@@ -15,11 +15,13 @@ import type { ThemeMode } from '../hooks/useTheme'
 import type { KeyboardLayoutId, AutoLockMinutes, PanelSide } from '../hooks/useDevicePrefs'
 import type { HubMyPost } from '../../shared/types/hub'
 import { KEYBOARD_LAYOUTS } from '../data/keyboard-layouts'
+import { AboutTabContent } from './AboutTabContent'
 
 const TABS = [
   { id: 'tools' as const, labelKey: 'settings.tabTools' },
   { id: 'data' as const, labelKey: 'settings.tabData' },
   { id: 'hub' as const, labelKey: 'settings.tabHub' },
+  { id: 'about' as const, labelKey: 'settings.tabAbout' },
 ]
 
 function scoreColor(score: number | null): string {
@@ -1159,6 +1161,7 @@ export function SettingsModal({
               </section>
             </div>
           )}
+          {activeTab === 'about' && <AboutTabContent />}
         </ModalTabPanel>
       </div>
     </div>

@@ -431,7 +431,21 @@
     "panelSide": "Panel Side",
     "panelLeft": "Left",
     "panelRight": "Right",
-    "tabHub": "Hub"
+    "tabHub": "Hub",
+    "tabAbout": "About",
+    "about": {
+      "version": "Version {{version}}",
+      "license": "License: {{license}}",
+      "licenseValue": "GPL-3.0-or-later",
+      "termsOfService": "Terms of Service",
+      "termsTitle": "Terms of Service",
+      "termsGoogleDrive": "Pipette uses Google Drive's Application Data folder (appDataFolder) to store encrypted sync data. This data is only accessible by Pipette and is not visible in your Google Drive files.",
+      "termsHubData": "Data uploaded to Pipette Hub is subject to Pipette Hub's Terms of Service. Uploaded content (keymaps, thumbnails, metadata) is stored on Pipette Hub's servers and may be publicly visible.",
+      "termsOpenSource": "Pipette is open-source software distributed under the GPL-3.0-or-later license.",
+      "termsHidAccess": "Pipette communicates with connected keyboards via USB HID. Keymap changes are written directly to the keyboard's firmware.",
+      "termsLocalData": "Pipette stores application settings and saved keymaps locally. This data remains on your device unless you explicitly enable sync or upload to Pipette Hub.",
+      "termsDisclaimer": "Pipette is provided as-is, without warranty of any kind. Use at your own risk."
+    }
   },
   "editorSettings": {
     "title": "Settings",

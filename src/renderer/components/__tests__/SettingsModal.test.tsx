@@ -13,6 +13,8 @@ vi.mock('react-i18next', () => ({
   }),
 }))
 
+vi.mock('../../assets/app-icon.png', () => ({ default: 'test-app-icon.png' }))
+
 vi.mock('../editors/ModalCloseButton', () => ({
   ModalCloseButton: ({ testid, onClick }: { testid: string; onClick: () => void }) => (
     <button data-testid={testid} onClick={onClick}>close</button>
@@ -641,12 +643,13 @@ describe('SettingsModal', () => {
   }
 
   describe('tabs', () => {
-    it('renders Tools, Data, and Hub tabs', () => {
+    it('renders Tools, Data, Hub, and About tabs', () => {
       render(<SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} />)
 
       expect(screen.getByTestId('settings-tab-tools')).toBeInTheDocument()
       expect(screen.getByTestId('settings-tab-data')).toBeInTheDocument()
       expect(screen.getByTestId('settings-tab-hub')).toBeInTheDocument()
+      expect(screen.getByTestId('settings-tab-about')).toBeInTheDocument()
     })
 
     it('shows Tools tab content by default', () => {
@@ -1042,6 +1045,54 @@ describe('SettingsModal', () => {
           expect(screen.getByTestId('hub-display-name-error')).toHaveTextContent('hub.displayNameSaveFailed')
         })
       })
+    })
+  })
+
+  describe('About tab', () => {
+    function renderAndSwitchToAbout(props?: Partial<Parameters<typeof SettingsModal>[0]>) {
+      const result = render(<SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} {...props} />)
+      fireEvent.click(screen.getByTestId('settings-tab-about'))
+      return result
+    }
+
+    it('shows app icon, name, and version', () => {
+      renderAndSwitchToAbout()
+
+      expect(screen.getByTestId('about-app-icon')).toBeInTheDocument()
+      expect(screen.getByTestId('about-app-name')).toHaveTextContent('Pipette')
+      expect(screen.getByTestId('about-app-version')).toBeInTheDocument()
+    })
+
+    it('shows license info', () => {
+      renderAndSwitchToAbout()
+
+      expect(screen.getByTestId('about-license')).toBeInTheDocument()
+    })
+
+    it('shows terms of service button', () => {
+      renderAndSwitchToAbout()
+
+      expect(screen.getByTestId('about-terms-button')).toBeInTheDocument()
+    })
+
+    it('toggles terms of service content on button click', () => {
+      renderAndSwitchToAbout()
+
+      expect(screen.queryByTestId('about-terms-content')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByTestId('about-terms-button'))
+      expect(screen.getByTestId('about-terms-content')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByTestId('about-terms-button'))
+      expect(screen.queryByTestId('about-terms-content')).not.toBeInTheDocument()
+    })
+
+    it('does not show other tab content when About is active', () => {
+      renderAndSwitchToAbout()
+
+      expect(screen.queryByTestId('theme-option-system')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('sync-sign-in')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('hub-enable-toggle')).not.toBeInTheDocument()
     })
   })
 })

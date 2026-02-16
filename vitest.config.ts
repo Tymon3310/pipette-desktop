@@ -5,6 +5,9 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify('0.1.0'),
+  },
   test: {
     // Default: node environment for preload/shared tests
     // Component tests use // @vitest-environment jsdom directive
