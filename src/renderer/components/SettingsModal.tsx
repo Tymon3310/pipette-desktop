@@ -40,6 +40,7 @@ const SYNC_STATUS_CLASS: Record<Exclude<SyncStatusType, 'none'>, string> = {
 
 const BTN_PRIMARY = 'rounded bg-accent px-3 py-1 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50'
 const BTN_SECONDARY = 'rounded border border-edge px-3 py-1 text-sm text-content-secondary hover:bg-surface-dim disabled:opacity-50'
+const BTN_DANGER_OUTLINE = 'rounded border border-danger px-3 py-1 text-sm text-danger hover:bg-danger/10'
 
 function formatTimestamp(timestamp: number): string {
   const d = new Date(timestamp)
@@ -160,7 +161,7 @@ function DangerCheckboxGroup({
       <div className="flex items-center justify-end">
         <button
           type="button"
-          className="rounded border border-danger px-3 py-1 text-sm text-danger hover:bg-danger/10 disabled:opacity-50"
+          className={`${BTN_DANGER_OUTLINE} disabled:opacity-50`}
           onClick={onRequestConfirm}
           disabled={disabled || !anySelected}
           data-testid={deleteTestId}
@@ -199,6 +200,66 @@ function DangerCheckboxGroup({
         </div>
       )}
     </div>
+  )
+}
+
+interface DisconnectConfirmButtonProps {
+  confirming: boolean
+  onRequestConfirm: () => void
+  onCancelConfirm: () => void
+  onConfirm: () => void
+  disconnectLabelKey: string
+  confirmLabelKey: string
+  disconnectTestId: string
+  confirmTestId: string
+  cancelTestId: string
+}
+
+function DisconnectConfirmButton({
+  confirming,
+  onRequestConfirm,
+  onCancelConfirm,
+  onConfirm,
+  disconnectLabelKey,
+  confirmLabelKey,
+  disconnectTestId,
+  confirmTestId,
+  cancelTestId,
+}: DisconnectConfirmButtonProps) {
+  const { t } = useTranslation()
+
+  if (confirming) {
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className={BTN_DANGER_OUTLINE}
+          onClick={onConfirm}
+          data-testid={confirmTestId}
+        >
+          {t(confirmLabelKey)}
+        </button>
+        <button
+          type="button"
+          className={BTN_SECONDARY}
+          onClick={onCancelConfirm}
+          data-testid={cancelTestId}
+        >
+          {t('common.cancel')}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className={BTN_SECONDARY}
+      onClick={onRequestConfirm}
+      data-testid={disconnectTestId}
+    >
+      {t(disconnectLabelKey)}
+    </button>
   )
 }
 
@@ -542,7 +603,12 @@ export function SettingsModal({
   const [confirmingLocalReset, setConfirmingLocalReset] = useState(false)
   const [authenticating, setAuthenticating] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
+  const [confirmingGoogleDisconnect, setConfirmingGoogleDisconnect] = useState(false)
+  const [confirmingHubDisconnect, setConfirmingHubDisconnect] = useState(false)
   const [importResult, setImportResult] = useState<'success' | 'error' | null>(null)
+
+  useEffect(() => { setConfirmingGoogleDisconnect(false) }, [sync.authStatus.authenticated])
+  useEffect(() => { setConfirmingHubDisconnect(false) }, [hubEnabled])
   const authInFlight = useRef(false)
   const validationSeq = useRef(0)
 
@@ -879,14 +945,17 @@ export function SettingsModal({
                     <span className="text-sm text-accent" data-testid="sync-auth-status">
                       {t('sync.connected')}
                     </span>
-                    <button
-                      type="button"
-                      className={BTN_SECONDARY}
-                      onClick={sync.signOut}
-                      data-testid="sync-sign-out"
-                    >
-                      {t('sync.signOut')}
-                    </button>
+                    <DisconnectConfirmButton
+                      confirming={confirmingGoogleDisconnect}
+                      onRequestConfirm={() => setConfirmingGoogleDisconnect(true)}
+                      onCancelConfirm={() => setConfirmingGoogleDisconnect(false)}
+                      onConfirm={() => { sync.signOut(); setConfirmingGoogleDisconnect(false) }}
+                      disconnectLabelKey="sync.signOut"
+                      confirmLabelKey="sync.confirmDisconnect"
+                      disconnectTestId="sync-sign-out"
+                      confirmTestId="sync-sign-out-confirm"
+                      cancelTestId="sync-sign-out-cancel"
+                    />
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1122,14 +1191,17 @@ export function SettingsModal({
                     <span className="text-sm text-accent" data-testid="hub-enabled-status">
                       {t('hub.enabled')}
                     </span>
-                    <button
-                      type="button"
-                      className={BTN_SECONDARY}
-                      onClick={() => onHubEnabledChange(false)}
-                      data-testid="hub-enable-toggle"
-                    >
-                      {t('hub.disable')}
-                    </button>
+                    <DisconnectConfirmButton
+                      confirming={confirmingHubDisconnect}
+                      onRequestConfirm={() => setConfirmingHubDisconnect(true)}
+                      onCancelConfirm={() => setConfirmingHubDisconnect(false)}
+                      onConfirm={() => { onHubEnabledChange(false); setConfirmingHubDisconnect(false) }}
+                      disconnectLabelKey="hub.disable"
+                      confirmLabelKey="hub.confirmDisconnect"
+                      disconnectTestId="hub-enable-toggle"
+                      confirmTestId="hub-disconnect-confirm"
+                      cancelTestId="hub-disconnect-cancel"
+                    />
                   </div>
                 ) : (
                   <div data-testid="hub-enable-row">

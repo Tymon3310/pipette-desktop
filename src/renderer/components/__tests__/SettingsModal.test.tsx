@@ -141,12 +141,33 @@ describe('SettingsModal', () => {
     expect(sync.startAuth).toHaveBeenCalledOnce()
   })
 
-  it('calls signOut when sign-out button is clicked', () => {
+  it('shows confirmation when sign-out button is clicked', () => {
     const sync = makeSyncMock({ authStatus: { authenticated: true } })
     renderAndSwitchToData({ sync })
 
     fireEvent.click(screen.getByTestId('sync-sign-out'))
+    expect(screen.getByTestId('sync-sign-out-confirm')).toBeInTheDocument()
+    expect(screen.getByTestId('sync-sign-out-cancel')).toBeInTheDocument()
+    expect(sync.signOut).not.toHaveBeenCalled()
+  })
+
+  it('calls signOut when confirmation is accepted', () => {
+    const sync = makeSyncMock({ authStatus: { authenticated: true } })
+    renderAndSwitchToData({ sync })
+
+    fireEvent.click(screen.getByTestId('sync-sign-out'))
+    fireEvent.click(screen.getByTestId('sync-sign-out-confirm'))
     expect(sync.signOut).toHaveBeenCalledOnce()
+  })
+
+  it('cancels sign-out when cancel is clicked', () => {
+    const sync = makeSyncMock({ authStatus: { authenticated: true } })
+    renderAndSwitchToData({ sync })
+
+    fireEvent.click(screen.getByTestId('sync-sign-out'))
+    fireEvent.click(screen.getByTestId('sync-sign-out-cancel'))
+    expect(screen.getByTestId('sync-sign-out')).toBeInTheDocument()
+    expect(sync.signOut).not.toHaveBeenCalled()
   })
 
   it('shows password set indicator when hasPassword is true', () => {
@@ -799,12 +820,33 @@ describe('SettingsModal', () => {
       expect(screen.getByTestId('hub-enabled-status')).toBeInTheDocument()
     })
 
-    it('calls onHubEnabledChange with false when disable button is clicked', () => {
+    it('shows confirmation when disconnect button is clicked', () => {
       const onHubEnabledChange = vi.fn()
       renderAndSwitchToHub({ hubEnabled: true, onHubEnabledChange })
 
       fireEvent.click(screen.getByTestId('hub-enable-toggle'))
+      expect(screen.getByTestId('hub-disconnect-confirm')).toBeInTheDocument()
+      expect(screen.getByTestId('hub-disconnect-cancel')).toBeInTheDocument()
+      expect(onHubEnabledChange).not.toHaveBeenCalled()
+    })
+
+    it('calls onHubEnabledChange with false when confirmation is accepted', () => {
+      const onHubEnabledChange = vi.fn()
+      renderAndSwitchToHub({ hubEnabled: true, onHubEnabledChange })
+
+      fireEvent.click(screen.getByTestId('hub-enable-toggle'))
+      fireEvent.click(screen.getByTestId('hub-disconnect-confirm'))
       expect(onHubEnabledChange).toHaveBeenCalledWith(false)
+    })
+
+    it('cancels hub disconnect when cancel is clicked', () => {
+      const onHubEnabledChange = vi.fn()
+      renderAndSwitchToHub({ hubEnabled: true, onHubEnabledChange })
+
+      fireEvent.click(screen.getByTestId('hub-enable-toggle'))
+      fireEvent.click(screen.getByTestId('hub-disconnect-cancel'))
+      expect(screen.getByTestId('hub-enable-toggle')).toBeInTheDocument()
+      expect(onHubEnabledChange).not.toHaveBeenCalled()
     })
 
     it('calls onHubEnabledChange with true when enable button is clicked', () => {
