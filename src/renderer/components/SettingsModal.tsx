@@ -6,17 +6,20 @@ import { Monitor, Sun, Moon } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ModalCloseButton } from './editors/ModalCloseButton'
 import { ROW_CLASS, toggleTrackClass, toggleKnobClass } from './editors/modal-controls'
+import { ACTION_BTN, DELETE_BTN, CONFIRM_DELETE_BTN, formatDate } from './editors/store-modal-shared'
 import { ModalTabBar, ModalTabPanel } from './editors/modal-tabs'
 import type { ModalTabId } from './editors/modal-tabs'
 import type { SyncStatusType, LastSyncResult, SyncProgress, SyncResetTargets, LocalResetTargets } from '../../shared/types/sync'
 import type { UseSyncReturn } from '../hooks/useSync'
 import type { ThemeMode } from '../hooks/useTheme'
 import type { KeyboardLayoutId, AutoLockMinutes, PanelSide } from '../hooks/useDevicePrefs'
+import type { HubMyPost } from '../../shared/types/hub'
 import { KEYBOARD_LAYOUTS } from '../data/keyboard-layouts'
 
 const TABS = [
   { id: 'tools' as const, labelKey: 'settings.tabTools' },
   { id: 'data' as const, labelKey: 'settings.tabData' },
+  { id: 'hub' as const, labelKey: 'settings.tabHub' },
 ]
 
 function scoreColor(score: number | null): string {
@@ -215,6 +218,150 @@ const PANEL_SIDE_OPTIONS: { side: PanelSide; labelKey: string }[] = [
 
 const TIME_STEPS = [10, 20, 30, 40, 50, 60] as const
 
+interface HubPostRowProps {
+  post: HubMyPost
+  onRename: (postId: string, newTitle: string) => Promise<void>
+  onDelete: (postId: string) => Promise<void>
+}
+
+function HubPostRow({ post, onRename, onDelete }: HubPostRowProps) {
+  const { t } = useTranslation()
+  const [editing, setEditing] = useState(false)
+  const [editLabel, setEditLabel] = useState('')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleStartEdit = useCallback(() => {
+    setEditLabel(post.title)
+    setEditing(true)
+    setConfirmingDelete(false)
+    setError(null)
+  }, [post.title])
+
+  const handleCancelEdit = useCallback(() => {
+    setEditing(false)
+  }, [])
+
+  const handleSubmitRename = useCallback(async () => {
+    if (!editLabel.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      await onRename(post.id, editLabel.trim())
+      setEditing(false)
+    } catch {
+      setError(t('hub.renameFailed'))
+    } finally {
+      setBusy(false)
+    }
+  }, [post.id, editLabel, onRename, t])
+
+  const handleKeyDown = useCallback(async (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      await handleSubmitRename()
+    } else if (e.key === 'Escape') {
+      handleCancelEdit()
+    }
+  }, [handleSubmitRename, handleCancelEdit])
+
+  const handleConfirmDelete = useCallback(async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await onDelete(post.id)
+      setConfirmingDelete(false)
+    } catch {
+      setError(t('hub.deleteFailed'))
+    } finally {
+      setBusy(false)
+    }
+  }, [post.id, onDelete, t])
+
+  const handleStartDelete = useCallback(() => {
+    setConfirmingDelete(true)
+    setEditing(false)
+    setError(null)
+  }, [])
+
+  return (
+    <div data-testid={`hub-post-${post.id}`}>
+      <div className="flex items-center justify-between rounded-lg border border-edge bg-surface/20 px-3 py-2">
+        {editing ? (
+          <input
+            type="text"
+            className="flex-1 rounded border border-edge bg-surface px-2 py-1 text-sm text-content focus:border-accent focus:outline-none"
+            value={editLabel}
+            onChange={(e) => setEditLabel(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={busy}
+            autoFocus
+            data-testid={`hub-rename-input-${post.id}`}
+          />
+        ) : (
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm text-content truncate">{post.title}</span>
+            <span className="text-[11px] text-content-muted truncate">
+              {post.keyboard_name} · {formatDate(post.created_at)}
+            </span>
+          </div>
+        )}
+        <div className="flex items-center gap-1 shrink-0 ml-2">
+          {confirmingDelete && (
+            <>
+              <button
+                type="button"
+                className={CONFIRM_DELETE_BTN}
+                onClick={handleConfirmDelete}
+                disabled={busy}
+                data-testid={`hub-confirm-delete-${post.id}`}
+              >
+                {t('layoutStore.confirmDelete')}
+              </button>
+              <button
+                type="button"
+                className={ACTION_BTN}
+                onClick={() => setConfirmingDelete(false)}
+                disabled={busy}
+                data-testid={`hub-cancel-delete-${post.id}`}
+              >
+                {t('common.cancel')}
+              </button>
+            </>
+          )}
+          {!confirmingDelete && !editing && (
+            <>
+              <button
+                type="button"
+                className={ACTION_BTN}
+                onClick={handleStartEdit}
+                disabled={busy}
+                data-testid={`hub-rename-${post.id}`}
+              >
+                {t('layoutStore.rename')}
+              </button>
+              <button
+                type="button"
+                className={DELETE_BTN}
+                onClick={handleStartDelete}
+                disabled={busy}
+                data-testid={`hub-delete-${post.id}`}
+              >
+                {t('layoutStore.delete')}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {error && (
+        <p className="mt-1 text-xs text-danger" data-testid={`hub-error-${post.id}`}>
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 interface Props {
   sync: UseSyncReturn
   theme: ThemeMode
@@ -230,6 +377,12 @@ interface Props {
   onResetStart?: () => void
   onResetEnd?: () => void
   onClose: () => void
+  hubEnabled: boolean
+  onHubEnabledChange: (enabled: boolean) => void
+  hubPosts: HubMyPost[]
+  hubAuthenticated: boolean
+  onHubRename: (postId: string, newTitle: string) => Promise<void>
+  onHubDelete: (postId: string) => Promise<void>
 }
 
 export function SettingsModal({
@@ -247,6 +400,12 @@ export function SettingsModal({
   onResetStart,
   onResetEnd,
   onClose,
+  hubEnabled,
+  onHubEnabledChange,
+  hubPosts,
+  hubAuthenticated,
+  onHubRename,
+  onHubDelete,
 }: Props) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<ModalTabId>('tools')
@@ -401,6 +560,35 @@ export function SettingsModal({
 
   const isSyncing = sync.syncStatus === 'syncing'
   const syncDisabled = busy || !sync.authStatus.authenticated || !sync.hasPassword || isSyncing
+
+  function renderHubPostList(): React.ReactNode {
+    if (!hubAuthenticated) {
+      return (
+        <p className="text-sm text-content-muted" data-testid="hub-requires-auth">
+          {t('hub.requiresAuth')}
+        </p>
+      )
+    }
+    if (hubPosts.length === 0) {
+      return (
+        <p className="text-sm text-content-muted" data-testid="hub-no-posts">
+          {t('hub.noPosts')}
+        </p>
+      )
+    }
+    return (
+      <div className="space-y-1" data-testid="hub-post-list">
+        {hubPosts.map((post) => (
+          <HubPostRow
+            key={post.id}
+            post={post}
+            onRename={onHubRename}
+            onDelete={onHubDelete}
+          />
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div
@@ -798,6 +986,42 @@ export function SettingsModal({
                   busy={busy}
                   confirmDisabled={busy || isSyncing}
                 />
+              </section>
+            </div>
+          )}
+          {activeTab === 'hub' && (
+            <div className="pt-4 space-y-6">
+              {/* Hub Enable/Disable */}
+              <section>
+                <div className={ROW_CLASS} data-testid="hub-enable-row">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[13px] font-medium text-content">
+                      {t('hub.enableToggle')}
+                    </span>
+                    <span className="text-xs text-content-muted">
+                      {t('hub.enableDescription')}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={hubEnabled}
+                    aria-label={t('hub.enableToggle')}
+                    className={toggleTrackClass(hubEnabled)}
+                    onClick={() => onHubEnabledChange(!hubEnabled)}
+                    data-testid="hub-enable-toggle"
+                  >
+                    <span className={toggleKnobClass(hubEnabled)} />
+                  </button>
+                </div>
+              </section>
+
+              {/* My Posts */}
+              <section>
+                <h4 className="mb-2 text-sm font-medium text-content-secondary">
+                  {t('hub.myPosts')}
+                </h4>
+                {renderHubPostList()}
               </section>
             </div>
           )}

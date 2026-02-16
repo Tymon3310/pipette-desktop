@@ -428,7 +428,8 @@
     "autoLockMinutes": "{{minutes}}分",
     "panelSide": "パネル位置",
     "panelLeft": "左",
-    "panelRight": "右"
+    "panelRight": "右",
+    "tabHub": "Hub"
   },
   "editorSettings": {
     "title": "設定",
@@ -454,7 +455,14 @@
     "uploadQuestion": "アップロード？",
     "deleteFromHub": "削除",
     "hubConnected": "Hub 接続",
-    "hubDisconnected": "Hub 未接続"
+    "hubDisconnected": "Hub 未接続",
+    "enableToggle": "Hub を有効化",
+    "enableDescription": "Pipette Hub でレイアウトを共有できます。",
+    "myPosts": "マイ投稿",
+    "noPosts": "投稿はまだありません",
+    "requiresAuth": "Hub 機能を使うには、データタブで Google アカウントを接続してください。",
+    "renameFailed": "名前変更に失敗しました",
+    "deleteFailed": "削除に失敗しました"
   },
   "favoriteStore": {
     "title": "お気に入り",

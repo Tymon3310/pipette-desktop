@@ -428,7 +428,8 @@
     "autoLockMinutes": "{{minutes}} min",
     "panelSide": "Panel Side",
     "panelLeft": "Left",
-    "panelRight": "Right"
+    "panelRight": "Right",
+    "tabHub": "Hub"
   },
   "editorSettings": {
     "title": "Settings",
@@ -454,7 +455,14 @@
     "uploadQuestion": "Upload?",
     "deleteFromHub": "Delete",
     "hubConnected": "Hub Connect",
-    "hubDisconnected": "Hub Disconnect"
+    "hubDisconnected": "Hub Disconnect",
+    "enableToggle": "Enable Hub",
+    "enableDescription": "Share layouts via Pipette Hub.",
+    "myPosts": "My Posts",
+    "noPosts": "No posts yet",
+    "requiresAuth": "Connect your Google account in the Data tab to use Hub features.",
+    "renameFailed": "Rename failed",
+    "deleteFailed": "Delete failed"
   },
   "favoriteStore": {
     "title": "Favorites",

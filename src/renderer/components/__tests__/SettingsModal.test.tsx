@@ -76,6 +76,12 @@ const defaultProps = {
   onAutoLockTimeChange: vi.fn(),
   panelSide: 'left' as const,
   onPanelSideChange: vi.fn(),
+  hubEnabled: true,
+  onHubEnabledChange: vi.fn(),
+  hubPosts: [] as { id: string; title: string; keyboard_name: string; created_at: string }[],
+  hubAuthenticated: false,
+  onHubRename: vi.fn().mockResolvedValue(undefined),
+  onHubDelete: vi.fn().mockResolvedValue(undefined),
 }
 
 describe('SettingsModal', () => {
@@ -88,6 +94,11 @@ describe('SettingsModal', () => {
     defaultProps.onDefaultAutoAdvanceChange = vi.fn()
     defaultProps.onAutoLockTimeChange = vi.fn()
     defaultProps.onPanelSideChange = vi.fn()
+    defaultProps.onHubEnabledChange = vi.fn()
+    defaultProps.onHubRename = vi.fn().mockResolvedValue(undefined)
+    defaultProps.onHubDelete = vi.fn().mockResolvedValue(undefined)
+    defaultProps.hubPosts = []
+    defaultProps.hubAuthenticated = false
     mockResetLocalTargets.mockClear()
     mockExportLocalData.mockClear()
     mockImportLocalData.mockClear()
@@ -623,12 +634,19 @@ describe('SettingsModal', () => {
     })
   })
 
+  function renderAndSwitchToHub(props?: Partial<Parameters<typeof SettingsModal>[0]>) {
+    const result = render(<SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} {...props} />)
+    fireEvent.click(screen.getByTestId('settings-tab-hub'))
+    return result
+  }
+
   describe('tabs', () => {
-    it('renders Tools and Data tabs', () => {
+    it('renders Tools, Data, and Hub tabs', () => {
       render(<SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} />)
 
       expect(screen.getByTestId('settings-tab-tools')).toBeInTheDocument()
       expect(screen.getByTestId('settings-tab-data')).toBeInTheDocument()
+      expect(screen.getByTestId('settings-tab-hub')).toBeInTheDocument()
     })
 
     it('shows Tools tab content by default', () => {
@@ -762,6 +780,160 @@ describe('SettingsModal', () => {
 
       fireEvent.click(screen.getByTestId('panel-side-option-right'))
       expect(onPanelSideChange).toHaveBeenCalledWith('right')
+    })
+  })
+
+  describe('Hub tab', () => {
+    it('switches to Hub tab and shows hub toggle', () => {
+      renderAndSwitchToHub()
+
+      expect(screen.getByTestId('hub-enable-toggle')).toBeInTheDocument()
+      expect(screen.queryByTestId('theme-option-system')).not.toBeInTheDocument()
+    })
+
+    it('calls onHubEnabledChange when toggle is clicked', () => {
+      const onHubEnabledChange = vi.fn()
+      renderAndSwitchToHub({ hubEnabled: true, onHubEnabledChange })
+
+      fireEvent.click(screen.getByTestId('hub-enable-toggle'))
+      expect(onHubEnabledChange).toHaveBeenCalledWith(false)
+    })
+
+    it('reflects hubEnabled off state', () => {
+      renderAndSwitchToHub({ hubEnabled: false })
+      const toggle = screen.getByTestId('hub-enable-toggle')
+      expect(toggle.getAttribute('aria-checked')).toBe('false')
+    })
+
+    it('shows auth required message when not authenticated', () => {
+      renderAndSwitchToHub({ hubAuthenticated: false })
+
+      expect(screen.getByTestId('hub-requires-auth')).toBeInTheDocument()
+      expect(screen.queryByTestId('hub-post-list')).not.toBeInTheDocument()
+    })
+
+    it('shows empty post list when authenticated with no posts', () => {
+      renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: [] })
+
+      expect(screen.queryByTestId('hub-requires-auth')).not.toBeInTheDocument()
+      expect(screen.getByTestId('hub-no-posts')).toBeInTheDocument()
+    })
+
+    it('renders post list when authenticated with posts', () => {
+      const posts = [
+        { id: 'p1', title: 'My Layout 1', keyboard_name: 'BoardA', created_at: '2025-01-15T10:30:00Z' },
+        { id: 'p2', title: 'My Layout 2', keyboard_name: 'BoardB', created_at: '2025-02-20T14:00:00Z' },
+      ]
+      renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts })
+
+      expect(screen.getByTestId('hub-post-p1')).toBeInTheDocument()
+      expect(screen.getByTestId('hub-post-p2')).toBeInTheDocument()
+      expect(screen.getByTestId('hub-post-p1')).toHaveTextContent('My Layout 1')
+      expect(screen.getByTestId('hub-post-p1')).toHaveTextContent('BoardA')
+      expect(screen.getByTestId('hub-post-p2')).toHaveTextContent('My Layout 2')
+      expect(screen.getByTestId('hub-post-p2')).toHaveTextContent('BoardB')
+    })
+
+    it('enters rename mode when rename button is clicked', () => {
+      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts })
+
+      fireEvent.click(screen.getByTestId('hub-rename-p1'))
+
+      expect(screen.getByTestId('hub-rename-input-p1')).toBeInTheDocument()
+      expect(screen.getByTestId('hub-rename-input-p1')).toHaveValue('My Layout')
+    })
+
+    it('submits rename on Enter key', async () => {
+      const onHubRename = vi.fn().mockResolvedValue(undefined)
+      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts, onHubRename })
+
+      fireEvent.click(screen.getByTestId('hub-rename-p1'))
+      const input = screen.getByTestId('hub-rename-input-p1')
+      fireEvent.change(input, { target: { value: 'New Name' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      await waitFor(() => {
+        expect(onHubRename).toHaveBeenCalledWith('p1', 'New Name')
+      })
+    })
+
+    it('cancels rename on Escape key', () => {
+      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts })
+
+      fireEvent.click(screen.getByTestId('hub-rename-p1'))
+      expect(screen.getByTestId('hub-rename-input-p1')).toBeInTheDocument()
+
+      fireEvent.keyDown(screen.getByTestId('hub-rename-input-p1'), { key: 'Escape' })
+      expect(screen.queryByTestId('hub-rename-input-p1')).not.toBeInTheDocument()
+      expect(screen.getByTestId('hub-post-p1')).toHaveTextContent('My Layout')
+    })
+
+    it('shows delete confirmation when delete button is clicked', () => {
+      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts })
+
+      fireEvent.click(screen.getByTestId('hub-delete-p1'))
+
+      expect(screen.getByTestId('hub-confirm-delete-p1')).toBeInTheDocument()
+      expect(screen.getByTestId('hub-cancel-delete-p1')).toBeInTheDocument()
+    })
+
+    it('calls onHubDelete when delete is confirmed', async () => {
+      const onHubDelete = vi.fn().mockResolvedValue(undefined)
+      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts, onHubDelete })
+
+      fireEvent.click(screen.getByTestId('hub-delete-p1'))
+      fireEvent.click(screen.getByTestId('hub-confirm-delete-p1'))
+
+      await waitFor(() => {
+        expect(onHubDelete).toHaveBeenCalledWith('p1')
+      })
+    })
+
+    it('cancels delete confirmation', () => {
+      const onHubDelete = vi.fn()
+      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts, onHubDelete })
+
+      fireEvent.click(screen.getByTestId('hub-delete-p1'))
+      expect(screen.getByTestId('hub-confirm-delete-p1')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByTestId('hub-cancel-delete-p1'))
+      expect(screen.queryByTestId('hub-confirm-delete-p1')).not.toBeInTheDocument()
+      expect(onHubDelete).not.toHaveBeenCalled()
+    })
+
+    it('shows error and stays in edit mode when rename fails', async () => {
+      const onHubRename = vi.fn().mockRejectedValue(new Error('Rename failed'))
+      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts, onHubRename })
+
+      fireEvent.click(screen.getByTestId('hub-rename-p1'))
+      const input = screen.getByTestId('hub-rename-input-p1')
+      fireEvent.change(input, { target: { value: 'New Name' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('hub-error-p1')).toHaveTextContent('hub.renameFailed')
+      })
+      expect(screen.getByTestId('hub-rename-input-p1')).toBeInTheDocument()
+    })
+
+    it('shows error when delete fails', async () => {
+      const onHubDelete = vi.fn().mockRejectedValue(new Error('Delete failed'))
+      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts, onHubDelete })
+
+      fireEvent.click(screen.getByTestId('hub-delete-p1'))
+      fireEvent.click(screen.getByTestId('hub-confirm-delete-p1'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('hub-error-p1')).toHaveTextContent('hub.deleteFailed')
+      })
     })
   })
 })

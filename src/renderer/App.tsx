@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAppConfig } from './hooks/useAppConfig'
 import { useDeviceConnection } from './hooks/useDeviceConnection'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useFileIO } from './hooks/useFileIO'
@@ -61,6 +62,7 @@ function findHubEntry(entries: SnapshotMeta[], entryId: string): SnapshotMeta | 
 
 export function App() {
   const { t } = useTranslation()
+  const appConfig = useAppConfig()
   const themeCtx = useTheme()
   const devicePrefs = useDevicePrefs()
   const device = useDeviceConnection()
@@ -266,6 +268,18 @@ export function App() {
     setHubMyPosts([])
     setHubConnected(false)
   }, [sync.authStatus.authenticated])
+
+  const handleHubRenamePost = useCallback(async (postId: string, newTitle: string) => {
+    const result = await window.vialAPI.hubPatchPost({ postId, title: newTitle })
+    if (!result.success) throw new Error(result.error ?? 'Rename failed')
+    await refreshHubMyPosts()
+  }, [refreshHubMyPosts])
+
+  const handleHubDeletePost = useCallback(async (postId: string) => {
+    const result = await window.vialAPI.hubDeletePost(postId)
+    if (!result.success) throw new Error(result.error ?? 'Delete failed')
+    await refreshHubMyPosts()
+  }, [refreshHubMyPosts])
 
   // Auto-check Hub connectivity when auth status changes
   useEffect(() => {
@@ -573,7 +587,7 @@ export function App() {
   const comboSupported = !device.isDummy && keyboard.dynamicCounts.combo > 0
   const altRepeatKeySupported = !device.isDummy && keyboard.dynamicCounts.altRepeatKey > 0
   const keyOverrideSupported = !device.isDummy && keyboard.dynamicCounts.keyOverride > 0
-  const hubEnabled = !device.isDummy && sync.authStatus.authenticated && hubConnected
+  const hubEnabled = !device.isDummy && appConfig.config.hubEnabled && sync.authStatus.authenticated && hubConnected
 
   // Close modals when their feature support is lost
   useEffect(() => {
@@ -700,6 +714,12 @@ export function App() {
             onResetStart={() => setResettingData(true)}
             onResetEnd={() => setResettingData(false)}
             onClose={() => setShowSettings(false)}
+            hubEnabled={appConfig.config.hubEnabled}
+            onHubEnabledChange={(enabled) => appConfig.set('hubEnabled', enabled)}
+            hubPosts={hubMyPosts}
+            hubAuthenticated={sync.authStatus.authenticated}
+            onHubRename={handleHubRenamePost}
+            onHubDelete={handleHubDeletePost}
           />
         )}
       </>

@@ -21,6 +21,7 @@ export interface AppConfig {
   autoLockTime: AutoLockMinutes
   panelSide: PanelSide
   language?: string
+  hubEnabled: boolean
 }
 
 export const SETTABLE_APP_CONFIG_KEYS: ReadonlySet<keyof AppConfig> = new Set([
@@ -32,6 +33,7 @@ export const SETTABLE_APP_CONFIG_KEYS: ReadonlySet<keyof AppConfig> = new Set([
   'autoLockTime',
   'panelSide',
   'language',
+  'hubEnabled',
 ])
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
@@ -42,4 +44,5 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   defaultAutoAdvance: true,
   autoLockTime: 10,
   panelSide: 'left',
+  hubEnabled: true,
 }

@@ -34,6 +34,8 @@ export interface HubDeleteResult {
 export interface HubMyPost {
   id: string
   title: string
+  keyboard_name: string
+  created_at: string
 }
 
 export interface HubFetchMyPostsResult {

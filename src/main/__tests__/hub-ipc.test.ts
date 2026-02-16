@@ -357,7 +357,7 @@ describe('hub-ipc', () => {
     })
 
     it('fetches posts successfully', async () => {
-      const posts = [{ id: 'post-1', title: 'My Keymap' }]
+      const posts = [{ id: 'post-1', title: 'My Keymap', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
       vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValueOnce({
         token: 'hub-jwt',
