@@ -25,3 +25,14 @@ export interface HubDeleteResult {
   success: boolean
   error?: string
 }
+
+export interface HubMyPost {
+  id: string
+  title: string
+}
+
+export interface HubFetchMyPostsResult {
+  success: boolean
+  posts?: HubMyPost[]
+  error?: string
+}

@@ -3,9 +3,9 @@
 
 import { ipcMain } from 'electron'
 import { IpcChannels } from '../../shared/ipc/channels'
-import type { HubUploadPostParams, HubUpdatePostParams, HubUploadResult, HubDeleteResult } from '../../shared/types/hub'
+import type { HubUploadPostParams, HubUpdatePostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult } from '../../shared/types/hub'
 import { getIdToken } from '../sync/google-auth'
-import { authenticateWithHub, uploadPostToHub, updatePostOnHub, deletePostFromHub } from './hub-client'
+import { authenticateWithHub, uploadPostToHub, updatePostOnHub, deletePostFromHub, fetchMyPosts } from './hub-client'
 import type { HubUploadFiles } from './hub-client'
 
 const AUTH_ERROR = 'Not authenticated with Google. Please sign in again.'
@@ -79,6 +79,19 @@ export function setupHubIpc(): void {
         return { success: true }
       } catch (err) {
         return { success: false, error: extractError(err, 'Delete failed') }
+      }
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannels.HUB_FETCH_MY_POSTS,
+    async (): Promise<HubFetchMyPostsResult> => {
+      try {
+        const jwt = await getHubToken()
+        const posts = await fetchMyPosts(jwt)
+        return { success: true, posts }
+      } catch (err) {
+        return { success: false, error: extractError(err, 'Fetch my posts failed') }
       }
     },
   )

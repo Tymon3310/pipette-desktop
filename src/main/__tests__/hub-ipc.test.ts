@@ -26,11 +26,12 @@ vi.mock('../hub/hub-client', () => ({
   uploadPostToHub: vi.fn(),
   updatePostOnHub: vi.fn(),
   deletePostFromHub: vi.fn(),
+  fetchMyPosts: vi.fn(),
 }))
 
 import { ipcMain } from 'electron'
 import { getIdToken } from '../sync/google-auth'
-import { authenticateWithHub, uploadPostToHub, updatePostOnHub, deletePostFromHub } from '../hub/hub-client'
+import { authenticateWithHub, uploadPostToHub, updatePostOnHub, deletePostFromHub, fetchMyPosts } from '../hub/hub-client'
 import { setupHubIpc } from '../hub/hub-ipc'
 
 describe('hub-ipc', () => {
@@ -287,6 +288,52 @@ describe('hub-ipc', () => {
       expect(result).toEqual({
         success: false,
         error: 'Hub delete failed: 500',
+      })
+    })
+  })
+
+  describe('HUB_FETCH_MY_POSTS', () => {
+    function getFetchMyPostsHandler(): (...args: unknown[]) => Promise<unknown> {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handler = (ipcMain as any)._handlers.get('hub:fetch-my-posts')
+      expect(handler).toBeDefined()
+      return handler
+    }
+
+    it('registers HUB_FETCH_MY_POSTS handler', () => {
+      expect(ipcMain.handle).toHaveBeenCalledWith('hub:fetch-my-posts', expect.any(Function))
+    })
+
+    it('fetches posts successfully', async () => {
+      const posts = [{ id: 'post-1', title: 'My Keymap' }]
+      vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
+      vi.mocked(authenticateWithHub).mockResolvedValueOnce({
+        token: 'hub-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce(posts)
+
+      const handler = getFetchMyPostsHandler()
+      const result = await handler()
+
+      expect(result).toEqual({ success: true, posts })
+      expect(fetchMyPosts).toHaveBeenCalledWith('hub-jwt')
+    })
+
+    it('returns error on failure', async () => {
+      vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
+      vi.mocked(authenticateWithHub).mockResolvedValueOnce({
+        token: 'hub-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
+      vi.mocked(fetchMyPosts).mockRejectedValueOnce(new Error('Hub fetch my posts failed: 500'))
+
+      const handler = getFetchMyPostsHandler()
+      const result = await handler()
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Hub fetch my posts failed: 500',
       })
     })
   })

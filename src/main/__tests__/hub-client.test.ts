@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
-import { authenticateWithHub, uploadPostToHub, deletePostFromHub, updatePostOnHub, type HubUploadFiles } from '../hub/hub-client'
+import { authenticateWithHub, uploadPostToHub, deletePostFromHub, updatePostOnHub, fetchMyPosts, type HubUploadFiles } from '../hub/hub-client'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
@@ -215,6 +215,49 @@ describe('hub-client', () => {
       })
 
       await expect(deletePostFromHub('jwt', 'post-1')).rejects.toThrow('Hub delete failed: Forbidden')
+    })
+  })
+
+  describe('fetchMyPosts', () => {
+    it('returns array of posts', async () => {
+      const posts = [
+        { id: 'post-1', title: 'My Keymap' },
+        { id: 'post-2', title: 'Second Layout' },
+      ]
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, data: posts }),
+      })
+
+      const result = await fetchMyPosts('jwt-token')
+
+      expect(result).toEqual(posts)
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://pipette-hub.pages.dev/api/files/me',
+        expect.objectContaining({
+          method: 'GET',
+          headers: { Authorization: 'Bearer jwt-token' },
+        }),
+      )
+    })
+
+    it('throws on HTTP error', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => 'Unauthorized',
+      })
+
+      await expect(fetchMyPosts('bad-jwt')).rejects.toThrow('Hub fetch my posts failed: 401')
+    })
+
+    it('throws on payload-level failure', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: false, error: 'Token expired' }),
+      })
+
+      await expect(fetchMyPosts('expired-jwt')).rejects.toThrow('Hub fetch my posts failed: Token expired')
     })
   })
 

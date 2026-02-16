@@ -42,6 +42,7 @@ import {
 } from '../shared/keycodes/keycodes'
 import type { DeviceInfo, QmkSettingsTab, VilFile } from '../shared/types/protocol'
 import type { SnapshotMeta } from '../shared/types/snapshot-store'
+import type { HubMyPost } from '../shared/types/hub'
 import settingsDefs from '../shared/qmk-settings-defs.json'
 
 // Lighting types that require the RGBConfigurator modal
@@ -74,6 +75,8 @@ export function App() {
   const hubUploadingRef = useRef(false)
   const [hubUploadResult, setHubUploadResult] = useState<HubEntryResult | null>(null)
   const [lastLoadedLabel, setLastLoadedLabel] = useState('')
+  const [hubMyPosts, setHubMyPosts] = useState<HubMyPost[]>([])
+  const [hubConnected, setHubConnected] = useState(false)
 
   // Startup auto-sync
   const { loading: syncLoading, config: syncConfig, authStatus: syncAuth, hasPassword: syncHasPassword, syncNow } = sync
@@ -244,14 +247,35 @@ export function App() {
     setFileSuccessKind(null)
   }, [])
 
+  const refreshHubMyPosts = useCallback(async () => {
+    if (!sync.authStatus.authenticated) {
+      setHubMyPosts([])
+      setHubConnected(false)
+      return
+    }
+    try {
+      const result = await window.vialAPI.hubFetchMyPosts()
+      if (result.success && Array.isArray(result.posts)) {
+        setHubMyPosts(result.posts)
+        setHubConnected(true)
+        return
+      }
+    } catch {
+      // Hub unreachable or auth expired -- fall through to disconnect state
+    }
+    setHubMyPosts([])
+    setHubConnected(false)
+  }, [sync.authStatus.authenticated])
+
   const handleOpenEditorSettings = useCallback(async () => {
     if (device.isDummy) {
       setEditorSettingsTab('tools')
     } else {
       await layoutStore.refreshEntries()
+      await refreshHubMyPosts()
     }
     setShowEditorSettings(true)
-  }, [layoutStore, device.isDummy])
+  }, [layoutStore, device.isDummy, refreshHubMyPosts])
 
   const handleCloseEditorSettings = useCallback(() => {
     setShowEditorSettings(false)
@@ -456,13 +480,14 @@ export function App() {
         if (result.success && result.postId) {
           await window.vialAPI.snapshotStoreSetHubPostId(keyboard.uid, entryId, result.postId)
           await layoutStore.refreshEntries()
+          await refreshHubMyPosts()
         }
         return result
       },
       t('hub.uploadSuccess'),
       t('hub.uploadFailed'),
     )
-  }, [runHubOperation, layoutStore, keyboard.uid, loadEntryVilData, buildHubPostParams, t])
+  }, [runHubOperation, layoutStore, keyboard.uid, loadEntryVilData, buildHubPostParams, refreshHubMyPosts, t])
 
   const handleUpdateOnHub = useCallback(async (entryId: string) => {
     await runHubOperation(
@@ -488,17 +513,55 @@ export function App() {
         if (result.success) {
           await window.vialAPI.snapshotStoreSetHubPostId(keyboard.uid, entryId, null)
           await layoutStore.refreshEntries()
+          await refreshHubMyPosts()
         }
         return result
       },
       t('hub.removeSuccess'),
       t('hub.removeFailed'),
     )
-  }, [runHubOperation, findHubEntry, layoutStore, keyboard.uid, t])
+  }, [runHubOperation, findHubEntry, layoutStore, keyboard.uid, refreshHubMyPosts, t])
+
+  const handleReuploadToHub = useCallback(async (entryId: string, orphanedPostId: string) => {
+    await runHubOperation(
+      entryId,
+      (entries) => entries.find((e) => e.id === entryId),
+      async (entry) => {
+        await window.vialAPI.hubDeletePost(orphanedPostId).catch(() => {})
+        const vilData = await loadEntryVilData(entryId)
+        if (!vilData) return { success: false, error: t('hub.uploadFailed') }
+        const postParams = await buildHubPostParams(entry, vilData)
+        const result = await window.vialAPI.hubUploadPost(postParams)
+        if (result.success && result.postId) {
+          await window.vialAPI.snapshotStoreSetHubPostId(keyboard.uid, entryId, result.postId)
+          await layoutStore.refreshEntries()
+        }
+        await refreshHubMyPosts()
+        return result
+      },
+      t('hub.uploadSuccess'),
+      t('hub.uploadFailed'),
+    )
+  }, [runHubOperation, layoutStore, keyboard.uid, loadEntryVilData, buildHubPostParams, refreshHubMyPosts, t])
+
+  const handleDeleteOrphanedHubPost = useCallback(async (entryId: string, orphanedPostId: string) => {
+    await runHubOperation(
+      entryId,
+      (entries) => entries.find((e) => e.id === entryId),
+      async () => {
+        const result = await window.vialAPI.hubDeletePost(orphanedPostId)
+        await refreshHubMyPosts()
+        return result
+      },
+      t('hub.removeSuccess'),
+      t('hub.removeFailed'),
+    )
+  }, [runHubOperation, refreshHubMyPosts, t])
 
   const comboSupported = !device.isDummy && keyboard.dynamicCounts.combo > 0
   const altRepeatKeySupported = !device.isDummy && keyboard.dynamicCounts.altRepeatKey > 0
   const keyOverrideSupported = !device.isDummy && keyboard.dynamicCounts.keyOverride > 0
+  const hubEnabled = !device.isDummy && sync.authStatus.authenticated && hubConnected
 
   // Close modals when their feature support is lost
   useEffect(() => {
@@ -538,6 +601,8 @@ export function App() {
       setFileSuccessKind(null)
       setMatrixState({ matrixMode: false, hasMatrixTester: false })
       setResettingKeyboard(false)
+      setHubConnected(false)
+      setHubMyPosts([])
     }
   }, [device.disconnectDevice, keyboard.reset])
 
@@ -762,6 +827,7 @@ export function App() {
         autoAdvance={devicePrefs.autoAdvance}
         unlocked={keyboard.unlockStatus.unlocked}
         syncStatus={sync.syncStatus}
+        hubConnected={sync.authStatus.authenticated ? hubConnected : undefined}
         matrixMode={matrixState.matrixMode}
         typingTestMode={typingTestMode}
         onDisconnect={handleDisconnect}
@@ -891,9 +957,12 @@ export function App() {
           onExportEntryVil={!device.isDummy ? handleExportEntryVil : undefined}
           onExportEntryKeymapC={!device.isDummy ? handleExportEntryKeymapC : undefined}
           onExportEntryPdf={!device.isDummy ? handleExportEntryPdf : undefined}
-          onUploadToHub={!device.isDummy && sync.authStatus.authenticated ? handleUploadToHub : undefined}
-          onUpdateOnHub={!device.isDummy && sync.authStatus.authenticated ? handleUpdateOnHub : undefined}
-          onRemoveFromHub={!device.isDummy && sync.authStatus.authenticated ? handleRemoveFromHub : undefined}
+          onUploadToHub={hubEnabled ? handleUploadToHub : undefined}
+          onUpdateOnHub={hubEnabled ? handleUpdateOnHub : undefined}
+          onRemoveFromHub={hubEnabled ? handleRemoveFromHub : undefined}
+          hubMyPosts={hubEnabled ? hubMyPosts : undefined}
+          onReuploadToHub={hubEnabled ? handleReuploadToHub : undefined}
+          onDeleteOrphanedHubPost={hubEnabled ? handleDeleteOrphanedHubPost : undefined}
           hubUploading={hubUploading}
           hubUploadResult={hubUploadResult}
           fileDisabled={fileIO.saving || fileIO.loading}

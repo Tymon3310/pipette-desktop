@@ -1019,6 +1019,109 @@ describe('LayoutStoreModal', () => {
     })
   })
 
+  describe('orphaned hub post detection', () => {
+    const HUB_MY_POSTS = [
+      { id: 'orphan-post-1', title: 'First Layout' },
+      { id: 'orphan-post-2', title: 'Other Layout' },
+    ]
+
+    const ENTRIES_NO_HUB: SnapshotMeta[] = [
+      {
+        id: 'entry-1',
+        label: 'First Layout',
+        filename: 'KB_2026-01-01.pipette',
+        savedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'entry-2',
+        label: 'No Match Layout',
+        filename: 'KB_2026-01-02.pipette',
+        savedAt: '2026-01-02T12:30:00.000Z',
+      },
+    ]
+
+    it('shows Upload? and Delete when orphan match found', () => {
+      render(
+        <LayoutStoreModal
+          entries={ENTRIES_NO_HUB}
+          {...DEFAULT_PROPS}
+          hubMyPosts={HUB_MY_POSTS}
+          onReuploadToHub={vi.fn()}
+          onDeleteOrphanedHubPost={vi.fn()}
+        />,
+      )
+
+      expect(screen.getByTestId('layout-store-reupload-hub')).toBeInTheDocument()
+      expect(screen.getByTestId('layout-store-reupload-hub').textContent).toBe('hub.uploadQuestion')
+      expect(screen.getByTestId('layout-store-delete-orphan-hub')).toBeInTheDocument()
+      expect(screen.getByTestId('layout-store-delete-orphan-hub').textContent).toBe('hub.deleteFromHub')
+    })
+
+    it('shows normal Upload when no orphan match', () => {
+      render(
+        <LayoutStoreModal
+          entries={ENTRIES_NO_HUB}
+          {...DEFAULT_PROPS}
+          hubMyPosts={HUB_MY_POSTS}
+          onUploadToHub={vi.fn()}
+          onReuploadToHub={vi.fn()}
+          onDeleteOrphanedHubPost={vi.fn()}
+        />,
+      )
+
+      // entry-2 ("No Match Layout") doesn't match any hub post
+      expect(screen.getByTestId('layout-store-upload-hub')).toBeInTheDocument()
+      expect(screen.getByTestId('layout-store-upload-hub').textContent).toBe('hub.uploadToHub')
+    })
+
+    it('calls onReuploadToHub with entryId and orphanedPostId when Upload? clicked', () => {
+      const onReuploadToHub = vi.fn()
+      render(
+        <LayoutStoreModal
+          entries={ENTRIES_NO_HUB}
+          {...DEFAULT_PROPS}
+          hubMyPosts={HUB_MY_POSTS}
+          onReuploadToHub={onReuploadToHub}
+          onDeleteOrphanedHubPost={vi.fn()}
+        />,
+      )
+
+      fireEvent.click(screen.getByTestId('layout-store-reupload-hub'))
+
+      expect(onReuploadToHub).toHaveBeenCalledWith('entry-1', 'orphan-post-1')
+    })
+
+    it('calls onDeleteOrphanedHubPost with entryId and orphanedPostId when Delete clicked', () => {
+      const onDeleteOrphanedHubPost = vi.fn()
+      render(
+        <LayoutStoreModal
+          entries={ENTRIES_NO_HUB}
+          {...DEFAULT_PROPS}
+          hubMyPosts={HUB_MY_POSTS}
+          onReuploadToHub={vi.fn()}
+          onDeleteOrphanedHubPost={onDeleteOrphanedHubPost}
+        />,
+      )
+
+      fireEvent.click(screen.getByTestId('layout-store-delete-orphan-hub'))
+
+      expect(onDeleteOrphanedHubPost).toHaveBeenCalledWith('entry-1', 'orphan-post-1')
+    })
+
+    it('shows normal Upload when hubMyPosts not provided', () => {
+      render(
+        <LayoutStoreModal
+          entries={ENTRIES_NO_HUB}
+          {...DEFAULT_PROPS}
+          onUploadToHub={vi.fn()}
+        />,
+      )
+
+      const uploadBtns = screen.getAllByTestId('layout-store-upload-hub')
+      expect(uploadBtns).toHaveLength(2)
+    })
+  })
+
   describe('isDummy mode', () => {
     const CONTENT_PROPS = {
       onSave: vi.fn(),

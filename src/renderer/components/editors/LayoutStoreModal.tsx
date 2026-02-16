@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { ModalCloseButton } from './ModalCloseButton'
 import { ACTION_BTN, CONFIRM_DELETE_BTN, DELETE_BTN, SectionHeader, formatDate } from './store-modal-shared'
 import type { SnapshotMeta } from '../../../shared/types/snapshot-store'
+import type { HubMyPost } from '../../../shared/types/hub'
 
 export type FileStatus =
   | 'idle'
@@ -78,6 +79,73 @@ function FormatButtons({ className, testIdPrefix, disabled, onVil, onKeymapC, on
   )
 }
 
+interface HubOrphanButtonsProps {
+  entry: SnapshotMeta
+  hubMyPosts?: HubMyPost[]
+  hubUploading?: string | null
+  fileDisabled?: boolean
+  onUploadToHub?: (entryId: string) => void
+  onReuploadToHub?: (entryId: string, orphanedPostId: string) => void
+  onDeleteOrphanedHubPost?: (entryId: string, orphanedPostId: string) => void
+}
+
+function HubOrphanButtons({
+  entry,
+  hubMyPosts,
+  hubUploading,
+  fileDisabled,
+  onUploadToHub,
+  onReuploadToHub,
+  onDeleteOrphanedHubPost,
+}: HubOrphanButtonsProps) {
+  const { t } = useTranslation()
+  const orphanPost = hubMyPosts?.find((p) => p.title === entry.label)
+  const disabled = !!hubUploading || fileDisabled
+
+  if (orphanPost) {
+    return (
+      <>
+        {onReuploadToHub && (
+          <button
+            type="button"
+            className={HUB_BTN}
+            onClick={() => onReuploadToHub(entry.id, orphanPost.id)}
+            disabled={disabled}
+            data-testid="layout-store-reupload-hub"
+          >
+            {hubUploading === entry.id ? t('hub.uploading') : t('hub.uploadQuestion')}
+          </button>
+        )}
+        {onDeleteOrphanedHubPost && (
+          <button
+            type="button"
+            className={HUB_BTN}
+            onClick={() => onDeleteOrphanedHubPost(entry.id, orphanPost.id)}
+            disabled={disabled}
+            data-testid="layout-store-delete-orphan-hub"
+          >
+            {t('hub.deleteFromHub')}
+          </button>
+        )}
+      </>
+    )
+  }
+
+  if (!onUploadToHub) return null
+
+  return (
+    <button
+      type="button"
+      className={HUB_BTN}
+      onClick={() => onUploadToHub(entry.id)}
+      disabled={disabled}
+      data-testid="layout-store-upload-hub"
+    >
+      {hubUploading === entry.id ? t('hub.uploading') : t('hub.uploadToHub')}
+    </button>
+  )
+}
+
 function fileStatusColorClass(status: FileStatus): string {
   if (status === 'importing' || status === 'exporting') return 'text-content-muted'
   if (typeof status === 'object' && status.kind === 'success') return 'text-accent'
@@ -127,6 +195,9 @@ export interface LayoutStoreContentProps {
   onUploadToHub?: (entryId: string) => void
   onUpdateOnHub?: (entryId: string) => void
   onRemoveFromHub?: (entryId: string) => void
+  hubMyPosts?: HubMyPost[]
+  onReuploadToHub?: (entryId: string, orphanedPostId: string) => void
+  onDeleteOrphanedHubPost?: (entryId: string, orphanedPostId: string) => void
   hubUploading?: string | null
   hubUploadResult?: HubEntryResult | null
   fileDisabled?: boolean
@@ -156,6 +227,9 @@ export function LayoutStoreContent({
   onUploadToHub,
   onUpdateOnHub,
   onRemoveFromHub,
+  hubMyPosts,
+  onReuploadToHub,
+  onDeleteOrphanedHubPost,
   hubUploading,
   hubUploadResult,
   fileDisabled,
@@ -175,15 +249,20 @@ export function LayoutStoreContent({
     e.preventDefault()
     if (saving) return
     const trimmed = saveLabel.trim()
+
+    // First submit with a duplicate label: ask for confirmation
     const existing = entries.find((entry) => entry.label === trimmed)
     if (existing && !confirmOverwriteId) {
       setConfirmOverwriteId(existing.id)
       return
     }
+
+    // Second submit (confirmed overwrite): delete the old entry first
     if (confirmOverwriteId) {
       onDelete(confirmOverwriteId)
       setConfirmOverwriteId(null)
     }
+
     onSave(trimmed)
     setSaveLabel('')
   }
@@ -214,7 +293,7 @@ export function LayoutStoreContent({
   const hasImportSideload = onImportVil || onSideloadJson
   const hasEntryExport = onExportEntryVil || onExportEntryKeymapC || onExportEntryPdf
   const hasCurrentExport = onExportVil || onExportKeymapC || onExportPdf
-  const hasHubActions = onUploadToHub || onUpdateOnHub || onRemoveFromHub
+  const hasHubActions = onUploadToHub || onUpdateOnHub || onRemoveFromHub || onReuploadToHub || onDeleteOrphanedHubPost
   const isPanel = !!listClassName
   const fixedSection = isPanel ? ' shrink-0' : ''
 
@@ -490,16 +569,16 @@ export function LayoutStoreContent({
                               )}
                             </>
                           )}
-                          {!entry.hubPostId && onUploadToHub && (
-                            <button
-                              type="button"
-                              className={HUB_BTN}
-                              onClick={() => onUploadToHub(entry.id)}
-                              disabled={!!hubUploading || fileDisabled}
-                              data-testid="layout-store-upload-hub"
-                            >
-                              {hubUploading === entry.id ? t('hub.uploading') : t('hub.uploadToHub')}
-                            </button>
+                          {!entry.hubPostId && (
+                            <HubOrphanButtons
+                              entry={entry}
+                              hubMyPosts={hubMyPosts}
+                              hubUploading={hubUploading}
+                              fileDisabled={fileDisabled}
+                              onUploadToHub={onUploadToHub}
+                              onReuploadToHub={onReuploadToHub}
+                              onDeleteOrphanedHubPost={onDeleteOrphanedHubPost}
+                            />
                           )}
                         </div>
                       </div>

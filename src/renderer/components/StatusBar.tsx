@@ -8,6 +8,7 @@ interface Props {
   autoAdvance: boolean
   unlocked: boolean
   syncStatus: SyncStatusType
+  hubConnected?: boolean
   matrixMode: boolean
   typingTestMode?: boolean
   onDisconnect: () => void
@@ -26,6 +27,7 @@ export function StatusBar({
   autoAdvance,
   unlocked,
   syncStatus,
+  hubConnected,
   matrixMode,
   typingTestMode,
   onDisconnect,
@@ -73,6 +75,14 @@ export function StatusBar({
                 {t('sync.cancelPending')}
               </button>
             )}
+          </>
+        )}
+        {hubConnected !== undefined && (
+          <>
+            <span className="text-edge">|</span>
+            <span className={hubConnected ? 'text-accent' : 'text-content-muted'} data-testid="hub-status">
+              {hubConnected ? t('hub.hubConnected') : t('hub.hubDisconnected')}
+            </span>
           </>
         )}
       </div>

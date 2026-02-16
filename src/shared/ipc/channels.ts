@@ -82,6 +82,7 @@ export const IpcChannels = {
   HUB_UPLOAD_POST: 'hub:upload-post',
   HUB_UPDATE_POST: 'hub:update-post',
   HUB_DELETE_POST: 'hub:delete-post',
+  HUB_FETCH_MY_POSTS: 'hub:fetch-my-posts',
 
   // Snapshot Store extensions
   SNAPSHOT_STORE_SET_HUB_POST_ID: 'snapshot-store:set-hub-post-id',

@@ -108,7 +108,7 @@ function ResetKeyboardDataSection({
   )
 }
 
-const PANEL_BASE = 'absolute top-0 h-full w-[380px] max-w-[90vw] flex flex-col border-edge bg-surface-alt shadow-xl transition-transform duration-300 ease-out'
+const PANEL_BASE = 'absolute top-0 h-full w-[440px] max-w-[90vw] flex flex-col border-edge bg-surface-alt shadow-xl transition-transform duration-300 ease-out'
 
 function panelPositionClass(side: PanelSide, open: boolean): string {
   if (side === 'left') return `${PANEL_BASE} left-0 border-r ${open ? 'translate-x-0' : '-translate-x-full'}`

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Hub API client — auth token exchange + multipart post upload
 
+import type { HubMyPost } from '../../shared/types/hub'
+
 const HUB_API_DEFAULT = 'https://pipette-hub.pages.dev'
 const isDev = !!process.env.ELECTRON_RENDERER_URL
 const HUB_API_BASE = (isDev && process.env.PIPETTE_HUB_URL) || HUB_API_DEFAULT
@@ -87,6 +89,13 @@ function buildMultipartBody(
   parts.push(Buffer.from(`--${boundary}--\r\n`))
 
   return { body: Buffer.concat(parts), boundary }
+}
+
+export async function fetchMyPosts(jwt: string): Promise<HubMyPost[]> {
+  return hubFetch<HubMyPost[]>(`${HUB_API_BASE}/api/files/me`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${jwt}` },
+  }, 'Hub fetch my posts failed')
 }
 
 export async function deletePostFromHub(jwt: string, postId: string): Promise<void> {

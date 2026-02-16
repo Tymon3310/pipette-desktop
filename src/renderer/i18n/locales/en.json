@@ -451,7 +451,11 @@
     "removeSuccess": "Removed from Pipette Hub",
     "removeFailed": "Remove failed",
     "confirmRemove": "Remove?",
-    "pipetteHub": "Pipette Hub"
+    "pipetteHub": "Pipette Hub",
+    "uploadQuestion": "Upload?",
+    "deleteFromHub": "Delete",
+    "hubConnected": "Hub Connect",
+    "hubDisconnected": "Hub Disconnect"
   },
   "favoriteStore": {
     "title": "Favorites",

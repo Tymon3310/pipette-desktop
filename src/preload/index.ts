@@ -14,7 +14,7 @@ import type { AppConfig } from '../shared/types/app-config'
 import type { SyncAuthStatus, SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets } from '../shared/types/sync'
 import type { PipetteSettings } from '../shared/types/pipette-settings'
 import type { LanguageListEntry } from '../shared/types/language-store'
-import type { HubUploadPostParams, HubUpdatePostParams, HubUploadResult, HubDeleteResult } from '../shared/types/hub'
+import type { HubUploadPostParams, HubUpdatePostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult } from '../shared/types/hub'
 
 /**
  * API exposed to renderer via contextBridge.
@@ -234,6 +234,8 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.HUB_UPDATE_POST, params),
   hubDeletePost: (postId: string): Promise<HubDeleteResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_DELETE_POST, postId),
+  hubFetchMyPosts: (): Promise<HubFetchMyPostsResult> =>
+    ipcRenderer.invoke(IpcChannels.HUB_FETCH_MY_POSTS),
 
   // --- Snapshot Store extensions ---
   snapshotStoreSetHubPostId: (uid: string, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }> =>

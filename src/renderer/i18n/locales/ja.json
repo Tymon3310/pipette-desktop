@@ -451,7 +451,11 @@
     "removeSuccess": "Pipette Hub から削除しました",
     "removeFailed": "削除に失敗しました",
     "confirmRemove": "削除しますか？",
-    "pipetteHub": "Pipette Hub"
+    "pipetteHub": "Pipette Hub",
+    "uploadQuestion": "アップロード？",
+    "deleteFromHub": "削除",
+    "hubConnected": "Hub 接続",
+    "hubDisconnected": "Hub 未接続"
   },
   "favoriteStore": {
     "title": "お気に入り",
