@@ -437,7 +437,6 @@
       "version": "バージョン {{version}}",
       "license": "ライセンス: {{license}}",
       "licenseValue": "GPL-3.0-or-later",
-      "termsOfService": "利用規約",
       "termsTitle": "利用規約",
       "termsGoogleDrive": "Pipette は Google Drive のアプリケーションデータフォルダ（appDataFolder）を使用して、暗号化された同期データを保存します。このデータは Pipette のみがアクセス可能で、Google Drive のファイル一覧には表示されません。",
       "termsHubData": "Pipette Hub にアップロードされたデータは、Pipette Hub の利用規約に従います。アップロードされたコンテンツ（キーマップ、サムネイル、メタデータ）は Pipette Hub のサーバーに保存され、一般に公開される場合があります。",

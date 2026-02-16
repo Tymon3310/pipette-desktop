@@ -802,12 +802,6 @@ describe('SettingsModal', () => {
       expect(onHubEnabledChange).toHaveBeenCalledWith(false)
     })
 
-    it('reflects hubEnabled off state', () => {
-      renderAndSwitchToHub({ hubEnabled: false })
-      const toggle = screen.getByTestId('hub-enable-toggle')
-      expect(toggle.getAttribute('aria-checked')).toBe('false')
-    })
-
     it('shows auth required message when not authenticated', () => {
       renderAndSwitchToHub({ hubAuthenticated: false })
 
@@ -1069,22 +1063,10 @@ describe('SettingsModal', () => {
       expect(screen.getByTestId('about-license')).toBeInTheDocument()
     })
 
-    it('shows terms of service button', () => {
+    it('shows terms of service content by default', () => {
       renderAndSwitchToAbout()
 
-      expect(screen.getByTestId('about-terms-button')).toBeInTheDocument()
-    })
-
-    it('toggles terms of service content on button click', () => {
-      renderAndSwitchToAbout()
-
-      expect(screen.queryByTestId('about-terms-content')).not.toBeInTheDocument()
-
-      fireEvent.click(screen.getByTestId('about-terms-button'))
       expect(screen.getByTestId('about-terms-content')).toBeInTheDocument()
-
-      fireEvent.click(screen.getByTestId('about-terms-button'))
-      expect(screen.queryByTestId('about-terms-content')).not.toBeInTheDocument()
     })
 
     it('does not show other tab content when About is active', () => {

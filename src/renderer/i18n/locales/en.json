@@ -437,7 +437,6 @@
       "version": "Version {{version}}",
       "license": "License: {{license}}",
       "licenseValue": "GPL-3.0-or-later",
-      "termsOfService": "Terms of Service",
       "termsTitle": "Terms of Service",
       "termsGoogleDrive": "Pipette uses Google Drive's Application Data folder (appDataFolder) to store encrypted sync data. This data is only accessible by Pipette and is not visible in your Google Drive files.",
       "termsHubData": "Data uploaded to Pipette Hub is subject to Pipette Hub's Terms of Service. Uploaded content (keymaps, thumbnails, metadata) is stored on Pipette Hub's servers and may be publicly visible.",

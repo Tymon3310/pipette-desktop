@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import appIcon from '../assets/app-icon.png'
 
@@ -14,7 +13,6 @@ const TERMS_SECTIONS = [
 
 export function AboutTabContent() {
   const { t } = useTranslation()
-  const [showTerms, setShowTerms] = useState(false)
 
   return (
     <div className="pt-4 space-y-6">
@@ -46,35 +44,22 @@ export function AboutTabContent() {
         </span>
       </div>
 
-      <div className="flex flex-col items-center">
-        <button
-          type="button"
-          className="text-sm text-accent hover:underline"
-          onClick={() => setShowTerms((prev) => !prev)}
-          data-testid="about-terms-button"
-        >
-          {t('settings.about.termsOfService')}
-        </button>
-      </div>
-
-      {showTerms && (
-        <div
-          className="max-h-60 overflow-y-auto rounded-lg border border-edge bg-surface p-4 space-y-3"
-          data-testid="about-terms-content"
-        >
-          <h4 className="text-sm font-medium text-content">
-            {t('settings.about.termsTitle')}
-          </h4>
-          {TERMS_SECTIONS.map((key) => (
-            <p key={key} className="text-xs text-content-muted leading-relaxed">
-              {t(`settings.about.${key}`)}
-            </p>
-          ))}
-          <p className="text-xs text-content-muted leading-relaxed font-medium">
-            {t('settings.about.termsDisclaimer')}
+      <div
+        className="max-h-60 overflow-y-auto rounded-lg border border-edge bg-surface p-4 space-y-3"
+        data-testid="about-terms-content"
+      >
+        <h4 className="text-sm font-medium text-content">
+          {t('settings.about.termsTitle')}
+        </h4>
+        {TERMS_SECTIONS.map((key) => (
+          <p key={key} className="text-xs text-content-muted leading-relaxed">
+            {t(`settings.about.${key}`)}
           </p>
-        </div>
-      )}
+        ))}
+        <p className="text-xs text-content-muted leading-relaxed font-medium">
+          {t('settings.about.termsDisclaimer')}
+        </p>
+      </div>
     </div>
   )
 }
