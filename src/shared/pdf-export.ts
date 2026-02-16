@@ -46,6 +46,7 @@ const LAYER_HEADER_HEIGHT = 7
 const BORDER_PAD = 4
 const SPACING_RATIO = 0.2
 const ROUNDNESS = 0.08
+const INNER_PAD_RATIO = 0.05
 
 // Font size caps: Math.min(absolute max pt, scale-relative max pt)
 const MASKED_LABEL_MAX = 18
@@ -104,6 +105,69 @@ function fitText(doc: jsPDF, text: string, maxWidth: number, maxSize: number): n
   return 4
 }
 
+// Build a dimension key for XObject lookup (rounded to avoid float mismatch)
+function dimKey(w: number, h: number): string {
+  return `${w.toFixed(2)}_${h.toFixed(2)}`
+}
+
+// Pre-register Form XObjects for each unique key shape to avoid redundant path data.
+// Normal keys get two variants (nk_ for plain, mk_ for masked); encoders get one (enc_).
+function registerShapes(doc: jsPDF, keys: KleKey[], scale: number): void {
+  const spacing = scale * SPACING_RATIO
+  const corner = scale * ROUNDNESS
+  const identity = doc.Matrix(1, 0, 0, 1, 0, 0)
+  const registered = new Set<string>()
+
+  for (const key of keys) {
+    const w = key.width * scale - spacing
+    const h = key.height * scale - spacing
+    const sk = dimKey(w, h)
+
+    if (key.encoderIdx !== -1) {
+      const id = `enc_${sk}`
+      if (registered.has(id)) continue
+      registered.add(id)
+
+      const r = Math.min(key.width, key.height) * scale / 2 - spacing / 2
+      doc.beginFormObject(0, 0, w, h, identity)
+      doc.setLineWidth(0.3)
+      doc.setDrawColor(0)
+      doc.setFillColor(255, 255, 255)
+      doc.circle(w / 2, h / 2, r, 'FD')
+      doc.endFormObject(id)
+    } else {
+      const nkId = `nk_${sk}`
+      if (registered.has(nkId)) continue
+      registered.add(nkId)
+
+      // Normal key: white rounded rect with black stroke
+      doc.beginFormObject(0, 0, w, h, identity)
+      doc.setLineWidth(0.3)
+      doc.setDrawColor(0)
+      doc.setFillColor(255, 255, 255)
+      doc.roundedRect(0, 0, w, h, corner, corner, 'FD')
+      doc.endFormObject(nkId)
+
+      // Masked key: outer rect + gray inner rect
+      const innerPad = scale * INNER_PAD_RATIO
+      const innerW = Math.max(0, w - innerPad * 2)
+      const innerH = Math.max(0, h * 0.6 - innerPad * 2)
+      const innerCorner = corner * 0.8
+
+      const mkId = `mk_${sk}`
+      doc.beginFormObject(0, 0, w, h, identity)
+      doc.setLineWidth(0.3)
+      doc.setDrawColor(0)
+      doc.setFillColor(255, 255, 255)
+      doc.roundedRect(0, 0, w, h, corner, corner, 'FD')
+      doc.setFillColor(240, 240, 240)
+      doc.roundedRect(innerPad, h * 0.4 + innerPad, innerW, innerH, innerCorner, innerCorner, 'FD')
+      doc.endFormObject(mkId)
+      registered.add(mkId)
+    }
+  }
+}
+
 function formatTimestamp(date: Date): string {
   const pad = (n: number): string => String(n).padStart(2, '0')
   const d = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
@@ -125,28 +189,21 @@ function drawKey(
   const y = offsetY + key.y * scale
   const w = key.width * scale - spacing
   const h = key.height * scale - spacing
-  const corner = scale * ROUNDNESS
 
   const code = input.keymap.get(`${layer},${key.row},${key.col}`) ?? 0
   const qmkId = input.serializeKeycode(code)
   const label = input.keycodeLabel(qmkId)
   const masked = input.isMask(qmkId)
 
-  doc.setDrawColor(0)
-  doc.setFillColor(255, 255, 255)
-  doc.roundedRect(x, y, w, h, corner, corner, 'FD')
+  // Stamp pre-defined XObject shape (rect drawn once, referenced many times)
+  const sk = dimKey(w, h)
+  doc.doFormObject(masked ? `mk_${sk}` : `nk_${sk}`, doc.Matrix(1, 0, 0, 1, x, y))
 
   if (masked) {
-    // Inner rect for masked keys (modifier + base key)
-    const innerPad = scale * 0.05
-    const innerX = x + innerPad
+    const innerPad = scale * INNER_PAD_RATIO
     const innerY = y + h * 0.4 + innerPad
     const innerW = Math.max(0, w - innerPad * 2)
     const innerH = Math.max(0, h * 0.6 - innerPad * 2)
-    const innerCorner = corner * 0.8
-
-    doc.setFillColor(240, 240, 240)
-    doc.roundedRect(innerX, innerY, innerW, innerH, innerCorner, innerCorner, 'FD')
 
     // Outer label (modifier) in top portion
     const outerLabel = sanitizeLabel(
@@ -200,13 +257,16 @@ function drawEncoder(
   input: PdfExportInput,
 ): void {
   const spacing = scale * SPACING_RATIO
-  const cx = offsetX + key.x * scale + (key.width * scale - spacing) / 2
-  const cy = offsetY + key.y * scale + (key.height * scale - spacing) / 2
+  const x = offsetX + key.x * scale
+  const y = offsetY + key.y * scale
+  const w = key.width * scale - spacing
+  const h = key.height * scale - spacing
+  const cx = x + w / 2
+  const cy = y + h / 2
   const r = Math.min(key.width, key.height) * scale / 2 - spacing / 2
 
-  doc.setDrawColor(0)
-  doc.setFillColor(255, 255, 255)
-  doc.circle(cx, cy, r, 'FD')
+  // Stamp pre-defined XObject shape
+  doc.doFormObject(`enc_${dimKey(w, h)}`, doc.Matrix(1, 0, 0, 1, x, y))
 
   // encoderDir: 0=CW, 1=CCW
   const code = input.encoderLayout.get(`${layer},${key.encoderIdx},${key.encoderDir}`) ?? 0
@@ -265,6 +325,9 @@ export function generateKeymapPdf(input: PdfExportInput): string {
     unit: 'mm',
     format: [PAGE_WIDTH, pageHeight],
   })
+
+  // Register reusable Form XObjects for key shapes (defined once, stamped per key)
+  registerShapes(doc, visibleKeys, scale)
 
   // Footer text (rendered on each page at the end)
   const timestamp = formatTimestamp(new Date())
