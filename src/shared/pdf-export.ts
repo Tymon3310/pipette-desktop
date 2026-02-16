@@ -37,18 +37,25 @@ interface Bounds {
   height: number
 }
 
-// A4 landscape dimensions in mm
+// Page layout dimensions in mm (dynamic height, one layer per page)
 const PAGE_WIDTH = 297
-const PAGE_HEIGHT = 210
-const MARGIN = 10
+const MARGIN = 5
 const USABLE_WIDTH = PAGE_WIDTH - MARGIN * 2
-const USABLE_HEIGHT = PAGE_HEIGHT - MARGIN * 2
-const FOOTER_HEIGHT = 8
-const LAYER_HEADER_HEIGHT = 8
-const LAYER_GAP = 5
-const BORDER_PAD = 5
+const FOOTER_HEIGHT = 6
+const LAYER_HEADER_HEIGHT = 7
+const BORDER_PAD = 4
 const SPACING_RATIO = 0.2
 const ROUNDNESS = 0.08
+
+// Font size caps: Math.min(absolute max pt, scale-relative max pt)
+const MASKED_LABEL_MAX = 18
+const MASKED_LABEL_SCALE = 0.55
+const NORMAL_LABEL_MAX = 20
+const NORMAL_LABEL_SCALE = 0.65
+const ENCODER_DIR_MAX = 14
+const ENCODER_DIR_SCALE = 0.45
+const ENCODER_LABEL_MAX = 16
+const ENCODER_LABEL_SCALE = 0.5
 
 // jsPDF's built-in Helvetica only supports WinAnsiEncoding (Latin-1).
 // Strip non-Latin1 characters (outside U+0020..U+00FF) to avoid rendering blanks.
@@ -125,7 +132,6 @@ function drawKey(
   const label = input.keycodeLabel(qmkId)
   const masked = input.isMask(qmkId)
 
-  // Draw key rectangle
   doc.setDrawColor(0)
   doc.setFillColor(255, 255, 255)
   doc.roundedRect(x, y, w, h, corner, corner, 'FD')
@@ -146,7 +152,7 @@ function drawKey(
     const outerLabel = sanitizeLabel(
       input.findOuterKeycode(qmkId)?.label.replace(/\n?\(kc\)$/, '') ?? label,
     )
-    const outerSize = fitText(doc, outerLabel, w * 0.9, Math.min(8, scale * 0.3))
+    const outerSize = fitText(doc, outerLabel, w * 0.9, Math.min(MASKED_LABEL_MAX, scale * MASKED_LABEL_SCALE))
     doc.setFontSize(outerSize)
     doc.setTextColor(0)
     doc.text(outerLabel, x + w / 2, y + h * 0.22, {
@@ -157,7 +163,7 @@ function drawKey(
     // Inner label (base key) in inner rect
     const innerLabel = sanitizeLabel(input.findInnerKeycode(qmkId)?.label ?? '')
     if (innerLabel) {
-      const innerSize = fitText(doc, innerLabel, innerW * 0.9, Math.min(8, scale * 0.3))
+      const innerSize = fitText(doc, innerLabel, innerW * 0.9, Math.min(MASKED_LABEL_MAX, scale * MASKED_LABEL_SCALE))
       doc.setFontSize(innerSize)
       doc.text(innerLabel, x + w / 2, innerY + innerH / 2, {
         align: 'center',
@@ -173,7 +179,7 @@ function drawKey(
       : [pdfKeyLabel(label, qmkId)]
     doc.setTextColor(0)
     for (let i = 0; i < lines.length; i++) {
-      const fontSize = fitText(doc, lines[i], w * 0.9, Math.min(9, scale * 0.35))
+      const fontSize = fitText(doc, lines[i], w * 0.9, Math.min(NORMAL_LABEL_MAX, scale * NORMAL_LABEL_SCALE))
       doc.setFontSize(fontSize)
       const lineY = y + (h / (lines.length + 1)) * (i + 1)
       doc.text(lines[i], x + w / 2, lineY, {
@@ -211,39 +217,54 @@ function drawEncoder(
   doc.setTextColor(0)
 
   // Direction label on top
-  const dirSize = fitText(doc, dirLabel, r * 1.6, Math.min(6, scale * 0.2))
+  const dirSize = fitText(doc, dirLabel, r * 1.6, Math.min(ENCODER_DIR_MAX, scale * ENCODER_DIR_SCALE))
   doc.setFontSize(dirSize)
   doc.text(dirLabel, cx, cy - r * 0.3, { align: 'center', baseline: 'middle' })
 
   // Key label on bottom
-  const labelSize = fitText(doc, label, r * 1.6, Math.min(7, scale * 0.25))
+  const labelSize = fitText(doc, label, r * 1.6, Math.min(ENCODER_LABEL_MAX, scale * ENCODER_LABEL_SCALE))
   doc.setFontSize(labelSize)
   doc.text(label, cx, cy + r * 0.3, { align: 'center', baseline: 'middle' })
 }
 
 export function generateKeymapPdf(input: PdfExportInput): string {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-
   const visibleKeys = filterVisibleKeys(input.keys, input.layoutOptions)
   const normalKeys = visibleKeys.filter((k) => k.encoderIdx === -1)
   const encoderKeys = visibleKeys.filter((k) => k.encoderIdx !== -1)
 
   const bounds = computeBounds(visibleKeys)
   if (bounds.width === 0 || bounds.height === 0) {
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     return arrayBufferToBase64(doc.output('arraybuffer'))
   }
 
-  // Scale keyboard to fit page width, capped by available vertical space per layer
-  const maxLayerHeight =
-    USABLE_HEIGHT - FOOTER_HEIGHT - LAYER_HEADER_HEIGHT - BORDER_PAD * 2 - LAYER_GAP
+  // Scale keyboard to fit usable page width, capped so page height stays reasonable
+  const MAX_PAGE_HEIGHT = PAGE_WIDTH // cap at square page to avoid jsPDF orientation swap
+  const maxContentHeight = MAX_PAGE_HEIGHT - MARGIN * 2 - LAYER_HEADER_HEIGHT - FOOTER_HEIGHT - BORDER_PAD * 2
   const scale = Math.min(
     USABLE_WIDTH / bounds.width,
-    maxLayerHeight / bounds.height,
+    maxContentHeight / bounds.height,
   )
   // Visual keyboard dimensions (keys are visually smaller due to inter-key spacing)
   const spacing = scale * SPACING_RATIO
   const visualW = bounds.width * scale - spacing
   const visualH = bounds.height * scale - spacing
+
+  const borderW = visualW + BORDER_PAD * 2
+  const borderH = visualH + BORDER_PAD * 2
+  const borderX = (PAGE_WIDTH - borderW) / 2
+  const borderY = MARGIN + LAYER_HEADER_HEIGHT
+  const keysOffsetX = borderX + BORDER_PAD - bounds.minX * scale
+  const keysOffsetY = borderY + BORDER_PAD - bounds.minY * scale
+
+  // Dynamic page height: fits exactly one layer with minimal whitespace
+  const pageHeight = MARGIN + LAYER_HEADER_HEIGHT + borderH + FOOTER_HEIGHT + MARGIN
+
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: [PAGE_WIDTH, pageHeight],
+  })
 
   // Footer text (rendered on each page at the end)
   const timestamp = formatTimestamp(new Date())
@@ -252,46 +273,30 @@ export function generateKeymapPdf(input: PdfExportInput): string {
     ? `${deviceLabel} - Exported ${timestamp} by Pipette`
     : `Exported ${timestamp} by Pipette`
 
-  let cursorY = MARGIN
-  const borderW = visualW + BORDER_PAD * 2
-  const borderH = visualH + BORDER_PAD * 2
-  const borderX = (PAGE_WIDTH - borderW) / 2
-
   for (let layer = 0; layer < input.layers; layer++) {
-    const layerBlockHeight = LAYER_HEADER_HEIGHT + borderH + LAYER_GAP
-
-    // Page break if needed (but always draw first layer on first page)
-    if (cursorY + layerBlockHeight > PAGE_HEIGHT - MARGIN - FOOTER_HEIGHT && layer > 0) {
+    if (layer > 0) {
       doc.addPage()
-      cursorY = MARGIN
     }
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
+    doc.setFontSize(12)
     doc.setTextColor(0)
-    doc.text(`Layer ${layer}`, borderX, cursorY + 5)
-    cursorY += LAYER_HEADER_HEIGHT
+    doc.text(`Layer ${layer}`, borderX, MARGIN + 5)
 
     // Outer border around keymap
     doc.setDrawColor(180)
     doc.setLineWidth(0.3)
-    doc.roundedRect(borderX, cursorY, borderW, borderH, 1.5, 1.5, 'S')
-
-    // Keys offset: align content with border interior
-    const offsetX = borderX + BORDER_PAD - bounds.minX * scale
-    const offsetY = cursorY + BORDER_PAD - bounds.minY * scale
+    doc.roundedRect(borderX, borderY, borderW, borderH, 1.5, 1.5, 'S')
 
     doc.setFont('helvetica', 'normal')
 
     for (const key of normalKeys) {
-      drawKey(doc, key, layer, offsetX, offsetY, scale, input)
+      drawKey(doc, key, layer, keysOffsetX, keysOffsetY, scale, input)
     }
 
     for (const key of encoderKeys) {
-      drawEncoder(doc, key, layer, offsetX, offsetY, scale, input)
+      drawEncoder(doc, key, layer, keysOffsetX, keysOffsetY, scale, input)
     }
-
-    cursorY += borderH + LAYER_GAP
   }
 
   // Footer on each page
@@ -301,7 +306,7 @@ export function generateKeymapPdf(input: PdfExportInput): string {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(7)
     doc.setTextColor(150)
-    doc.text(footerText, PAGE_WIDTH / 2, PAGE_HEIGHT - MARGIN + 4, { align: 'center' })
+    doc.text(footerText, PAGE_WIDTH / 2, pageHeight - MARGIN, { align: 'center' })
   }
 
   return arrayBufferToBase64(doc.output('arraybuffer'))
