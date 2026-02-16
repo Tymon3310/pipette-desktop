@@ -267,15 +267,17 @@ export function App() {
     } catch {}
   }, [sync.authStatus.authenticated])
 
-  const handleUpdateHubDisplayName = useCallback(async (name: string | null): Promise<boolean> => {
+  const handleUpdateHubDisplayName = useCallback(async (name: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const result = await window.vialAPI.hubPatchAuthMe(name)
       if (result.success && result.user) {
         setHubDisplayName(result.user.display_name)
-        return true
+        return { success: true }
       }
-    } catch {}
-    return false
+      return { success: false, error: result.error }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : undefined }
+    }
   }, [])
 
   const refreshHubMyPosts = useCallback(async () => {

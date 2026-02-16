@@ -935,5 +935,113 @@ describe('SettingsModal', () => {
         expect(screen.getByTestId('hub-error-p1')).toHaveTextContent('hub.deleteFailed')
       })
     })
+
+    describe('display name empty save prevention', () => {
+      it('disables save button when input is cleared to empty', () => {
+        const onHubDisplayNameChange = vi.fn().mockResolvedValue({ success: true })
+        renderAndSwitchToHub({
+          hubEnabled: true,
+          hubAuthenticated: true,
+          hubDisplayName: 'Alice',
+          onHubDisplayNameChange,
+        })
+
+        const input = screen.getByTestId('hub-display-name-input')
+        fireEvent.change(input, { target: { value: '' } })
+
+        const saveBtn = screen.getByTestId('hub-display-name-save')
+        expect(saveBtn).toBeDisabled()
+      })
+
+      it('disables save button when input is whitespace only', () => {
+        const onHubDisplayNameChange = vi.fn().mockResolvedValue({ success: true })
+        renderAndSwitchToHub({
+          hubEnabled: true,
+          hubAuthenticated: true,
+          hubDisplayName: 'Alice',
+          onHubDisplayNameChange,
+        })
+
+        const input = screen.getByTestId('hub-display-name-input')
+        fireEvent.change(input, { target: { value: '   ' } })
+
+        const saveBtn = screen.getByTestId('hub-display-name-save')
+        expect(saveBtn).toBeDisabled()
+      })
+
+      it('does not call onSave on Enter when input is empty', () => {
+        const onHubDisplayNameChange = vi.fn().mockResolvedValue({ success: true })
+        renderAndSwitchToHub({
+          hubEnabled: true,
+          hubAuthenticated: true,
+          hubDisplayName: 'Alice',
+          onHubDisplayNameChange,
+        })
+
+        const input = screen.getByTestId('hub-display-name-input')
+        fireEvent.change(input, { target: { value: '' } })
+        fireEvent.keyDown(input, { key: 'Enter' })
+
+        expect(onHubDisplayNameChange).not.toHaveBeenCalled()
+      })
+
+      it('does not call onSave on Enter when input is whitespace only', () => {
+        const onHubDisplayNameChange = vi.fn().mockResolvedValue({ success: true })
+        renderAndSwitchToHub({
+          hubEnabled: true,
+          hubAuthenticated: true,
+          hubDisplayName: 'Alice',
+          onHubDisplayNameChange,
+        })
+
+        const input = screen.getByTestId('hub-display-name-input')
+        fireEvent.change(input, { target: { value: '   ' } })
+        fireEvent.keyDown(input, { key: 'Enter' })
+
+        expect(onHubDisplayNameChange).not.toHaveBeenCalled()
+      })
+
+      it('shows duplicate error when save returns 409', async () => {
+        const onHubDisplayNameChange = vi.fn().mockResolvedValue({
+          success: false,
+          error: 'Hub patch auth me failed: 409 {"ok":false,"error":"display_name is already taken"}',
+        })
+        renderAndSwitchToHub({
+          hubEnabled: true,
+          hubAuthenticated: true,
+          hubDisplayName: 'Alice',
+          onHubDisplayNameChange,
+        })
+
+        const input = screen.getByTestId('hub-display-name-input')
+        fireEvent.change(input, { target: { value: 'Bob' } })
+        fireEvent.click(screen.getByTestId('hub-display-name-save'))
+
+        await waitFor(() => {
+          expect(screen.getByTestId('hub-display-name-error')).toHaveTextContent('hub.displayNameTaken')
+        })
+      })
+
+      it('shows generic error when save fails without 409', async () => {
+        const onHubDisplayNameChange = vi.fn().mockResolvedValue({
+          success: false,
+          error: 'Hub patch auth me failed: 500',
+        })
+        renderAndSwitchToHub({
+          hubEnabled: true,
+          hubAuthenticated: true,
+          hubDisplayName: 'Alice',
+          onHubDisplayNameChange,
+        })
+
+        const input = screen.getByTestId('hub-display-name-input')
+        fireEvent.change(input, { target: { value: 'Bob' } })
+        fireEvent.click(screen.getByTestId('hub-display-name-save'))
+
+        await waitFor(() => {
+          expect(screen.getByTestId('hub-display-name-error')).toHaveTextContent('hub.displayNameSaveFailed')
+        })
+      })
+    })
   })
 })

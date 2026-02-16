@@ -240,7 +240,7 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.HUB_FETCH_MY_POSTS),
   hubFetchAuthMe: (): Promise<HubUserResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_FETCH_AUTH_ME),
-  hubPatchAuthMe: (displayName: string | null): Promise<HubUserResult> =>
+  hubPatchAuthMe: (displayName: string): Promise<HubUserResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_PATCH_AUTH_ME, displayName),
 
   // --- Snapshot Store extensions ---

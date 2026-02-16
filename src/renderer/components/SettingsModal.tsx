@@ -385,12 +385,12 @@ interface Props {
   onHubRename: (postId: string, newTitle: string) => Promise<void>
   onHubDelete: (postId: string) => Promise<void>
   hubDisplayName: string | null
-  onHubDisplayNameChange: (name: string | null) => Promise<boolean>
+  onHubDisplayNameChange: (name: string) => Promise<{ success: boolean; error?: string }>
 }
 
 interface HubDisplayNameFieldProps {
   currentName: string | null
-  onSave: (name: string | null) => Promise<boolean>
+  onSave: (name: string) => Promise<{ success: boolean; error?: string }>
 }
 
 function HubDisplayNameField({ currentName, onSave }: HubDisplayNameFieldProps) {
@@ -411,10 +411,12 @@ function HubDisplayNameField({ currentName, onSave }: HubDisplayNameFieldProps) 
     setSaved(false)
     setError(null)
     try {
-      const ok = await onSave(value.trim() || null)
-      if (ok) {
+      const result = await onSave(value.trim())
+      if (result.success) {
         setSaved(true)
         setTimeout(() => setSaved(false), 2000)
+      } else if (result.error?.includes('409')) {
+        setError(t('hub.displayNameTaken'))
       } else {
         setError(t('hub.displayNameSaveFailed'))
       }
@@ -426,10 +428,10 @@ function HubDisplayNameField({ currentName, onSave }: HubDisplayNameFieldProps) 
   }, [value, onSave, t])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && hasChanged) {
+    if (e.key === 'Enter' && hasChanged && value.trim()) {
       void handleSave()
     }
-  }, [handleSave, hasChanged])
+  }, [handleSave, hasChanged, value])
 
   return (
     <div>
@@ -453,7 +455,7 @@ function HubDisplayNameField({ currentName, onSave }: HubDisplayNameFieldProps) 
           type="button"
           className={BTN_PRIMARY}
           onClick={handleSave}
-          disabled={saving || !hasChanged}
+          disabled={saving || !hasChanged || !value.trim()}
           data-testid="hub-display-name-save"
         >
           {saving ? t('common.saving') : t('common.save')}

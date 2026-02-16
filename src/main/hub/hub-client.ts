@@ -98,7 +98,7 @@ export async function fetchAuthMe(jwt: string): Promise<HubUser> {
   }, 'Hub fetch auth me failed')
 }
 
-export async function patchAuthMe(jwt: string, displayName: string | null): Promise<HubUser> {
+export async function patchAuthMe(jwt: string, displayName: string): Promise<HubUser> {
   return hubFetch<HubUser>(`${HUB_API_BASE}/api/auth/me`, {
     method: 'PATCH',
     headers: {

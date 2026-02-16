@@ -420,20 +420,12 @@ describe('hub-ipc', () => {
       expect(patchAuthMe).toHaveBeenCalledWith('hub-jwt', 'New Name')
     })
 
-    it('patches with null display name', async () => {
-      const user = { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' }
-      vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
-      vi.mocked(authenticateWithHub).mockResolvedValueOnce({
-        token: 'hub-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: 'Old Name' },
-      })
-      vi.mocked(patchAuthMe).mockResolvedValueOnce(user)
-
+    it('rejects null display name', async () => {
       const handler = getPatchAuthMeHandler()
       const result = await handler({}, null)
 
-      expect(result).toEqual({ success: true, user })
-      expect(patchAuthMe).toHaveBeenCalledWith('hub-jwt', null)
+      expect(result).toEqual({ success: false, error: 'Display name must not be empty' })
+      expect(getIdToken).not.toHaveBeenCalled()
     })
 
     it('returns error when not authenticated', async () => {
@@ -465,29 +457,25 @@ describe('hub-ipc', () => {
       const handler = getPatchAuthMeHandler()
       for (const bad of [123, true, { name: 'x' }, ['a']]) {
         const result = await handler({}, bad)
-        expect(result).toEqual({ success: false, error: 'Invalid display name' })
+        expect(result).toEqual({ success: false, error: 'Display name must not be empty' })
       }
       expect(getIdToken).not.toHaveBeenCalled()
     })
 
     it('rejects display name exceeding max length', async () => {
       const handler = getPatchAuthMeHandler()
-      const result = await handler({}, 'a'.repeat(101))
+      const result = await handler({}, 'a'.repeat(51))
 
       expect(result).toEqual({ success: false, error: 'Display name too long' })
       expect(getIdToken).not.toHaveBeenCalled()
     })
 
-    it('normalizes whitespace-only to null', async () => {
-      const user = { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' }
-      mockHubAuth()
-      vi.mocked(patchAuthMe).mockResolvedValueOnce(user)
-
+    it('rejects whitespace-only display name', async () => {
       const handler = getPatchAuthMeHandler()
       const result = await handler({}, '   ')
 
-      expect(result).toEqual({ success: true, user })
-      expect(patchAuthMe).toHaveBeenCalledWith('hub-jwt', null)
+      expect(result).toEqual({ success: false, error: 'Display name must not be empty' })
+      expect(getIdToken).not.toHaveBeenCalled()
     })
 
     it('trims whitespace from display name', async () => {

@@ -10,7 +10,7 @@ import type { HubUploadFiles } from './hub-client'
 
 const AUTH_ERROR = 'Not authenticated with Google. Please sign in again.'
 const POST_ID_RE = /^[a-zA-Z0-9_-]+$/
-const DISPLAY_NAME_MAX_LENGTH = 100
+const DISPLAY_NAME_MAX_LENGTH = 50
 
 function validatePostId(postId: string): void {
   if (!postId || !POST_ID_RE.test(postId)) {
@@ -18,11 +18,10 @@ function validatePostId(postId: string): void {
   }
 }
 
-function validateDisplayName(displayName: unknown): string | null {
-  if (displayName === null) return null
-  if (typeof displayName !== 'string') throw new Error('Invalid display name')
+function validateDisplayName(displayName: unknown): string {
+  if (displayName == null || typeof displayName !== 'string') throw new Error('Display name must not be empty')
   const trimmed = displayName.trim()
-  if (trimmed.length === 0) return null
+  if (trimmed.length === 0) throw new Error('Display name must not be empty')
   if (trimmed.length > DISPLAY_NAME_MAX_LENGTH) throw new Error('Display name too long')
   return trimmed
 }

@@ -469,7 +469,8 @@
     "displayName": "Display Name",
     "displayNameDescription": "Your display name on Hub posts",
     "displayNameSaved": "Display name saved",
-    "displayNameSaveFailed": "Failed to save display name"
+    "displayNameSaveFailed": "Failed to save display name",
+    "displayNameTaken": "This display name is already taken"
   },
   "favoriteStore": {
     "title": "Favorites",
