@@ -308,8 +308,10 @@ export function App() {
   }, [appConfig.config.hubEnabled, sync.authStatus.authenticated, deviceName, device.isDummy])
 
   const refreshHubPosts = useCallback(async () => {
-    await refreshHubMyPosts()
+    // Fetch keyboard posts first so they are ready before hubConnected
+    // is set to true inside refreshHubMyPosts (which gates hubReady).
     await refreshHubKeyboardPosts()
+    await refreshHubMyPosts()
   }, [refreshHubMyPosts, refreshHubKeyboardPosts])
 
   const getHubPostId = useCallback((label: string): string | undefined => {
@@ -724,6 +726,7 @@ export function App() {
       setResettingKeyboard(false)
       setHubConnected(false)
       setHubMyPosts([])
+      setHubKeyboardPosts([])
     }
   }, [device.disconnectDevice, keyboard.reset])
 
