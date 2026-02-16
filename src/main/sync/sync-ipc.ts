@@ -12,6 +12,7 @@ import {
   checkPasswordStrength,
 } from './sync-crypto'
 import { startOAuthFlow, getAuthStatus, signOut } from './google-auth'
+import { clearHubTokenCache } from '../hub/hub-ipc'
 import { deleteAllFiles, deleteFilesByPrefix } from './google-drive'
 import {
   executeSync,
@@ -118,6 +119,7 @@ export function setupSyncIpc(): void {
   ipcMain.handle(IpcChannels.SYNC_AUTH_SIGN_OUT, () =>
     wrapIpc('Sign out failed', async () => {
       stopPolling()
+      clearHubTokenCache()
       await signOut()
     }),
   )

@@ -37,11 +37,12 @@ vi.mock('../hub/hub-client', () => ({
 import { ipcMain } from 'electron'
 import { getIdToken } from '../sync/google-auth'
 import { authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from '../hub/hub-client'
-import { setupHubIpc } from '../hub/hub-ipc'
+import { setupHubIpc, clearHubTokenCache } from '../hub/hub-ipc'
 
 describe('hub-ipc', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearHubTokenCache()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(ipcMain as any)._handlers.clear()
     setupHubIpc()
@@ -559,6 +560,115 @@ describe('hub-ipc', () => {
         success: false,
         error: 'Hub fetch keyboard posts failed: 500',
       })
+    })
+  })
+
+  describe('Hub JWT caching', () => {
+    it('reuses cached token for consecutive API calls', async () => {
+      vi.mocked(getIdToken).mockResolvedValue('id-token')
+      vi.mocked(authenticateWithHub).mockResolvedValue({
+        token: 'hub-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
+      vi.mocked(fetchMyPosts).mockResolvedValue([])
+      vi.mocked(fetchAuthMe).mockResolvedValue({ id: 'u1', email: 'test@example.com', display_name: null })
+
+      const fetchPostsHandler = getHandlerFor('hub:fetch-my-posts')
+      const fetchAuthHandler = getHandlerFor('hub:fetch-auth-me')
+
+      await fetchPostsHandler()
+      await fetchAuthHandler()
+
+      expect(authenticateWithHub).toHaveBeenCalledTimes(1)
+    })
+
+    it('deduplicates concurrent auth requests', async () => {
+      vi.mocked(getIdToken).mockResolvedValue('id-token')
+      vi.mocked(authenticateWithHub).mockResolvedValue({
+        token: 'hub-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
+      vi.mocked(fetchMyPosts).mockResolvedValue([])
+      vi.mocked(fetchMyPostsByKeyboard).mockResolvedValue([])
+      vi.mocked(fetchAuthMe).mockResolvedValue({ id: 'u1', email: 'test@example.com', display_name: null })
+
+      const fetchPostsHandler = getHandlerFor('hub:fetch-my-posts')
+      const fetchKeyboardHandler = getHandlerFor('hub:fetch-my-keyboard-posts')
+      const fetchAuthHandler = getHandlerFor('hub:fetch-auth-me')
+
+      await Promise.all([
+        fetchPostsHandler(),
+        fetchKeyboardHandler({}, 'TestBoard'),
+        fetchAuthHandler(),
+      ])
+
+      expect(authenticateWithHub).toHaveBeenCalledTimes(1)
+    })
+
+    it('clearHubTokenCache forces re-authentication', async () => {
+      vi.mocked(getIdToken).mockResolvedValue('id-token')
+      vi.mocked(authenticateWithHub).mockResolvedValue({
+        token: 'hub-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
+      vi.mocked(fetchMyPosts).mockResolvedValue([])
+
+      const handler = getHandlerFor('hub:fetch-my-posts')
+      await handler()
+      expect(authenticateWithHub).toHaveBeenCalledTimes(1)
+
+      clearHubTokenCache()
+      await handler()
+      expect(authenticateWithHub).toHaveBeenCalledTimes(2)
+    })
+
+    it('does not cache token when auth fails', async () => {
+      vi.mocked(getIdToken).mockResolvedValue('id-token')
+      vi.mocked(authenticateWithHub)
+        .mockRejectedValueOnce(new Error('Hub auth failed: 401'))
+        .mockResolvedValueOnce({
+          token: 'hub-jwt',
+          user: { id: 'u1', email: 'test@example.com', display_name: null },
+        })
+      vi.mocked(fetchMyPosts).mockResolvedValue([])
+
+      const handler = getHandlerFor('hub:fetch-my-posts')
+      const result1 = await handler()
+      expect(result1).toEqual({ success: false, error: 'Hub auth failed: 401' })
+
+      const result2 = await handler()
+      expect(result2).toEqual({ success: true, posts: [] })
+      expect(authenticateWithHub).toHaveBeenCalledTimes(2)
+    })
+
+    it('does not write cache if cleared during inflight auth', async () => {
+      let resolveAuth!: (value: { token: string; user: { id: string; email: string; display_name: null } }) => void
+      vi.mocked(getIdToken).mockResolvedValue('id-token')
+      vi.mocked(authenticateWithHub).mockImplementationOnce(
+        () => new Promise((r) => { resolveAuth = r }),
+      )
+      vi.mocked(fetchMyPosts).mockResolvedValue([])
+
+      const handler = getHandlerFor('hub:fetch-my-posts')
+      const pending = handler()
+
+      // Wait for authenticateWithHub to be called (after getIdToken microtask)
+      await vi.waitFor(() => expect(authenticateWithHub).toHaveBeenCalledTimes(1))
+
+      // Sign-out while auth is in flight
+      clearHubTokenCache()
+
+      // Resolve the inflight auth
+      resolveAuth({ token: 'stale-jwt', user: { id: 'u1', email: 'test@example.com', display_name: null } })
+      await pending
+
+      // Next call should re-authenticate (stale-jwt was not cached)
+      vi.mocked(authenticateWithHub).mockResolvedValueOnce({
+        token: 'fresh-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
+      await handler()
+      expect(authenticateWithHub).toHaveBeenCalledTimes(2)
     })
   })
 

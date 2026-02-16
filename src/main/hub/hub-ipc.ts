@@ -35,11 +35,42 @@ function validateKeyboardName(name: unknown): string {
   return trimmed
 }
 
+// Cache Hub JWT to avoid redundant /api/auth/token round-trips.
+// Hub JWT is valid for 7 days; we cache for 1 hour as a safe margin.
+// The /api/auth/token endpoint has a 10 req/min rate limit.
+const HUB_JWT_TTL_MS = 60 * 60 * 1000
+let cachedHubJwt: { token: string; expiresAt: number } | null = null
+let inflightHubAuth: Promise<string> | null = null
+let cacheGeneration = 0
+
 async function getHubToken(): Promise<string> {
-  const idToken = await getIdToken()
-  if (!idToken) throw new Error(AUTH_ERROR)
-  const auth = await authenticateWithHub(idToken)
-  return auth.token
+  if (cachedHubJwt && Date.now() < cachedHubJwt.expiresAt) {
+    return cachedHubJwt.token
+  }
+  // Deduplicate concurrent requests
+  if (inflightHubAuth) return inflightHubAuth
+  const gen = cacheGeneration
+  inflightHubAuth = (async () => {
+    try {
+      const idToken = await getIdToken()
+      if (!idToken) throw new Error(AUTH_ERROR)
+      const auth = await authenticateWithHub(idToken)
+      // Only cache if not invalidated (e.g. by sign-out) during the request
+      if (gen === cacheGeneration) {
+        cachedHubJwt = { token: auth.token, expiresAt: Date.now() + HUB_JWT_TTL_MS }
+      }
+      return auth.token
+    } finally {
+      inflightHubAuth = null
+    }
+  })()
+  return inflightHubAuth
+}
+
+export function clearHubTokenCache(): void {
+  cachedHubJwt = null
+  inflightHubAuth = null
+  cacheGeneration++
 }
 
 function extractError(err: unknown, fallback: string): string {
