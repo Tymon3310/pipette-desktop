@@ -7,6 +7,7 @@
     "undo": "Undo",
     "revert": "Revert",
     "refresh": "Refresh",
+    "refreshing": "Refreshing...",
     "disconnect": "Disconnect",
     "loading": "Loading...",
     "apply": "Apply",
@@ -462,7 +463,8 @@
     "noPosts": "No posts yet",
     "requiresAuth": "Connect your Google account in the Data tab to use Hub features.",
     "renameFailed": "Rename failed",
-    "deleteFailed": "Delete failed"
+    "deleteFailed": "Delete failed",
+    "hubSynced": "Synced"
   },
   "favoriteStore": {
     "title": "Favorites",

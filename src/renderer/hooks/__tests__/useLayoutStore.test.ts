@@ -95,12 +95,12 @@ describe('useLayoutStore – saveLayout', () => {
     const opts = createHookOptions()
     const { result } = renderHook(() => useLayoutStore(opts))
 
-    let ok: boolean | undefined
+    let ok: string | null | undefined
     await act(async () => {
       ok = await result.current.saveLayout('My Label')
     })
 
-    expect(ok).toBe(true)
+    expect(ok).toBe('entry-1')
     expect(opts.serialize).toHaveBeenCalledOnce()
     expect(mockSnapshotStoreSave).toHaveBeenCalledWith(
       VALID_VIL.uid,
@@ -115,12 +115,12 @@ describe('useLayoutStore – saveLayout', () => {
     const opts = createHookOptions()
     const { result } = renderHook(() => useLayoutStore(opts))
 
-    let ok: boolean | undefined
+    let ok: string | null | undefined
     await act(async () => {
       ok = await result.current.saveLayout('test')
     })
 
-    expect(ok).toBe(false)
+    expect(ok).toBeNull()
     expect(result.current.error).toBe('layoutStore.saveFailed')
   })
 

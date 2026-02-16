@@ -381,8 +381,35 @@ interface Props {
   onHubEnabledChange: (enabled: boolean) => void
   hubPosts: HubMyPost[]
   hubAuthenticated: boolean
+  onHubRefresh?: () => Promise<void>
   onHubRename: (postId: string, newTitle: string) => Promise<void>
   onHubDelete: (postId: string) => Promise<void>
+}
+
+function HubRefreshButton({ onRefresh }: { onRefresh: () => Promise<void> }) {
+  const { t } = useTranslation()
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleClick = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await onRefresh()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [onRefresh])
+
+  return (
+    <button
+      type="button"
+      className="text-xs text-content-muted hover:text-content disabled:opacity-50"
+      onClick={handleClick}
+      disabled={refreshing}
+      data-testid="hub-refresh-posts"
+    >
+      {refreshing ? t('common.refreshing') : t('common.refresh')}
+    </button>
+  )
 }
 
 export function SettingsModal({
@@ -404,6 +431,7 @@ export function SettingsModal({
   onHubEnabledChange,
   hubPosts,
   hubAuthenticated,
+  onHubRefresh,
   onHubRename,
   onHubDelete,
 }: Props) {
@@ -1018,9 +1046,14 @@ export function SettingsModal({
 
               {/* My Posts */}
               <section>
-                <h4 className="mb-2 text-sm font-medium text-content-secondary">
-                  {t('hub.myPosts')}
-                </h4>
+                <div className="mb-2 flex items-center justify-between">
+                  <h4 className="text-sm font-medium text-content-secondary">
+                    {t('hub.myPosts')}
+                  </h4>
+                  {onHubRefresh && hubAuthenticated && (
+                    <HubRefreshButton onRefresh={onHubRefresh} />
+                  )}
+                </div>
                 {renderHubPostList()}
               </section>
             </div>

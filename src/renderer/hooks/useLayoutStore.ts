@@ -36,7 +36,7 @@ export function useLayoutStore({
     }
   }, [deviceUid])
 
-  const saveLayout = useCallback(async (label: string): Promise<boolean> => {
+  const saveLayout = useCallback(async (label: string): Promise<string | null> => {
     setError(null)
     setSaving(true)
     try {
@@ -44,13 +44,13 @@ export function useLayoutStore({
       const result = await window.vialAPI.snapshotStoreSave(deviceUid, json, deviceName, label)
       if (!result.success) {
         setError(t('layoutStore.saveFailed'))
-        return false
+        return null
       }
       await refreshEntries()
-      return true
+      return result.entry?.id ?? null
     } catch {
       setError(t('layoutStore.saveFailed'))
-      return false
+      return null
     } finally {
       setSaving(false)
     }

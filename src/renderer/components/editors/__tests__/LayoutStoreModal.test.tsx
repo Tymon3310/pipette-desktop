@@ -1207,4 +1207,80 @@ describe('LayoutStoreModal', () => {
       expect(screen.getByTestId('layout-store-list')).toBeInTheDocument()
     })
   })
+
+  describe('onOverwriteSave callback', () => {
+    it('calls onOverwriteSave instead of onDelete+onSave when provided and overwrite confirmed', () => {
+      const onSave = vi.fn()
+      const onDelete = vi.fn()
+      const onOverwriteSave = vi.fn()
+      render(
+        <LayoutStoreModal
+          entries={MOCK_ENTRIES}
+          {...DEFAULT_PROPS}
+          onSave={onSave}
+          onDelete={onDelete}
+          onOverwriteSave={onOverwriteSave}
+        />,
+      )
+
+      // Type a label that matches an existing entry
+      const input = screen.getByTestId('layout-store-save-input')
+      fireEvent.change(input, { target: { value: 'First Layout' } })
+      fireEvent.submit(input.closest('form')!)
+
+      // Confirm overwrite
+      fireEvent.click(screen.getByTestId('layout-store-overwrite-confirm'))
+
+      // onOverwriteSave should be called with the entry id and label
+      expect(onOverwriteSave).toHaveBeenCalledWith('entry-1', 'First Layout')
+      // onDelete and onSave should NOT be called
+      expect(onDelete).not.toHaveBeenCalled()
+      expect(onSave).not.toHaveBeenCalled()
+    })
+
+    it('falls back to onDelete+onSave when onOverwriteSave is not provided', () => {
+      const onSave = vi.fn()
+      const onDelete = vi.fn()
+      render(
+        <LayoutStoreModal
+          entries={MOCK_ENTRIES}
+          {...DEFAULT_PROPS}
+          onSave={onSave}
+          onDelete={onDelete}
+        />,
+      )
+
+      const input = screen.getByTestId('layout-store-save-input')
+      fireEvent.change(input, { target: { value: 'First Layout' } })
+      fireEvent.submit(input.closest('form')!)
+
+      // Confirm overwrite
+      fireEvent.click(screen.getByTestId('layout-store-overwrite-confirm'))
+
+      expect(onDelete).toHaveBeenCalledWith('entry-1')
+      expect(onSave).toHaveBeenCalledWith('First Layout')
+    })
+
+    it('clears save input and confirmation state after onOverwriteSave', () => {
+      const onOverwriteSave = vi.fn()
+      render(
+        <LayoutStoreModal
+          entries={MOCK_ENTRIES}
+          {...DEFAULT_PROPS}
+          onOverwriteSave={onOverwriteSave}
+        />,
+      )
+
+      const input = screen.getByTestId('layout-store-save-input') as HTMLInputElement
+      fireEvent.change(input, { target: { value: 'First Layout' } })
+      fireEvent.submit(input.closest('form')!)
+      fireEvent.click(screen.getByTestId('layout-store-overwrite-confirm'))
+
+      // Input should be cleared
+      expect(input.value).toBe('')
+      // Confirmation state should be reset (save button visible again)
+      expect(screen.getByTestId('layout-store-save-submit')).toBeInTheDocument()
+      expect(screen.queryByTestId('layout-store-overwrite-confirm')).not.toBeInTheDocument()
+    })
+  })
 })

@@ -7,6 +7,7 @@
     "undo": "元に戻す",
     "revert": "復元",
     "refresh": "更新",
+    "refreshing": "更新中...",
     "disconnect": "切断",
     "loading": "読み込み中...",
     "apply": "適用",
@@ -462,7 +463,8 @@
     "noPosts": "投稿はまだありません",
     "requiresAuth": "Hub 機能を使うには、データタブで Google アカウントを接続してください。",
     "renameFailed": "名前変更に失敗しました",
-    "deleteFailed": "削除に失敗しました"
+    "deleteFailed": "削除に失敗しました",
+    "hubSynced": "同期しました"
   },
   "favoriteStore": {
     "title": "お気に入り",

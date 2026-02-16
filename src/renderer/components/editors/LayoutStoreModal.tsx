@@ -192,6 +192,7 @@ export interface LayoutStoreContentProps {
   onExportEntryVil?: (entryId: string) => void
   onExportEntryKeymapC?: (entryId: string) => void
   onExportEntryPdf?: (entryId: string) => void
+  onOverwriteSave?: (overwriteEntryId: string, label: string) => void
   onUploadToHub?: (entryId: string) => void
   onUpdateOnHub?: (entryId: string) => void
   onRemoveFromHub?: (entryId: string) => void
@@ -216,6 +217,7 @@ export function LayoutStoreContent({
   onLoad,
   onRename,
   onDelete,
+  onOverwriteSave,
   onImportVil,
   onExportVil,
   onExportKeymapC,
@@ -257,8 +259,14 @@ export function LayoutStoreContent({
       return
     }
 
-    // Second submit (confirmed overwrite): delete the old entry first
+    // Second submit (confirmed overwrite)
     if (confirmOverwriteId) {
+      if (onOverwriteSave) {
+        onOverwriteSave(confirmOverwriteId, trimmed)
+        setConfirmOverwriteId(null)
+        setSaveLabel('')
+        return
+      }
       onDelete(confirmOverwriteId)
       setConfirmOverwriteId(null)
     }
