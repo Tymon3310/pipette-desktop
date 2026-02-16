@@ -648,12 +648,12 @@ export function App() {
   const comboSupported = !device.isDummy && keyboard.dynamicCounts.combo > 0
   const altRepeatKeySupported = !device.isDummy && keyboard.dynamicCounts.altRepeatKey > 0
   const keyOverrideSupported = !device.isDummy && keyboard.dynamicCounts.keyOverride > 0
-  const hubEnabled = !device.isDummy && appConfig.config.hubEnabled && sync.authStatus.authenticated && hubConnected
+  const hubReady = appConfig.config.hubEnabled && sync.authStatus.authenticated && hubConnected
 
   const handleDeleteEntry = useCallback(async (entryId: string) => {
     const hubPostId = layoutStore.entries.find((e) => e.id === entryId)?.hubPostId
     const deleted = await layoutStore.deleteEntry(entryId)
-    if (deleted && hubPostId && hubEnabled) {
+    if (deleted && hubPostId && hubReady) {
       try {
         const result = await window.vialAPI.hubDeletePost(hubPostId)
         if (result.success) await refreshHubMyPosts()
@@ -661,12 +661,12 @@ export function App() {
         // Hub deletion is best-effort; local entry is already removed
       }
     }
-  }, [layoutStore, hubEnabled, refreshHubMyPosts])
+  }, [layoutStore, hubReady, refreshHubMyPosts])
 
   const handleRenameEntry = useCallback(async (entryId: string, newLabel: string): Promise<boolean> => {
     const hubPostId = layoutStore.entries.find((e) => e.id === entryId)?.hubPostId
     const ok = await layoutStore.renameEntry(entryId, newLabel)
-    if (ok && hubEnabled && hubPostId) {
+    if (ok && hubReady && hubPostId) {
       void runHubOperation(
         entryId,
         (entries) => findHubEntry(entries, entryId),
@@ -680,7 +680,7 @@ export function App() {
       )
     }
     return ok
-  }, [layoutStore, hubEnabled, runHubOperation, refreshHubMyPosts, t])
+  }, [layoutStore, hubReady, runHubOperation, refreshHubMyPosts, t])
 
   // Close modals when their feature support is lost
   useEffect(() => {
@@ -1087,14 +1087,14 @@ export function App() {
           onExportEntryVil={!device.isDummy ? handleExportEntryVil : undefined}
           onExportEntryKeymapC={!device.isDummy ? handleExportEntryKeymapC : undefined}
           onExportEntryPdf={!device.isDummy ? handleExportEntryPdf : undefined}
-          onOverwriteSave={hubEnabled ? handleOverwriteSave : undefined}
-          onUploadToHub={hubEnabled ? handleUploadToHub : undefined}
-          onUpdateOnHub={hubEnabled ? handleUpdateOnHub : undefined}
-          onRemoveFromHub={hubEnabled ? handleRemoveFromHub : undefined}
-          onReuploadToHub={hubEnabled ? handleReuploadToHub : undefined}
-          onDeleteOrphanedHubPost={hubEnabled ? handleDeleteOrphanedHubPost : undefined}
-          hubOrigin={hubEnabled ? hubOrigin : undefined}
-          hubMyPosts={hubEnabled ? hubMyPosts : undefined}
+          onOverwriteSave={hubReady ? handleOverwriteSave : undefined}
+          onUploadToHub={hubReady ? handleUploadToHub : undefined}
+          onUpdateOnHub={hubReady ? handleUpdateOnHub : undefined}
+          onRemoveFromHub={hubReady ? handleRemoveFromHub : undefined}
+          onReuploadToHub={hubReady ? handleReuploadToHub : undefined}
+          onDeleteOrphanedHubPost={hubReady ? handleDeleteOrphanedHubPost : undefined}
+          hubOrigin={hubReady ? hubOrigin : undefined}
+          hubMyPosts={hubReady ? hubMyPosts : undefined}
           hubUploading={hubUploading}
           hubUploadResult={hubUploadResult}
           fileDisabled={fileIO.saving || fileIO.loading}
