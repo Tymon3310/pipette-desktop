@@ -366,7 +366,7 @@
     "googleAccount": "Google Account",
     "connected": "Connected",
     "signOut": "Disconnect",
-    "signIn": "Connect to Google Drive",
+    "signIn": "Connect",
     "authenticating": "Waiting for authentication...",
     "authFailed": "Authentication failed. Please try again.",
     "encryptionPassword": "Sync Encryption Password",

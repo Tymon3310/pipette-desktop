@@ -366,7 +366,7 @@
     "googleAccount": "Googleアカウント",
     "connected": "接続済み",
     "signOut": "接続解除",
-    "signIn": "Google Driveに接続",
+    "signIn": "接続",
     "authenticating": "認証を待機中...",
     "authFailed": "認証に失敗しました。もう一度お試しください。",
     "encryptionPassword": "同期暗号化パスワード",
