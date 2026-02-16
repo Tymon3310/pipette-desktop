@@ -57,7 +57,7 @@ describe('hub-client', () => {
       })
       await authFn('token')
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://pipette-hub.pages.dev/api/auth/token',
+        'https://pipette-hub-worker.keymaps.workers.dev/api/auth/token',
         expect.anything(),
       )
     } finally {
@@ -84,7 +84,7 @@ describe('hub-client', () => {
       expect(result.token).toBe('hub-jwt-token')
       expect(result.user.email).toBe('test@example.com')
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://pipette-hub.pages.dev/api/auth/token',
+        'https://pipette-hub-worker.keymaps.workers.dev/api/auth/token',
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -136,7 +136,7 @@ describe('hub-client', () => {
       expect(result.title).toBe('My Keymap')
 
       const [url, options] = mockFetch.mock.calls[0]
-      expect(url).toBe('https://pipette-hub.pages.dev/api/files')
+      expect(url).toBe('https://pipette-hub-worker.keymaps.workers.dev/api/files')
       expect(options.method).toBe('POST')
       expect(options.headers.Authorization).toBe('Bearer jwt-token')
       expect(options.headers['Content-Type']).toContain('multipart/form-data')
@@ -190,7 +190,7 @@ describe('hub-client', () => {
       await deletePostFromHub('jwt-token', 'post-123')
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://pipette-hub.pages.dev/api/files/post-123',
+        'https://pipette-hub-worker.keymaps.workers.dev/api/files/post-123',
         expect.objectContaining({
           method: 'DELETE',
           headers: { Authorization: 'Bearer jwt-token' },
@@ -233,7 +233,7 @@ describe('hub-client', () => {
 
       expect(result).toEqual(posts)
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://pipette-hub.pages.dev/api/files/me',
+        'https://pipette-hub-worker.keymaps.workers.dev/api/files/me',
         expect.objectContaining({
           method: 'GET',
           headers: { Authorization: 'Bearer jwt-token' },
@@ -271,7 +271,7 @@ describe('hub-client', () => {
       await patchPostOnHub('jwt', 'post-1', { title: 'New Title' })
 
       const [url, options] = mockFetch.mock.calls[0]
-      expect(url).toBe('https://pipette-hub.pages.dev/api/files/post-1')
+      expect(url).toBe('https://pipette-hub-worker.keymaps.workers.dev/api/files/post-1')
       expect(options.method).toBe('PATCH')
       expect(options.headers.Authorization).toBe('Bearer jwt')
       expect(options.headers['Content-Type']).toBe('application/json')
@@ -297,7 +297,7 @@ describe('hub-client', () => {
       await patchPostOnHub('jwt', 'id with spaces', { title: 'test' })
 
       const [url] = mockFetch.mock.calls[0]
-      expect(url).toBe('https://pipette-hub.pages.dev/api/files/id%20with%20spaces')
+      expect(url).toBe('https://pipette-hub-worker.keymaps.workers.dev/api/files/id%20with%20spaces')
     })
   })
 
@@ -320,7 +320,7 @@ describe('hub-client', () => {
 
       expect(result.id).toBe('post-123')
       const [url, options] = mockFetch.mock.calls[0]
-      expect(url).toBe('https://pipette-hub.pages.dev/api/files/post-123')
+      expect(url).toBe('https://pipette-hub-worker.keymaps.workers.dev/api/files/post-123')
       expect(options.method).toBe('PUT')
       expect(options.headers.Authorization).toBe('Bearer jwt')
       expect(options.headers['Content-Type']).toContain('multipart/form-data')

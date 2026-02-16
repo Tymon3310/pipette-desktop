@@ -3,7 +3,7 @@
 
 import type { HubMyPost, HubUser } from '../../shared/types/hub'
 
-const HUB_API_DEFAULT = 'https://pipette-hub.pages.dev'
+const HUB_API_DEFAULT = 'https://pipette-hub-worker.keymaps.workers.dev'
 const isDev = !!process.env.ELECTRON_RENDERER_URL
 const HUB_API_BASE = (isDev && process.env.PIPETTE_HUB_URL) || HUB_API_DEFAULT
 
