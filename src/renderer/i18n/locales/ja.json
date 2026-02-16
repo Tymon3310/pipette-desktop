@@ -369,6 +369,7 @@
     "connected": "接続済み",
     "signOut": "接続解除",
     "confirmDisconnect": "接続解除しますか？",
+    "disconnectHubWarning": "Pipette Hub も切断されます。",
     "signIn": "接続",
     "authenticating": "認証を待機中...",
     "authFailed": "認証に失敗しました。もう一度お試しください。",

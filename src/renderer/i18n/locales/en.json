@@ -369,6 +369,7 @@
     "connected": "Connected",
     "signOut": "Disconnect",
     "confirmDisconnect": "Disconnect?",
+    "disconnectHubWarning": "Pipette Hub will also be disconnected.",
     "signIn": "Connect",
     "authenticating": "Waiting for authentication...",
     "authFailed": "Authentication failed. Please try again.",

@@ -151,13 +151,31 @@ describe('SettingsModal', () => {
     expect(sync.signOut).not.toHaveBeenCalled()
   })
 
-  it('calls signOut when confirmation is accepted', () => {
+  it('calls signOut and disables hub when confirmation is accepted', () => {
     const sync = makeSyncMock({ authStatus: { authenticated: true } })
-    renderAndSwitchToData({ sync })
+    const onHubEnabledChange = vi.fn()
+    renderAndSwitchToData({ sync, hubEnabled: true, onHubEnabledChange })
 
     fireEvent.click(screen.getByTestId('sync-sign-out'))
     fireEvent.click(screen.getByTestId('sync-sign-out-confirm'))
     expect(sync.signOut).toHaveBeenCalledOnce()
+    expect(onHubEnabledChange).toHaveBeenCalledWith(false)
+  })
+
+  it('shows hub warning when hub is enabled and confirming disconnect', () => {
+    const sync = makeSyncMock({ authStatus: { authenticated: true } })
+    renderAndSwitchToData({ sync, hubEnabled: true })
+
+    fireEvent.click(screen.getByTestId('sync-sign-out'))
+    expect(screen.getByTestId('sync-disconnect-hub-warning')).toBeInTheDocument()
+  })
+
+  it('does not show hub warning when hub is disabled', () => {
+    const sync = makeSyncMock({ authStatus: { authenticated: true } })
+    renderAndSwitchToData({ sync, hubEnabled: false })
+
+    fireEvent.click(screen.getByTestId('sync-sign-out'))
+    expect(screen.queryByTestId('sync-disconnect-hub-warning')).not.toBeInTheDocument()
   })
 
   it('cancels sign-out when cancel is clicked', () => {
@@ -856,11 +874,24 @@ describe('SettingsModal', () => {
       expect(onHubEnabledChange).toHaveBeenCalledWith(true)
     })
 
-    it('shows auth required message when not authenticated', () => {
-      renderAndSwitchToHub({ hubAuthenticated: false })
+    it('hides my posts when hub is disabled', () => {
+      renderAndSwitchToHub({ hubEnabled: false })
+      expect(screen.queryByTestId('hub-post-list')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('hub-no-posts')).not.toBeInTheDocument()
+    })
+
+    it('shows auth required message below connect button when not authenticated and disabled', () => {
+      renderAndSwitchToHub({ hubEnabled: false, hubAuthenticated: false })
 
       expect(screen.getByTestId('hub-requires-auth')).toBeInTheDocument()
       expect(screen.queryByTestId('hub-post-list')).not.toBeInTheDocument()
+    })
+
+    it('hides my posts when hub is enabled but not authenticated', () => {
+      renderAndSwitchToHub({ hubEnabled: true, hubAuthenticated: false })
+
+      expect(screen.queryByTestId('hub-post-list')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('hub-no-posts')).not.toBeInTheDocument()
     })
 
     it('shows empty post list when authenticated with no posts', () => {

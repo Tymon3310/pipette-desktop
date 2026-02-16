@@ -213,6 +213,8 @@ interface DisconnectConfirmButtonProps {
   disconnectTestId: string
   confirmTestId: string
   cancelTestId: string
+  warningKey?: string
+  warningTestId?: string
 }
 
 function DisconnectConfirmButton({
@@ -225,28 +227,37 @@ function DisconnectConfirmButton({
   disconnectTestId,
   confirmTestId,
   cancelTestId,
+  warningKey,
+  warningTestId,
 }: DisconnectConfirmButtonProps) {
   const { t } = useTranslation()
 
   if (confirming) {
     return (
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className={BTN_DANGER_OUTLINE}
-          onClick={onConfirm}
-          data-testid={confirmTestId}
-        >
-          {t(confirmLabelKey)}
-        </button>
-        <button
-          type="button"
-          className={BTN_SECONDARY}
-          onClick={onCancelConfirm}
-          data-testid={cancelTestId}
-        >
-          {t('common.cancel')}
-        </button>
+      <div>
+        <div className="flex items-center gap-2 justify-end">
+          <button
+            type="button"
+            className={BTN_DANGER_OUTLINE}
+            onClick={onConfirm}
+            data-testid={confirmTestId}
+          >
+            {t(confirmLabelKey)}
+          </button>
+          <button
+            type="button"
+            className={BTN_SECONDARY}
+            onClick={onCancelConfirm}
+            data-testid={cancelTestId}
+          >
+            {t('common.cancel')}
+          </button>
+        </div>
+        {warningKey && (
+          <p className="mt-2 text-xs text-danger" data-testid={warningTestId}>
+            {t(warningKey)}
+          </p>
+        )}
       </div>
     )
   }
@@ -636,6 +647,17 @@ export function SettingsModal({
     }
   }, [sync, t])
 
+  const handleGoogleDisconnect = useCallback(() => {
+    void sync.signOut()
+    onHubEnabledChange(false)
+    setConfirmingGoogleDisconnect(false)
+  }, [sync, onHubEnabledChange])
+
+  const handleHubDisconnect = useCallback(() => {
+    onHubEnabledChange(false)
+    setConfirmingHubDisconnect(false)
+  }, [onHubEnabledChange])
+
   const handlePasswordChange = useCallback(
     async (value: string) => {
       setPassword(value)
@@ -749,13 +771,6 @@ export function SettingsModal({
   const syncDisabled = busy || !sync.authStatus.authenticated || !sync.hasPassword || isSyncing
 
   function renderHubPostList(): React.ReactNode {
-    if (!hubAuthenticated) {
-      return (
-        <p className="text-sm text-content-muted" data-testid="hub-requires-auth">
-          {t('hub.requiresAuth')}
-        </p>
-      )
-    }
     if (hubPosts.length === 0) {
       return (
         <p className="text-sm text-content-muted" data-testid="hub-no-posts">
@@ -766,12 +781,7 @@ export function SettingsModal({
     return (
       <div className="space-y-1" data-testid="hub-post-list">
         {hubPosts.map((post) => (
-          <HubPostRow
-            key={post.id}
-            post={post}
-            onRename={onHubRename}
-            onDelete={onHubDelete}
-          />
+          <HubPostRow key={post.id} post={post} onRename={onHubRename} onDelete={onHubDelete} />
         ))}
       </div>
     )
@@ -949,12 +959,14 @@ export function SettingsModal({
                       confirming={confirmingGoogleDisconnect}
                       onRequestConfirm={() => setConfirmingGoogleDisconnect(true)}
                       onCancelConfirm={() => setConfirmingGoogleDisconnect(false)}
-                      onConfirm={() => { sync.signOut(); setConfirmingGoogleDisconnect(false) }}
+                      onConfirm={handleGoogleDisconnect}
                       disconnectLabelKey="sync.signOut"
                       confirmLabelKey="sync.confirmDisconnect"
                       disconnectTestId="sync-sign-out"
                       confirmTestId="sync-sign-out-confirm"
                       cancelTestId="sync-sign-out-cancel"
+                      warningKey={hubEnabled ? 'sync.disconnectHubWarning' : undefined}
+                      warningTestId="sync-disconnect-hub-warning"
                     />
                   </div>
                 ) : (
@@ -1187,21 +1199,28 @@ export function SettingsModal({
                   {t('hub.enableToggle')}
                 </h4>
                 {hubEnabled ? (
-                  <div className="flex items-center justify-between" data-testid="hub-enable-row">
-                    <span className="text-sm text-accent" data-testid="hub-enabled-status">
-                      {t('hub.enabled')}
-                    </span>
-                    <DisconnectConfirmButton
-                      confirming={confirmingHubDisconnect}
-                      onRequestConfirm={() => setConfirmingHubDisconnect(true)}
-                      onCancelConfirm={() => setConfirmingHubDisconnect(false)}
-                      onConfirm={() => { onHubEnabledChange(false); setConfirmingHubDisconnect(false) }}
-                      disconnectLabelKey="hub.disable"
-                      confirmLabelKey="hub.confirmDisconnect"
-                      disconnectTestId="hub-enable-toggle"
-                      confirmTestId="hub-disconnect-confirm"
-                      cancelTestId="hub-disconnect-cancel"
-                    />
+                  <div data-testid="hub-enable-row">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-accent" data-testid="hub-enabled-status">
+                        {t('hub.enabled')}
+                      </span>
+                      <DisconnectConfirmButton
+                        confirming={confirmingHubDisconnect}
+                        onRequestConfirm={() => setConfirmingHubDisconnect(true)}
+                        onCancelConfirm={() => setConfirmingHubDisconnect(false)}
+                        onConfirm={handleHubDisconnect}
+                        disconnectLabelKey="hub.disable"
+                        confirmLabelKey="hub.confirmDisconnect"
+                        disconnectTestId="hub-enable-toggle"
+                        confirmTestId="hub-disconnect-confirm"
+                        cancelTestId="hub-disconnect-cancel"
+                      />
+                    </div>
+                    {!hubAuthenticated && (
+                      <p className="mt-2 text-xs text-content-muted" data-testid="hub-requires-auth">
+                        {t('hub.requiresAuth')}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div data-testid="hub-enable-row">
@@ -1213,6 +1232,11 @@ export function SettingsModal({
                     >
                       {t('hub.enable')}
                     </button>
+                    {!hubAuthenticated && (
+                      <p className="mt-2 text-xs text-content-muted" data-testid="hub-requires-auth">
+                        {t('hub.requiresAuth')}
+                      </p>
+                    )}
                   </div>
                 )}
               </section>
@@ -1228,17 +1252,19 @@ export function SettingsModal({
               )}
 
               {/* My Posts */}
-              <section>
-                <div className="mb-2 flex items-center justify-between">
-                  <h4 className="text-sm font-medium text-content-secondary">
-                    {t('hub.myPosts')}
-                  </h4>
-                  {onHubRefresh && hubAuthenticated && (
-                    <HubRefreshButton onRefresh={onHubRefresh} />
-                  )}
-                </div>
-                {renderHubPostList()}
-              </section>
+              {hubEnabled && hubAuthenticated && (
+                <section>
+                  <div className="mb-2 flex items-center justify-between">
+                    <h4 className="text-sm font-medium text-content-secondary">
+                      {t('hub.myPosts')}
+                    </h4>
+                    {onHubRefresh && (
+                      <HubRefreshButton onRefresh={onHubRefresh} />
+                    )}
+                  </div>
+                  {renderHubPostList()}
+                </section>
+              )}
             </div>
           )}
           {activeTab === 'about' && <AboutTabContent />}
