@@ -492,7 +492,10 @@
     "displayNameSaved": "Display name saved",
     "displayNameSaveFailed": "Failed to save display name",
     "displayNameTaken": "This display name is already taken",
-    "openInBrowser": "Open in Browser"
+    "openInBrowser": "Open in Browser",
+    "pagePrev": "Prev",
+    "pageNext": "Next",
+    "pageInfo": "{{current}} / {{total}}"
   },
   "favoriteStore": {
     "title": "Favorites",

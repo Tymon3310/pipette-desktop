@@ -219,7 +219,7 @@ describe('hub-client', () => {
   })
 
   describe('fetchMyPosts', () => {
-    it('returns array of posts', async () => {
+    it('returns page object with items', async () => {
       const posts = [
         { id: 'post-1', title: 'My Keymap' },
         { id: 'post-2', title: 'Second Layout' },
@@ -231,7 +231,7 @@ describe('hub-client', () => {
 
       const result = await fetchMyPosts('jwt-token')
 
-      expect(result).toEqual(posts)
+      expect(result).toEqual({ items: posts, total: 2, page: 1, per_page: 20 })
       expect(mockFetch).toHaveBeenCalledWith(
         'https://pipette-hub-worker.keymaps.workers.dev/api/files/me',
         expect.objectContaining({
@@ -239,6 +239,30 @@ describe('hub-client', () => {
           headers: { Authorization: 'Bearer jwt-token' },
         }),
       )
+    })
+
+    it('appends page and per_page query parameters', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, data: { items: [], total: 0, page: 2, per_page: 10 } }),
+      })
+
+      await fetchMyPosts('jwt-token', { page: 2, per_page: 10 })
+
+      const [url] = mockFetch.mock.calls[0]
+      expect(url).toBe('https://pipette-hub-worker.keymaps.workers.dev/api/files/me?page=2&per_page=10')
+    })
+
+    it('omits query string when no params are provided', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, data: { items: [], total: 0, page: 1, per_page: 20 } }),
+      })
+
+      await fetchMyPosts('jwt-token')
+
+      const [url] = mockFetch.mock.calls[0]
+      expect(url).toBe('https://pipette-hub-worker.keymaps.workers.dev/api/files/me')
     })
 
     it('throws on HTTP error', async () => {

@@ -329,16 +329,96 @@ describe('hub-ipc', () => {
       expect(ipcMain.handle).toHaveBeenCalledWith('hub:fetch-my-posts', expect.any(Function))
     })
 
-    it('fetches posts successfully', async () => {
+    it('fetches posts successfully with pagination metadata', async () => {
       const posts = [{ id: 'post-1', title: 'My Keymap', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
       mockHubAuth()
-      vi.mocked(fetchMyPosts).mockResolvedValueOnce(posts)
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: posts, total: 1, page: 1, per_page: 10 })
 
       const handler = getFetchMyPostsHandler()
-      const result = await handler()
+      const result = await handler({})
 
-      expect(result).toEqual({ success: true, posts })
-      expect(fetchMyPosts).toHaveBeenCalledWith('hub-jwt')
+      expect(result).toEqual({
+        success: true,
+        posts,
+        pagination: { total: 1, page: 1, per_page: 10, total_pages: 1 },
+      })
+      expect(fetchMyPosts).toHaveBeenCalledWith('hub-jwt', { page: undefined, per_page: undefined })
+    })
+
+    it('passes page and per_page params to fetchMyPosts', async () => {
+      mockHubAuth()
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 25, page: 3, per_page: 10 })
+
+      const handler = getFetchMyPostsHandler()
+      const result = await handler({}, { page: 3, per_page: 10 })
+
+      expect(fetchMyPosts).toHaveBeenCalledWith('hub-jwt', { page: 3, per_page: 10 })
+      expect(result).toEqual({
+        success: true,
+        posts: [],
+        pagination: { total: 25, page: 3, per_page: 10, total_pages: 3 },
+      })
+    })
+
+    it('clamps page to minimum 1', async () => {
+      mockHubAuth()
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 0, page: 1, per_page: 10 })
+
+      const handler = getFetchMyPostsHandler()
+      await handler({}, { page: -5, per_page: 10 })
+
+      expect(fetchMyPosts).toHaveBeenCalledWith('hub-jwt', { page: 1, per_page: 10 })
+    })
+
+    it('clamps per_page to 1-100 range', async () => {
+      mockHubAuth()
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 0, page: 1, per_page: 100 })
+
+      const handler = getFetchMyPostsHandler()
+      await handler({}, { page: 1, per_page: 200 })
+
+      expect(fetchMyPosts).toHaveBeenCalledWith('hub-jwt', { page: 1, per_page: 100 })
+    })
+
+    it('ignores non-finite page and per_page values', async () => {
+      const handler = getFetchMyPostsHandler()
+      for (const bad of [NaN, Infinity, -Infinity]) {
+        clearHubTokenCache()
+        mockHubAuth()
+        vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 0, page: 1, per_page: 10 })
+
+        await handler({}, { page: bad, per_page: bad })
+
+        expect(fetchMyPosts).toHaveBeenLastCalledWith('hub-jwt', { page: undefined, per_page: undefined })
+      }
+    })
+
+    it('handles per_page=0 from backend without Infinity total_pages', async () => {
+      mockHubAuth()
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 5, page: 1, per_page: 0 })
+
+      const handler = getFetchMyPostsHandler()
+      const result = await handler({})
+
+      expect(result).toEqual({
+        success: true,
+        posts: [],
+        pagination: { total: 5, page: 1, per_page: 0, total_pages: 5 },
+      })
+    })
+
+    it('sanitizes non-finite backend total and per_page', async () => {
+      mockHubAuth()
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: NaN, page: 1, per_page: NaN })
+
+      const handler = getFetchMyPostsHandler()
+      const result = await handler({})
+
+      expect(result).toEqual({
+        success: true,
+        posts: [],
+        pagination: { total: NaN, page: 1, per_page: NaN, total_pages: 1 },
+      })
     })
 
     it('returns error on failure', async () => {
@@ -570,7 +650,7 @@ describe('hub-ipc', () => {
         token: 'hub-jwt',
         user: { id: 'u1', email: 'test@example.com', display_name: null },
       })
-      vi.mocked(fetchMyPosts).mockResolvedValue([])
+      vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
       vi.mocked(fetchAuthMe).mockResolvedValue({ id: 'u1', email: 'test@example.com', display_name: null })
 
       const fetchPostsHandler = getHandlerFor('hub:fetch-my-posts')
@@ -588,7 +668,7 @@ describe('hub-ipc', () => {
         token: 'hub-jwt',
         user: { id: 'u1', email: 'test@example.com', display_name: null },
       })
-      vi.mocked(fetchMyPosts).mockResolvedValue([])
+      vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
       vi.mocked(fetchMyPostsByKeyboard).mockResolvedValue([])
       vi.mocked(fetchAuthMe).mockResolvedValue({ id: 'u1', email: 'test@example.com', display_name: null })
 
@@ -611,7 +691,7 @@ describe('hub-ipc', () => {
         token: 'hub-jwt',
         user: { id: 'u1', email: 'test@example.com', display_name: null },
       })
-      vi.mocked(fetchMyPosts).mockResolvedValue([])
+      vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
 
       const handler = getHandlerFor('hub:fetch-my-posts')
       await handler()
@@ -630,14 +710,18 @@ describe('hub-ipc', () => {
           token: 'hub-jwt',
           user: { id: 'u1', email: 'test@example.com', display_name: null },
         })
-      vi.mocked(fetchMyPosts).mockResolvedValue([])
+      vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
 
       const handler = getHandlerFor('hub:fetch-my-posts')
       const result1 = await handler()
       expect(result1).toEqual({ success: false, error: 'Hub auth failed: 401' })
 
       const result2 = await handler()
-      expect(result2).toEqual({ success: true, posts: [] })
+      expect(result2).toEqual({
+        success: true,
+        posts: [],
+        pagination: { total: 0, page: 1, per_page: 10, total_pages: 1 },
+      })
       expect(authenticateWithHub).toHaveBeenCalledTimes(2)
     })
 
@@ -647,7 +731,7 @@ describe('hub-ipc', () => {
       vi.mocked(authenticateWithHub).mockImplementationOnce(
         () => new Promise((r) => { resolveAuth = r }),
       )
-      vi.mocked(fetchMyPosts).mockResolvedValue([])
+      vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
 
       const handler = getHandlerFor('hub:fetch-my-posts')
       const pending = handler()

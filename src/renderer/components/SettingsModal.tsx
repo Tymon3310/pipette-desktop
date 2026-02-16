@@ -13,7 +13,7 @@ import type { SyncStatusType, LastSyncResult, SyncProgress, SyncResetTargets, Lo
 import type { UseSyncReturn } from '../hooks/useSync'
 import type { ThemeMode } from '../hooks/useTheme'
 import type { KeyboardLayoutId, AutoLockMinutes, PanelSide } from '../hooks/useDevicePrefs'
-import type { HubMyPost } from '../../shared/types/hub'
+import type { HubMyPost, HubPaginationMeta, HubFetchMyPostsParams } from '../../shared/types/hub'
 import { KEYBOARD_LAYOUTS } from '../data/keyboard-layouts'
 import { AboutTabContent } from './AboutTabContent'
 
@@ -291,14 +291,16 @@ const PANEL_SIDE_OPTIONS: { side: PanelSide; labelKey: string }[] = [
 ]
 
 const TIME_STEPS = [10, 20, 30, 40, 50, 60] as const
+const DEFAULT_PER_PAGE = 10
 
 interface HubPostRowProps {
   post: HubMyPost
   onRename: (postId: string, newTitle: string) => Promise<void>
   onDelete: (postId: string) => Promise<void>
+  hubOrigin?: string
 }
 
-function HubPostRow({ post, onRename, onDelete }: HubPostRowProps) {
+function HubPostRow({ post, onRename, onDelete, hubOrigin }: HubPostRowProps) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
   const [editLabel, setEditLabel] = useState('')
@@ -405,6 +407,17 @@ function HubPostRow({ post, onRename, onDelete }: HubPostRowProps) {
           )}
           {!confirmingDelete && !editing && (
             <>
+              {hubOrigin && (
+                <button
+                  type="button"
+                  className={ACTION_BTN}
+                  onClick={() => window.vialAPI.openExternal(`${hubOrigin}/post/${encodeURIComponent(post.id)}`)}
+                  disabled={busy}
+                  data-testid={`hub-open-${post.id}`}
+                >
+                  {t('hub.openInBrowser')}
+                </button>
+              )}
               <button
                 type="button"
                 className={ACTION_BTN}
@@ -454,12 +467,14 @@ interface Props {
   hubEnabled: boolean
   onHubEnabledChange: (enabled: boolean) => void
   hubPosts: HubMyPost[]
+  hubPostsPagination?: HubPaginationMeta
   hubAuthenticated: boolean
-  onHubRefresh?: () => Promise<void>
+  onHubRefresh?: (params?: HubFetchMyPostsParams) => Promise<void>
   onHubRename: (postId: string, newTitle: string) => Promise<void>
   onHubDelete: (postId: string) => Promise<void>
   hubDisplayName: string | null
   onHubDisplayNameChange: (name: string) => Promise<{ success: boolean; error?: string }>
+  hubOrigin?: string
 }
 
 interface HubDisplayNameFieldProps {
@@ -593,12 +608,14 @@ export function SettingsModal({
   hubEnabled,
   onHubEnabledChange,
   hubPosts,
+  hubPostsPagination,
   hubAuthenticated,
   onHubRefresh,
   onHubRename,
   onHubDelete,
   hubDisplayName,
   onHubDisplayNameChange,
+  hubOrigin,
 }: Props) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<ModalTabId>('tools')
@@ -617,6 +634,12 @@ export function SettingsModal({
   const [confirmingGoogleDisconnect, setConfirmingGoogleDisconnect] = useState(false)
   const [confirmingHubDisconnect, setConfirmingHubDisconnect] = useState(false)
   const [importResult, setImportResult] = useState<'success' | 'error' | null>(null)
+  const [hubPage, setHubPage] = useState(1)
+
+  // Keep local page in sync when parent provides updated pagination (e.g. after refresh)
+  useEffect(() => {
+    if (hubPostsPagination?.page != null) setHubPage(hubPostsPagination.page)
+  }, [hubPostsPagination?.page])
 
   useEffect(() => { setConfirmingGoogleDisconnect(false) }, [sync.authStatus.authenticated])
   useEffect(() => { setConfirmingHubDisconnect(false) }, [hubEnabled])
@@ -770,19 +793,80 @@ export function SettingsModal({
   const isSyncing = sync.syncStatus === 'syncing'
   const syncDisabled = busy || !sync.authStatus.authenticated || !sync.hasPassword || isSyncing
 
+  const refreshHubPage = useCallback(async (page: number) => {
+    await onHubRefresh?.({ page, per_page: DEFAULT_PER_PAGE })
+  }, [onHubRefresh])
+
+  const handleHubPageChange = useCallback((newPage: number) => {
+    setHubPage(newPage)
+    void refreshHubPage(newPage)
+  }, [refreshHubPage])
+
+  const handleHubRenameWithPageRefresh = useCallback(async (postId: string, newTitle: string) => {
+    await onHubRename(postId, newTitle)
+    void refreshHubPage(hubPage)
+  }, [onHubRename, hubPage, refreshHubPage])
+
+  const handleHubDeleteWithPageAdjust = useCallback(async (postId: string) => {
+    await onHubDelete(postId)
+    if (hubPosts.length <= 1 && hubPage > 1) {
+      handleHubPageChange(hubPage - 1)
+    } else {
+      void refreshHubPage(hubPage)
+    }
+  }, [onHubDelete, hubPosts.length, hubPage, handleHubPageChange, refreshHubPage])
+
   function renderHubPostList(): React.ReactNode {
-    if (hubPosts.length === 0) {
+    const totalPages = hubPostsPagination?.total_pages ?? 1
+    const hasPosts = hubPosts.length > 0
+    const showPagination = totalPages > 1
+
+    if (!hasPosts && !showPagination) {
       return (
         <p className="text-sm text-content-muted" data-testid="hub-no-posts">
           {t('hub.noPosts')}
         </p>
       )
     }
+
     return (
-      <div className="space-y-1" data-testid="hub-post-list">
-        {hubPosts.map((post) => (
-          <HubPostRow key={post.id} post={post} onRename={onHubRename} onDelete={onHubDelete} />
-        ))}
+      <div data-testid="hub-post-list">
+        {hasPosts ? (
+          <div className="space-y-1">
+            {hubPosts.map((post) => (
+              <HubPostRow key={post.id} post={post} onRename={handleHubRenameWithPageRefresh} onDelete={handleHubDeleteWithPageAdjust} hubOrigin={hubOrigin} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-content-muted" data-testid="hub-no-posts">
+            {t('hub.noPosts')}
+          </p>
+        )}
+        {showPagination && (
+          <div className="mt-2 flex items-center justify-center gap-3" data-testid="hub-pagination">
+            <button
+              type="button"
+              className={BTN_SECONDARY}
+              onClick={() => handleHubPageChange(hubPage - 1)}
+              disabled={hubPage <= 1}
+              data-testid="hub-page-prev"
+            >
+              {t('hub.pagePrev')}
+            </button>
+            <span className="text-xs text-content-muted" data-testid="hub-page-info">
+              {t('hub.pageInfo', { current: hubPage, total: totalPages })}
+            </span>
+            <button
+              type="button"
+              className={BTN_SECONDARY}
+              onClick={() => handleHubPageChange(hubPage + 1)}
+              disabled={hubPage >= totalPages}
+              data-testid="hub-page-next"
+            >
+              {t('hub.pageNext')}
+            </button>
+          </div>
+        )}
       </div>
     )
   }
@@ -1260,7 +1344,7 @@ export function SettingsModal({
                       {t('hub.myPosts')}
                     </h4>
                     {onHubRefresh && (
-                      <HubRefreshButton onRefresh={onHubRefresh} />
+                      <HubRefreshButton onRefresh={() => refreshHubPage(hubPage)} />
                     )}
                   </div>
                   {renderHubPostList()}

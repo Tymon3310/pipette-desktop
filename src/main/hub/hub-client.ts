@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Hub API client — auth token exchange + multipart post upload
 
-import type { HubMyPost, HubUser } from '../../shared/types/hub'
+import type { HubMyPost, HubUser, HubFetchMyPostsParams } from '../../shared/types/hub'
 
 const HUB_API_DEFAULT = 'https://pipette-hub-worker.keymaps.workers.dev'
 const isDev = !!process.env.ELECTRON_RENDERER_URL
@@ -109,12 +109,26 @@ export async function patchAuthMe(jwt: string, displayName: string): Promise<Hub
   }, 'Hub patch auth me failed')
 }
 
-export async function fetchMyPosts(jwt: string): Promise<HubMyPost[]> {
-  const page = await hubFetch<{ items: HubMyPost[] }>(`${HUB_API_BASE}/api/files/me`, {
+export interface HubMyPostsPage {
+  items: HubMyPost[]
+  total: number
+  page: number
+  per_page: number
+}
+
+export async function fetchMyPosts(
+  jwt: string,
+  params?: HubFetchMyPostsParams,
+): Promise<HubMyPostsPage> {
+  const qs = new URLSearchParams()
+  if (params?.page != null) qs.set('page', String(params.page))
+  if (params?.per_page != null) qs.set('per_page', String(params.per_page))
+  const query = qs.toString()
+  const url = `${HUB_API_BASE}/api/files/me${query ? `?${query}` : ''}`
+  return hubFetch<HubMyPostsPage>(url, {
     method: 'GET',
     headers: { Authorization: `Bearer ${jwt}` },
   }, 'Hub fetch my posts failed')
-  return page.items
 }
 
 export async function fetchMyPostsByKeyboard(jwt: string, keyboardName: string): Promise<HubMyPost[]> {

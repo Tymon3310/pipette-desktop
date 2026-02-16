@@ -3,7 +3,7 @@
 
 import { ipcMain } from 'electron'
 import { IpcChannels } from '../../shared/ipc/channels'
-import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyKeyboardPostsResult, HubUserResult } from '../../shared/types/hub'
+import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyKeyboardPostsResult, HubUserResult, HubFetchMyPostsParams } from '../../shared/types/hub'
 import { getIdToken } from '../sync/google-auth'
 import { authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from './hub-client'
 import type { HubUploadFiles } from './hub-client'
@@ -33,6 +33,19 @@ function validateKeyboardName(name: unknown): string {
   const trimmed = name.trim()
   if (trimmed.length > KEYBOARD_NAME_MAX_LENGTH) throw new Error('Keyboard name too long')
   return trimmed
+}
+
+function clampInt(value: number | undefined, min: number, max: number): number | undefined {
+  if (value == null) return undefined
+  const floored = Math.floor(value)
+  if (!Number.isFinite(floored)) return undefined
+  return Math.max(min, Math.min(max, floored))
+}
+
+function computeTotalPages(total: number, perPage: number): number {
+  const safeTotal = Number.isFinite(total) ? Math.max(0, total) : 0
+  const safePerPage = Number.isFinite(perPage) && perPage > 0 ? perPage : 1
+  return Math.max(1, Math.ceil(safeTotal / safePerPage))
 }
 
 // Cache Hub JWT to avoid redundant /api/auth/token round-trips.
@@ -148,11 +161,23 @@ export function setupHubIpc(): void {
 
   ipcMain.handle(
     IpcChannels.HUB_FETCH_MY_POSTS,
-    async (): Promise<HubFetchMyPostsResult> => {
+    async (_event, params?: HubFetchMyPostsParams): Promise<HubFetchMyPostsResult> => {
       try {
+        const page = clampInt(params?.page, 1, Number.MAX_SAFE_INTEGER)
+        const perPage = clampInt(params?.per_page, 1, 100)
         const jwt = await getHubToken()
-        const posts = await fetchMyPosts(jwt)
-        return { success: true, posts }
+        const result = await fetchMyPosts(jwt, { page, per_page: perPage })
+        const totalPages = computeTotalPages(result.total, result.per_page)
+        return {
+          success: true,
+          posts: result.items,
+          pagination: {
+            total: result.total,
+            page: result.page,
+            per_page: result.per_page,
+            total_pages: totalPages,
+          },
+        }
       } catch (err) {
         return { success: false, error: extractError(err, 'Fetch my posts failed') }
       }

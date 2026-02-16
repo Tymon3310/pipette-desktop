@@ -38,9 +38,22 @@ export interface HubMyPost {
   created_at: string
 }
 
+export interface HubPaginationMeta {
+  total: number
+  page: number
+  per_page: number
+  total_pages: number
+}
+
+export interface HubFetchMyPostsParams {
+  page?: number
+  per_page?: number
+}
+
 export interface HubFetchMyPostsResult {
   success: boolean
   posts?: HubMyPost[]
+  pagination?: HubPaginationMeta
   error?: string
 }
 

@@ -43,7 +43,7 @@ import {
 } from '../shared/keycodes/keycodes'
 import type { DeviceInfo, QmkSettingsTab, VilFile } from '../shared/types/protocol'
 import type { SnapshotMeta } from '../shared/types/snapshot-store'
-import type { HubMyPost, HubUploadResult } from '../shared/types/hub'
+import type { HubMyPost, HubUploadResult, HubPaginationMeta, HubFetchMyPostsParams } from '../shared/types/hub'
 import settingsDefs from '../shared/qmk-settings-defs.json'
 
 // Lighting types that require the RGBConfigurator modal
@@ -80,6 +80,7 @@ export function App() {
   // Clear loaded label when device identity changes (USB unplug/replug, device switch)
   useEffect(() => { setLastLoadedLabel('') }, [keyboard.uid])
   const [hubMyPosts, setHubMyPosts] = useState<HubMyPost[]>([])
+  const [hubMyPostsPagination, setHubMyPostsPagination] = useState<HubPaginationMeta | undefined>()
   const [hubKeyboardPosts, setHubKeyboardPosts] = useState<HubMyPost[]>([])
   const [hubOrigin, setHubOrigin] = useState('')
   useEffect(() => { window.vialAPI.hubGetOrigin().then(setHubOrigin).catch(() => {}) }, [])
@@ -279,18 +280,20 @@ export function App() {
     }
   }, [])
 
-  const refreshHubMyPosts = useCallback(async () => {
+  const refreshHubMyPosts = useCallback(async (params?: HubFetchMyPostsParams) => {
     if (appConfig.config.hubEnabled && sync.authStatus.authenticated) {
       try {
-        const result = await window.vialAPI.hubFetchMyPosts()
+        const result = await window.vialAPI.hubFetchMyPosts(params)
         if (result.success && Array.isArray(result.posts)) {
           setHubMyPosts(result.posts)
+          setHubMyPostsPagination(result.pagination)
           setHubConnected(true)
           return
         }
       } catch {}
     }
     setHubMyPosts([])
+    setHubMyPostsPagination(undefined)
     setHubConnected(false)
   }, [appConfig.config.hubEnabled, sync.authStatus.authenticated])
 
@@ -815,12 +818,14 @@ export function App() {
             hubEnabled={appConfig.config.hubEnabled}
             onHubEnabledChange={(enabled) => appConfig.set('hubEnabled', enabled)}
             hubPosts={hubMyPosts}
+            hubPostsPagination={hubMyPostsPagination}
             hubAuthenticated={sync.authStatus.authenticated}
             onHubRefresh={refreshHubMyPosts}
             onHubRename={handleHubRenamePost}
             onHubDelete={handleHubDeletePost}
             hubDisplayName={hubDisplayName}
             onHubDisplayNameChange={handleUpdateHubDisplayName}
+            hubOrigin={hubOrigin}
           />
         )}
       </>

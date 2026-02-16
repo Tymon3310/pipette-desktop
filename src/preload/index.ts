@@ -14,7 +14,7 @@ import type { AppConfig } from '../shared/types/app-config'
 import type { SyncAuthStatus, SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets } from '../shared/types/sync'
 import type { PipetteSettings } from '../shared/types/pipette-settings'
 import type { LanguageListEntry } from '../shared/types/language-store'
-import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyKeyboardPostsResult, HubUserResult } from '../shared/types/hub'
+import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyPostsParams, HubFetchMyKeyboardPostsResult, HubUserResult } from '../shared/types/hub'
 
 /**
  * API exposed to renderer via contextBridge.
@@ -236,8 +236,8 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.HUB_PATCH_POST, params),
   hubDeletePost: (postId: string): Promise<HubDeleteResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_DELETE_POST, postId),
-  hubFetchMyPosts: (): Promise<HubFetchMyPostsResult> =>
-    ipcRenderer.invoke(IpcChannels.HUB_FETCH_MY_POSTS),
+  hubFetchMyPosts: (params?: HubFetchMyPostsParams): Promise<HubFetchMyPostsResult> =>
+    ipcRenderer.invoke(IpcChannels.HUB_FETCH_MY_POSTS, params),
   hubFetchMyKeyboardPosts: (keyboardName: string): Promise<HubFetchMyKeyboardPostsResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_FETCH_MY_KEYBOARD_POSTS, keyboardName),
   hubFetchAuthMe: (): Promise<HubUserResult> =>

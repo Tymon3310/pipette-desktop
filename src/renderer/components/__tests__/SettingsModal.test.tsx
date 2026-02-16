@@ -24,11 +24,13 @@ vi.mock('../editors/ModalCloseButton', () => ({
 const mockResetLocalTargets = vi.fn().mockResolvedValue({ success: true })
 const mockExportLocalData = vi.fn().mockResolvedValue({ success: true })
 const mockImportLocalData = vi.fn().mockResolvedValue({ success: true })
+const mockOpenExternal = vi.fn().mockResolvedValue(undefined)
 Object.defineProperty(window, 'vialAPI', {
   value: {
     resetLocalTargets: mockResetLocalTargets,
     exportLocalData: mockExportLocalData,
     importLocalData: mockImportLocalData,
+    openExternal: mockOpenExternal,
   },
   writable: true,
 })
@@ -104,6 +106,7 @@ describe('SettingsModal', () => {
     mockResetLocalTargets.mockClear()
     mockExportLocalData.mockClear()
     mockImportLocalData.mockClear()
+    mockOpenExternal.mockClear()
   })
 
   function renderAndSwitchToTools(props?: Partial<Parameters<typeof SettingsModal>[0]>) {
@@ -950,6 +953,28 @@ describe('SettingsModal', () => {
       })
     })
 
+    it('refreshes current page after rename completes', async () => {
+      const onHubRename = vi.fn().mockResolvedValue(undefined)
+      const onHubRefresh = vi.fn().mockResolvedValue(undefined)
+      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      renderAndSwitchToHub({
+        hubAuthenticated: true,
+        hubPosts: posts,
+        hubPostsPagination: { total: 25, page: 2, per_page: 10, total_pages: 3 },
+        onHubRename,
+        onHubRefresh,
+      })
+
+      fireEvent.click(screen.getByTestId('hub-rename-p1'))
+      const input = screen.getByTestId('hub-rename-input-p1')
+      fireEvent.change(input, { target: { value: 'New Name' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      await waitFor(() => {
+        expect(onHubRefresh).toHaveBeenCalledWith({ page: 2, per_page: 10 })
+      })
+    })
+
     it('cancels rename on Escape key', () => {
       const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
       renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts })
@@ -1024,6 +1049,99 @@ describe('SettingsModal', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('hub-error-p1')).toHaveTextContent('hub.deleteFailed')
+      })
+    })
+
+    describe('pagination', () => {
+      it('does not show pagination controls when total_pages is 1', () => {
+        const posts = [{ id: 'p1', title: 'Layout 1', keyboard_name: 'Board', created_at: '2025-01-15T10:30:00Z' }]
+        renderAndSwitchToHub({
+          hubAuthenticated: true,
+          hubPosts: posts,
+          hubPostsPagination: { total: 1, page: 1, per_page: 10, total_pages: 1 },
+        })
+
+        expect(screen.getByTestId('hub-post-list')).toBeInTheDocument()
+        expect(screen.queryByTestId('hub-pagination')).not.toBeInTheDocument()
+      })
+
+      it('shows pagination controls when total_pages > 1', () => {
+        const posts = [{ id: 'p1', title: 'Layout 1', keyboard_name: 'Board', created_at: '2025-01-15T10:30:00Z' }]
+        renderAndSwitchToHub({
+          hubAuthenticated: true,
+          hubPosts: posts,
+          hubPostsPagination: { total: 25, page: 1, per_page: 10, total_pages: 3 },
+        })
+
+        expect(screen.getByTestId('hub-pagination')).toBeInTheDocument()
+        expect(screen.getByTestId('hub-page-prev')).toBeDisabled()
+        expect(screen.getByTestId('hub-page-next')).not.toBeDisabled()
+        expect(screen.getByTestId('hub-page-info')).toHaveTextContent('hub.pageInfo')
+      })
+
+      it('calls onHubRefresh with next page when Next is clicked', () => {
+        const onHubRefresh = vi.fn().mockResolvedValue(undefined)
+        const posts = [{ id: 'p1', title: 'Layout 1', keyboard_name: 'Board', created_at: '2025-01-15T10:30:00Z' }]
+        renderAndSwitchToHub({
+          hubAuthenticated: true,
+          hubPosts: posts,
+          hubPostsPagination: { total: 25, page: 1, per_page: 10, total_pages: 3 },
+          onHubRefresh,
+        })
+
+        fireEvent.click(screen.getByTestId('hub-page-next'))
+
+        expect(onHubRefresh).toHaveBeenCalledWith({ page: 2, per_page: 10 })
+      })
+
+      it('syncs hubPage from pagination props and disables Next on last page', () => {
+        const posts = [{ id: 'p1', title: 'Layout 1', keyboard_name: 'Board', created_at: '2025-01-15T10:30:00Z' }]
+        renderAndSwitchToHub({
+          hubAuthenticated: true,
+          hubPosts: posts,
+          hubPostsPagination: { total: 25, page: 3, per_page: 10, total_pages: 3 },
+        })
+
+        // hubPage syncs from hubPostsPagination.page=3, so Next is disabled on last page
+        expect(screen.getByTestId('hub-page-next')).toBeDisabled()
+        expect(screen.getByTestId('hub-page-prev')).not.toBeDisabled()
+      })
+
+      it('shows pagination controls on empty page when total_pages > 1', () => {
+        renderAndSwitchToHub({
+          hubAuthenticated: true,
+          hubPosts: [],
+          hubPostsPagination: { total: 15, page: 2, per_page: 10, total_pages: 2 },
+        })
+
+        expect(screen.getByTestId('hub-no-posts')).toBeInTheDocument()
+        expect(screen.getByTestId('hub-pagination')).toBeInTheDocument()
+        expect(screen.getByTestId('hub-page-prev')).not.toBeDisabled()
+      })
+    })
+
+    describe('open in browser', () => {
+      it('shows open in browser button when hubOrigin is provided', () => {
+        const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+        renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts, hubOrigin: 'https://hub.example.com' })
+
+        expect(screen.getByTestId('hub-open-p1')).toBeInTheDocument()
+      })
+
+      it('does not show open in browser button when hubOrigin is undefined', () => {
+        const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+        renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts })
+
+        expect(screen.queryByTestId('hub-open-p1')).not.toBeInTheDocument()
+      })
+
+      it('calls openExternal with correct URL when clicked', () => {
+        const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+        renderAndSwitchToHub({ hubAuthenticated: true, hubPosts: posts, hubOrigin: 'https://hub.example.com' })
+
+        fireEvent.click(screen.getByTestId('hub-open-p1'))
+
+        expect(mockOpenExternal).toHaveBeenCalledWith('https://hub.example.com/post/p1')
       })
     })
 
