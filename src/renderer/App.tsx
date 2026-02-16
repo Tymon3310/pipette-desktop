@@ -666,7 +666,7 @@ export function App() {
   const handleRenameEntry = useCallback(async (entryId: string, newLabel: string): Promise<boolean> => {
     const hubPostId = layoutStore.entries.find((e) => e.id === entryId)?.hubPostId
     const ok = await layoutStore.renameEntry(entryId, newLabel)
-    if (ok && hubConnected && hubPostId) {
+    if (ok && hubEnabled && hubPostId) {
       void runHubOperation(
         entryId,
         (entries) => findHubEntry(entries, entryId),
@@ -680,7 +680,7 @@ export function App() {
       )
     }
     return ok
-  }, [layoutStore, hubConnected, runHubOperation, refreshHubMyPosts, t])
+  }, [layoutStore, hubEnabled, runHubOperation, refreshHubMyPosts, t])
 
   // Close modals when their feature support is lost
   useEffect(() => {
