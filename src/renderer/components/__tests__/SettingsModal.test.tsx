@@ -867,11 +867,20 @@ describe('SettingsModal', () => {
       expect(onHubEnabledChange).not.toHaveBeenCalled()
     })
 
-    it('calls onHubEnabledChange with true when enable button is clicked', () => {
+    it('calls onHubEnabledChange with true when enable button is clicked while authenticated', () => {
       const onHubEnabledChange = vi.fn()
-      renderAndSwitchToHub({ hubEnabled: false, onHubEnabledChange })
+      renderAndSwitchToHub({ hubEnabled: false, hubAuthenticated: true, onHubEnabledChange })
       fireEvent.click(screen.getByTestId('hub-enable-toggle'))
       expect(onHubEnabledChange).toHaveBeenCalledWith(true)
+    })
+
+    it('disables hub enable button when not authenticated', () => {
+      const onHubEnabledChange = vi.fn()
+      renderAndSwitchToHub({ hubEnabled: false, hubAuthenticated: false, onHubEnabledChange })
+      const button = screen.getByTestId('hub-enable-toggle')
+      expect(button).toBeDisabled()
+      fireEvent.click(button)
+      expect(onHubEnabledChange).not.toHaveBeenCalled()
     })
 
     it('hides my posts when hub is disabled', () => {

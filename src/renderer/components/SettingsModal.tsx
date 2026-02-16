@@ -1226,8 +1226,9 @@ export function SettingsModal({
                   <div data-testid="hub-enable-row">
                     <button
                       type="button"
-                      className="w-full rounded bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
+                      className="w-full rounded bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
                       onClick={() => onHubEnabledChange(true)}
+                      disabled={!hubAuthenticated}
                       data-testid="hub-enable-toggle"
                     >
                       {t('hub.enable')}
