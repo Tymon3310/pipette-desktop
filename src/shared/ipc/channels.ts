@@ -87,6 +87,7 @@ export const IpcChannels = {
   HUB_FETCH_AUTH_ME: 'hub:fetch-auth-me',
   HUB_PATCH_AUTH_ME: 'hub:patch-auth-me',
   HUB_GET_ORIGIN: 'hub:get-origin',
+  HUB_FETCH_MY_KEYBOARD_POSTS: 'hub:fetch-my-keyboard-posts',
 
   // Shell (renderer → main)
   SHELL_OPEN_EXTERNAL: 'shell:open-external',

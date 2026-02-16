@@ -43,7 +43,7 @@ export function useLayoutStore({
       const json = JSON.stringify(serialize(), null, 2)
       const result = await window.vialAPI.snapshotStoreSave(deviceUid, json, deviceName, label)
       if (!result.success) {
-        setError(t('layoutStore.saveFailed'))
+        setError(result.error === 'max entries reached' ? t('layoutStore.maxEntriesReached') : t('layoutStore.saveFailed'))
         return null
       }
       await refreshEntries()

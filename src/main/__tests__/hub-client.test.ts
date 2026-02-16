@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
-import { authenticateWithHub, uploadPostToHub, deletePostFromHub, updatePostOnHub, fetchMyPosts, patchPostOnHub, getHubOrigin, type HubUploadFiles } from '../hub/hub-client'
+import { authenticateWithHub, uploadPostToHub, deletePostFromHub, updatePostOnHub, fetchMyPosts, fetchMyPostsByKeyboard, patchPostOnHub, getHubOrigin, type HubUploadFiles } from '../hub/hub-client'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
@@ -338,6 +338,60 @@ describe('hub-client', () => {
       ).rejects.toThrow('Hub update failed: 403')
     })
 
+  })
+
+  describe('fetchMyPostsByKeyboard', () => {
+    it('sends keyboard name as query parameter', async () => {
+      const posts = [
+        { id: 'post-1', title: 'My Keymap', keyboard_name: 'Corne', created_at: '2025-01-15T10:30:00Z' },
+      ]
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, data: posts }),
+      })
+
+      const result = await fetchMyPostsByKeyboard('jwt-token', 'Corne')
+
+      expect(result).toEqual(posts)
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://pipette-hub-worker.keymaps.workers.dev/api/files/me/keyboard?name=Corne',
+        expect.objectContaining({
+          method: 'GET',
+          headers: { Authorization: 'Bearer jwt-token' },
+        }),
+      )
+    })
+
+    it('encodes keyboard name with special characters', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, data: [] }),
+      })
+
+      await fetchMyPostsByKeyboard('jwt', 'My Board / v2')
+
+      const [url] = mockFetch.mock.calls[0]
+      expect(url).toBe('https://pipette-hub-worker.keymaps.workers.dev/api/files/me/keyboard?name=My%20Board%20%2F%20v2')
+    })
+
+    it('throws on HTTP error', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => 'Missing name',
+      })
+
+      await expect(fetchMyPostsByKeyboard('jwt', '')).rejects.toThrow('Hub fetch keyboard posts failed: 400')
+    })
+
+    it('throws on payload-level failure', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: false, error: 'Invalid name' }),
+      })
+
+      await expect(fetchMyPostsByKeyboard('jwt', 'x')).rejects.toThrow('Hub fetch keyboard posts failed: Invalid name')
+    })
   })
 
   describe('getHubOrigin', () => {

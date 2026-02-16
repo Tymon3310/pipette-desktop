@@ -28,6 +28,7 @@ vi.mock('../hub/hub-client', () => ({
   patchPostOnHub: vi.fn(),
   deletePostFromHub: vi.fn(),
   fetchMyPosts: vi.fn(),
+  fetchMyPostsByKeyboard: vi.fn(),
   fetchAuthMe: vi.fn(),
   patchAuthMe: vi.fn(),
   getHubOrigin: vi.fn(() => 'https://pipette-hub-worker.keymaps.workers.dev'),
@@ -35,7 +36,7 @@ vi.mock('../hub/hub-client', () => ({
 
 import { ipcMain } from 'electron'
 import { getIdToken } from '../sync/google-auth'
-import { authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchAuthMe, patchAuthMe, getHubOrigin } from '../hub/hub-client'
+import { authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from '../hub/hub-client'
 import { setupHubIpc } from '../hub/hub-ipc'
 
 describe('hub-ipc', () => {
@@ -489,6 +490,75 @@ describe('hub-ipc', () => {
 
       expect(result).toEqual({ success: true, user })
       expect(patchAuthMe).toHaveBeenCalledWith('hub-jwt', 'Hello')
+    })
+  })
+
+  describe('HUB_FETCH_MY_KEYBOARD_POSTS', () => {
+    function getFetchKeyboardPostsHandler(): (...args: unknown[]) => Promise<unknown> {
+      return getHandlerFor('hub:fetch-my-keyboard-posts')
+    }
+
+    it('registers HUB_FETCH_MY_KEYBOARD_POSTS handler', () => {
+      expect(ipcMain.handle).toHaveBeenCalledWith('hub:fetch-my-keyboard-posts', expect.any(Function))
+    })
+
+    it('fetches keyboard posts successfully', async () => {
+      const posts = [{ id: 'post-1', title: 'My Keymap', keyboard_name: 'Corne', created_at: '2025-01-15T10:30:00Z' }]
+      mockHubAuth()
+      vi.mocked(fetchMyPostsByKeyboard).mockResolvedValueOnce(posts)
+
+      const handler = getFetchKeyboardPostsHandler()
+      const result = await handler({}, 'Corne')
+
+      expect(result).toEqual({ success: true, posts })
+      expect(fetchMyPostsByKeyboard).toHaveBeenCalledWith('hub-jwt', 'Corne')
+    })
+
+    it('rejects empty keyboard name', async () => {
+      const handler = getFetchKeyboardPostsHandler()
+      const result = await handler({}, '')
+
+      expect(result).toEqual({ success: false, error: 'Missing keyboard name' })
+      expect(getIdToken).not.toHaveBeenCalled()
+    })
+
+    it('rejects non-string keyboard name', async () => {
+      const handler = getFetchKeyboardPostsHandler()
+      const result = await handler({}, 123)
+
+      expect(result).toEqual({ success: false, error: 'Missing keyboard name' })
+      expect(getIdToken).not.toHaveBeenCalled()
+    })
+
+    it('rejects keyboard name exceeding 100 characters', async () => {
+      const handler = getFetchKeyboardPostsHandler()
+      const result = await handler({}, 'a'.repeat(101))
+
+      expect(result).toEqual({ success: false, error: 'Keyboard name too long' })
+      expect(getIdToken).not.toHaveBeenCalled()
+    })
+
+    it('trims whitespace from keyboard name', async () => {
+      mockHubAuth()
+      vi.mocked(fetchMyPostsByKeyboard).mockResolvedValueOnce([])
+
+      const handler = getFetchKeyboardPostsHandler()
+      await handler({}, '  Corne  ')
+
+      expect(fetchMyPostsByKeyboard).toHaveBeenCalledWith('hub-jwt', 'Corne')
+    })
+
+    it('returns error on failure', async () => {
+      mockHubAuth()
+      vi.mocked(fetchMyPostsByKeyboard).mockRejectedValueOnce(new Error('Hub fetch keyboard posts failed: 500'))
+
+      const handler = getFetchKeyboardPostsHandler()
+      const result = await handler({}, 'Corne')
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Hub fetch keyboard posts failed: 500',
+      })
     })
   })
 

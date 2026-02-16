@@ -9,6 +9,8 @@ import { IpcChannels } from '../shared/ipc/channels'
 import { notifyChange } from './sync/sync-service'
 import type { SnapshotMeta, SnapshotIndex } from '../shared/types/snapshot-store'
 
+const MAX_ENTRIES_PER_KEYBOARD = 30
+
 function sanitizeFilename(name: string): string {
   return name
     .replace(/[/\\:*?"<>|]/g, '_')
@@ -80,6 +82,15 @@ async function updateEntry(
   }
 }
 
+// Simple per-uid write serialization to prevent race conditions
+const writeLocks = new Map<string, Promise<unknown>>()
+function withWriteLock<T>(uid: string, fn: () => Promise<T>): Promise<T> {
+  const prev = writeLocks.get(uid) ?? Promise.resolve()
+  const next = prev.then(fn, fn)
+  writeLocks.set(uid, next)
+  return next
+}
+
 export function setupSnapshotStore(): void {
   ipcMain.handle(
     IpcChannels.SNAPSHOT_STORE_LIST,
@@ -105,32 +116,39 @@ export function setupSnapshotStore(): void {
     ): Promise<{ success: boolean; entry?: SnapshotMeta; error?: string }> => {
       try {
         validateUid(uid)
-        const dir = getSnapshotDir(uid)
-        await mkdir(dir, { recursive: true })
+        return await withWriteLock(uid, async () => {
+          const index = await readIndex(uid)
+          const activeCount = index.entries.filter((e) => !e.deletedAt).length
+          if (activeCount >= MAX_ENTRIES_PER_KEYBOARD) {
+            return { success: false, error: 'max entries reached' }
+          }
 
-        const now = new Date()
-        const timestamp = now.toISOString().replace(/:/g, '-')
-        const safeName = sanitizeFilename(deviceName)
-        const filename = `${safeName}_${timestamp}.pipette`
-        const filePath = getSafeFilePath(uid, filename)
+          const dir = getSnapshotDir(uid)
+          await mkdir(dir, { recursive: true })
 
-        await writeFile(filePath, json, 'utf-8')
+          const now = new Date()
+          const timestamp = now.toISOString().replace(/:/g, '-')
+          const safeName = sanitizeFilename(deviceName)
+          const filename = `${safeName}_${timestamp}.pipette`
+          const filePath = getSafeFilePath(uid, filename)
 
-        const nowIso = now.toISOString()
-        const entry: SnapshotMeta = {
-          id: randomUUID(),
-          label,
-          filename,
-          savedAt: nowIso,
-          updatedAt: nowIso,
-        }
+          await writeFile(filePath, json, 'utf-8')
 
-        const index = await readIndex(uid)
-        index.entries.unshift(entry)
-        await writeIndex(uid, index)
+          const nowIso = now.toISOString()
+          const entry: SnapshotMeta = {
+            id: randomUUID(),
+            label,
+            filename,
+            savedAt: nowIso,
+            updatedAt: nowIso,
+          }
 
-        notifyChange(`keyboards/${uid}/snapshots`)
-        return { success: true, entry }
+          index.entries.unshift(entry)
+          await writeIndex(uid, index)
+
+          notifyChange(`keyboards/${uid}/snapshots`)
+          return { success: true, entry }
+        })
       } catch (err) {
         return { success: false, error: String(err) }
       }

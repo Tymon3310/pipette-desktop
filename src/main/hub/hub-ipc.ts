@@ -3,9 +3,9 @@
 
 import { ipcMain } from 'electron'
 import { IpcChannels } from '../../shared/ipc/channels'
-import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubUserResult } from '../../shared/types/hub'
+import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyKeyboardPostsResult, HubUserResult } from '../../shared/types/hub'
 import { getIdToken } from '../sync/google-auth'
-import { authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchAuthMe, patchAuthMe, getHubOrigin } from './hub-client'
+import { authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from './hub-client'
 import type { HubUploadFiles } from './hub-client'
 
 const AUTH_ERROR = 'Not authenticated with Google. Please sign in again.'
@@ -23,6 +23,15 @@ function validateDisplayName(displayName: unknown): string {
   const trimmed = displayName.trim()
   if (trimmed.length === 0) throw new Error('Display name must not be empty')
   if (trimmed.length > DISPLAY_NAME_MAX_LENGTH) throw new Error('Display name too long')
+  return trimmed
+}
+
+const KEYBOARD_NAME_MAX_LENGTH = 100
+
+function validateKeyboardName(name: unknown): string {
+  if (typeof name !== 'string' || name.trim().length === 0) throw new Error('Missing keyboard name')
+  const trimmed = name.trim()
+  if (trimmed.length > KEYBOARD_NAME_MAX_LENGTH) throw new Error('Keyboard name too long')
   return trimmed
 }
 
@@ -142,6 +151,20 @@ export function setupHubIpc(): void {
         return { success: true, user }
       } catch (err) {
         return { success: false, error: extractError(err, 'Patch auth failed') }
+      }
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannels.HUB_FETCH_MY_KEYBOARD_POSTS,
+    async (_event, keyboardName: unknown): Promise<HubFetchMyKeyboardPostsResult> => {
+      try {
+        const validated = validateKeyboardName(keyboardName)
+        const jwt = await getHubToken()
+        const posts = await fetchMyPostsByKeyboard(jwt, validated)
+        return { success: true, posts }
+      } catch (err) {
+        return { success: false, error: extractError(err, 'Fetch keyboard posts failed') }
       }
     },
   )

@@ -44,6 +44,8 @@ export interface HubFetchMyPostsResult {
   error?: string
 }
 
+export type HubFetchMyKeyboardPostsResult = HubFetchMyPostsResult
+
 export interface HubUser {
   id: string
   email: string

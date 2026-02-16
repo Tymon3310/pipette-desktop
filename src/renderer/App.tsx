@@ -651,6 +651,53 @@ export function App() {
   const keyOverrideSupported = !device.isDummy && keyboard.dynamicCounts.keyOverride > 0
   const hubReady = appConfig.config.hubEnabled && sync.authStatus.authenticated && hubConnected
 
+  // Auto-link local Synced Data entries with Hub posts on keyboard connect
+  const reconcileUidRef = useRef('')
+  useEffect(() => {
+    if (!hubReady || !keyboard.uid || device.isDummy) return
+    if (reconcileUidRef.current === keyboard.uid) return
+    void layoutStore.refreshEntries()
+  }, [hubReady, keyboard.uid, device.isDummy, layoutStore.refreshEntries])
+
+  useEffect(() => {
+    if (!hubReady || !keyboard.uid || device.isDummy) return
+    if (reconcileUidRef.current === keyboard.uid) return
+    if (layoutStore.entries.length === 0) return
+    if (!layoutStore.entries.some((e) => !e.hubPostId)) return
+
+    reconcileUidRef.current = keyboard.uid
+    const uid = keyboard.uid
+
+    void (async () => {
+      try {
+        const result = await window.vialAPI.hubFetchMyKeyboardPosts(deviceName)
+        if (!result.success || !result.posts?.length) return
+
+        const consumed = new Set<string>()
+        let linked = false
+        for (const hubPost of result.posts) {
+          const alreadyLinked = layoutStore.entries.some((e) => e.hubPostId === hubPost.id)
+          if (alreadyLinked) continue
+
+          const match = layoutStore.entries.find(
+            (e) => e.label === hubPost.title && !e.hubPostId && !consumed.has(e.id),
+          )
+          if (match) {
+            consumed.add(match.id)
+            await window.vialAPI.snapshotStoreSetHubPostId(uid, match.id, hubPost.id)
+            linked = true
+          }
+        }
+        if (linked) {
+          await layoutStore.refreshEntries()
+          await refreshHubMyPosts()
+        }
+      } catch {
+        // Best-effort reconciliation
+      }
+    })()
+  }, [hubReady, keyboard.uid, device.isDummy, deviceName, layoutStore.entries, layoutStore.refreshEntries, refreshHubMyPosts])
+
   const handleDeleteEntry = useCallback(async (entryId: string) => {
     const hubPostId = layoutStore.entries.find((e) => e.id === entryId)?.hubPostId
     const deleted = await layoutStore.deleteEntry(entryId)

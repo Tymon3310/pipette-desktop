@@ -117,6 +117,17 @@ export async function fetchMyPosts(jwt: string): Promise<HubMyPost[]> {
   return page.items
 }
 
+export async function fetchMyPostsByKeyboard(jwt: string, keyboardName: string): Promise<HubMyPost[]> {
+  return hubFetch<HubMyPost[]>(
+    `${HUB_API_BASE}/api/files/me/keyboard?name=${encodeURIComponent(keyboardName)}`,
+    {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${jwt}` },
+    },
+    'Hub fetch keyboard posts failed',
+  )
+}
+
 export async function patchPostOnHub(jwt: string, postId: string, fields: { title?: string }): Promise<void> {
   await hubFetch<unknown>(`${HUB_API_BASE}/api/files/${encodeURIComponent(postId)}`, {
     method: 'PATCH',
