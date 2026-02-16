@@ -11,8 +11,7 @@ vi.mock('react-i18next', () => ({
     t: (key: string, params?: Record<string, string>) => {
       const map: Record<string, string> = {
         'app.title': 'Pipette',
-        'app.selectDevice': 'Select a device to configure',
-        'app.connectedDevices': 'Connected Devices',
+        'app.selectDevices': 'Select Devices',
         'app.connecting': 'Connecting{{dots}}',
         'app.deviceNotConnected': 'No keyboard connected',
         'app.loadDummy': 'Load from JSON file…',
@@ -53,10 +52,10 @@ describe('DeviceSelector', () => {
     onLoadDummy: vi.fn(),
   }
 
-  it('renders title and subtitle', () => {
+  it('renders title and section label', () => {
     render(<DeviceSelector {...defaultProps} />)
     expect(screen.getByText('Pipette')).toBeInTheDocument()
-    expect(screen.getByText('Select a device to configure')).toBeInTheDocument()
+    expect(screen.getByText('Select Devices')).toBeInTheDocument()
   })
 
   it('shows empty state message when no devices', () => {

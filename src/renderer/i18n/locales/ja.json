@@ -18,8 +18,7 @@
     "title": "Pipette",
     "deviceNotConnected": "キーボードが接続されていません",
     "connecting": "接続中{{dots}}",
-    "selectDevice": "設定するデバイスを選択",
-    "connectedDevices": "接続中のデバイス",
+    "selectDevices": "デバイスを選択",
     "connectedTo": "{{name}} に接続中",
     "udevHelp": "Linuxでデバイスが見つからない場合は、udevルールがインストールされていることを確認してください。詳細はプロジェクトのREADMEを参照してください。",
     "loadDummy": "JSONファイルから読み込み…"

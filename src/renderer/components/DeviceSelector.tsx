@@ -29,15 +29,10 @@ export function DeviceSelector({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-surface">
       <div className="w-full max-w-sm rounded-2xl bg-surface-alt px-8 pb-7 pt-9 shadow-lg">
-        <div className="mb-7 flex items-start justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-content">
-              {t('app.title')}
-            </h1>
-            <p className="mt-1 text-sm text-content-muted">
-              {t('app.selectDevice')}
-            </p>
-          </div>
+        <div className="mb-7 flex items-center justify-between">
+          <h1 className="text-xl font-bold text-content">
+            {t('app.title')}
+          </h1>
           {onOpenSettings && (
             <button
               type="button"
@@ -60,7 +55,7 @@ export function DeviceSelector({
 
         <div className="mb-5">
           <p className="mb-2.5 pl-0.5 text-[10px] font-semibold uppercase tracking-widest text-content-muted">
-            {t('app.connectedDevices')}
+            {t('app.selectDevices')}
           </p>
 
           <div className="space-y-2" data-testid="device-list">
