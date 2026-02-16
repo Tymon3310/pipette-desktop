@@ -260,14 +260,14 @@ export function App() {
   }, [])
 
   const fetchHubUser = useCallback(async () => {
-    if (!sync.authStatus.authenticated) return
+    if (!appConfig.config.hubEnabled || !sync.authStatus.authenticated) return
     try {
       const result = await window.vialAPI.hubFetchAuthMe()
       if (result.success && result.user) {
         setHubDisplayName(result.user.display_name)
       }
     } catch {}
-  }, [sync.authStatus.authenticated])
+  }, [appConfig.config.hubEnabled, sync.authStatus.authenticated])
 
   const handleUpdateHubDisplayName = useCallback(async (name: string): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -283,7 +283,7 @@ export function App() {
   }, [])
 
   const refreshHubMyPosts = useCallback(async () => {
-    if (sync.authStatus.authenticated) {
+    if (appConfig.config.hubEnabled && sync.authStatus.authenticated) {
       try {
         const result = await window.vialAPI.hubFetchMyPosts()
         if (result.success && Array.isArray(result.posts)) {
@@ -295,7 +295,7 @@ export function App() {
     }
     setHubMyPosts([])
     setHubConnected(false)
-  }, [sync.authStatus.authenticated])
+  }, [appConfig.config.hubEnabled, sync.authStatus.authenticated])
 
   const handleHubRenamePost = useCallback(async (postId: string, newTitle: string) => {
     const result = await window.vialAPI.hubPatchPost({ postId, title: newTitle })
