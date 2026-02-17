@@ -4,7 +4,8 @@
   "description": "Pipette — Vial-compatible keyboard configurator built with Electron and TypeScript",
   "license": "GPL-3.0-or-later",
   "type": "module",
-  "author": "",
+  "author": "darakuneko <tvkids@gmail.com>",
+  "homepage": "https://github.com/darakuneko/pipette-desktop",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -65,6 +66,7 @@
   "build": {
     "appId": "app.pipette.desktop",
     "productName": "Pipette",
+    "npmRebuild": false,
     "directories": {
       "output": "dist"
     },
