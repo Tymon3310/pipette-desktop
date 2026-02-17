@@ -11,6 +11,7 @@ import { setupLanguageStore } from './language-store'
 import { setupSyncIpc } from './sync/sync-ipc'
 import { setupHubIpc } from './hub/hub-ipc'
 import { setupLzmaIpc } from './lzma'
+import { buildCsp, securityHeaders } from './csp'
 import { log, logHidPacket } from './logger'
 import type { LogLevel } from './logger'
 import { loadWindowState, saveWindowState, setupAppConfigIpc } from './app-config'
@@ -38,33 +39,14 @@ if (process.platform === 'linux') {
 }
 
 function setupCsp(): void {
-  const prodCsp = [
-    "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self'",
-    "img-src 'self' data:",
-    "font-src 'self'",
-    "connect-src 'self'",
-    "base-uri 'self'",
-    "object-src 'none'",
-  ].join('; ')
-
-  const devCsp = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:",
-    "font-src 'self'",
-    "connect-src 'self' ws://localhost:*",
-    "base-uri 'self'",
-    "object-src 'none'",
-  ].join('; ')
+  const csp = buildCsp(isDev)
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': [isDev ? devCsp : prodCsp],
+        'Content-Security-Policy': [csp],
+        ...securityHeaders,
       },
     })
   })
