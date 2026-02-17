@@ -141,7 +141,7 @@ describe('hub-ipc', () => {
     const result = await handler({}, VALID_PARAMS)
 
     expect(result).toEqual({ success: true, postId: 'post-42' })
-    expect(authenticateWithHub).toHaveBeenCalledWith('id-token')
+    expect(authenticateWithHub).toHaveBeenCalledWith('id-token', undefined)
     expect(uploadPostToHub).toHaveBeenCalledWith(
       'hub-jwt',
       'My Keymap',
@@ -939,6 +939,143 @@ describe('hub-ipc', () => {
         success: false,
         error: 'Hub auth failed: 401 Unauthorized',
       })
+    })
+  })
+
+  describe('auth 409 display name conflict', () => {
+    it('returns DISPLAY_NAME_CONFLICT when authenticateWithHub throws Hub409Error', async () => {
+      vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
+      vi.mocked(authenticateWithHub).mockRejectedValueOnce(
+        new Hub409Error('Hub auth failed', 'Conflict'),
+      )
+
+      const handler = getHandlerFor('hub:fetch-my-posts')
+      const result = await handler({})
+
+      expect(result).toEqual({
+        success: false,
+        error: HUB_ERROR_DISPLAY_NAME_CONFLICT,
+      })
+    })
+
+    it('returns DISPLAY_NAME_CONFLICT on any IPC handler when auth 409 occurs', async () => {
+      vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
+      vi.mocked(authenticateWithHub).mockRejectedValueOnce(
+        new Hub409Error('Hub auth failed', 'Conflict'),
+      )
+
+      const handler = getHandlerFor('hub:fetch-auth-me')
+      const result = await handler()
+
+      expect(result).toEqual({
+        success: false,
+        error: HUB_ERROR_DISPLAY_NAME_CONFLICT,
+      })
+    })
+  })
+
+  describe('HUB_SET_AUTH_DISPLAY_NAME', () => {
+    it('registers HUB_SET_AUTH_DISPLAY_NAME handler', () => {
+      expect(ipcMain.handle).toHaveBeenCalledWith('hub:set-auth-display-name', expect.any(Function))
+    })
+
+    it('sets pendingAuthDisplayName and uses it in next auth', async () => {
+      const setHandler = getHandlerFor('hub:set-auth-display-name')
+      setHandler({}, 'CustomName')
+
+      vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
+      vi.mocked(authenticateWithHub).mockResolvedValueOnce({
+        token: 'hub-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: 'CustomName' },
+      })
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 0, page: 1, per_page: 10 })
+
+      const fetchHandler = getHandlerFor('hub:fetch-my-posts')
+      await fetchHandler({})
+
+      expect(authenticateWithHub).toHaveBeenCalledWith('id-token', 'CustomName')
+    })
+
+    it('clears pendingAuthDisplayName when null is passed', async () => {
+      const setHandler = getHandlerFor('hub:set-auth-display-name')
+      setHandler({}, 'SomeName')
+      setHandler({}, null)
+
+      vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
+      vi.mocked(authenticateWithHub).mockResolvedValueOnce({
+        token: 'hub-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 0, page: 1, per_page: 10 })
+
+      const fetchHandler = getHandlerFor('hub:fetch-my-posts')
+      await fetchHandler({})
+
+      expect(authenticateWithHub).toHaveBeenCalledWith('id-token', undefined)
+    })
+
+    it('clearHubTokenCache also clears pendingAuthDisplayName', async () => {
+      const setHandler = getHandlerFor('hub:set-auth-display-name')
+      setHandler({}, 'SomeName')
+
+      clearHubTokenCache()
+
+      vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
+      vi.mocked(authenticateWithHub).mockResolvedValueOnce({
+        token: 'hub-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 0, page: 1, per_page: 10 })
+
+      const fetchHandler = getHandlerFor('hub:fetch-my-posts')
+      await fetchHandler({})
+
+      expect(authenticateWithHub).toHaveBeenCalledWith('id-token', undefined)
+    })
+
+    it('invalidates cached JWT when display name is set so next auth uses it', async () => {
+      // First, populate the JWT cache
+      vi.mocked(getIdToken).mockResolvedValue('id-token')
+      vi.mocked(authenticateWithHub).mockResolvedValueOnce({
+        token: 'hub-jwt-1',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
+      vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
+
+      const fetchHandler = getHandlerFor('hub:fetch-my-posts')
+      await fetchHandler({})
+      expect(authenticateWithHub).toHaveBeenCalledTimes(1)
+
+      // Now set display name — this should invalidate the cache
+      const setHandler = getHandlerFor('hub:set-auth-display-name')
+      setHandler({}, 'NewName')
+
+      // Next call should re-authenticate with the new display name
+      vi.mocked(authenticateWithHub).mockResolvedValueOnce({
+        token: 'hub-jwt-2',
+        user: { id: 'u1', email: 'test@example.com', display_name: 'NewName' },
+      })
+      await fetchHandler({})
+
+      expect(authenticateWithHub).toHaveBeenCalledTimes(2)
+      expect(authenticateWithHub).toHaveBeenLastCalledWith('id-token', 'NewName')
+    })
+
+    it('rejects non-string displayName by setting null', async () => {
+      const setHandler = getHandlerFor('hub:set-auth-display-name')
+      setHandler({}, 123)
+
+      vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
+      vi.mocked(authenticateWithHub).mockResolvedValueOnce({
+        token: 'hub-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 0, page: 1, per_page: 10 })
+
+      const fetchHandler = getHandlerFor('hub:fetch-my-posts')
+      await fetchHandler({})
+
+      expect(authenticateWithHub).toHaveBeenCalledWith('id-token', undefined)
     })
   })
 

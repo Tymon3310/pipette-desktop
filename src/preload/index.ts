@@ -244,6 +244,8 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.HUB_FETCH_AUTH_ME),
   hubPatchAuthMe: (displayName: string): Promise<HubUserResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_PATCH_AUTH_ME, displayName),
+  hubSetAuthDisplayName: (displayName: string | null): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.HUB_SET_AUTH_DISPLAY_NAME, displayName),
   hubGetOrigin: (): Promise<string> =>
     ipcRenderer.invoke(IpcChannels.HUB_GET_ORIGIN),
 

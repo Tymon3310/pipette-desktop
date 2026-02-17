@@ -157,6 +157,7 @@ export interface VialAPI {
   hubFetchMyKeyboardPosts(keyboardName: string): Promise<HubFetchMyKeyboardPostsResult>
   hubFetchAuthMe(): Promise<HubUserResult>
   hubPatchAuthMe(displayName: string): Promise<HubUserResult>
+  hubSetAuthDisplayName(displayName: string | null): Promise<void>
   hubGetOrigin(): Promise<string>
 
   // Shell

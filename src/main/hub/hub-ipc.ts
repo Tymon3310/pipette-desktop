@@ -7,7 +7,7 @@ import { HUB_ERROR_DISPLAY_NAME_CONFLICT } from '../../shared/types/hub'
 import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyKeyboardPostsResult, HubUserResult, HubFetchMyPostsParams } from '../../shared/types/hub'
 import { getIdToken } from '../sync/google-auth'
 import { Hub401Error, Hub409Error, authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from './hub-client'
-import type { HubUploadFiles } from './hub-client'
+import type { HubAuthResult, HubUploadFiles } from './hub-client'
 
 const AUTH_ERROR = 'Not authenticated with Google. Please sign in again.'
 const POST_ID_RE = /^[a-zA-Z0-9_-]+$/
@@ -66,6 +66,7 @@ const HUB_JWT_TTL_MS = 24 * 60 * 60 * 1000
 let cachedHubJwt: { token: string; expiresAt: number } | null = null
 let inflightHubAuth: Promise<string> | null = null
 let cacheGeneration = 0
+let pendingAuthDisplayName: string | null = null
 
 async function getHubToken(): Promise<string> {
   if (cachedHubJwt && Date.now() < cachedHubJwt.expiresAt) {
@@ -78,7 +79,15 @@ async function getHubToken(): Promise<string> {
     try {
       const idToken = await getIdToken()
       if (!idToken) throw new Error(AUTH_ERROR)
-      const auth = await authenticateWithHub(idToken)
+      let auth: HubAuthResult
+      try {
+        auth = await authenticateWithHub(idToken, pendingAuthDisplayName ?? undefined)
+      } catch (err) {
+        if (err instanceof Hub409Error) {
+          throw new Error(HUB_ERROR_DISPLAY_NAME_CONFLICT)
+        }
+        throw err
+      }
       // Only cache if not invalidated (e.g. by sign-out) during the request
       if (gen === cacheGeneration) {
         cachedHubJwt = { token: auth.token, expiresAt: Date.now() + HUB_JWT_TTL_MS }
@@ -95,6 +104,7 @@ export function clearHubTokenCache(): void {
   cachedHubJwt = null
   inflightHubAuth = null
   cacheGeneration++
+  pendingAuthDisplayName = null
 }
 
 function invalidateCachedHubJwt(): void {
@@ -263,4 +273,15 @@ export function setupHubIpc(): void {
   )
 
   ipcMain.handle(IpcChannels.HUB_GET_ORIGIN, (): string => getHubOrigin())
+
+  ipcMain.handle(
+    IpcChannels.HUB_SET_AUTH_DISPLAY_NAME,
+    (_event, displayName: string | null): void => {
+      pendingAuthDisplayName = typeof displayName === 'string' ? displayName : null
+      // Invalidate cached JWT so the next getHubToken() re-authenticates
+      // with the new display name instead of returning a stale cached/inflight result.
+      cachedHubJwt = null
+      inflightHubAuth = null
+    },
+  )
 }

@@ -7,7 +7,7 @@ const HUB_API_DEFAULT = 'https://pipette-hub-worker.keymaps.workers.dev'
 const isDev = !!process.env.ELECTRON_RENDERER_URL
 const HUB_API_BASE = (isDev && process.env.PIPETTE_HUB_URL) || HUB_API_DEFAULT
 
-interface HubAuthResult {
+export interface HubAuthResult {
   token: string
   user: HubUser
 }
@@ -60,11 +60,16 @@ async function hubFetch<T>(url: string, init: RequestInit, label: string): Promi
   return json.data
 }
 
-export async function authenticateWithHub(idToken: string): Promise<HubAuthResult> {
+export async function authenticateWithHub(
+  idToken: string,
+  displayName?: string,
+): Promise<HubAuthResult> {
+  const payload: Record<string, string> = { id_token: idToken }
+  if (displayName) payload.display_name = displayName
   return hubFetch<HubAuthResult>(`${HUB_API_BASE}/api/auth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id_token: idToken }),
+    body: JSON.stringify(payload),
   }, 'Hub auth failed')
 }
 

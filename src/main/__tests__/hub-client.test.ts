@@ -131,6 +131,52 @@ describe('hub-client', () => {
       expect((err as Error).message).toBe('Hub auth failed: 500 Internal Server Error')
     })
 
+    it('sends display_name when displayName is provided', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          data: {
+            token: 'hub-jwt-token',
+            user: { id: 'user-1', email: 'test@example.com', display_name: 'Custom Name' },
+          },
+        }),
+      })
+
+      await authenticateWithHub('google-id-token', 'Custom Name')
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://pipette-hub-worker.keymaps.workers.dev/api/auth/token',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: 'google-id-token', display_name: 'Custom Name' }),
+        }),
+      )
+    })
+
+    it('sends only id_token when displayName is undefined', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          data: {
+            token: 'hub-jwt-token',
+            user: { id: 'user-1', email: 'test@example.com', display_name: null },
+          },
+        }),
+      })
+
+      await authenticateWithHub('google-id-token')
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://pipette-hub-worker.keymaps.workers.dev/api/auth/token',
+        expect.objectContaining({
+          body: JSON.stringify({ id_token: 'google-id-token' }),
+        }),
+      )
+    })
+
     it('throws on payload-level failure (HTTP 200 + ok:false)', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,

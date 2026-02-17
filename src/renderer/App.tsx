@@ -43,6 +43,7 @@ import {
 } from '../shared/keycodes/keycodes'
 import type { DeviceInfo, QmkSettingsTab, VilFile } from '../shared/types/protocol'
 import type { SnapshotMeta } from '../shared/types/snapshot-store'
+import { HUB_ERROR_DISPLAY_NAME_CONFLICT } from '../shared/types/hub'
 import type { HubMyPost, HubUploadResult, HubPaginationMeta, HubFetchMyPostsParams } from '../shared/types/hub'
 import settingsDefs from '../shared/qmk-settings-defs.json'
 
@@ -86,6 +87,7 @@ export function App() {
   useEffect(() => { window.vialAPI.hubGetOrigin().then(setHubOrigin).catch(() => {}) }, [])
   const [hubConnected, setHubConnected] = useState(false)
   const [hubDisplayName, setHubDisplayName] = useState<string | null>(null)
+  const [hubAuthConflict, setHubAuthConflict] = useState(false)
 
   // Startup auto-sync
   const { loading: syncLoading, config: syncConfig, authStatus: syncAuth, hasPassword: syncHasPassword, syncNow } = sync
@@ -280,6 +282,26 @@ export function App() {
     }
   }, [])
 
+  const handleResolveAuthConflict = useCallback(async (name: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await window.vialAPI.hubSetAuthDisplayName(name)
+      const result = await window.vialAPI.hubFetchAuthMe()
+      if (!result.success) {
+        return { success: false, error: result.error }
+      }
+      if (result.user) {
+        setHubAuthConflict(false)
+        setHubDisplayName(result.user.display_name)
+        await refreshHubPosts()
+      }
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : undefined }
+    } finally {
+      await window.vialAPI.hubSetAuthDisplayName(null).catch(() => {})
+    }
+  }, [refreshHubPosts])
+
   const refreshHubMyPosts = useCallback(async (params?: HubFetchMyPostsParams) => {
     if (appConfig.config.hubEnabled && sync.authStatus.authenticated) {
       try {
@@ -288,6 +310,14 @@ export function App() {
           setHubMyPosts(result.posts)
           setHubMyPostsPagination(result.pagination)
           setHubConnected(true)
+          setHubAuthConflict(false)
+          return
+        }
+        if (!result.success && result.error === HUB_ERROR_DISPLAY_NAME_CONFLICT) {
+          setHubAuthConflict(true)
+          setHubConnected(false)
+          setHubMyPosts([])
+          setHubMyPostsPagination(undefined)
           return
         }
       } catch {}
@@ -827,6 +857,8 @@ export function App() {
             hubDisplayName={hubDisplayName}
             onHubDisplayNameChange={handleUpdateHubDisplayName}
             hubOrigin={hubOrigin}
+            hubAuthConflict={hubAuthConflict}
+            onResolveAuthConflict={handleResolveAuthConflict}
           />
         )}
       </>

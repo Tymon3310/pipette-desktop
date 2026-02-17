@@ -476,6 +476,8 @@ interface Props {
   hubDisplayName: string | null
   onHubDisplayNameChange: (name: string) => Promise<{ success: boolean; error?: string }>
   hubOrigin?: string
+  hubAuthConflict?: boolean
+  onResolveAuthConflict?: (name: string) => Promise<{ success: boolean; error?: string }>
 }
 
 interface HubDisplayNameFieldProps {
@@ -622,6 +624,8 @@ export function SettingsModal({
   hubDisplayName,
   onHubDisplayNameChange,
   hubOrigin,
+  hubAuthConflict,
+  onResolveAuthConflict,
 }: Props) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<ModalTabId>('tools')
@@ -1332,8 +1336,26 @@ export function SettingsModal({
                 )}
               </section>
 
+              {/* Auth Conflict Warning */}
+              {hubAuthConflict && hubAuthenticated && (
+                <section>
+                  <div
+                    className="rounded border border-warning/50 bg-warning/10 p-3 text-sm text-warning"
+                    data-testid="hub-auth-conflict-warning"
+                  >
+                    {t('hub.authDisplayNameConflict')}
+                  </div>
+                  <div className="mt-3">
+                    <HubDisplayNameField
+                      currentName={null}
+                      onSave={onResolveAuthConflict ?? onHubDisplayNameChange}
+                    />
+                  </div>
+                </section>
+              )}
+
               {/* Display Name */}
-              {hubEnabled && hubAuthenticated && (
+              {hubEnabled && hubAuthenticated && !hubAuthConflict && (
                 <section>
                   <HubDisplayNameField
                     currentName={hubDisplayName}
