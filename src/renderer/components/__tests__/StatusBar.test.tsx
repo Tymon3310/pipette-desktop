@@ -18,6 +18,7 @@ vi.mock('react-i18next', () => ({
       if (key === 'statusBar.sync.syncing') return 'Syncing...'
       if (key === 'statusBar.sync.synced') return 'Synced'
       if (key === 'statusBar.sync.error') return 'Error'
+      if (key === 'statusBar.sync.partial') return 'Partial'
       if (key === 'sync.cancelPending') return 'Cancel'
       return key
     },
@@ -118,6 +119,14 @@ describe('StatusBar', () => {
       const syncStatus = screen.getByTestId('sync-status')
       expect(syncStatus).toHaveTextContent('Error')
       expect(syncStatus.className).toContain('text-danger')
+    })
+
+    it('shows "Partial" with warning class when syncStatus is partial', () => {
+      render(<StatusBar {...defaultProps} syncStatus="partial" />)
+      const syncStatus = screen.getByTestId('sync-status')
+      expect(syncStatus).toHaveTextContent('Partial')
+      expect(syncStatus.className).toContain('text-warning')
+      expect(syncStatus.className).not.toContain('animate-pulse')
     })
 
     it('does not render sync status when syncStatus is none', () => {

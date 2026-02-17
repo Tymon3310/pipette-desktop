@@ -25,7 +25,16 @@ export interface SyncBundle {
 
 export type SyncDirection = 'upload' | 'download'
 
-export type SyncStatus = 'idle' | 'syncing' | 'error' | 'success'
+export type SyncStatus = 'idle' | 'syncing' | 'error' | 'success' | 'partial'
+
+/** Terminal statuses that indicate sync has finished (successfully, partially, or with error). */
+export type SyncTerminalStatus = 'success' | 'error' | 'partial'
+
+const TERMINAL_STATUSES: ReadonlySet<string> = new Set<SyncTerminalStatus>(['success', 'error', 'partial'])
+
+export function isSyncTerminalStatus(status: string): status is SyncTerminalStatus {
+  return TERMINAL_STATUSES.has(status)
+}
 
 export interface SyncProgress {
   direction: SyncDirection
@@ -34,6 +43,7 @@ export interface SyncProgress {
   syncUnit?: string
   current?: number
   total?: number
+  failedUnits?: string[]
 }
 
 export interface SyncAuthStatus {
@@ -52,12 +62,13 @@ export interface PasswordStrength {
 }
 
 export interface LastSyncResult {
-  status: 'success' | 'error'
+  status: SyncTerminalStatus
   message?: string
+  failedUnits?: string[]
   timestamp: number
 }
 
-export type SyncStatusType = 'pending' | 'syncing' | 'synced' | 'error' | 'none'
+export type SyncStatusType = 'pending' | 'syncing' | 'synced' | 'error' | 'partial' | 'none'
 
 export interface SyncResetTargets {
   keyboards: boolean

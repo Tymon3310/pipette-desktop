@@ -91,6 +91,7 @@ vi.mock('../app-config', () => ({
 
 vi.stubGlobal('fetch', vi.fn())
 
+import type { SyncProgress } from '../../shared/types/sync'
 import {
   executeSync,
   notifyChange,
@@ -512,6 +513,116 @@ describe('sync-service', () => {
 
       // Local entry is newer (via updatedAt), so should upload
       expect(mockUploadFile).toHaveBeenCalled()
+    })
+  })
+
+  describe('partial failure reporting', () => {
+    it('emits status: partial with failedUnits when some downloads fail', async () => {
+      const progressEvents: SyncProgress[] = []
+      setProgressCallback((p) => progressEvents.push({ ...p }))
+
+      // Two remote files: one succeeds, one fails during merge
+      mockListFiles.mockResolvedValue([
+        { id: 'f1', name: 'favorites_tapDance.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+        { id: 'f2', name: 'favorites_macro.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+      ])
+      mockDownloadFile
+        .mockResolvedValueOnce(makeRemoteEnvelope('2025-01-01T00:00:00.000Z'))
+        .mockRejectedValueOnce(new Error('decrypt failed'))
+
+      await executeSync('download')
+
+      const final = progressEvents[progressEvents.length - 1]
+      expect(final.status).toBe('partial')
+      expect(final.failedUnits).toEqual(['favorites/macro'])
+    })
+
+    it('emits status: success when all downloads succeed', async () => {
+      const progressEvents: SyncProgress[] = []
+      setProgressCallback((p) => progressEvents.push({ ...p }))
+
+      mockListFiles.mockResolvedValue([
+        { id: 'f1', name: 'favorites_tapDance.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+      ])
+      mockDownloadFile.mockResolvedValue(makeRemoteEnvelope('2025-01-01T00:00:00.000Z'))
+
+      await executeSync('download')
+
+      const final = progressEvents[progressEvents.length - 1]
+      expect(final.status).toBe('success')
+      expect(final.failedUnits).toBeUndefined()
+    })
+
+    it('emits status: partial with failedUnits when some uploads fail', async () => {
+      const progressEvents: SyncProgress[] = []
+      setProgressCallback((p) => progressEvents.push({ ...p }))
+
+      // Set up two local favorites so collectAllSyncUnits finds them
+      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{}' })
+      // Set up macro favorite too
+      const macroDir = join(mockUserDataPath, 'sync', 'favorites', 'macro')
+      await mkdir(macroDir, { recursive: true })
+      await writeFile(
+        join(macroDir, 'index.json'),
+        JSON.stringify({ type: 'macro', entries: [{ id: '2', label: 'entry', filename: 'macro.json', savedAt: '2025-01-01T00:00:00.000Z' }] }),
+        'utf-8',
+      )
+      await writeFile(join(macroDir, 'macro.json'), '{}', 'utf-8')
+
+      mockListFiles.mockResolvedValue([])
+      // tapDance upload succeeds, macro upload fails
+      mockUploadFile
+        .mockResolvedValueOnce('id1')
+        .mockRejectedValueOnce(new Error('upload failed'))
+
+      await executeSync('upload')
+
+      const final = progressEvents[progressEvents.length - 1]
+      expect(final.status).toBe('partial')
+      expect(final.failedUnits).toBeDefined()
+      expect(final.failedUnits).toContain('favorites/macro')
+    })
+
+    it('re-adds failed units to pending after partial upload', async () => {
+      // Set up two local favorites
+      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{}' })
+      const macroDir = join(mockUserDataPath, 'sync', 'favorites', 'macro')
+      await mkdir(macroDir, { recursive: true })
+      await writeFile(
+        join(macroDir, 'index.json'),
+        JSON.stringify({ type: 'macro', entries: [{ id: '2', label: 'entry', filename: 'macro.json', savedAt: '2025-01-01T00:00:00.000Z' }] }),
+        'utf-8',
+      )
+      await writeFile(join(macroDir, 'macro.json'), '{}', 'utf-8')
+
+      // Mark both as pending before sync
+      notifyChange('favorites/tapDance')
+      notifyChange('favorites/macro')
+      expect(hasPendingChanges()).toBe(true)
+
+      mockListFiles.mockResolvedValue([])
+      // tapDance succeeds, macro fails
+      mockUploadFile
+        .mockResolvedValueOnce('id1')
+        .mockRejectedValueOnce(new Error('upload failed'))
+
+      await executeSync('upload')
+
+      // Failed unit should remain pending for auto-sync retry
+      expect(hasPendingChanges()).toBe(true)
+    })
+
+    it('emits status: error and re-throws on catastrophic failure', async () => {
+      const progressEvents: SyncProgress[] = []
+      setProgressCallback((p) => progressEvents.push({ ...p }))
+
+      mockListFiles.mockRejectedValue(new Error('network down'))
+
+      await expect(executeSync('download')).rejects.toThrow('network down')
+
+      const final = progressEvents[progressEvents.length - 1]
+      expect(final.status).toBe('error')
+      expect(final.failedUnits).toBeUndefined()
     })
   })
 })

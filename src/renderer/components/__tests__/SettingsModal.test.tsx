@@ -486,6 +486,26 @@ describe('SettingsModal', () => {
     expect(screen.getByTestId('sync-status-error-message')).toHaveTextContent('Drive API 403')
   })
 
+  it('shows partial status with failed units list', () => {
+    renderAndSwitchToData({
+      sync: makeSyncMock({
+        ...SYNC_ENABLED,
+        syncStatus: 'partial',
+        lastSyncResult: {
+          status: 'partial',
+          message: '2 sync unit(s) failed',
+          failedUnits: ['favorites/tapDance', 'favorites/macro'],
+          timestamp: Date.now(),
+        },
+      }),
+    })
+
+    expect(screen.getByTestId('sync-status-label')).toHaveTextContent('statusBar.sync.partial')
+    expect(screen.getByTestId('sync-status-partial-details')).toBeInTheDocument()
+    expect(screen.getByTestId('sync-status-partial-details')).toHaveTextContent('favorites/tapDance')
+    expect(screen.getByTestId('sync-status-partial-details')).toHaveTextContent('favorites/macro')
+  })
+
   it('shows pending status when hasPendingChanges is true', () => {
     renderAndSwitchToData({
       sync: makeSyncMock({

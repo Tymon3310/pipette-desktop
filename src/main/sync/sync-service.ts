@@ -271,17 +271,31 @@ export async function executeSync(direction: 'download' | 'upload'): Promise<voi
 
     emitProgress({ direction, status: 'syncing', message: 'Starting sync...' })
 
+    let failedUnits: string[]
     if (direction === 'download') {
-      await executeDownloadSync(password)
+      failedUnits = await executeDownloadSync(password)
     } else {
-      await executeUploadSync(password)
-      // Manual upload covers all sync units — clear pending
+      failedUnits = await executeUploadSync(password)
+      // Manual upload covers all sync units — clear pending, but re-add failed units
       if (pendingChanges.size > 0) {
         pendingChanges.clear()
-        broadcastPendingStatus()
       }
+      for (const unit of failedUnits) {
+        pendingChanges.add(unit)
+      }
+      broadcastPendingStatus()
     }
-    emitProgress({ direction, status: 'success', message: 'Sync complete' })
+
+    if (failedUnits.length === 0) {
+      emitProgress({ direction, status: 'success', message: 'Sync complete' })
+    } else {
+      emitProgress({
+        direction,
+        status: 'partial',
+        message: `${failedUnits.length} sync unit(s) failed`,
+        failedUnits,
+      })
+    }
   } catch (err) {
     emitProgress({
       direction,
@@ -294,11 +308,12 @@ export async function executeSync(direction: 'download' | 'upload'): Promise<voi
   }
 }
 
-async function executeDownloadSync(password: string): Promise<void> {
+async function executeDownloadSync(password: string): Promise<string[]> {
   const remoteFiles = await listFiles()
   updateRemoteState(remoteFiles)
   const total = remoteFiles.length
   let current = 0
+  const failedUnits: string[] = []
 
   for (const remoteFile of remoteFiles) {
     current++
@@ -316,6 +331,7 @@ async function executeDownloadSync(password: string): Promise<void> {
     try {
       await mergeWithRemote(remoteFile.id, syncUnit, password, remoteFiles)
     } catch (err) {
+      failedUnits.push(syncUnit)
       emitProgress({
         direction: 'download',
         status: 'error',
@@ -324,14 +340,17 @@ async function executeDownloadSync(password: string): Promise<void> {
       })
     }
   }
+
+  return failedUnits
 }
 
-async function executeUploadSync(password: string): Promise<void> {
+async function executeUploadSync(password: string): Promise<string[]> {
   const syncUnits = await collectAllSyncUnits()
   let remoteFiles = await listFiles()
   updateRemoteState(remoteFiles)
   const total = syncUnits.length
   let current = 0
+  const failedUnits: string[] = []
 
   for (const syncUnit of syncUnits) {
     current++
@@ -348,6 +367,7 @@ async function executeUploadSync(password: string): Promise<void> {
       remoteFiles = await listFiles()
       updateRemoteState(remoteFiles)
     } catch (err) {
+      failedUnits.push(syncUnit)
       emitProgress({
         direction: 'upload',
         status: 'error',
@@ -356,6 +376,8 @@ async function executeUploadSync(password: string): Promise<void> {
       })
     }
   }
+
+  return failedUnits
 }
 
 export async function collectAllSyncUnits(): Promise<string[]> {

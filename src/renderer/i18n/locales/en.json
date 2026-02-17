@@ -328,7 +328,8 @@
       "pending": "Pending",
       "syncing": "Syncing...",
       "synced": "Synced",
-      "error": "Error"
+      "error": "Error",
+      "partial": "Partial"
     }
   },
   "security": {

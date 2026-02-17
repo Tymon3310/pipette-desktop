@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import { useTranslation } from 'react-i18next'
+import { SYNC_STATUS_CLASS } from './sync-ui'
 import type { SyncStatusType } from '../../shared/types/sync'
 
 interface Props {
@@ -14,13 +15,6 @@ interface Props {
   typingTestMode?: boolean
   onDisconnect: () => void
   onCancelPending?: () => void
-}
-
-const SYNC_STATUS_CLASS: Record<Exclude<SyncStatusType, 'none'>, string> = {
-  pending: 'text-pending',
-  syncing: 'text-warning animate-pulse',
-  synced: 'text-accent',
-  error: 'text-danger',
 }
 
 export function StatusBar({

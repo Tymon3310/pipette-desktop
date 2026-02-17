@@ -3,14 +3,26 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAppConfig } from './useAppConfig'
 import type { AppConfig } from '../../shared/types/app-config'
+import { isSyncTerminalStatus } from '../../shared/types/sync'
 import type {
   SyncAuthStatus,
   SyncProgress,
+  SyncStatus,
   SyncStatusType,
+  SyncTerminalStatus,
   PasswordStrength,
   LastSyncResult,
   SyncResetTargets,
 } from '../../shared/types/sync'
+
+/** Maps a SyncProgress status or LastSyncResult status to the UI SyncStatusType. */
+const SYNC_STATUS_MAP: Record<SyncStatus, SyncStatusType> & Record<SyncTerminalStatus, SyncStatusType> = {
+  idle: 'none',
+  syncing: 'syncing',
+  error: 'error',
+  success: 'synced',
+  partial: 'partial',
+}
 
 export interface UseSyncReturn {
   config: AppConfig
@@ -75,10 +87,15 @@ export function useSync(): UseSyncReturn {
         timeoutId = null
       }
       setProgress(p)
-      if (p.status === 'success' || p.status === 'error') {
+      if (isSyncTerminalStatus(p.status)) {
         // Only update lastSyncResult on final events (no syncUnit = end of entire sync)
         if (!p.syncUnit) {
-          setLastSyncResult({ status: p.status, message: p.message, timestamp: Date.now() })
+          setLastSyncResult({
+            status: p.status,
+            message: p.message,
+            failedUnits: p.failedUnits,
+            timestamp: Date.now(),
+          })
         }
         timeoutId = setTimeout(() => setProgress(null), 3000)
       }
@@ -150,13 +167,12 @@ export function useSync(): UseSyncReturn {
   }, [])
 
   const syncStatus = useMemo((): SyncStatusType => {
-    if (progress?.status === 'syncing') return 'syncing'
-    if (progress?.status === 'error') return 'error'
-    if (progress?.status === 'success') return 'synced'
+    if (progress?.status && progress.status !== 'idle') {
+      return SYNC_STATUS_MAP[progress.status]
+    }
     if (!authStatus.authenticated || !hasPassword) return 'none'
     if (config.autoSync && hasPendingChangesState) return 'pending'
-    if (lastSyncResult?.status === 'error') return 'error'
-    if (lastSyncResult?.status === 'success') return 'synced'
+    if (lastSyncResult) return SYNC_STATUS_MAP[lastSyncResult.status]
     return 'none'
   }, [progress, authStatus.authenticated, hasPassword, config.autoSync, hasPendingChangesState, lastSyncResult])
 

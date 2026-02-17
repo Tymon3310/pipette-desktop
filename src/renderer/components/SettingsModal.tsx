@@ -8,6 +8,7 @@ import { ModalCloseButton } from './editors/ModalCloseButton'
 import { ROW_CLASS, toggleTrackClass, toggleKnobClass } from './editors/modal-controls'
 import { ACTION_BTN, DELETE_BTN, CONFIRM_DELETE_BTN, formatDate } from './editors/store-modal-shared'
 import { ModalTabBar, ModalTabPanel } from './editors/modal-tabs'
+import { SYNC_STATUS_CLASS } from './sync-ui'
 import type { ModalTabId } from './editors/modal-tabs'
 import type { SyncStatusType, LastSyncResult, SyncProgress, SyncResetTargets, LocalResetTargets } from '../../shared/types/sync'
 import type { UseSyncReturn } from '../hooks/useSync'
@@ -30,13 +31,6 @@ function scoreColor(score: number | null): string {
   if (score < 2) return 'bg-danger'
   if (score < 4) return 'bg-warning'
   return 'bg-accent'
-}
-
-const SYNC_STATUS_CLASS: Record<Exclude<SyncStatusType, 'none'>, string> = {
-  pending: 'text-pending',
-  syncing: 'text-warning animate-pulse',
-  synced: 'text-accent',
-  error: 'text-danger',
 }
 
 const BTN_PRIMARY = 'rounded bg-accent px-3 py-1 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50'
@@ -94,6 +88,19 @@ function SyncStatusSection({ syncStatus, progress, lastSyncResult }: SyncStatusS
               data-testid="sync-status-error-message"
             >
               {lastSyncResult.message}
+            </div>
+          )}
+          {syncStatus === 'partial' && lastSyncResult?.failedUnits && lastSyncResult.failedUnits.length > 0 && (
+            <div
+              className="rounded border border-warning/30 bg-warning/10 px-2 py-1 text-xs text-warning"
+              data-testid="sync-status-partial-details"
+            >
+              <div>{lastSyncResult.message}</div>
+              <ul className="mt-1 list-disc pl-4">
+                {lastSyncResult.failedUnits.map((unit) => (
+                  <li key={unit}>{unit}</li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

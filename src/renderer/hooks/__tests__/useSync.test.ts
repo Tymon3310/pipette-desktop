@@ -341,6 +341,7 @@ describe('useSync', () => {
       { progressStatus: 'syncing', expected: 'syncing' },
       { progressStatus: 'success', expected: 'synced' },
       { progressStatus: 'error', expected: 'error' },
+      { progressStatus: 'partial', expected: 'partial' },
     ])('returns $expected from progress $progressStatus even with autoSync off', async ({ progressStatus, expected }) => {
       captureProgressCallback()
       const { result } = await mountAndWait()
@@ -374,6 +375,24 @@ describe('useSync', () => {
       })
 
       expect(result.current.syncStatus).toBe('synced')
+    })
+
+    it('returns partial from lastSyncResult when authenticated', async () => {
+      captureProgressCallback()
+      mockAuthenticatedState()
+      const { result } = await mountAndWait()
+
+      act(() => {
+        progressCallback({
+          direction: 'upload',
+          status: 'partial',
+          failedUnits: ['favorites/tapDance'],
+        })
+      })
+
+      expect(result.current.syncStatus).toBe('partial')
+      expect(result.current.lastSyncResult?.status).toBe('partial')
+      expect(result.current.lastSyncResult?.failedUnits).toEqual(['favorites/tapDance'])
     })
   })
 })

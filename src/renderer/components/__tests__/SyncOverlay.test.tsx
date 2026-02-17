@@ -54,6 +54,20 @@ describe('SyncOverlay', () => {
     expect(screen.getByText('Network failure')).toBeInTheDocument()
   })
 
+  it('shows warning message when progress status is partial', () => {
+    const progress: SyncProgress = {
+      direction: 'download',
+      status: 'partial',
+      message: '2 sync unit(s) failed',
+      failedUnits: ['favorites/tapDance', 'favorites/macro'],
+    }
+    render(<SyncOverlay progress={progress} onSkip={vi.fn()} />)
+
+    const warningEl = screen.getByText('2 sync unit(s) failed')
+    expect(warningEl).toBeInTheDocument()
+    expect(warningEl.className).toContain('text-warning')
+  })
+
   it('does not show progress details when progress is null', () => {
     render(<SyncOverlay progress={null} onSkip={vi.fn()} />)
 

@@ -328,7 +328,8 @@
       "pending": "同期待ち",
       "syncing": "同期中...",
       "synced": "同期済み",
-      "error": "エラー"
+      "error": "エラー",
+      "partial": "一部失敗"
     }
   },
   "security": {
