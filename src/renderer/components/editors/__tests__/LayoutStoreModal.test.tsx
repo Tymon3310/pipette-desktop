@@ -34,6 +34,7 @@ const DEFAULT_PROPS = {
   onRename: vi.fn(),
   onDelete: vi.fn(),
   onClose: vi.fn(),
+  keyboardName: 'TestKeyboard',
 }
 
 describe('LayoutStoreModal', () => {
@@ -255,7 +256,7 @@ describe('LayoutStoreModal', () => {
     expect(onSave).toHaveBeenCalledWith('My Layout')
   })
 
-  it('calls onSave with empty string when no label entered', () => {
+  it('disables save button when label is empty', () => {
     const onSave = vi.fn()
     render(
       <LayoutStoreModal
@@ -265,9 +266,10 @@ describe('LayoutStoreModal', () => {
       />,
     )
 
-    fireEvent.click(screen.getByTestId('layout-store-save-submit'))
-
-    expect(onSave).toHaveBeenCalledWith('')
+    const btn = screen.getByTestId('layout-store-save-submit')
+    expect(btn).toBeDisabled()
+    fireEvent.click(btn)
+    expect(onSave).not.toHaveBeenCalled()
   })
 
   it('disables save button when saving', () => {
@@ -1098,8 +1100,8 @@ describe('LayoutStoreModal', () => {
 
   describe('orphaned hub post detection', () => {
     const HUB_MY_POSTS: HubMyPost[] = [
-      { id: 'orphan-post-1', title: 'First Layout', keyboard_name: 'KB', created_at: '2026-01-01T00:00:00.000Z' },
-      { id: 'orphan-post-2', title: 'Other Layout', keyboard_name: 'KB', created_at: '2026-01-01T00:00:00.000Z' },
+      { id: 'orphan-post-1', title: 'First Layout', keyboard_name: 'TestKeyboard', created_at: '2026-01-01T00:00:00.000Z' },
+      { id: 'orphan-post-2', title: 'Other Layout', keyboard_name: 'TestKeyboard', created_at: '2026-01-01T00:00:00.000Z' },
     ]
 
     const ENTRIES_NO_HUB: SnapshotMeta[] = [
@@ -1183,6 +1185,27 @@ describe('LayoutStoreModal', () => {
       fireEvent.click(screen.getByTestId('layout-store-delete-orphan-hub'))
 
       expect(onDeleteOrphanedHubPost).toHaveBeenCalledWith('entry-1', 'orphan-post-1')
+    })
+
+    it('does not match orphan post from different keyboard', () => {
+      const crossKeyboardPosts: HubMyPost[] = [
+        { id: 'other-kb-post', title: 'First Layout', keyboard_name: 'OtherKeyboard', created_at: '2026-01-01T00:00:00.000Z' },
+      ]
+      render(
+        <LayoutStoreModal
+          entries={ENTRIES_NO_HUB}
+          {...DEFAULT_PROPS}
+          hubMyPosts={crossKeyboardPosts}
+          onUploadToHub={vi.fn()}
+          onReuploadToHub={vi.fn()}
+          onDeleteOrphanedHubPost={vi.fn()}
+        />,
+      )
+
+      // Same title but different keyboard_name — should show Upload, not Upload?/Delete
+      expect(screen.queryByTestId('layout-store-reupload-hub')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('layout-store-delete-orphan-hub')).not.toBeInTheDocument()
+      expect(screen.getAllByTestId('layout-store-upload-hub')).toHaveLength(2)
     })
 
     it('shows normal Upload when hubMyPosts not provided', () => {
@@ -1295,6 +1318,7 @@ describe('LayoutStoreModal', () => {
       onLoad: vi.fn(),
       onRename: vi.fn(),
       onDelete: vi.fn(),
+      keyboardName: 'TestKeyboard',
     }
 
     it('hides save form when isDummy is true', () => {

@@ -82,6 +82,7 @@ function FormatButtons({ className, testIdPrefix, disabled, onVil, onKeymapC, on
 
 interface HubOrphanButtonsProps {
   entry: SnapshotMeta
+  keyboardName: string
   hubMyPosts?: HubMyPost[]
   hubUploading?: string | null
   fileDisabled?: boolean
@@ -92,6 +93,7 @@ interface HubOrphanButtonsProps {
 
 function HubOrphanButtons({
   entry,
+  keyboardName,
   hubMyPosts,
   hubUploading,
   fileDisabled,
@@ -100,7 +102,7 @@ function HubOrphanButtons({
   onDeleteOrphanedHubPost,
 }: HubOrphanButtonsProps) {
   const { t } = useTranslation()
-  const orphanPost = hubMyPosts?.find((p) => p.title === entry.label)
+  const orphanPost = hubMyPosts?.find((p) => p.title === entry.label && p.keyboard_name === keyboardName)
   const disabled = !!hubUploading || fileDisabled
 
   if (orphanPost) {
@@ -219,6 +221,7 @@ export interface LayoutStoreContentProps {
   onRemoveFromHub?: (entryId: string) => void
   onReuploadToHub?: (entryId: string, orphanedPostId: string) => void
   onDeleteOrphanedHubPost?: (entryId: string, orphanedPostId: string) => void
+  keyboardName: string
   hubOrigin?: string
   hubMyPosts?: HubMyPost[]
   hubKeyboardPosts?: HubMyPost[]
@@ -255,6 +258,7 @@ export function LayoutStoreContent({
   onRemoveFromHub,
   onReuploadToHub,
   onDeleteOrphanedHubPost,
+  keyboardName,
   hubOrigin,
   hubMyPosts,
   hubKeyboardPosts,
@@ -276,8 +280,8 @@ export function LayoutStoreContent({
 
   function handleSaveSubmit(e: React.FormEvent): void {
     e.preventDefault()
-    if (saving) return
     const trimmed = saveLabel.trim()
+    if (saving || !trimmed) return
 
     // First submit with a duplicate label: ask for confirmation
     const existing = entries.find((entry) => entry.label === trimmed)
@@ -304,7 +308,7 @@ export function LayoutStoreContent({
 
   function handleRenameSubmit(entryId: string): void {
     const trimmed = editLabel.trim()
-    if (trimmed !== originalLabelRef.current) {
+    if (trimmed && trimmed !== originalLabelRef.current) {
       onRename(entryId, trimmed)
     }
     setEditingId(null)
@@ -427,7 +431,7 @@ export function LayoutStoreContent({
             ) : (
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || !saveLabel.trim()}
                 className="shrink-0 rounded-lg bg-accent px-4 py-2 text-[13px] font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
                 data-testid="layout-store-save-submit"
               >
@@ -619,6 +623,7 @@ export function LayoutStoreContent({
                           {!entryHubPostId && (
                             <HubOrphanButtons
                               entry={entry}
+                              keyboardName={keyboardName}
                               hubMyPosts={hubMyPosts}
                               hubUploading={hubUploading}
                               fileDisabled={fileDisabled}

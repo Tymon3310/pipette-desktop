@@ -115,7 +115,7 @@ function panelPositionClass(side: PanelSide, open: boolean): string {
   return `${PANEL_BASE} right-0 border-l ${open ? 'translate-x-0' : 'translate-x-full'}`
 }
 
-interface Props extends LayoutStoreContentProps {
+interface Props extends Omit<LayoutStoreContentProps, 'keyboardName'> {
   onClose: () => void
   activeTab: ModalTabId
   onTabChange: (tab: ModalTabId) => void
@@ -294,6 +294,7 @@ export function EditorSettingsModal({
             <LayoutStoreContent
               {...dataProps}
               isDummy={isDummy}
+              keyboardName={deviceName}
               listClassName="overflow-y-auto"
               footer={onResetKeyboardData && (
                 <ResetKeyboardDataSection
