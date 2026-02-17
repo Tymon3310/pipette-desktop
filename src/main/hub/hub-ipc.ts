@@ -35,6 +35,15 @@ function validateKeyboardName(name: unknown): string {
   return trimmed
 }
 
+const TITLE_MAX_LENGTH = 200
+
+function validateTitle(title: unknown): string {
+  if (typeof title !== 'string' || title.trim().length === 0) throw new Error('Title must not be empty')
+  const trimmed = title.trim()
+  if (trimmed.length > TITLE_MAX_LENGTH) throw new Error('Title too long')
+  return trimmed
+}
+
 function clampInt(value: number | undefined, min: number, max: number): number | undefined {
   if (value == null) return undefined
   const floored = Math.floor(value)
@@ -125,9 +134,10 @@ export function setupHubIpc(): void {
     IpcChannels.HUB_UPLOAD_POST,
     async (_event, params: HubUploadPostParams): Promise<HubUploadResult> => {
       try {
+        const title = validateTitle(params.title)
         const files = buildFiles(params)
         const result = await withTokenRetry((jwt) =>
-          uploadPostToHub(jwt, params.title, params.keyboardName, files),
+          uploadPostToHub(jwt, title, params.keyboardName, files),
         )
         return { success: true, postId: result.id }
       } catch (err) {
@@ -141,9 +151,10 @@ export function setupHubIpc(): void {
     async (_event, params: HubUpdatePostParams): Promise<HubUploadResult> => {
       try {
         validatePostId(params.postId)
+        const title = validateTitle(params.title)
         const files = buildFiles(params)
         const result = await withTokenRetry((jwt) =>
-          updatePostOnHub(jwt, params.postId, params.title, params.keyboardName, files),
+          updatePostOnHub(jwt, params.postId, title, params.keyboardName, files),
         )
         return { success: true, postId: result.id }
       } catch (err) {
@@ -157,8 +168,9 @@ export function setupHubIpc(): void {
     async (_event, params: HubPatchPostParams): Promise<HubDeleteResult> => {
       try {
         validatePostId(params.postId)
+        const title = validateTitle(params.title)
         await withTokenRetry((jwt) =>
-          patchPostOnHub(jwt, params.postId, { title: params.title }),
+          patchPostOnHub(jwt, params.postId, { title }),
         )
         return { success: true }
       } catch (err) {

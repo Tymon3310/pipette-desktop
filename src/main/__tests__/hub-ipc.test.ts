@@ -67,6 +67,24 @@ describe('hub-ipc', () => {
     })
   }
 
+  async function expectTitleRejection(
+    handler: (...args: unknown[]) => Promise<unknown>,
+    baseParams: Record<string, unknown>,
+  ): Promise<void> {
+    for (const [title, error] of [
+      ['', 'Title must not be empty'],
+      ['   ', 'Title must not be empty'],
+      [undefined, 'Title must not be empty'],
+      [null, 'Title must not be empty'],
+      [123, 'Title must not be empty'],
+      ['a'.repeat(201), 'Title too long'],
+    ] as const) {
+      const result = await handler({}, { ...baseParams, title })
+      expect(result).toEqual({ success: false, error })
+    }
+    expect(getIdToken).not.toHaveBeenCalled()
+  }
+
   function getHandler(): (...args: unknown[]) => Promise<unknown> {
     return getHandlerFor('hub:upload-post')
   }
@@ -136,6 +154,26 @@ describe('hub-ipc', () => {
     )
   })
 
+  it('rejects invalid titles (empty, whitespace-only, too long)', async () => {
+    await expectTitleRejection(getHandler(), VALID_PARAMS)
+  })
+
+  it('trims whitespace from title', async () => {
+    mockHubAuth()
+    vi.mocked(uploadPostToHub).mockResolvedValueOnce({ id: 'post-1', title: 'Trimmed' })
+
+    const handler = getHandler()
+    const result = await handler({}, { ...VALID_PARAMS, title: '  Trimmed  ' })
+
+    expect(result).toEqual({ success: true, postId: 'post-1' })
+    expect(uploadPostToHub).toHaveBeenCalledWith(
+      'hub-jwt',
+      'Trimmed',
+      'TestBoard',
+      expect.any(Object),
+    )
+  })
+
   it('returns error when upload fails', async () => {
     mockHubAuth()
     vi.mocked(uploadPostToHub).mockRejectedValueOnce(new Error('Hub upload failed: 500'))
@@ -202,6 +240,27 @@ describe('hub-ipc', () => {
       expect(getIdToken).not.toHaveBeenCalled()
     })
 
+    it('rejects invalid titles (empty, whitespace-only, too long)', async () => {
+      await expectTitleRejection(getUpdateHandler(), { ...VALID_PARAMS, postId: 'post-1' })
+    })
+
+    it('trims whitespace from title', async () => {
+      mockHubAuth()
+      vi.mocked(updatePostOnHub).mockResolvedValueOnce({ id: 'post-1', title: 'Trimmed' })
+
+      const handler = getUpdateHandler()
+      const result = await handler({}, { ...VALID_PARAMS, postId: 'post-1', title: '  Trimmed  ' })
+
+      expect(result).toEqual({ success: true, postId: 'post-1' })
+      expect(updatePostOnHub).toHaveBeenCalledWith(
+        'hub-jwt',
+        'post-1',
+        'Trimmed',
+        'TestBoard',
+        expect.any(Object),
+      )
+    })
+
     it('returns error on update failure', async () => {
       mockHubAuth()
       vi.mocked(updatePostOnHub).mockRejectedValueOnce(new Error('Hub update failed: 403'))
@@ -232,6 +291,21 @@ describe('hub-ipc', () => {
         expect(result).toEqual({ success: false, error: 'Invalid post ID' })
       }
       expect(getIdToken).not.toHaveBeenCalled()
+    })
+
+    it('rejects invalid titles (empty, whitespace-only, too long)', async () => {
+      await expectTitleRejection(getPatchHandler(), { postId: 'post-1' })
+    })
+
+    it('trims whitespace from title', async () => {
+      mockHubAuth()
+      vi.mocked(patchPostOnHub).mockResolvedValueOnce(undefined)
+
+      const handler = getPatchHandler()
+      const result = await handler({}, { postId: 'post-1', title: '  Trimmed Title  ' })
+
+      expect(result).toEqual({ success: true })
+      expect(patchPostOnHub).toHaveBeenCalledWith('hub-jwt', 'post-1', { title: 'Trimmed Title' })
     })
 
     it('patches successfully', async () => {

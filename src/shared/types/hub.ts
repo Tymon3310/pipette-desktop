@@ -23,7 +23,7 @@ export interface HubUpdatePostParams extends HubUploadPostParams {
 
 export interface HubPatchPostParams {
   postId: string
-  title?: string
+  title: string
 }
 
 export interface HubDeleteResult {
