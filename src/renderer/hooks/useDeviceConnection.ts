@@ -14,6 +14,18 @@ export interface DeviceConnectionState {
 /** Polling interval for device auto-detection and disconnect monitoring (ms) */
 export const POLL_INTERVAL_MS = 1000
 
+/** Maximum time to wait for a single poll IPC call before giving up (ms) */
+export const POLL_TIMEOUT_MS = 5000
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Poll timeout')), ms),
+    ),
+  ])
+}
+
 export function useDeviceConnection() {
   const [state, setState] = useState<DeviceConnectionState>({
     devices: [],
@@ -142,29 +154,48 @@ export function useDeviceConnection() {
       }
     }
 
-    const interval = setInterval(async () => {
-      if (!mountedRef.current) return
+    let timerId: ReturnType<typeof setTimeout> | null = null
+    let cancelled = false
+
+    async function poll(): Promise<void> {
+      if (!mountedRef.current || cancelled) return
 
       if (connectedDeviceRef.current) {
         // Skip health check for dummy keyboards
-        if (isDummyRef.current) return
-        // Check if the connected device is still physically present
-        const open = await window.vialAPI.isDeviceOpen().catch(() => false)
-        if (!open) await handleDisconnect()
+        if (!isDummyRef.current) {
+          const open = await withTimeout(
+            window.vialAPI.isDeviceOpen(),
+            POLL_TIMEOUT_MS,
+          ).catch(() => false)
+          if (!open) await handleDisconnect()
+        }
       } else {
         // Refresh device list for auto-detection
         try {
-          const devices = await window.vialAPI.listDevices()
+          const devices = await withTimeout(
+            window.vialAPI.listDevices(),
+            POLL_TIMEOUT_MS,
+          )
           if (mountedRef.current) {
             setState((s) => ({ ...s, devices, error: null }))
           }
         } catch {
-          // Ignore polling errors to avoid flooding the UI
+          // Ignore polling errors (including timeouts) to avoid flooding the UI
         }
       }
-    }, POLL_INTERVAL_MS)
 
-    return () => clearInterval(interval)
+      // Schedule next poll only after current one completes
+      if (!cancelled) {
+        timerId = setTimeout(poll, POLL_INTERVAL_MS)
+      }
+    }
+
+    timerId = setTimeout(poll, POLL_INTERVAL_MS)
+
+    return () => {
+      cancelled = true
+      if (timerId !== null) clearTimeout(timerId)
+    }
   }, []) // stable — uses refs internally
 
   return {

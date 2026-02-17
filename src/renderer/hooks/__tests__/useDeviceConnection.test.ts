@@ -235,6 +235,55 @@ describe('useDeviceConnection', () => {
       expect(result.current.devices).toEqual([])
     })
 
+    it('does not overlap polls when async callback is slow', async () => {
+      // Simulate a slow listDevices call that takes longer than POLL_INTERVAL_MS
+      let resolveSlowCall: ((devices: DeviceInfo[]) => void) | null = null
+      mockListDevices
+        .mockImplementationOnce(() => Promise.resolve([])) // initial fetch
+        .mockImplementation(
+          () =>
+            new Promise<DeviceInfo[]>((resolve) => {
+              resolveSlowCall = resolve
+            }),
+        )
+
+      renderHook(() => useDeviceConnection())
+
+      // Wait for initial fetch
+      await waitFor(() => {
+        expect(mockListDevices).toHaveBeenCalledTimes(1)
+      })
+
+      // Wait for first poll to start (slow call)
+      await waitFor(
+        () => {
+          expect(mockListDevices).toHaveBeenCalledTimes(2)
+        },
+        { timeout: 5000, interval: 200 },
+      )
+
+      // Wait for another interval to pass while first poll is still pending
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS + 200))
+
+      // Should NOT have started another poll — still waiting for slow call
+      expect(mockListDevices).toHaveBeenCalledTimes(2)
+
+      // Resolve the slow call — resolveSlowCall is guaranteed non-null
+      // because waitFor above confirmed the mock was invoked
+      expect(resolveSlowCall).not.toBeNull()
+      await act(async () => {
+        resolveSlowCall!([])
+      })
+
+      // Now the next poll should fire after the interval
+      await waitFor(
+        () => {
+          expect(mockListDevices.mock.calls.length).toBeGreaterThanOrEqual(3)
+        },
+        { timeout: 5000, interval: 200 },
+      )
+    })
+
     it('resumes listDevices polling after disconnect', async () => {
       mockListDevices.mockResolvedValue([mockDevice])
       const { result } = renderHook(() => useDeviceConnection())
