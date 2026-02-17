@@ -38,7 +38,7 @@ describe('fetchNotifications', () => {
     mockHandlers.clear()
   })
 
-  it('sends POST request with query payload', async () => {
+  it('sends POST request with query payload and timeout signal', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(wrapResponse([])),
@@ -51,6 +51,7 @@ describe('fetchNotifications', () => {
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: expect.any(AbortSignal),
       }),
     )
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
@@ -163,6 +164,23 @@ describe('fetchNotifications', () => {
     const result = await fetchNotifications()
     expect(result.success).toBe(true)
     expect(result.notifications).toHaveLength(2)
+  })
+
+  it('filters out notifications with malformed publishedAt strings', async () => {
+    const data = [
+      { title: 'Valid', body: 'Body', type: 'Info', publishedAt: '2025-01-01T00:00:00Z' },
+      { title: 'Invalid', body: 'Body', type: 'Info', publishedAt: 'not-a-date' },
+      { title: 'Empty', body: 'Body', type: 'Info', publishedAt: '' },
+    ]
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(wrapResponse(data)),
+    })
+
+    const result = await fetchNotifications()
+    expect(result.success).toBe(true)
+    expect(result.notifications).toHaveLength(1)
+    expect(result.notifications![0].title).toBe('Valid')
   })
 })
 

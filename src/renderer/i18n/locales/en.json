@@ -514,7 +514,12 @@
   },
   "notification": {
     "title": "Notifications",
-    "empty": "No notifications"
+    "empty": "No notifications",
+    "type": {
+      "Info": "Info",
+      "Warning": "Warning",
+      "Update": "Update"
+    }
   },
   "favoriteStore": {
     "title": "Favorites",

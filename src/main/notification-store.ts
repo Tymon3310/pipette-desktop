@@ -5,6 +5,7 @@ import { log } from './logger'
 import { secureHandle } from './ipc-guard'
 
 const NOTIFICATION_ENDPOINT = 'https://getnotifications-svtx62766a-uc.a.run.app'
+const FETCH_TIMEOUT_MS = 10_000
 
 interface FirestoreTimestamp {
   _seconds: number
@@ -17,10 +18,14 @@ function isFirestoreTimestamp(value: unknown): value is FirestoreTimestamp {
   return typeof obj._seconds === 'number' && typeof obj._nanoseconds === 'number'
 }
 
-function normalizeTimestamp(value: unknown): string {
-  if (typeof value === 'string') return value
+function isValidIsoDate(s: string): boolean {
+  return s.length > 0 && !Number.isNaN(Date.parse(s))
+}
+
+function normalizeTimestamp(value: unknown): string | null {
+  if (typeof value === 'string') return isValidIsoDate(value) ? value : null
   if (isFirestoreTimestamp(value)) return new Date(value._seconds * 1000).toISOString()
-  return new Date(0).toISOString()
+  return null
 }
 
 interface RawNotification {
@@ -41,13 +46,10 @@ function isValidNotification(item: unknown): item is RawNotification {
   )
 }
 
-function normalizeNotification(raw: RawNotification): AppNotification {
-  return {
-    title: raw.title,
-    body: raw.body,
-    type: raw.type,
-    publishedAt: normalizeTimestamp(raw.publishedAt),
-  }
+function normalizeNotification(raw: RawNotification): AppNotification | null {
+  const publishedAt = normalizeTimestamp(raw.publishedAt)
+  if (!publishedAt) return null
+  return { title: raw.title, body: raw.body, type: raw.type, publishedAt }
 }
 
 export async function fetchNotifications(): Promise<NotificationFetchResult> {
@@ -67,6 +69,7 @@ export async function fetchNotifications(): Promise<NotificationFetchResult> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     })
     if (!response.ok) {
       log('warn', `Notification fetch failed: HTTP ${response.status}`)
@@ -78,7 +81,9 @@ export async function fetchNotifications(): Promise<NotificationFetchResult> {
       log('warn', 'Notification fetch: response.notifications is not an array')
       return { success: false, error: 'Invalid response format' }
     }
-    const notifications = rawList.filter(isValidNotification).map(normalizeNotification)
+    const notifications = rawList
+      .filter(isValidNotification)
+      .flatMap((raw) => normalizeNotification(raw) ?? [])
     return { success: true, notifications }
   } catch (err) {
     log('warn', `Notification fetch error: ${err}`)

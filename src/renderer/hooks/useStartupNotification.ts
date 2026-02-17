@@ -18,24 +18,26 @@ export function useStartupNotification(): StartupNotificationState {
     if (appConfig.loading || fetchedRef.current) return
     fetchedRef.current = true
 
+    let cancelled = false
     window.vialAPI.notificationFetch().then((result) => {
+      if (cancelled) return
       if (!result.success || !result.notifications || result.notifications.length === 0) return
 
-      const lastSeenTs = appConfig.config.lastNotificationSeen
+      const parsed = appConfig.config.lastNotificationSeen
         ? new Date(appConfig.config.lastNotificationSeen).getTime()
         : 0
-      let filtered = result.notifications
-      if (lastSeenTs > 0) {
-        filtered = filtered.filter((n) => new Date(n.publishedAt).getTime() > lastSeenTs)
-      }
+      const lastSeenTs = Number.isNaN(parsed) ? 0 : parsed
+      const filtered = result.notifications
+        .filter((n) => new Date(n.publishedAt).getTime() > lastSeenTs)
+        .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
       if (filtered.length === 0) return
 
-      filtered.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
       setNotifications(filtered)
       setVisible(true)
     }).catch(() => {
       // Network errors are non-critical
     })
+    return () => { cancelled = true }
   }, [appConfig.loading, appConfig.config.lastNotificationSeen])
 
   const dismiss = useCallback(() => {

@@ -29,11 +29,11 @@ describe('NotificationModal', () => {
 
     expect(screen.getByText('Update Available')).toBeInTheDocument()
     expect(screen.getByText('Version 2.0 is out')).toBeInTheDocument()
-    expect(screen.getByText('Info')).toBeInTheDocument()
+    expect(screen.getByText('notification.type.Info')).toBeInTheDocument()
 
     expect(screen.getByText('Maintenance')).toBeInTheDocument()
     expect(screen.getByText(/Server maintenance/)).toBeInTheDocument()
-    expect(screen.getByText('Warning')).toBeInTheDocument()
+    expect(screen.getByText('notification.type.Warning')).toBeInTheDocument()
   })
 
   it('calls onClose when close button is clicked', () => {

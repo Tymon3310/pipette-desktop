@@ -40,7 +40,7 @@ export function NotificationModal({ notifications, onClose }: NotificationModalP
               <div className="mb-2 flex items-center gap-2">
                 <span className="font-medium">{notification.title}</span>
                 <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent">
-                  {notification.type}
+                  {t(`notification.type.${notification.type}`, { defaultValue: notification.type })}
                 </span>
               </div>
               <p className="whitespace-pre-line text-sm text-content-secondary">

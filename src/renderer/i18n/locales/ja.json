@@ -514,7 +514,12 @@
   },
   "notification": {
     "title": "お知らせ",
-    "empty": "お知らせはありません"
+    "empty": "お知らせはありません",
+    "type": {
+      "Info": "情報",
+      "Warning": "警告",
+      "Update": "更新"
+    }
   },
   "favoriteStore": {
     "title": "お気に入り",

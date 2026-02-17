@@ -82,6 +82,22 @@ describe('useStartupNotification', () => {
     expect(result.current.visible).toBe(false)
   })
 
+  it('shows all notifications when lastNotificationSeen is malformed', async () => {
+    const notifications = [
+      { title: 'A', body: 'Body', type: 'Info', publishedAt: '2025-01-02T00:00:00Z' },
+    ]
+    setupMocks(
+      { lastNotificationSeen: 'not-a-date' },
+      { success: true, notifications },
+    )
+
+    const { result } = renderHookWithConfig(() => useStartupNotification())
+    await act(async () => {})
+
+    expect(result.current.visible).toBe(true)
+    expect(result.current.notifications).toHaveLength(1)
+  })
+
   it('hides modal when fetch fails', async () => {
     setupMocks({}, { success: false, error: 'Network error' })
 
