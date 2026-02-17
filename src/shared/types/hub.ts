@@ -31,11 +31,23 @@ export interface HubDeleteResult {
   error?: string
 }
 
+export interface HubPostFile {
+  file_type: string
+  original_filename: string
+  file_size: number
+}
+
 export interface HubMyPost {
   id: string
   title: string
   keyboard_name: string
+  description?: string | null
   created_at: string
+  updated_at?: string
+  uploaded_by?: string
+  uploader_name?: string
+  download_count?: number
+  files?: HubPostFile[]
 }
 
 export interface HubPaginationMeta {
