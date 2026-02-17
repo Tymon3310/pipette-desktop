@@ -25,6 +25,7 @@ vi.mock('../hub/hub-client', async () => {
   const actual = await vi.importActual<typeof import('../hub/hub-client')>('../hub/hub-client')
   return {
     Hub401Error: actual.Hub401Error,
+    Hub409Error: actual.Hub409Error,
     authenticateWithHub: vi.fn(),
     uploadPostToHub: vi.fn(),
     updatePostOnHub: vi.fn(),
@@ -40,7 +41,8 @@ vi.mock('../hub/hub-client', async () => {
 
 import { ipcMain } from 'electron'
 import { getIdToken } from '../sync/google-auth'
-import { Hub401Error, authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from '../hub/hub-client'
+import { HUB_ERROR_DISPLAY_NAME_CONFLICT } from '../../shared/types/hub'
+import { Hub401Error, Hub409Error, authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from '../hub/hub-client'
 import { setupHubIpc, clearHubTokenCache } from '../hub/hub-ipc'
 
 describe('hub-ipc', () => {
@@ -599,6 +601,20 @@ describe('hub-ipc', () => {
         success: false,
         error: 'Not authenticated with Google. Please sign in again.',
       })
+    })
+
+    it('returns DISPLAY_NAME_CONFLICT on Hub409Error', async () => {
+      mockHubAuth()
+      vi.mocked(patchAuthMe).mockRejectedValueOnce(new Hub409Error('Hub patch auth me failed', 'Display name already taken'))
+
+      const handler = getPatchAuthMeHandler()
+      const result = await handler({}, 'TakenName')
+
+      expect(result).toEqual({
+        success: false,
+        error: HUB_ERROR_DISPLAY_NAME_CONFLICT,
+      })
+      expect(getIdToken).toHaveBeenCalled()
     })
 
     it('returns error on failure', async () => {

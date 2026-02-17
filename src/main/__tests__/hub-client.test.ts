@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
-import { Hub401Error, authenticateWithHub, uploadPostToHub, deletePostFromHub, updatePostOnHub, fetchMyPosts, fetchMyPostsByKeyboard, patchPostOnHub, getHubOrigin, type HubUploadFiles } from '../hub/hub-client'
+import { Hub401Error, Hub409Error, authenticateWithHub, uploadPostToHub, deletePostFromHub, updatePostOnHub, fetchMyPosts, fetchMyPostsByKeyboard, patchPostOnHub, getHubOrigin, patchAuthMe, type HubUploadFiles } from '../hub/hub-client'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
@@ -105,7 +105,19 @@ describe('hub-client', () => {
       expect((err as Error).message).toBe('Hub auth failed: 401 Unauthorized')
     })
 
-    it('throws plain Error on non-401 HTTP error', async () => {
+    it('throws Hub409Error on 409 response', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        text: async () => 'Conflict',
+      })
+
+      const err = await authenticateWithHub('token').catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(Hub409Error)
+      expect((err as Error).message).toBe('Hub auth failed: 409 Conflict')
+    })
+
+    it('throws plain Error on non-401/non-409 HTTP error', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -115,6 +127,7 @@ describe('hub-client', () => {
       const err = await authenticateWithHub('token').catch((e: unknown) => e)
       expect(err).toBeInstanceOf(Error)
       expect(err).not.toBeInstanceOf(Hub401Error)
+      expect(err).not.toBeInstanceOf(Hub409Error)
       expect((err as Error).message).toBe('Hub auth failed: 500 Internal Server Error')
     })
 
@@ -337,6 +350,20 @@ describe('hub-client', () => {
 
       const [url] = mockFetch.mock.calls[0]
       expect(url).toBe('https://pipette-hub-worker.keymaps.workers.dev/api/files/id%20with%20spaces')
+    })
+  })
+
+  describe('patchAuthMe', () => {
+    it('throws Hub409Error on 409 response', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        text: async () => 'Display name already taken',
+      })
+
+      const err = await patchAuthMe('jwt', 'TakenName').catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(Hub409Error)
+      expect((err as Error).message).toBe('Hub patch auth me failed: 409 Display name already taken')
     })
   })
 

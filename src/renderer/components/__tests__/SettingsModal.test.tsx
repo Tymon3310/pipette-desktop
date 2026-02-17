@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { SettingsModal } from '../SettingsModal'
 import type { UseSyncReturn } from '../../hooks/useSync'
+import { HUB_ERROR_DISPLAY_NAME_CONFLICT } from '../../../shared/types/hub'
 import { DEFAULT_APP_CONFIG } from '../../../shared/types/sync'
 
 vi.mock('react-i18next', () => ({
@@ -1230,10 +1231,10 @@ describe('SettingsModal', () => {
         expect(screen.queryByTestId('hub-display-name-required')).not.toBeInTheDocument()
       })
 
-      it('shows duplicate error when save returns 409', async () => {
+      it('shows duplicate error when save returns DISPLAY_NAME_CONFLICT', async () => {
         const onHubDisplayNameChange = vi.fn().mockResolvedValue({
           success: false,
-          error: 'Hub patch auth me failed: 409 {"ok":false,"error":"display_name is already taken"}',
+          error: HUB_ERROR_DISPLAY_NAME_CONFLICT,
         })
         renderAndSwitchToHub({
           hubEnabled: true,

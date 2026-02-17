@@ -66,6 +66,8 @@ export interface HubUser {
   role: string
 }
 
+export const HUB_ERROR_DISPLAY_NAME_CONFLICT = 'DISPLAY_NAME_CONFLICT'
+
 export interface HubUserResult {
   success: boolean
   user?: HubUser

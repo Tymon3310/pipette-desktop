@@ -32,6 +32,13 @@ export class Hub401Error extends Error {
   }
 }
 
+export class Hub409Error extends Error {
+  constructor(label: string, body: string) {
+    super(`${label}: 409 ${body}`)
+    this.name = 'Hub409Error'
+  }
+}
+
 interface HubApiResponse<T> {
   ok: boolean
   data: T
@@ -43,6 +50,7 @@ async function hubFetch<T>(url: string, init: RequestInit, label: string): Promi
   if (!response.ok) {
     const text = await response.text()
     if (response.status === 401) throw new Hub401Error(label, text)
+    if (response.status === 409) throw new Hub409Error(label, text)
     throw new Error(`${label}: ${response.status} ${text}`)
   }
   const json = (await response.json()) as HubApiResponse<T>

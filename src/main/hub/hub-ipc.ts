@@ -3,9 +3,10 @@
 
 import { ipcMain } from 'electron'
 import { IpcChannels } from '../../shared/ipc/channels'
+import { HUB_ERROR_DISPLAY_NAME_CONFLICT } from '../../shared/types/hub'
 import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyKeyboardPostsResult, HubUserResult, HubFetchMyPostsParams } from '../../shared/types/hub'
 import { getIdToken } from '../sync/google-auth'
-import { Hub401Error, authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from './hub-client'
+import { Hub401Error, Hub409Error, authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from './hub-client'
 import type { HubUploadFiles } from './hub-client'
 
 const AUTH_ERROR = 'Not authenticated with Google. Please sign in again.'
@@ -238,6 +239,9 @@ export function setupHubIpc(): void {
         const user = await withTokenRetry((jwt) => patchAuthMe(jwt, validated))
         return { success: true, user }
       } catch (err) {
+        if (err instanceof Hub409Error) {
+          return { success: false, error: HUB_ERROR_DISPLAY_NAME_CONFLICT }
+        }
         return { success: false, error: extractError(err, 'Patch auth failed') }
       }
     },
