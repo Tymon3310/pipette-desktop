@@ -375,8 +375,32 @@ describe('google-auth', () => {
       }
     })
 
-    it('opens system browser with auth URL', async () => {
-      // Setup: mock the token exchange
+    /** Wait for shell.openExternal and return the parsed auth URL params */
+    async function waitForAuthRedirect(): Promise<{ redirectUri: string; state: string }> {
+      await vi.waitFor(() => {
+        expect(shell.openExternal).toHaveBeenCalledOnce()
+      })
+
+      const authUrl = vi.mocked(shell.openExternal).mock.calls[0][0]
+      const parsed = new URL(authUrl)
+      return {
+        redirectUri: parsed.searchParams.get('redirect_uri')!,
+        state: parsed.searchParams.get('state')!,
+      }
+    }
+
+    /** Send an HTTP GET to the OAuth loopback server and drain the response */
+    async function sendCallback(url: string): Promise<void> {
+      const { get } = await import('node:http')
+      await new Promise<void>((resolve) => {
+        get(url, (res) => {
+          res.resume()
+          resolve()
+        }).on('error', () => resolve())
+      })
+    }
+
+    async function completeOAuthFlow(): Promise<void> {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -388,31 +412,40 @@ describe('google-auth', () => {
       })
 
       const flowPromise = startOAuthFlow()
-
-      // Wait for shell.openExternal to be called
-      await vi.waitFor(() => {
-        expect(shell.openExternal).toHaveBeenCalledOnce()
-      })
-
-      // Extract redirect URL from the auth URL that was opened
-      const authUrl = vi.mocked(shell.openExternal).mock.calls[0][0]
-      const parsed = new URL(authUrl)
-      const redirectUri = parsed.searchParams.get('redirect_uri')!
-      const state = parsed.searchParams.get('state')!
-
-      // Simulate the OAuth callback using node:http (not global fetch which is mocked)
-      const callbackUrl = `${redirectUri}?code=test-auth-code&state=${state}`
-      const { get } = await import('node:http')
-      await new Promise<void>((resolve) => {
-        get(callbackUrl, (res) => {
-          res.resume()
-          resolve()
-        }).on('error', () => resolve())
-      })
-
+      const { redirectUri, state } = await waitForAuthRedirect()
+      await sendCallback(`${redirectUri}?code=test-auth-code&state=${state}`)
       await flowPromise
+    }
 
+    it('opens system browser with auth URL', async () => {
+      await completeOAuthFlow()
       expect(mockFetch).toHaveBeenCalled()
+    })
+
+    it('clears timeout timer after successful flow', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        await completeOAuthFlow()
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('clears timeout timer after OAuth error', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        const flowPromise = startOAuthFlow().catch((err: Error) => err)
+        const { redirectUri } = await waitForAuthRedirect()
+        await sendCallback(`${redirectUri}?error=access_denied`)
+
+        const result = await flowPromise
+        expect(result).toBeInstanceOf(Error)
+        expect((result as Error).message).toBe('OAuth error: access_denied')
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 })

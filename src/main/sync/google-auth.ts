@@ -253,6 +253,19 @@ export async function signOut(): Promise<void> {
 
 export async function startOAuthFlow(): Promise<void> {
   return new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    let finished = false
+
+    function teardown(): void {
+      if (finished) return
+      finished = true
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+      server.close()
+    }
+
     const server: Server = createServer((req, res) => {
       const url = new URL(req.url ?? '/', `http://127.0.0.1`)
       const code = url.searchParams.get('code')
@@ -262,7 +275,7 @@ export async function startOAuthFlow(): Promise<void> {
       if (error) {
         res.writeHead(200, { 'Content-Type': 'text/html' })
         res.end('<html><body><h1>Authorization failed</h1><p>You can close this window.</p></body></html>')
-        server.close()
+        teardown()
         reject(new Error(`OAuth error: ${error}`))
         return
       }
@@ -279,11 +292,11 @@ export async function startOAuthFlow(): Promise<void> {
       const port = (server.address() as { port: number }).port
       exchangeCodeForTokens(code, codeVerifier, port)
         .then(() => {
-          server.close()
+          teardown()
           resolve()
         })
         .catch((err) => {
-          server.close()
+          teardown()
           reject(err)
         })
     })
@@ -298,14 +311,16 @@ export async function startOAuthFlow(): Promise<void> {
       codeVerifier = auth.codeVerifier
 
       shell.openExternal(auth.url).catch((err) => {
-        server.close()
+        teardown()
         reject(err)
       })
     })
 
     // Timeout after 5 minutes
-    setTimeout(() => {
-      server.close()
+    timeoutId = setTimeout(() => {
+      if (finished) return
+      timeoutId = null
+      teardown()
       reject(new Error('OAuth flow timed out'))
     }, 5 * 60 * 1000)
   })
