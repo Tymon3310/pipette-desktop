@@ -222,6 +222,7 @@ export interface LayoutStoreContentProps {
   hubOrigin?: string
   hubMyPosts?: HubMyPost[]
   hubKeyboardPosts?: HubMyPost[]
+  hubNeedsDisplayName?: boolean
   hubUploading?: string | null
   hubUploadResult?: HubEntryResult | null
   fileDisabled?: boolean
@@ -257,6 +258,7 @@ export function LayoutStoreContent({
   hubOrigin,
   hubMyPosts,
   hubKeyboardPosts,
+  hubNeedsDisplayName,
   hubUploading,
   hubUploadResult,
   fileDisabled,
@@ -326,7 +328,7 @@ export function LayoutStoreContent({
   const hasImportSideload = onImportVil || onSideloadJson
   const hasEntryExport = onExportEntryVil || onExportEntryKeymapC || onExportEntryPdf
   const hasCurrentExport = onExportVil || onExportKeymapC || onExportPdf
-  const hasHubActions = onUploadToHub || onUpdateOnHub || onRemoveFromHub || onReuploadToHub || onDeleteOrphanedHubPost
+  const hasHubActions = onUploadToHub || onUpdateOnHub || onRemoveFromHub || onReuploadToHub || onDeleteOrphanedHubPost || hubNeedsDisplayName
   const isPanel = !!listClassName
   const fixedSection = isPanel ? ' shrink-0' : ''
 
@@ -621,6 +623,14 @@ export function LayoutStoreContent({
                           )}
                         </div>
                       </div>
+                      {hubNeedsDisplayName && (entryHubPostId ? !onUpdateOnHub : !onUploadToHub) && (
+                        <div
+                          className="mt-1 text-[11px] text-content-muted"
+                          data-testid="layout-store-hub-needs-display-name"
+                        >
+                          {t('hub.needsDisplayName')}
+                        </div>
+                      )}
                       {hubUploadResult && hubUploadResult.entryId === entry.id && (
                         <div
                           className={`mt-1 flex items-center text-[11px] font-medium ${hubUploadResult.kind === 'success' ? 'text-accent' : 'text-danger'}`}

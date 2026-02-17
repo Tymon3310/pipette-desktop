@@ -505,6 +505,7 @@ export function App() {
   }, [buildEntryParams, buildVilExportContext, deviceName])
 
   const hubReady = appConfig.config.hubEnabled && sync.authStatus.authenticated && hubConnected
+  const hubCanUpload = hubReady && !!hubDisplayName?.trim()
 
   const runHubOperation = useCallback(async (
     entryId: string,
@@ -1102,14 +1103,15 @@ export function App() {
           onExportEntryKeymapC={!device.isDummy ? handleExportEntryKeymapC : undefined}
           onExportEntryPdf={!device.isDummy ? handleExportEntryPdf : undefined}
           onOverwriteSave={hubReady ? handleOverwriteSave : undefined}
-          onUploadToHub={hubReady ? handleUploadToHub : undefined}
-          onUpdateOnHub={hubReady ? handleUpdateOnHub : undefined}
+          onUploadToHub={hubCanUpload ? handleUploadToHub : undefined}
+          onUpdateOnHub={hubCanUpload ? handleUpdateOnHub : undefined}
           onRemoveFromHub={hubReady ? handleRemoveFromHub : undefined}
-          onReuploadToHub={hubReady ? handleReuploadToHub : undefined}
+          onReuploadToHub={hubCanUpload ? handleReuploadToHub : undefined}
           onDeleteOrphanedHubPost={hubReady ? handleDeleteOrphanedHubPost : undefined}
           hubOrigin={hubReady ? hubOrigin : undefined}
           hubMyPosts={hubReady ? hubMyPosts : undefined}
           hubKeyboardPosts={hubReady ? hubKeyboardPosts : undefined}
+          hubNeedsDisplayName={hubReady && !hubCanUpload}
           hubUploading={hubUploading}
           hubUploadResult={hubUploadResult}
           fileDisabled={fileIO.saving || fileIO.loading}

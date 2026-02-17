@@ -1199,6 +1199,96 @@ describe('LayoutStoreModal', () => {
     })
   })
 
+  describe('hubNeedsDisplayName hint', () => {
+    const HUB_POSTS: HubMyPost[] = [
+      { id: 'post-1', title: 'First Layout', keyboard_name: 'KB', created_at: '2026-01-01T00:00:00.000Z' },
+    ]
+
+    it('shows hint when hubNeedsDisplayName is true and no upload prop', () => {
+      render(
+        <LayoutStoreContent
+          entries={MOCK_ENTRIES}
+          onSave={vi.fn()}
+          onLoad={vi.fn()}
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+          hubNeedsDisplayName
+        />,
+      )
+
+      const hints = screen.getAllByTestId('layout-store-hub-needs-display-name')
+      expect(hints).toHaveLength(2)
+      expect(hints[0].textContent).toBe('hub.needsDisplayName')
+    })
+
+    it('does not show hint when hubNeedsDisplayName is false', () => {
+      render(
+        <LayoutStoreContent
+          entries={MOCK_ENTRIES}
+          onSave={vi.fn()}
+          onLoad={vi.fn()}
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+        />,
+      )
+
+      expect(screen.queryByTestId('layout-store-hub-needs-display-name')).not.toBeInTheDocument()
+    })
+
+    it('does not show hint when onUploadToHub is provided', () => {
+      render(
+        <LayoutStoreContent
+          entries={MOCK_ENTRIES}
+          onSave={vi.fn()}
+          onLoad={vi.fn()}
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+          hubNeedsDisplayName
+          onUploadToHub={vi.fn()}
+        />,
+      )
+
+      expect(screen.queryByTestId('layout-store-hub-needs-display-name')).not.toBeInTheDocument()
+    })
+
+    it('shows hint for existing hub post entry when update is blocked', () => {
+      render(
+        <LayoutStoreContent
+          entries={MOCK_ENTRIES}
+          onSave={vi.fn()}
+          onLoad={vi.fn()}
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+          hubKeyboardPosts={HUB_POSTS}
+          onRemoveFromHub={vi.fn()}
+          hubNeedsDisplayName
+        />,
+      )
+
+      // entry-1 ("First Layout") matches a hub post — hint in entryHubPostId branch
+      // entry-2 (empty label) has no hub post — hint in !entryHubPostId branch
+      const hints = screen.getAllByTestId('layout-store-hub-needs-display-name')
+      expect(hints).toHaveLength(2)
+    })
+
+    it('does not show hint for existing hub post entry when onUpdateOnHub is provided', () => {
+      render(
+        <LayoutStoreContent
+          entries={MOCK_ENTRIES}
+          onSave={vi.fn()}
+          onLoad={vi.fn()}
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+          hubKeyboardPosts={HUB_POSTS}
+          onUpdateOnHub={vi.fn()}
+          onRemoveFromHub={vi.fn()}
+        />,
+      )
+
+      expect(screen.queryByTestId('layout-store-hub-needs-display-name')).not.toBeInTheDocument()
+    })
+  })
+
   describe('isDummy mode', () => {
     const CONTENT_PROPS = {
       onSave: vi.fn(),

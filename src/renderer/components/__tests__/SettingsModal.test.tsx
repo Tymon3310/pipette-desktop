@@ -1210,6 +1210,26 @@ describe('SettingsModal', () => {
         expect(onHubDisplayNameChange).not.toHaveBeenCalled()
       })
 
+      it('shows required hint when display name is empty', () => {
+        renderAndSwitchToHub({
+          hubEnabled: true,
+          hubAuthenticated: true,
+          hubDisplayName: null,
+        })
+
+        expect(screen.getByTestId('hub-display-name-required')).toHaveTextContent('hub.displayNameRequired')
+      })
+
+      it('does not show required hint when display name is set', () => {
+        renderAndSwitchToHub({
+          hubEnabled: true,
+          hubAuthenticated: true,
+          hubDisplayName: 'Alice',
+        })
+
+        expect(screen.queryByTestId('hub-display-name-required')).not.toBeInTheDocument()
+      })
+
       it('shows duplicate error when save returns 409', async () => {
         const onHubDisplayNameChange = vi.fn().mockResolvedValue({
           success: false,

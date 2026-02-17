@@ -550,6 +550,11 @@ function HubDisplayNameField({ currentName, onSave }: HubDisplayNameFieldProps) 
           {saving ? t('common.saving') : t('common.save')}
         </button>
       </div>
+      {!currentName?.trim() && !saved && !error && (
+        <p className="mt-1 text-xs text-warning" data-testid="hub-display-name-required">
+          {t('hub.displayNameRequired')}
+        </p>
+      )}
       {saved && (
         <p className="mt-1 text-xs text-accent" data-testid="hub-display-name-saved">
           {t('hub.displayNameSaved')}

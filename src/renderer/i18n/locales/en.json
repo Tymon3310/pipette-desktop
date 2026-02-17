@@ -495,7 +495,9 @@
     "openInBrowser": "Open in Browser",
     "pagePrev": "Prev",
     "pageNext": "Next",
-    "pageInfo": "{{current}} / {{total}}"
+    "pageInfo": "{{current}} / {{total}}",
+    "needsDisplayName": "Set a display name in Settings to upload",
+    "displayNameRequired": "Required to upload to Hub"
   },
   "favoriteStore": {
     "title": "Favorites",
