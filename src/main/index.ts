@@ -1,7 +1,6 @@
 import { app, BrowserWindow, Menu, session, shell } from 'electron'
 import { join, resolve, dirname } from 'node:path'
 import { statSync } from 'node:fs'
-import { spawn } from 'node:child_process'
 import { IpcChannels } from '../shared/ipc/channels'
 import { setupFileIO } from './file-io'
 import { setupSnapshotStore } from './snapshot-store'
@@ -11,6 +10,7 @@ import { setupPipetteSettingsStore } from './pipette-settings-store'
 import { setupLanguageStore } from './language-store'
 import { setupSyncIpc } from './sync/sync-ipc'
 import { setupHubIpc } from './hub/hub-ipc'
+import { setupLzmaIpc } from './lzma'
 import { log, logHidPacket } from './logger'
 import type { LogLevel } from './logger'
 import { loadWindowState, saveWindowState, setupAppConfigIpc } from './app-config'
@@ -115,62 +115,6 @@ function createWindow(): void {
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
-}
-
-function setupLzmaIpc(): void {
-  secureHandle(IpcChannels.LZMA_DECOMPRESS, (_event, data: number[]): Promise<string | null> => {
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      return Promise.resolve(null)
-    }
-    const buf = Buffer.from(data)
-    // Detect format from magic bytes: XZ starts with FD 37 7A 58 5A 00
-    const isXz = buf.length >= 6 && buf[0] === 0xfd && buf[1] === 0x37 && buf[2] === 0x7a &&
-      buf[3] === 0x58 && buf[4] === 0x5a && buf[5] === 0x00
-    if (isXz) {
-      return decompressXz(buf)
-    }
-    // Fallback: try lzma package for raw LZMA streams
-    return decompressLzma(data)
-  })
-}
-
-function decompressXz(buf: Buffer): Promise<string | null> {
-  return new Promise((resolve) => {
-    const child = spawn('xz', ['--decompress', '--stdout'], { stdio: ['pipe', 'pipe', 'ignore'] })
-    const chunks: Buffer[] = []
-    child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
-    child.on('close', (code: number | null) => {
-      if (code !== 0) {
-        log('warn', `XZ decompress exited with code ${code}`)
-        resolve(null)
-        return
-      }
-      try {
-        resolve(Buffer.concat(chunks).toString('utf-8'))
-      } catch {
-        resolve(null)
-      }
-    })
-    child.on('error', (err: Error) => {
-      log('warn', `XZ decompress error: ${err.message}`)
-      resolve(null)
-    })
-    child.stdin.end(buf)
-  })
-}
-
-function decompressLzma(data: number[]): Promise<string | null> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const LZMA = require('lzma') as { decompress: (data: number[], cb: (result: string | null) => void) => void }
-  return new Promise((resolve) => {
-    try {
-      LZMA.decompress(data, (result: string | null) => {
-        resolve(result)
-      })
-    } catch {
-      resolve(null)
-    }
-  })
 }
 
 function setupShellIpc(): void {
