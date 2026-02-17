@@ -146,9 +146,10 @@ function makeDriveFile(modifiedTime: string): { id: string; name: string; modifi
 async function setupLocalFavorite(
   savedAt: string,
   dataFile?: { name: string; content: string },
-  opts?: { id?: string; updatedAt?: string },
+  opts?: { id?: string; updatedAt?: string; favoriteType?: string },
 ): Promise<void> {
-  const favDir = join(mockUserDataPath, 'sync', 'favorites', 'tapDance')
+  const type = opts?.favoriteType ?? 'tapDance'
+  const favDir = join(mockUserDataPath, 'sync', 'favorites', type)
   await mkdir(favDir, { recursive: true })
   const entry: Record<string, string> = {
     id: opts?.id ?? '1',
@@ -159,7 +160,7 @@ async function setupLocalFavorite(
   if (opts?.updatedAt) entry.updatedAt = opts.updatedAt
   await writeFile(
     join(favDir, 'index.json'),
-    JSON.stringify({ type: 'tapDance', entries: [entry] }),
+    JSON.stringify({ type, entries: [entry] }),
     'utf-8',
   )
   if (dataFile) {
@@ -559,15 +560,7 @@ describe('sync-service', () => {
 
       // Set up two local favorites so collectAllSyncUnits finds them
       await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{}' })
-      // Set up macro favorite too
-      const macroDir = join(mockUserDataPath, 'sync', 'favorites', 'macro')
-      await mkdir(macroDir, { recursive: true })
-      await writeFile(
-        join(macroDir, 'index.json'),
-        JSON.stringify({ type: 'macro', entries: [{ id: '2', label: 'entry', filename: 'macro.json', savedAt: '2025-01-01T00:00:00.000Z' }] }),
-        'utf-8',
-      )
-      await writeFile(join(macroDir, 'macro.json'), '{}', 'utf-8')
+      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'macro.json', content: '{}' }, { id: '2', favoriteType: 'macro' })
 
       mockListFiles.mockResolvedValue([])
       // tapDance upload succeeds, macro upload fails
@@ -586,14 +579,7 @@ describe('sync-service', () => {
     it('re-adds failed units to pending after partial upload', async () => {
       // Set up two local favorites
       await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{}' })
-      const macroDir = join(mockUserDataPath, 'sync', 'favorites', 'macro')
-      await mkdir(macroDir, { recursive: true })
-      await writeFile(
-        join(macroDir, 'index.json'),
-        JSON.stringify({ type: 'macro', entries: [{ id: '2', label: 'entry', filename: 'macro.json', savedAt: '2025-01-01T00:00:00.000Z' }] }),
-        'utf-8',
-      )
-      await writeFile(join(macroDir, 'macro.json'), '{}', 'utf-8')
+      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'macro.json', content: '{}' }, { id: '2', favoriteType: 'macro' })
 
       // Mark both as pending before sync
       notifyChange('favorites/tapDance')
@@ -610,6 +596,25 @@ describe('sync-service', () => {
 
       // Failed unit should remain pending for auto-sync retry
       expect(hasPendingChanges()).toBe(true)
+    })
+
+    it('calls listFiles only twice during upload sync (no N+1)', async () => {
+      // Set up multiple local favorites to simulate N sync units
+      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{}' })
+      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'macro.json', content: '{}' }, { id: '2', favoriteType: 'macro' })
+
+      mockListFiles.mockResolvedValue([])
+      mockUploadFile.mockResolvedValue('id1')
+
+      await executeSync('upload')
+
+      // listFiles should be called exactly twice:
+      // 1. Initial fetch before the loop
+      // 2. Final refresh after the loop
+      // NOT N+1 times (once per sync unit)
+      expect(mockListFiles).toHaveBeenCalledTimes(2)
+      // Verify uploads actually happened (guards against false-positive)
+      expect(mockUploadFile).toHaveBeenCalledTimes(2)
     })
 
     it('emits status: error and re-throws on catastrophic failure', async () => {

@@ -346,7 +346,7 @@ async function executeDownloadSync(password: string): Promise<string[]> {
 
 async function executeUploadSync(password: string): Promise<string[]> {
   const syncUnits = await collectAllSyncUnits()
-  let remoteFiles = await listFiles()
+  const remoteFiles = await listFiles()
   updateRemoteState(remoteFiles)
   const total = syncUnits.length
   let current = 0
@@ -364,8 +364,6 @@ async function executeUploadSync(password: string): Promise<string[]> {
 
     try {
       await syncOrUpload(syncUnit, password, remoteFiles)
-      remoteFiles = await listFiles()
-      updateRemoteState(remoteFiles)
     } catch (err) {
       failedUnits.push(syncUnit)
       emitProgress({
@@ -376,6 +374,10 @@ async function executeUploadSync(password: string): Promise<string[]> {
       })
     }
   }
+
+  // Refresh remote state once after all uploads to prevent polling re-downloads
+  const updatedFiles = await listFiles()
+  updateRemoteState(updatedFiles)
 
   return failedUnits
 }
