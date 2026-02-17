@@ -177,16 +177,18 @@ export class Keyboard {
       buffer.push(...chunk)
     }
 
-    // Parse keycodes (big-endian u16)
+    // Parse keycodes into temporary Map, then assign atomically
+    const keymap = new Map<string, number>()
     for (let layer = 0; layer < layers; layer++) {
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
           const idx = (layer * rows * cols + row * cols + col) * 2
           const keycode = (buffer[idx] << 8) | buffer[idx + 1]
-          this.state.keymap.set(keymapKey(layer, row, col), keycode)
+          keymap.set(keymapKey(layer, row, col), keycode)
         }
       }
     }
+    this.state.keymap = keymap
   }
 
   async setKey(layer: number, row: number, col: number, keycode: number): Promise<void> {
@@ -202,13 +204,15 @@ export class Keyboard {
 
   private async reloadEncoders(): Promise<void> {
     const { layers, encoderCount } = this.state
+    const layout = new Map<string, number>()
     for (let layer = 0; layer < layers; layer++) {
       for (let idx = 0; idx < encoderCount; idx++) {
         const [cw, ccw] = await protocol.getEncoder(layer, idx)
-        this.state.encoderLayout.set(encoderKey(layer, idx, 0), cw)
-        this.state.encoderLayout.set(encoderKey(layer, idx, 1), ccw)
+        layout.set(encoderKey(layer, idx, 0), cw)
+        layout.set(encoderKey(layer, idx, 1), ccw)
       }
     }
+    this.state.encoderLayout = layout
   }
 
   async setEncoderKeycode(
@@ -231,29 +235,32 @@ export class Keyboard {
     const { dynamicCounts, vialProtocol } = this.state
     if (vialProtocol < VIAL_PROTOCOL_DYNAMIC) return
 
-    // Tap Dance
-    this.state.tapDanceEntries = []
+    // Fetch all entries into temporaries, then assign atomically
+    const tapDance: TapDanceEntry[] = []
     for (let i = 0; i < dynamicCounts.tapDance; i++) {
-      this.state.tapDanceEntries.push(await protocol.getTapDance(i))
+      tapDance.push(await protocol.getTapDance(i))
     }
 
-    // Combo
-    this.state.comboEntries = []
+    const combos: ComboEntry[] = []
     for (let i = 0; i < dynamicCounts.combo; i++) {
-      this.state.comboEntries.push(await protocol.getCombo(i))
+      combos.push(await protocol.getCombo(i))
     }
 
-    // Key Override
-    this.state.keyOverrideEntries = []
+    const keyOverrides: KeyOverrideEntry[] = []
     for (let i = 0; i < dynamicCounts.keyOverride; i++) {
-      this.state.keyOverrideEntries.push(await protocol.getKeyOverride(i))
+      keyOverrides.push(await protocol.getKeyOverride(i))
     }
 
-    // Alt Repeat Key
-    this.state.altRepeatKeyEntries = []
+    const altRepeatKeys: AltRepeatKeyEntry[] = []
     for (let i = 0; i < dynamicCounts.altRepeatKey; i++) {
-      this.state.altRepeatKeyEntries.push(await protocol.getAltRepeatKey(i))
+      altRepeatKeys.push(await protocol.getAltRepeatKey(i))
     }
+
+    // Assign atomically after all fetches succeed
+    this.state.tapDanceEntries = tapDance
+    this.state.comboEntries = combos
+    this.state.keyOverrideEntries = keyOverrides
+    this.state.altRepeatKeyEntries = altRepeatKeys
   }
 
   // --- Macros ---

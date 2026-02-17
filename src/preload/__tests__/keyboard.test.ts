@@ -772,6 +772,75 @@ describe('Keyboard', () => {
       expect(kb.state.rows).toBe(0)
       expect(kb.state.cols).toBe(0)
     })
+
+    it('does not store partial keymap when device disconnects mid-fetch', async () => {
+      // Choose dimensions that guarantee at least 2 buffer chunks
+      const rows = Math.ceil(BUFFER_FETCH_CHUNK / 2) + 1
+      setupReloadMocks({
+        vialProtocol: 5,
+        layers: 2,
+        rows,
+        cols: 2,
+      })
+
+      // First chunk succeeds, second rejects (simulating disconnect)
+      ;(protocol.getKeymapBuffer as Mock)
+        .mockImplementationOnce((_offset: number, size: number) =>
+          Promise.resolve(new Array(size).fill(0)),
+        )
+        .mockRejectedValue(new Error('Device disconnected'))
+
+      const kb = new Keyboard()
+      await expect(kb.reload()).rejects.toThrow('Device disconnected')
+
+      expect(kb.state.keymap.size).toBe(0)
+    })
+
+    it('does not store partial encoder data when device disconnects mid-fetch', async () => {
+      setupReloadMocks({
+        vialProtocol: 5,
+        layers: 2,
+        rows: 2,
+        cols: 2,
+        encoderCount: 3,
+      })
+
+      // First encoder succeeds, second rejects (simulating disconnect)
+      ;(protocol.getEncoder as Mock)
+        .mockResolvedValueOnce([0x01, 0x02])
+        .mockRejectedValue(new Error('Device disconnected'))
+
+      const kb = new Keyboard()
+      await expect(kb.reload()).rejects.toThrow('Device disconnected')
+
+      expect(kb.state.encoderLayout.size).toBe(0)
+    })
+
+    it('does not store partial dynamic entries when device disconnects mid-fetch', async () => {
+      setupReloadMocks({
+        vialProtocol: 5,
+        layers: 1,
+        rows: 1,
+        cols: 1,
+        tapDanceCount: 3,
+        comboCount: 2,
+      })
+
+      // First tap dance succeeds, second rejects (simulating disconnect)
+      ;(protocol.getTapDance as Mock)
+        .mockResolvedValueOnce({
+          onTap: 1, onHold: 2, onDoubleTap: 3, onTapHold: 4, tappingTerm: 200,
+        })
+        .mockRejectedValue(new Error('Device disconnected'))
+
+      const kb = new Keyboard()
+      await expect(kb.reload()).rejects.toThrow('Device disconnected')
+
+      expect(kb.state.tapDanceEntries).toEqual([])
+      expect(kb.state.comboEntries).toEqual([])
+      expect(kb.state.keyOverrideEntries).toEqual([])
+      expect(kb.state.altRepeatKeyEntries).toEqual([])
+    })
   })
 
   // ----------------------------------------------------------------
