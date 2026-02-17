@@ -85,7 +85,7 @@ pnpm format       # Prettier
 
 ```bash
 pnpm dist         # Package for all platforms
-pnpm dist:linux   # Linux (AppImage / deb)
+pnpm dist:linux   # Linux (AppImage)
 pnpm dist:win     # Windows (NSIS installer)
 pnpm dist:mac     # macOS (dmg)
 ```
