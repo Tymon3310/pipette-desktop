@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
-import { Hub401Error, Hub409Error, authenticateWithHub, uploadPostToHub, deletePostFromHub, updatePostOnHub, fetchMyPosts, fetchMyPostsByKeyboard, patchPostOnHub, getHubOrigin, patchAuthMe, type HubUploadFiles } from '../hub/hub-client'
+import { Hub401Error, Hub403Error, Hub409Error, authenticateWithHub, uploadPostToHub, deletePostFromHub, updatePostOnHub, fetchMyPosts, fetchMyPostsByKeyboard, patchPostOnHub, getHubOrigin, patchAuthMe, type HubUploadFiles } from '../hub/hub-client'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
@@ -105,6 +105,18 @@ describe('hub-client', () => {
       expect((err as Error).message).toBe('Hub auth failed: 401 Unauthorized')
     })
 
+    it('throws Hub403Error on 403 response', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        text: async () => 'Account is deactivated',
+      })
+
+      const err = await authenticateWithHub('token').catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(Hub403Error)
+      expect((err as Error).message).toBe('Hub auth failed: 403 Account is deactivated')
+    })
+
     it('throws Hub409Error on 409 response', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
@@ -117,7 +129,7 @@ describe('hub-client', () => {
       expect((err as Error).message).toBe('Hub auth failed: 409 Conflict')
     })
 
-    it('throws plain Error on non-401/non-409 HTTP error', async () => {
+    it('throws plain Error on non-401/non-403/non-409 HTTP error', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -127,6 +139,7 @@ describe('hub-client', () => {
       const err = await authenticateWithHub('token').catch((e: unknown) => e)
       expect(err).toBeInstanceOf(Error)
       expect(err).not.toBeInstanceOf(Hub401Error)
+      expect(err).not.toBeInstanceOf(Hub403Error)
       expect(err).not.toBeInstanceOf(Hub409Error)
       expect((err as Error).message).toBe('Hub auth failed: 500 Internal Server Error')
     })
@@ -438,16 +451,16 @@ describe('hub-client', () => {
       expect(options.headers['Content-Type']).toContain('multipart/form-data')
     })
 
-    it('throws on update failure', async () => {
+    it('throws Hub403Error on 403 response', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 403,
         text: async () => 'Forbidden',
       })
 
-      await expect(
-        updatePostOnHub('jwt', 'post-1', 'title', 'board', testFiles),
-      ).rejects.toThrow('Hub update failed: 403')
+      const err = await updatePostOnHub('jwt', 'post-1', 'title', 'board', testFiles).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(Hub403Error)
+      expect((err as Error).message).toBe('Hub update failed: 403 Forbidden')
     })
 
   })

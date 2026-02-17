@@ -25,18 +25,25 @@ export interface HubUploadFiles {
   thumbnail: { name: string; data: Buffer }
 }
 
-export class Hub401Error extends Error {
-  constructor(label: string, body: string) {
-    super(`${label}: 401 ${body}`)
-    this.name = 'Hub401Error'
+class HubHttpError extends Error {
+  constructor(label: string, status: number, body: string) {
+    super(`${label}: ${status} ${body}`)
   }
 }
 
-export class Hub409Error extends Error {
-  constructor(label: string, body: string) {
-    super(`${label}: 409 ${body}`)
-    this.name = 'Hub409Error'
-  }
+export class Hub401Error extends HubHttpError {
+  override name = 'Hub401Error'
+  constructor(label: string, body: string) { super(label, 401, body) }
+}
+
+export class Hub403Error extends HubHttpError {
+  override name = 'Hub403Error'
+  constructor(label: string, body: string) { super(label, 403, body) }
+}
+
+export class Hub409Error extends HubHttpError {
+  override name = 'Hub409Error'
+  constructor(label: string, body: string) { super(label, 409, body) }
 }
 
 interface HubApiResponse<T> {
@@ -50,6 +57,7 @@ async function hubFetch<T>(url: string, init: RequestInit, label: string): Promi
   if (!response.ok) {
     const text = await response.text()
     if (response.status === 401) throw new Hub401Error(label, text)
+    if (response.status === 403) throw new Hub403Error(label, text)
     if (response.status === 409) throw new Hub409Error(label, text)
     throw new Error(`${label}: ${response.status} ${text}`)
   }

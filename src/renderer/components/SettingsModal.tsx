@@ -479,6 +479,7 @@ interface Props {
   hubOrigin?: string
   hubAuthConflict?: boolean
   onResolveAuthConflict?: (name: string) => Promise<{ success: boolean; error?: string }>
+  hubAccountDeactivated?: boolean
 }
 
 interface HubDisplayNameFieldProps {
@@ -628,6 +629,7 @@ export function SettingsModal({
   hubOrigin,
   hubAuthConflict,
   onResolveAuthConflict,
+  hubAccountDeactivated,
 }: Props) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<ModalTabId>('tools')
@@ -1337,6 +1339,18 @@ export function SettingsModal({
                   </div>
                 )}
               </section>
+
+              {/* Account Deactivated Warning */}
+              {hubAccountDeactivated && hubAuthenticated && (
+                <section>
+                  <div
+                    className="rounded border border-danger/50 bg-danger/10 p-3 text-sm text-danger"
+                    data-testid="hub-account-deactivated-warning"
+                  >
+                    {t('hub.accountDeactivated')}
+                  </div>
+                </section>
+              )}
 
               {/* Auth Conflict Warning */}
               {hubAuthConflict && hubAuthenticated && (

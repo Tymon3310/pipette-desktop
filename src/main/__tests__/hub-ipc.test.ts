@@ -25,6 +25,7 @@ vi.mock('../hub/hub-client', async () => {
   const actual = await vi.importActual<typeof import('../hub/hub-client')>('../hub/hub-client')
   return {
     Hub401Error: actual.Hub401Error,
+    Hub403Error: actual.Hub403Error,
     Hub409Error: actual.Hub409Error,
     authenticateWithHub: vi.fn(),
     uploadPostToHub: vi.fn(),
@@ -41,8 +42,8 @@ vi.mock('../hub/hub-client', async () => {
 
 import { ipcMain } from 'electron'
 import { getIdToken } from '../sync/google-auth'
-import { HUB_ERROR_DISPLAY_NAME_CONFLICT } from '../../shared/types/hub'
-import { Hub401Error, Hub409Error, authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from '../hub/hub-client'
+import { HUB_ERROR_DISPLAY_NAME_CONFLICT, HUB_ERROR_ACCOUNT_DEACTIVATED } from '../../shared/types/hub'
+import { Hub401Error, Hub403Error, Hub409Error, authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from '../hub/hub-client'
 import { setupHubIpc, clearHubTokenCache } from '../hub/hub-ipc'
 
 describe('hub-ipc', () => {
@@ -938,6 +939,110 @@ describe('hub-ipc', () => {
       expect(result).toEqual({
         success: false,
         error: 'Hub auth failed: 401 Unauthorized',
+      })
+    })
+  })
+
+  describe('403 account deactivated', () => {
+    function mockHubAuthPersistent(): void {
+      vi.mocked(getIdToken).mockResolvedValue('id-token')
+      vi.mocked(authenticateWithHub).mockResolvedValue({
+        token: 'hub-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
+    }
+
+    it('returns ACCOUNT_DEACTIVATED when fetchMyPosts throws Hub403Error', async () => {
+      mockHubAuthPersistent()
+      vi.mocked(fetchMyPosts).mockRejectedValueOnce(
+        new Hub403Error('Hub fetch my posts failed', 'Account is deactivated'),
+      )
+
+      const handler = getHandlerFor('hub:fetch-my-posts')
+      const result = await handler({})
+
+      expect(result).toEqual({
+        success: false,
+        error: HUB_ERROR_ACCOUNT_DEACTIVATED,
+      })
+    })
+
+    it('returns ACCOUNT_DEACTIVATED when uploadPostToHub throws Hub403Error', async () => {
+      mockHubAuthPersistent()
+      vi.mocked(uploadPostToHub).mockRejectedValueOnce(
+        new Hub403Error('Hub upload failed', 'Account is deactivated'),
+      )
+
+      const handler = getHandlerFor('hub:upload-post')
+      const result = await handler({}, VALID_PARAMS)
+
+      expect(result).toEqual({
+        success: false,
+        error: HUB_ERROR_ACCOUNT_DEACTIVATED,
+      })
+    })
+
+    it('returns ACCOUNT_DEACTIVATED when fetchAuthMe throws Hub403Error', async () => {
+      mockHubAuthPersistent()
+      vi.mocked(fetchAuthMe).mockRejectedValueOnce(
+        new Hub403Error('Hub fetch auth me failed', 'Account is deactivated'),
+      )
+
+      const handler = getHandlerFor('hub:fetch-auth-me')
+      const result = await handler()
+
+      expect(result).toEqual({
+        success: false,
+        error: HUB_ERROR_ACCOUNT_DEACTIVATED,
+      })
+    })
+
+    it('returns ACCOUNT_DEACTIVATED when deletePostFromHub throws Hub403Error', async () => {
+      mockHubAuthPersistent()
+      vi.mocked(deletePostFromHub).mockRejectedValueOnce(
+        new Hub403Error('Hub delete failed', 'Account is deactivated'),
+      )
+
+      const handler = getHandlerFor('hub:delete-post')
+      const result = await handler({}, 'post-1')
+
+      expect(result).toEqual({
+        success: false,
+        error: HUB_ERROR_ACCOUNT_DEACTIVATED,
+      })
+    })
+
+    it('returns ACCOUNT_DEACTIVATED when authenticateWithHub throws Hub403Error (token acquisition)', async () => {
+      vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
+      vi.mocked(authenticateWithHub).mockRejectedValueOnce(
+        new Hub403Error('Hub auth failed', 'Account is deactivated'),
+      )
+
+      const handler = getHandlerFor('hub:fetch-my-posts')
+      const result = await handler({})
+
+      expect(result).toEqual({
+        success: false,
+        error: HUB_ERROR_ACCOUNT_DEACTIVATED,
+      })
+    })
+
+    it('returns ACCOUNT_DEACTIVATED when 403 occurs on post-401 retry path', async () => {
+      vi.mocked(getIdToken).mockResolvedValue('id-token')
+      vi.mocked(authenticateWithHub).mockResolvedValue({
+        token: 'hub-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
+      vi.mocked(fetchAuthMe)
+        .mockRejectedValueOnce(new Hub401Error('Hub fetch auth me failed', 'Unauthorized'))
+        .mockRejectedValueOnce(new Hub403Error('Hub fetch auth me failed', 'Account is deactivated'))
+
+      const handler = getHandlerFor('hub:fetch-auth-me')
+      const result = await handler()
+
+      expect(result).toEqual({
+        success: false,
+        error: HUB_ERROR_ACCOUNT_DEACTIVATED,
       })
     })
   })

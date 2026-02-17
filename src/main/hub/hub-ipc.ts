@@ -3,10 +3,10 @@
 
 import { ipcMain } from 'electron'
 import { IpcChannels } from '../../shared/ipc/channels'
-import { HUB_ERROR_DISPLAY_NAME_CONFLICT } from '../../shared/types/hub'
+import { HUB_ERROR_DISPLAY_NAME_CONFLICT, HUB_ERROR_ACCOUNT_DEACTIVATED } from '../../shared/types/hub'
 import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyKeyboardPostsResult, HubUserResult, HubFetchMyPostsParams } from '../../shared/types/hub'
 import { getIdToken } from '../sync/google-auth'
-import { Hub401Error, Hub409Error, authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from './hub-client'
+import { Hub401Error, Hub403Error, Hub409Error, authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from './hub-client'
 import type { HubAuthResult, HubUploadFiles } from './hub-client'
 
 const AUTH_ERROR = 'Not authenticated with Google. Please sign in again.'
@@ -83,6 +83,9 @@ async function getHubToken(): Promise<string> {
       try {
         auth = await authenticateWithHub(idToken, pendingAuthDisplayName ?? undefined)
       } catch (err) {
+        if (err instanceof Hub403Error) {
+          throw new Error(HUB_ERROR_ACCOUNT_DEACTIVATED)
+        }
         if (err instanceof Hub409Error) {
           throw new Error(HUB_ERROR_DISPLAY_NAME_CONFLICT)
         }
@@ -123,7 +126,17 @@ async function withTokenRetry<T>(operation: (jwt: string) => Promise<T>): Promis
     if (err instanceof Hub401Error) {
       invalidateCachedHubJwt()
       const freshJwt = await getHubToken()
-      return operation(freshJwt)
+      try {
+        return await operation(freshJwt)
+      } catch (retryErr) {
+        if (retryErr instanceof Hub403Error) {
+          throw new Error(HUB_ERROR_ACCOUNT_DEACTIVATED)
+        }
+        throw retryErr
+      }
+    }
+    if (err instanceof Hub403Error) {
+      throw new Error(HUB_ERROR_ACCOUNT_DEACTIVATED)
     }
     throw err
   }

@@ -43,7 +43,7 @@ import {
 } from '../shared/keycodes/keycodes'
 import type { DeviceInfo, QmkSettingsTab, VilFile } from '../shared/types/protocol'
 import type { SnapshotMeta } from '../shared/types/snapshot-store'
-import { HUB_ERROR_DISPLAY_NAME_CONFLICT } from '../shared/types/hub'
+import { HUB_ERROR_DISPLAY_NAME_CONFLICT, HUB_ERROR_ACCOUNT_DEACTIVATED } from '../shared/types/hub'
 import type { HubMyPost, HubUploadResult, HubPaginationMeta, HubFetchMyPostsParams } from '../shared/types/hub'
 import settingsDefs from '../shared/qmk-settings-defs.json'
 
@@ -88,6 +88,7 @@ export function App() {
   const [hubConnected, setHubConnected] = useState(false)
   const [hubDisplayName, setHubDisplayName] = useState<string | null>(null)
   const [hubAuthConflict, setHubAuthConflict] = useState(false)
+  const [hubAccountDeactivated, setHubAccountDeactivated] = useState(false)
 
   // Startup auto-sync
   const { loading: syncLoading, config: syncConfig, authStatus: syncAuth, hasPassword: syncHasPassword, syncNow } = sync
@@ -302,6 +303,17 @@ export function App() {
     }
   }, [refreshHubPosts])
 
+  const clearHubPostsState = useCallback(() => {
+    setHubMyPosts([])
+    setHubMyPostsPagination(undefined)
+    setHubConnected(false)
+  }, [])
+
+  const markAccountDeactivated = useCallback(() => {
+    setHubAccountDeactivated(true)
+    clearHubPostsState()
+  }, [clearHubPostsState])
+
   const refreshHubMyPosts = useCallback(async (params?: HubFetchMyPostsParams) => {
     if (appConfig.config.hubEnabled && sync.authStatus.authenticated) {
       try {
@@ -311,21 +323,22 @@ export function App() {
           setHubMyPostsPagination(result.pagination)
           setHubConnected(true)
           setHubAuthConflict(false)
+          setHubAccountDeactivated(false)
           return
         }
-        if (!result.success && result.error === HUB_ERROR_DISPLAY_NAME_CONFLICT) {
+        if (result.error === HUB_ERROR_DISPLAY_NAME_CONFLICT) {
           setHubAuthConflict(true)
-          setHubConnected(false)
-          setHubMyPosts([])
-          setHubMyPostsPagination(undefined)
+          clearHubPostsState()
+          return
+        }
+        if (result.error === HUB_ERROR_ACCOUNT_DEACTIVATED) {
+          markAccountDeactivated()
           return
         }
       } catch {}
     }
-    setHubMyPosts([])
-    setHubMyPostsPagination(undefined)
-    setHubConnected(false)
-  }, [appConfig.config.hubEnabled, sync.authStatus.authenticated])
+    clearHubPostsState()
+  }, [appConfig.config.hubEnabled, sync.authStatus.authenticated, clearHubPostsState, markAccountDeactivated])
 
   const refreshHubKeyboardPosts = useCallback(async () => {
     if (!appConfig.config.hubEnabled || !sync.authStatus.authenticated || !deviceName || device.isDummy) {
@@ -557,7 +570,12 @@ export function App() {
       if (result.success) {
         setHubUploadResult({ kind: 'success', message: successMsg, entryId })
       } else {
-        setHubUploadResult({ kind: 'error', message: result.error || failMsg, entryId })
+        if (result.error === HUB_ERROR_ACCOUNT_DEACTIVATED) {
+          markAccountDeactivated()
+          setHubUploadResult({ kind: 'error', message: t('hub.accountDeactivated'), entryId })
+        } else {
+          setHubUploadResult({ kind: 'error', message: result.error || failMsg, entryId })
+        }
       }
     } catch {
       setHubUploadResult({ kind: 'error', message: failMsg, entryId })
@@ -565,7 +583,7 @@ export function App() {
       setHubUploading(null)
       hubUploadingRef.current = false
     }
-  }, [layoutStore.entries])
+  }, [layoutStore.entries, markAccountDeactivated, t])
 
   const handleUploadToHub = useCallback(async (entryId: string) => {
     await runHubOperation(
@@ -859,6 +877,7 @@ export function App() {
             hubOrigin={hubOrigin}
             hubAuthConflict={hubAuthConflict}
             onResolveAuthConflict={handleResolveAuthConflict}
+            hubAccountDeactivated={hubAccountDeactivated}
           />
         )}
       </>
