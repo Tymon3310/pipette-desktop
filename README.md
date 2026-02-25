@@ -38,6 +38,11 @@ Download the latest release for your platform:
 > chmod +x Pipette-linux-x86_64.AppImage
 > ```
 
+> Arch users: install with your favorite AUR helper
+> ```bash
+> yay -S pipette-desktop-bin
+> ```
+
 
 ## Usage
 
