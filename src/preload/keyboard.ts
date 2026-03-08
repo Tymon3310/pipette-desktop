@@ -10,10 +10,12 @@
  *   4. Lighting + QMK settings
  *   5. Dynamic entry counts
  *   6. Keymap + encoders + macro buffer + dynamic entries
+ *   7. Keychron-specific features (debounce, NKRO, RGB, analog, etc.)
  */
 
 import LZMA from 'lzma'
 import * as protocol from './protocol'
+import * as keychronProtocol from './keychron-protocol'
 import { deserializeAllMacros, serializeAllMacros, type MacroAction } from './macro'
 import type {
   KeyboardId,
@@ -25,6 +27,7 @@ import type {
   DynamicEntryCounts,
   UnlockStatus,
 } from '../shared/types/protocol'
+import type { KeychronState, SnapClickEntry } from '../shared/types/keychron'
 import {
   BUFFER_FETCH_CHUNK,
   VIAL_PROTOCOL_DYNAMIC,
@@ -67,6 +70,9 @@ export interface KeyboardState {
 
   // Features
   supportedFeatures: Set<string>
+
+  // Keychron-specific state (null if not a Keychron keyboard)
+  keychron: KeychronState | null
 }
 
 function keymapKey(layer: number, row: number, col: number): string {
@@ -102,6 +108,7 @@ function emptyState(): KeyboardState {
     altRepeatKeyEntries: [],
     unlockStatus: { unlocked: false, inProgress: false, keys: [] },
     supportedFeatures: new Set(),
+    keychron: null,
   }
 }
 
@@ -162,6 +169,14 @@ export class Keyboard {
     } else {
       // VIA-only keyboards are always unlocked
       this.state.unlockStatus = { unlocked: true, inProgress: false, keys: [] }
+    }
+
+    // Phase 10: Keychron-specific features
+    try {
+      this.state.keychron = await keychronProtocol.reloadKeychron()
+    } catch {
+      // Not a Keychron keyboard or protocol error — silently ignore
+      this.state.keychron = null
     }
   }
 
@@ -370,6 +385,35 @@ export class Keyboard {
       encoderArray.push(layerEnc)
     }
 
+    // Serialize Keychron settings if present
+    let keychronData: Record<string, unknown> | undefined
+    if (this.state.keychron) {
+      const kc = this.state.keychron
+      keychronData = {}
+      if (kc.hasDebounce) {
+        keychronData.debounce = { type: kc.debounceType, time: kc.debounceTime }
+      }
+      if (kc.hasNkro && !kc.nkroAdaptive) {
+        keychronData.nkro = { enabled: kc.nkroEnabled }
+      }
+      if (kc.hasReportRate) {
+        if (kc.pollRateVersion === 2) {
+          keychronData.report_rate_v2 = { usb: kc.pollRateUsb, fr: kc.pollRate24g }
+        } else {
+          keychronData.report_rate = kc.reportRate
+        }
+      }
+      if (kc.hasWireless) {
+        keychronData.wireless_lpm = {
+          backlit_time: kc.wirelessBacklitTime,
+          idle_time: kc.wirelessIdleTime,
+        }
+      }
+      if (kc.hasSnapClick && kc.snapClickCount > 0) {
+        keychronData.snap_click = kc.snapClickEntries
+      }
+    }
+
     return {
       version: 1,
       uid: this.state.keyboardId.uid,
@@ -383,6 +427,7 @@ export class Keyboard {
       combo: this.state.comboEntries,
       key_override: this.state.keyOverrideEntries,
       alt_repeat_key: this.state.altRepeatKeyEntries,
+      ...(keychronData ? { keychron: keychronData } : {}),
     }
   }
 
@@ -456,6 +501,57 @@ export class Keyboard {
       for (let i = 0; i < Math.min(altRepeatKey.length, this.state.dynamicCounts.altRepeatKey); i++) {
         await protocol.setAltRepeatKey(i, altRepeatKey[i])
         this.state.altRepeatKeyEntries[i] = altRepeatKey[i]
+      }
+    }
+
+    // Restore Keychron settings
+    const kcData = data.keychron as Record<string, unknown> | undefined
+    if (kcData && this.state.keychron) {
+      const kc = this.state.keychron
+      if (kcData.debounce && kc.hasDebounce) {
+        const d = kcData.debounce as { type?: number; time?: number }
+        await keychronProtocol.setKeychronDebounce(
+          d.type ?? kc.debounceType,
+          d.time ?? kc.debounceTime,
+        )
+      }
+      if (kcData.nkro && kc.hasNkro && !kc.nkroAdaptive) {
+        const n = kcData.nkro as { enabled?: boolean }
+        await keychronProtocol.setKeychronNkro(n.enabled ?? false)
+      }
+      if (kcData.report_rate !== undefined && kc.hasReportRate) {
+        const rate = kcData.report_rate as number
+        if (kc.reportRateMask & (1 << rate)) {
+          await keychronProtocol.setKeychronReportRate(rate)
+        }
+      }
+      if (kcData.report_rate_v2 && kc.hasReportRate && kc.pollRateVersion === 2) {
+        const rv2 = kcData.report_rate_v2 as { usb?: number; fr?: number }
+        await keychronProtocol.setKeychronPollRateV2(
+          rv2.usb ?? kc.pollRateUsb,
+          rv2.fr ?? kc.pollRate24g,
+        )
+      }
+      if (kcData.wireless_lpm && kc.hasWireless) {
+        const w = kcData.wireless_lpm as { backlit_time?: number; idle_time?: number }
+        await keychronProtocol.setKeychronWirelessLpm(
+          w.backlit_time ?? kc.wirelessBacklitTime,
+          w.idle_time ?? kc.wirelessIdleTime,
+        )
+      }
+      if (kcData.snap_click && kc.hasSnapClick) {
+        const entries = kcData.snap_click as SnapClickEntry[]
+        for (let i = 0; i < Math.min(entries.length, kc.snapClickCount); i++) {
+          await keychronProtocol.setKeychronSnapClick(
+            i,
+            entries[i].type,
+            entries[i].key1,
+            entries[i].key2,
+          )
+        }
+        if (kc.snapClickCount > 0) {
+          await keychronProtocol.saveKeychronSnapClick()
+        }
       }
     }
   }

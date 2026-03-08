@@ -11,6 +11,7 @@ import type {
   UnlockStatus,
   VilFile,
 } from '../../shared/types/protocol'
+import type { KeychronState } from '../../shared/types/keychron'
 import {
   VIAL_PROTOCOL_DYNAMIC,
   VIAL_PROTOCOL_QMK_SETTINGS,
@@ -90,6 +91,8 @@ export interface KeyboardState {
   qmkSettingsValues: Record<string, number[]>
   // Layer names (persisted per-UID, synced)
   layerNames: string[]
+  // Keychron-specific state (null if not a Keychron keyboard)
+  keychron: KeychronState | null
 }
 
 function emptyState(): KeyboardState {
@@ -138,6 +141,7 @@ function emptyState(): KeyboardState {
     supportedQsids: new Set(),
     qmkSettingsValues: {},
     layerNames: [],
+    keychron: null,
   }
 }
 
@@ -435,6 +439,16 @@ export function useKeyboard() {
       }
 
       newState.loading = false
+
+      // Phase 10: Keychron-specific features
+      try {
+        const kcResult = await api.keychronReload()
+        newState.keychron = kcResult as KeychronState | null
+      } catch {
+        // Not a Keychron keyboard or protocol error — silently ignore
+        newState.keychron = null
+      }
+
       setState(newState)
       return newState.uid
     } catch (err) {

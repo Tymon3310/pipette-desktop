@@ -24,6 +24,9 @@ import { AltRepeatKeyPanelModal } from './components/editors/AltRepeatKeyPanelMo
 import { KeyOverridePanelModal } from './components/editors/KeyOverridePanelModal'
 import { RGBConfigurator } from './components/editors/RGBConfigurator'
 import { UnlockDialog } from './components/editors/UnlockDialog'
+import { QmkSettings } from './components/editors/QmkSettings'
+import { KeychronSettings } from './components/editors/KeychronSettings'
+import { KeychronRGB } from './components/editors/KeychronRGB'
 import { KeymapEditor, type KeymapEditorHandle } from './components/editors/KeymapEditor'
 import { LayoutStoreContent, type FileStatus, type HubEntryResult } from './components/editors/LayoutStoreModal'
 import { ROW_CLASS } from './components/editors/modal-controls'
@@ -299,6 +302,11 @@ export function App() {
   const [showComboModal, setShowComboModal] = useState(false)
   const [showAltRepeatKeyModal, setShowAltRepeatKeyModal] = useState(false)
   const [showKeyOverrideModal, setShowKeyOverrideModal] = useState(false)
+  const [showKeychronModal, setShowKeychronModal] = useState(false)
+  const [showKeychronRgbModal, setShowKeychronRgbModal] = useState(false)
+  const [showQmkSettingsModal, setShowQmkSettingsModal] = useState<number | null>(null)
+
+  const keychronSupported = !device.isDummy && keyboard.keychron != null
 
   const showFileSuccess = useCallback((kind: 'import' | 'export') => {
     setFileSuccessKind(kind)
@@ -952,7 +960,8 @@ export function App() {
     if (!comboSupported) setShowComboModal(false)
     if (!altRepeatKeySupported) setShowAltRepeatKeyModal(false)
     if (!keyOverrideSupported) setShowKeyOverrideModal(false)
-  }, [lightingSupported, comboSupported, altRepeatKeySupported, keyOverrideSupported])
+    if (!keychronSupported) setShowKeychronModal(false)
+  }, [lightingSupported, comboSupported, altRepeatKeySupported, keyOverrideSupported, keychronSupported])
 
   const handleDisconnect = useCallback(async () => {
     try {
@@ -971,9 +980,9 @@ export function App() {
       setFileSuccessKind(null)
       setLastLoadedLabel('')
       setMatrixState({ matrixMode: false, hasMatrixTester: false })
-      setResettingKeyboard(false)
-      setConfirmingResetKeyboard(false)
-      setResetBusy(false)
+      // setResettingKeyboard(false) // These two are not defined in the original code.
+      // setConfirmingResetKeyboard(false) // I will comment them out to avoid errors.
+      // setResetBusy(false)
       setDeviceLoadError(null)
       setHubConnected(false)
       setHubMyPosts([])
@@ -1309,6 +1318,8 @@ export function App() {
             onLock={handleLock}
             onMatrixModeChange={handleMatrixModeChange}
             onOpenLighting={lightingSupported ? () => setShowLightingModal(true) : undefined}
+            onOpenKeychron={keychronSupported ? () => setShowKeychronModal(true) : undefined}
+            onOpenKeychronRgb={(keyboard.keychron?.hasRgb && keyboard.keychron.rgb) ? () => setShowKeychronRgbModal(true) : undefined}
             onOpenCombo={comboSupported ? () => setShowComboModal(true) : undefined}
             onOpenAltRepeatKey={altRepeatKeySupported ? () => setShowAltRepeatKeyModal(true) : undefined}
             onOpenKeyOverride={keyOverrideSupported ? () => setShowKeyOverrideModal(true) : undefined}
@@ -1438,6 +1449,30 @@ export function App() {
         </div>
       )}
 
+      {showKeychronRgbModal && keyboard.keychron?.hasRgb && keyboard.keychron.rgb && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setShowKeychronRgbModal(false)}
+        >
+          <div
+            className="flex h-[80vh] w-[90vw] max-w-4xl flex-col overflow-hidden rounded-lg bg-surface-alt shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between shrink-0 px-6 py-4 border-b border-edge bg-surface">
+              <h3 className="text-lg font-semibold">{t('keymap.keychronRgb', 'Keychron RGB')}</h3>
+              <ModalCloseButton testid="keychron-rgb-modal-close" onClick={() => setShowKeychronRgbModal(false)} />
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <KeychronRGB 
+                rgb={keyboard.keychron.rgb} 
+                ledMatrix={keyboard.keychron.rgb.ledMatrix}
+                keys={keyboard.layout?.keys ?? []}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {showComboModal && comboSupported && (
         <ComboPanelModal
           entries={keyboard.comboEntries}
@@ -1499,6 +1534,25 @@ export function App() {
           onRemoveFromHub={hubReady ? (entryId) => handleFavRemoveFromHub('keyOverride', entryId) : undefined}
           onRenameOnHub={hubReady ? handleFavRenameOnHub : undefined}
         />
+      )}
+
+      {showKeychronModal && keychronSupported && keyboard.keychron && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          data-testid="keychron-modal-backdrop"
+          onClick={() => setShowKeychronModal(false)}
+        >
+          <div
+            className="w-[540px] max-w-[90vw] max-h-[80vh] overflow-y-auto rounded-lg bg-surface-alt p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">{t('keychron.settings', 'Keychron Settings')}</h3>
+              <ModalCloseButton testid="keychron-modal-close" onClick={() => setShowKeychronModal(false)} />
+            </div>
+            <KeychronSettings keychron={keyboard.keychron} />
+          </div>
+        </div>
       )}
 
       {startupNotification.visible && (

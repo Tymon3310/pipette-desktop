@@ -577,6 +577,8 @@ interface Props {
   onLock?: () => void
   onMatrixModeChange?: (matrixMode: boolean, hasMatrixTester: boolean) => void
   onOpenLighting?: () => void
+  onOpenKeychron?: () => void
+  onOpenKeychronRgb?: () => void
   onOpenCombo?: () => void
   onOpenAltRepeatKey?: () => void
   onOpenKeyOverride?: () => void
@@ -670,6 +672,8 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
   onLock,
   onMatrixModeChange,
   onOpenLighting,
+  onOpenKeychron,
+  onOpenKeychronRgb,
   onOpenCombo,
   onOpenAltRepeatKey,
   onOpenKeyOverride,
@@ -1738,6 +1742,8 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
       { tab: 'quantum', key: 'altRepeatKey', label: t('editor.altRepeatKey.title'), onClick: onOpenAltRepeatKey, testId: 'alt-repeat-key-settings-btn', enabled: !!onOpenAltRepeatKey },
       { tab: 'quantum', key: 'keyOverride', label: t('editor.keyOverride.title'), onClick: onOpenKeyOverride, testId: 'key-override-settings-btn', enabled: !!onOpenKeyOverride },
       { tab: 'backlight', key: 'lighting', label: t('editor.lighting.title'), onClick: onOpenLighting, testId: 'lighting-settings-btn', enabled: !!onOpenLighting },
+      { tab: 'quantum', key: 'keychron', label: t('keychron.settings', 'Keychron'), onClick: onOpenKeychron, testId: 'keychron-settings-btn', enabled: !!onOpenKeychron },
+      { tab: 'lighting', key: 'keychron-rgb', label: t('keychron.rgb', 'Keychron RGB'), onClick: onOpenKeychronRgb, testId: 'keychron-rgb-settings-btn', enabled: !!onOpenKeychronRgb },
     ]
 
     const content: Record<string, React.ReactNode> = {}
@@ -1767,7 +1773,7 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
     }
 
     return content
-  }, [tapHoldSupported, mouseKeysSupported, magicSupported, autoShiftSupported, graveEscapeSupported, oneShotKeysSupported, onOpenLighting, onOpenCombo, onOpenAltRepeatKey, onOpenKeyOverride, t])
+  }, [tapHoldSupported, mouseKeysSupported, magicSupported, autoShiftSupported, graveEscapeSupported, oneShotKeysSupported, onOpenLighting, onOpenKeychron, onOpenCombo, onOpenAltRepeatKey, onOpenKeyOverride, t])
 
   const tabContentOverride = useTileContentOverride(tapDanceEntries, deserializedMacros, handleKeycodeSelect)
 
