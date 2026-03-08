@@ -60,6 +60,19 @@ export const DIP_SWITCH_SET = 0x10
 export const FACTORY_RESET = 0x11
 export const NKRO_GET = 0x12
 export const NKRO_SET = 0x13
+// Keychron-proprietary bootloader jump (sub-command 21 = 0x15)
+// Discovered from Keychron Launcher source — NOT the standard VIA 0x0B command.
+// Uses a state machine: BL_IDLE→BL_WAITING→BL_HOLDING→BL_AWAIT_CONFIRM→BL_CONFIRMED
+export const BOOTLOADER_JUMP = 0x15
+
+// Bootloader jump state machine states
+export const BL_IDLE = 0
+export const BL_WAITING = 1
+export const BL_HOLDING = 2
+export const BL_AWAIT_CONFIRM = 3
+export const BL_CONFIRMED = 4
+export const BL_TIMEOUT = 5
+export const BL_EXCEEDED = 6
 
 // =====================================================================
 // Misc feature support flags (from MISC_GET_PROTOCOL_VER response)

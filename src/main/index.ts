@@ -11,6 +11,7 @@ import { setupLanguageStore } from './language-store'
 import { setupSyncIpc } from './sync/sync-ipc'
 import { setupHubIpc } from './hub/hub-ipc'
 import { setupLzmaIpc } from './lzma'
+import { setupKeychronDfuIpc } from './keychron-dfu-ipc'
 import { setupNotificationStore } from './notification-store'
 import { buildCsp, securityHeaders } from './csp'
 import { log, logHidPacket } from './logger'
@@ -134,6 +135,7 @@ app.whenReady().then(() => {
   setupSyncIpc()
   setupHubIpc()
   setupLzmaIpc()
+  setupKeychronDfuIpc()
   setupNotificationStore()
   setupLogIpc()
   setupShellIpc()

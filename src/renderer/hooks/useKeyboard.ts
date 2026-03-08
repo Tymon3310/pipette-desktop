@@ -28,10 +28,11 @@ import {
 } from '../../shared/constants/protocol'
 import { mapToRecord, recordToMap } from '../../shared/vil-file'
 import { vilToVialGuiJson } from '../../shared/vil-compat'
-import { splitMacroBuffer, deserializeMacro, macroActionsToJson, jsonToMacroActions, type MacroAction } from '../../preload/macro'
+import { splitMacroBuffer, deserializeMacro, serializeMacro, macroActionsToJson, jsonToMacroActions, type MacroAction } from '../../preload/macro'
+import { recreateKeyboardKeycodes } from '../../shared/keycodes/keycodes'
+import { serializeKeychronState, restoreKeychronSettings } from '../../shared/keychron-serialize'
 import { parseKle } from '../../shared/kle/kle-parser'
 import type { KeyboardLayout } from '../../shared/kle/types'
-import { recreateKeyboardKeycodes } from '../../shared/keycodes/keycodes'
 
 export interface BulkKeyEntry {
   layer: number
@@ -772,6 +773,14 @@ export function useKeyboard() {
     const s = stateRef.current
     const macrosSrc = s.parsedMacros
       ?? splitMacroBuffer(s.macroBuffer, s.macroCount).map((m) => deserializeMacro(m, s.vialProtocol))
+    const kcData = serializeKeychronState(s.keychron, s.vialRGBSupported ? {
+        mode: s.vialRGBMode,
+        speed: s.vialRGBSpeed,
+        hue: s.vialRGBHue,
+        sat: s.vialRGBSat,
+        val: s.vialRGBVal,
+      } : null)
+    console.log('[KB] serialize() keychron:', kcData ? Object.keys(kcData) : null, 'state.keychron:', s.keychron != null)
     return {
       uid: s.uid,
       keymap: mapToRecord(s.keymap),
@@ -785,6 +794,7 @@ export function useKeyboard() {
       altRepeatKey: s.altRepeatKeyEntries,
       qmkSettings: s.qmkSettingsValues,
       layerNames: s.layerNames,
+      keychron: kcData,
     }
   }, [])
 
@@ -836,44 +846,99 @@ export function useKeyboard() {
         const [layer, row, col] = key.split(',').map(Number)
         await api.setKeycode(layer, row, col, keycode)
       }
+      console.log('[KB] applyVilFile: keymap done')
 
       // Apply encoder layout
       for (const [key, keycode] of encoderLayout) {
         const [layer, idx, direction] = key.split(',').map(Number)
         await api.setEncoder(layer, idx, direction, keycode)
       }
+      console.log('[KB] applyVilFile: encoders done')
 
       // Apply macros
-      if (vil.macros.length > 0) {
-        await api.setMacroBuffer(vil.macros)
-      }
+      try {
+        if (vil.macros.length > 0) {
+          await api.setMacroBuffer(vil.macros)
+        }
+        console.log('[KB] applyVilFile: macros done')
+      } catch (err) { console.error('[KB] applyVilFile: macros failed:', err) }
 
       // Apply layout options
-      await api.setLayoutOptions(vil.layoutOptions)
+      try {
+        await api.setLayoutOptions(vil.layoutOptions)
+        console.log('[KB] applyVilFile: layout options done')
+      } catch (err) { console.error('[KB] applyVilFile: layout options failed:', err) }
 
       // Apply tap dance entries
-      for (let i = 0; i < vil.tapDance.length; i++) {
-        await api.setTapDance(i, vil.tapDance[i])
-      }
+      try {
+        for (let i = 0; i < vil.tapDance.length; i++) {
+          await api.setTapDance(i, vil.tapDance[i])
+        }
+        console.log('[KB] applyVilFile: tap dance done')
+      } catch (err) { console.error('[KB] applyVilFile: tap dance failed:', err) }
 
       // Apply combo entries
-      for (let i = 0; i < vil.combo.length; i++) {
-        await api.setCombo(i, vil.combo[i])
-      }
+      try {
+        for (let i = 0; i < vil.combo.length; i++) {
+          await api.setCombo(i, vil.combo[i])
+        }
+        console.log('[KB] applyVilFile: combos done')
+      } catch (err) { console.error('[KB] applyVilFile: combos failed:', err) }
 
       // Apply key override entries
-      for (let i = 0; i < vil.keyOverride.length; i++) {
-        await api.setKeyOverride(i, vil.keyOverride[i])
-      }
+      try {
+        for (let i = 0; i < vil.keyOverride.length; i++) {
+          await api.setKeyOverride(i, vil.keyOverride[i])
+        }
+        console.log('[KB] applyVilFile: key overrides done')
+      } catch (err) { console.error('[KB] applyVilFile: key overrides failed:', err) }
 
       // Apply alt repeat key entries
-      for (let i = 0; i < vil.altRepeatKey.length; i++) {
-        await api.setAltRepeatKey(i, vil.altRepeatKey[i])
-      }
+      try {
+        for (let i = 0; i < vil.altRepeatKey.length; i++) {
+          await api.setAltRepeatKey(i, vil.altRepeatKey[i])
+        }
+        console.log('[KB] applyVilFile: alt repeat key done')
+      } catch (err) { console.error('[KB] applyVilFile: alt repeat key failed:', err) }
 
       // Apply QMK settings
-      for (const [qsid, data] of Object.entries(vil.qmkSettings)) {
-        await api.qmkSettingsSet(Number(qsid), data)
+      try {
+        for (const [qsid, data] of Object.entries(vil.qmkSettings)) {
+          await api.qmkSettingsSet(Number(qsid), data)
+        }
+        console.log('[KB] applyVilFile: QMK settings done')
+      } catch (err) { console.error('[KB] applyVilFile: QMK settings failed:', err) }
+
+      // Apply Keychron settings
+      console.log('[KB] Keychron restore check:', {
+        vilKeychron: vil.keychron ? Object.keys(vil.keychron) : null,
+        stateKeychron: stateRef.current.keychron != null,
+        rows: stateRef.current.rows,
+        cols: stateRef.current.cols,
+      })
+      if (vil.keychron && stateRef.current.keychron) {
+        try {
+          console.log('[KB] Restoring Keychron settings:', vil.keychron)
+          await restoreKeychronSettings(
+            vil.keychron,
+            stateRef.current.keychron,
+            api,
+            stateRef.current.rows,
+            stateRef.current.cols,
+          )
+          console.log('[KB] Keychron settings restored successfully')
+          // Reload keychron state so in-memory state matches the keyboard
+          try {
+            const kcState = await api.keychronReload()
+            if (kcState) {
+              setState((s) => ({ ...s, keychron: kcState as KeychronState }))
+            }
+          } catch { /* reload is best-effort */ }
+        } catch (err) {
+          console.error('[KB] Keychron settings restore failed:', err)
+        }
+      } else {
+        console.warn('[KB] Skipping Keychron restore — vil.keychron:', !!vil.keychron, 'state.keychron:', !!stateRef.current.keychron)
       }
     }
 
@@ -913,6 +978,18 @@ export function useKeyboard() {
     }
   }, [])
 
+  /** Reload keychron state from the keyboard. Call after GUI setting changes. */
+  const refreshKeychron = useCallback(async () => {
+    try {
+      const kcState = await window.vialAPI.keychronReload()
+      if (kcState) {
+        setState((s) => ({ ...s, keychron: kcState as KeychronState }))
+      }
+    } catch (err) {
+      console.error('[KB] refreshKeychron failed:', err)
+    }
+  }, [])
+
   return {
     ...state,
     activityCount,
@@ -947,5 +1024,6 @@ export function useKeyboard() {
     updateQmkSettingsValue,
     setLayerName,
     setSaveLayerNamesCallback,
+    refreshKeychron,
   }
 }

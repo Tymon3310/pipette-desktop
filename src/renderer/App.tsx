@@ -27,6 +27,8 @@ import { UnlockDialog } from './components/editors/UnlockDialog'
 import { QmkSettings } from './components/editors/QmkSettings'
 import { KeychronSettings } from './components/editors/KeychronSettings'
 import { KeychronRGB } from './components/editors/KeychronRGB'
+import { KeychronDfuFlasher } from './components/editors/KeychronDfuFlasher'
+import { KeychronAnalog } from './components/editors/KeychronAnalog'
 import { KeymapEditor, type KeymapEditorHandle } from './components/editors/KeymapEditor'
 import { LayoutStoreContent, type FileStatus, type HubEntryResult } from './components/editors/LayoutStoreModal'
 import { ROW_CLASS } from './components/editors/modal-controls'
@@ -285,6 +287,16 @@ export function App() {
   const [primaryLayer, setPrimaryLayer] = useState(0)
   const [secondaryLayer, setSecondaryLayer] = useState(0)
 
+  // Use Keychron's default layer if supported
+  useEffect(() => {
+    if (keyboard.keychron?.hasDefaultLayer && 
+        keyboard.keychron.defaultLayer >= 0 && 
+        keyboard.keychron.defaultLayer < keyboard.layers) {
+      setPrimaryLayer(keyboard.keychron.defaultLayer)
+    }
+  }, [keyboard.keychron?.hasDefaultLayer, keyboard.keychron?.defaultLayer, keyboard.layers])
+
+
   const handleDualModeChange = useCallback((enabled: boolean) => {
     setDualMode(enabled)
     setActivePane('primary')
@@ -304,9 +316,33 @@ export function App() {
   const [showKeyOverrideModal, setShowKeyOverrideModal] = useState(false)
   const [showKeychronModal, setShowKeychronModal] = useState(false)
   const [showKeychronRgbModal, setShowKeychronRgbModal] = useState(false)
+  const [showKeychronFlasherModal, setShowKeychronFlasherModal] = useState(false)
+  const [showKeychronAnalogModal, setShowKeychronAnalogModal] = useState(false)
+  const [keychronAnalogData, setKeychronAnalogData] = useState<import('../shared/types/keychron').KeychronAnalogState | null>(
+    keyboard.keychron?.analog ?? null
+  )
   const [showQmkSettingsModal, setShowQmkSettingsModal] = useState<number | null>(null)
 
   const keychronSupported = !device.isDummy && keyboard.keychron != null
+
+  const handleOpenKeychronAnalog = useCallback(async () => {
+    if (!keyboard.keychron?.hasAnalog) return
+    // If we already have analog data loaded, just show the modal
+    if (keychronAnalogData) {
+      setShowKeychronAnalogModal(true)
+      return
+    }
+    // Lazy-load the analog state
+    try {
+      const result = await window.vialAPI.keychronAnalogReload(keyboard.rows, keyboard.cols) as import('../shared/types/keychron').KeychronAnalogState | null
+      if (result) {
+        setKeychronAnalogData(result)
+        setShowKeychronAnalogModal(true)
+      }
+    } catch (err) {
+      console.error('[App] Failed to load analog state:', err)
+    }
+  }, [keyboard.keychron?.hasAnalog, keyboard.rows, keyboard.cols, keychronAnalogData])
 
   const showFileSuccess = useCallback((kind: 'import' | 'export') => {
     setFileSuccessKind(kind)
@@ -448,10 +484,38 @@ export function App() {
     if (ok) showFileSuccess('import')
   }, [fileIO.loadLayout, showFileSuccess])
 
-  const handleExportVil = useCallback(async () => {
+  const handleExportVil = useCallback(async (): Promise<boolean> => {
     const ok = await fileIO.saveLayout()
     if (ok) showFileSuccess('export')
+    return ok
   }, [fileIO.saveLayout, showFileSuccess])
+
+  const handleSilentBackup = useCallback(async (): Promise<boolean> => {
+    const entryId = await layoutStore.saveLayout('Pre-Flash Auto-Backup')
+    if (entryId) {
+      localStorage.setItem('pendingDeviceRestore', JSON.stringify({ uid: keyboard.uid, entryId }))
+      return true
+    }
+    return false
+  }, [layoutStore, keyboard.uid])
+
+  useEffect(() => {
+    if (device.isDummy || !layoutStore) return
+    const pendingRestoreStr = localStorage.getItem('pendingDeviceRestore')
+    if (pendingRestoreStr) {
+      try {
+        const pendingRestore = JSON.parse(pendingRestoreStr)
+        if (pendingRestore.uid === keyboard.uid && pendingRestore.entryId) {
+          localStorage.removeItem('pendingDeviceRestore')
+          console.log(`Auto-restoring layout for flashed device ${keyboard.uid} from backup ${pendingRestore.entryId}`)
+          // We fire and forget loading the layout so it quietly applies in the background
+          layoutStore.loadLayout(pendingRestore.entryId).catch(() => {})
+        }
+      } catch {
+        localStorage.removeItem('pendingDeviceRestore')
+      }
+    }
+  }, [device.isDummy, keyboard.uid, layoutStore.loadLayout])
 
   const handleExportKeymapC = useCallback(async () => {
     const ok = await fileIO.exportKeymapC()
@@ -838,7 +902,8 @@ export function App() {
     }
   }, [])
 
-  const handleFavUploadToHub = useCallback(async (type: FavoriteType, entryId: string) => {
+  const handleFavUploadToHub = useCallback(async (typeStr: string, entryId: string) => {
+    const type = typeStr as FavoriteType
     await runFavHubOperation(type, entryId, false, async (entry) => {
       try {
         const result = await window.vialAPI.hubUploadFavoritePost({
@@ -856,7 +921,8 @@ export function App() {
     })
   }, [runFavHubOperation, persistFavHubPostId, markAccountDeactivated, t])
 
-  const handleFavUpdateOnHub = useCallback(async (type: FavoriteType, entryId: string) => {
+  const handleFavUpdateOnHub = useCallback(async (typeStr: string, entryId: string) => {
+    const type = typeStr as FavoriteType
     await runFavHubOperation(type, entryId, true, async (entry) => {
       try {
         const result = await window.vialAPI.hubUpdateFavoritePost({
@@ -873,7 +939,8 @@ export function App() {
     })
   }, [runFavHubOperation, persistFavHubPostId, markAccountDeactivated, t])
 
-  const handleFavRemoveFromHub = useCallback(async (type: FavoriteType, entryId: string) => {
+  const handleFavRemoveFromHub = useCallback(async (typeStr: string, entryId: string) => {
+    const type = typeStr as FavoriteType
     await runFavHubOperation(type, entryId, true, async (entry) => {
       try {
         const result = await window.vialAPI.hubDeletePost(entry.hubPostId!)
@@ -890,6 +957,8 @@ export function App() {
   }, [runFavHubOperation, persistFavHubPostId, t])
 
   const handleFavRenameOnHub = useCallback(async (entryId: string, hubPostId: string, newLabel: string) => {
+    // Note: rename is triggered from UI where we already have the type conceptually, but it's not passed here.
+    // However, the signature inside DataModal doesn't need `type` for rename.
     if (!hubReady || favHubUploadingRef.current) return
     favHubUploadingRef.current = true
     setFavHubUploading(entryId)
@@ -1136,33 +1205,31 @@ export function App() {
   const toolsExtra = (
     <>
       {/* Import */}
-      {(handleImportVil || (!device.isDummy && sideload.sideloadJson)) && (
-        <div className={ROW_CLASS} data-testid="overlay-import-row">
-          <span className="text-[13px] font-medium text-content">{t('layoutStore.import')}</span>
-          <div className="flex gap-2">
+      <div className={ROW_CLASS} data-testid="overlay-import-row">
+        <span className="text-[13px] font-medium text-content">{t('layoutStore.import')}</span>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className={importBtnClass}
+            onClick={handleImportVil}
+            disabled={fileIO.saving || fileIO.loading}
+            data-testid="overlay-import-vil"
+          >
+            {t('fileIO.loadLayout')}
+          </button>
+          {!device.isDummy && (
             <button
               type="button"
               className={importBtnClass}
-              onClick={handleImportVil}
+              onClick={sideload.sideloadJson}
               disabled={fileIO.saving || fileIO.loading}
-              data-testid="overlay-import-vil"
+              data-testid="overlay-sideload-json"
             >
-              {t('fileIO.loadLayout')}
+              {t('fileIO.sideloadJson')}
             </button>
-            {!device.isDummy && sideload.sideloadJson && (
-              <button
-                type="button"
-                className={importBtnClass}
-                onClick={sideload.sideloadJson}
-                disabled={fileIO.saving || fileIO.loading}
-                data-testid="overlay-sideload-json"
-              >
-                {t('fileIO.sideloadJson')}
-              </button>
-            )}
-          </div>
+          )}
         </div>
-      )}
+      </div>
     </>
   )
 
@@ -1318,8 +1385,10 @@ export function App() {
             onLock={handleLock}
             onMatrixModeChange={handleMatrixModeChange}
             onOpenLighting={lightingSupported ? () => setShowLightingModal(true) : undefined}
-            onOpenKeychron={keychronSupported ? () => setShowKeychronModal(true) : undefined}
+            onOpenKeychron={keychronSupported ? () => { keyboard.refreshKeychron(); setShowKeychronModal(true) } : undefined}
             onOpenKeychronRgb={(keyboard.keychron?.hasRgb && keyboard.keychron.rgb) ? () => setShowKeychronRgbModal(true) : undefined}
+            onOpenKeychronFlasher={keychronSupported ? () => setShowKeychronFlasherModal(true) : undefined}
+            onOpenKeychronAnalog={keyboard.keychron?.hasAnalog ? handleOpenKeychronAnalog : undefined}
             onOpenCombo={comboSupported ? () => setShowComboModal(true) : undefined}
             onOpenAltRepeatKey={altRepeatKeySupported ? () => setShowAltRepeatKeyModal(true) : undefined}
             onOpenKeyOverride={keyOverrideSupported ? () => setShowKeyOverrideModal(true) : undefined}
@@ -1467,6 +1536,58 @@ export function App() {
                 rgb={keyboard.keychron.rgb} 
                 ledMatrix={keyboard.keychron.rgb.ledMatrix}
                 keys={keyboard.layout?.keys ?? []}
+                vialRGBMode={keyboard.vialRGBMode}
+                vialRGBSpeed={keyboard.vialRGBSpeed}
+                vialRGBHue={keyboard.vialRGBHue}
+                vialRGBSat={keyboard.vialRGBSat}
+                vialRGBVal={keyboard.vialRGBVal}
+                vialRGBMaxBrightness={keyboard.vialRGBMaxBrightness}
+                vialRGBSupported={keyboard.vialRGBSupported}
+                onSetVialRGBMode={keyboard.setVialRGBMode}
+                onSetVialRGBSpeed={keyboard.setVialRGBSpeed}
+                onSetVialRGBColor={keyboard.setVialRGBColor}
+                onSetVialRGBBrightness={keyboard.setVialRGBBrightness}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showKeychronFlasherModal && (
+        <KeychronDfuFlasher
+          isOpen={showKeychronFlasherModal}
+          onClose={() => setShowKeychronFlasherModal(false)}
+          onSaveBackup={handleSilentBackup}
+          unlocked={keyboard?.unlockStatus?.unlocked ?? false}
+          onUnlock={() => {
+            setShowUnlockDialog(true)
+            setUnlockMacroWarning(false)
+          }}
+          setSuppressDisconnect={device.setSuppressDisconnect}
+          originalDevice={device.connectedDevice}
+          connectDevice={device.connectDevice}
+        />
+      )}
+
+      {showKeychronAnalogModal && keychronAnalogData && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setShowKeychronAnalogModal(false)}
+        >
+          <div
+            className="flex h-[85vh] w-[90vw] max-w-5xl flex-col overflow-hidden rounded-lg bg-surface-alt shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between shrink-0 px-6 py-4 border-b border-edge bg-surface">
+              <h3 className="text-lg font-semibold">{t('keychron.analog.title', 'Analog Matrix (HE)')}</h3>
+              <ModalCloseButton testid="keychron-analog-modal-close" onClick={() => setShowKeychronAnalogModal(false)} />
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <KeychronAnalog
+                analog={keychronAnalogData}
+                keys={keyboard.layout?.keys ?? []}
+                rows={keyboard.rows}
+                cols={keyboard.cols}
               />
             </div>
           </div>
@@ -1550,7 +1671,7 @@ export function App() {
               <h3 className="text-lg font-semibold">{t('keychron.settings', 'Keychron Settings')}</h3>
               <ModalCloseButton testid="keychron-modal-close" onClick={() => setShowKeychronModal(false)} />
             </div>
-            <KeychronSettings keychron={keyboard.keychron} />
+            <KeychronSettings keychron={keyboard.keychron} onSettingChanged={keyboard.refreshKeychron} />
           </div>
         </div>
       )}

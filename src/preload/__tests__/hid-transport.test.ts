@@ -66,9 +66,9 @@ describe('openHidDevice / closeHidDevice', () => {
   it('opens device via IPC and updates local state', async () => {
     mockInvoke.mockResolvedValue(true)
 
-    const result = await openHidDevice(0x1234, 0x5678)
+    const result = await openHidDevice(0x1234, 0x5678, 'TEST_SERIAL')
 
-    expect(mockInvoke).toHaveBeenCalledWith('hid:openDevice', 0x1234, 0x5678)
+    expect(mockInvoke).toHaveBeenCalledWith('hid:openDevice', 0x1234, 0x5678, 'TEST_SERIAL')
     expect(result).toBe(true)
     await expect(isDeviceOpen()).resolves.toBe(true)
   })

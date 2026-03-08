@@ -23,8 +23,8 @@ export async function listDevices(): Promise<DeviceInfo[]> {
 /**
  * Open a HID device by vendorId and productId.
  */
-export async function openHidDevice(vendorId: number, productId: number): Promise<boolean> {
-  const result = await ipcRenderer.invoke(IpcChannels.HID_OPEN_DEVICE, vendorId, productId)
+export async function openHidDevice(vendorId: number, productId: number, serialNumber?: string): Promise<boolean> {
+  const result = await ipcRenderer.invoke(IpcChannels.HID_OPEN_DEVICE, vendorId, productId, serialNumber)
   deviceOpen = result === true
   return deviceOpen
 }

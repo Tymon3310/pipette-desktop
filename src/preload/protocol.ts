@@ -10,7 +10,9 @@
  *     Little-endian: vial protocol, keyboard uid, definition block, dynamic entries, QMK settings
  */
 
-import { sendReceive } from './hid-transport'
+import { ipcRenderer } from 'electron'
+import { sendReceive, send } from './hid-transport.js'
+import { IpcChannels } from '../shared/ipc/channels.js'
 import {
   MSG_LEN,
   BUFFER_FETCH_CHUNK,
@@ -60,7 +62,7 @@ import {
   ECHO_RETRY_COUNT,
   ECHO_RETRY_DELAY_MS,
   ECHO_DETECTED_MSG,
-} from '../shared/constants/protocol'
+} from '../shared/constants/protocol.js'
 import type {
   KeyboardId,
   TapDanceEntry,
@@ -69,7 +71,7 @@ import type {
   AltRepeatKeyEntry,
   DynamicEntryCounts,
   UnlockStatus,
-} from '../shared/types/protocol'
+} from '../shared/types/protocol.js'
 
 // --- Byte helpers ---
 
@@ -723,4 +725,30 @@ export async function qmkSettingsSet(qsid: number, data: number[]): Promise<void
 /** Reset all QMK settings to defaults. */
 export async function qmkSettingsReset(): Promise<void> {
   await sendReceive(cmd(CMD_VIA_VIAL_PREFIX, CMD_VIAL_QMK_SETTINGS_RESET))
+}
+
+// --- Special Commands ---
+
+/**
+ * Commands the keyboard to reboot into the bootloader (DFU).
+ * Standard VIA command 0x0B — matches vial-gui's keyboard_comm.reset():
+ *   usb_send(dev, struct.pack("B", 0xB))   # write + read (times out OK)
+ *   dev.close()
+ *
+ * We use sendReceive() (not send()) because:
+ * 1. vial-gui uses usb_send which does both write+read
+ * 2. The read ensures the write is fully flushed to the device
+ * 3. The keyboard reboots after processing, so the read will timeout — that's expected
+ */
+export async function jumpToBootloader(): Promise<void> {
+  try {
+    await sendReceive(cmd(0x0b))
+  } catch {
+    // Expected — keyboard disconnects during/after processing the reboot command
+  }
+  try {
+    await ipcRenderer.invoke(IpcChannels.HID_CLOSE_DEVICE)
+  } catch {
+    // Expected — device may already be gone
+  }
 }

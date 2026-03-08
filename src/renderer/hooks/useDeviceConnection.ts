@@ -37,6 +37,7 @@ export function useDeviceConnection() {
   const mountedRef = useRef(true)
   const connectedDeviceRef = useRef<DeviceInfo | null>(null)
   const isDummyRef = useRef(false)
+  const suppressDisconnectRef = useRef(false)
 
   useEffect(() => {
     mountedRef.current = true
@@ -70,6 +71,7 @@ export function useDeviceConnection() {
       const success = await window.vialAPI.openDevice(
         device.vendorId,
         device.productId,
+        device.serialNumber,
       )
       if (mountedRef.current) {
         if (success) {
@@ -133,6 +135,15 @@ export function useDeviceConnection() {
     }
   }, [])
 
+  /**
+   * Suppress disconnect detection during DFU flashing.
+   * While suppressed, the health-check poll is skipped so the keyboard
+   * editor stays visible even though the HID device is gone.
+   */
+  const setSuppressDisconnect = useCallback((suppress: boolean) => {
+    suppressDisconnectRef.current = suppress
+  }, [])
+
   // Initial device list fetch
   useEffect(() => {
     refreshDevices()
@@ -161,8 +172,8 @@ export function useDeviceConnection() {
       if (!mountedRef.current || cancelled) return
 
       if (connectedDeviceRef.current) {
-        // Skip health check for dummy keyboards
-        if (!isDummyRef.current) {
+        // Skip health check for dummy keyboards and when disconnect is suppressed (DFU flashing)
+        if (!isDummyRef.current && !suppressDisconnectRef.current) {
           const open = await withTimeout(
             window.vialAPI.isDeviceOpen(),
             POLL_TIMEOUT_MS,
@@ -204,5 +215,6 @@ export function useDeviceConnection() {
     connectDevice,
     connectDummy,
     disconnectDevice,
+    setSuppressDisconnect,
   }
 }

@@ -77,6 +77,7 @@ interface Props {
   onEncoderClick?: (key: KleKey, direction: number) => void
   onEncoderDoubleClick?: (key: KleKey, direction: number, rect: DOMRect) => void
   readOnly?: boolean
+  keyColors?: Map<string, string>
   scale?: number
 }
 
@@ -99,6 +100,7 @@ function KeyboardWidgetInner({
   onEncoderClick,
   onEncoderDoubleClick,
   readOnly = false,
+  keyColors,
   scale = 1,
 }: Props) {
   // Reposition selected layout alternatives to align with option 0, then filter
@@ -186,6 +188,7 @@ function KeyboardWidgetInner({
             highlighted={highlightedKeys?.has(posKey)}
             everPressed={everPressedKeys?.has(posKey)}
             remapped={remappedKeys?.has(posKey)}
+            customFill={keyColors?.get(posKey)}
             onClick={readOnly ? undefined : onKeyClick}
             onDoubleClick={readOnly ? undefined : onKeyDoubleClick}
             scale={scale}
@@ -230,6 +233,7 @@ function KeyboardWidgetInner({
             highlighted={highlightedKeys?.has(posKey)}
             everPressed={everPressedKeys?.has(posKey)}
             remapped={remappedKeys?.has(posKey)}
+            customFill={keyColors?.get(posKey)}
             onClick={readOnly ? undefined : onKeyClick}
             onDoubleClick={readOnly ? undefined : onKeyDoubleClick}
             scale={scale}

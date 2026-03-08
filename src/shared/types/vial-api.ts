@@ -24,7 +24,7 @@ import type { NotificationFetchResult } from './notification'
 export interface VialAPI {
   // Device Management
   listDevices(): Promise<DeviceInfo[]>
-  openDevice(vendorId: number, productId: number): Promise<boolean>
+  openDevice(vendorId: number, productId: number, serialNumber?: string): Promise<boolean>
   closeDevice(): Promise<void>
   isDeviceOpen(): Promise<boolean>
 
@@ -106,11 +106,12 @@ export interface VialAPI {
   keychronSaveRGB(): Promise<void>
   keychronSetIndicators(disableMask: number, hue: number, sat: number, val: number): Promise<void>
   keychronSetMixedRGBRegions(startIndex: number, regions: number[]): Promise<void>
-  keychronSetMixedRGBEffects(regionIndex: number, startIndex: number, effects: number[]): Promise<void>
+  keychronSetMixedRGBEffects(regionIndex: number, startIndex: number, effects: import('./keychron').MixedRGBEffect[]): Promise<void>
   keychronAnalogReload(rows: number, cols: number): Promise<unknown>
   keychronAnalogGetVersion(): Promise<number>
   keychronAnalogGetProfilesInfo(): Promise<{ currentProfile: number; profileCount: number; profileSize: number; okmcCount: number; socdCount: number }>
   keychronAnalogGetCurve(): Promise<number[]>
+  keychronAnalogSetCurve(curvePoints: number[]): Promise<boolean>
   keychronAnalogGetGameControllerMode(): Promise<number>
   keychronAnalogSetProfile(profileIndex: number): Promise<boolean>
   keychronAnalogSetTravel(profile: number, mode: number, actPt: number, sens: number, rlsSens: number, entire: boolean, rowMask?: number[]): Promise<boolean>
@@ -126,6 +127,13 @@ export interface VialAPI {
   keychronAnalogSetAdvanceModeClear(profile: number, row: number, col: number): Promise<boolean>
   keychronAnalogSetAdvanceModeDks(profile: number, row: number, col: number, okmcIndex: number, shallowAct: number, shallowDeact: number, deepAct: number, deepDeact: number, keycodes: number[], actions: number[]): Promise<boolean>
   keychronAnalogSetAdvanceModeToggle(profile: number, row: number, col: number): Promise<boolean>
+
+  // Keychron DFU Flasher
+  keychronDfuFlash(firmwareData: ArrayBuffer): Promise<{ success: boolean; error?: string }>
+  keychronDfuOnOutput(callback: (data: { log?: string; progress?: number }) => void): () => void
+
+  // Special Commands
+  jumpToBootloader(): Promise<void>
 
   // File I/O (IPC to main for native file dialogs)
   saveLayout(json: string, deviceName?: string): Promise<{ success: boolean; filePath?: string; error?: string }>

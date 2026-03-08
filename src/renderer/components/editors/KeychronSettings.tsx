@@ -4,7 +4,7 @@
  * Keychron Settings editor — general keyboard settings panel.
  *
  * Handles debounce, NKRO, USB/2.4 GHz report rate, wireless power
- * management, Snap Click (SOCD), and firmware info display.
+ * management, Snap Click (SOCD), factory reset tutorial, and firmware info.
  *
  * Port of vial-gui/editor/keychron_settings.py to React.
  */
@@ -22,14 +22,17 @@ import {
 } from '../../../shared/constants/keychron'
 import { KeycodeField } from './KeycodeField'
 import { KeyPopover } from '../keycodes/KeyPopover'
+import { FactoryResetDialog } from './FactoryResetDialog'
 import type { Keycode } from '../../../shared/keycodes/keycodes'
 import { deserialize } from '../../../shared/keycodes/keycodes'
 
 interface Props {
   keychron: KeychronState
+  /** Called after any setting is written to the keyboard so parent can refresh state. */
+  onSettingChanged?: () => void
 }
 
-export function KeychronSettings({ keychron }: Props) {
+export function KeychronSettings({ keychron, onSettingChanged }: Props) {
   const { t } = useTranslation()
   const api = window.vialAPI
   const updating = useRef(false)
@@ -51,6 +54,7 @@ export function KeychronSettings({ keychron }: Props) {
     keyField: 'key1' | 'key2'
     anchorRect: DOMRect
   } | null>(null)
+  const [showFactoryReset, setShowFactoryReset] = useState(false)
 
   // Sync local state when keychron prop changes
   useEffect(() => {
@@ -74,8 +78,9 @@ export function KeychronSettings({ keychron }: Props) {
       const type = parseInt(e.target.value, 10)
       setDebounceType(type)
       await api.keychronSetDebounce(type, debounceTime)
+      onSettingChanged?.()
     },
-    [api, debounceTime],
+    [api, debounceTime, onSettingChanged],
   )
 
   const handleDebounceTime = useCallback(
@@ -84,8 +89,9 @@ export function KeychronSettings({ keychron }: Props) {
       const time = parseInt(e.target.value, 10) || 0
       setDebounceTime(time)
       await api.keychronSetDebounce(debounceType, time)
+      onSettingChanged?.()
     },
-    [api, debounceType],
+    [api, debounceType, onSettingChanged],
   )
 
   // --- NKRO ---
@@ -95,8 +101,9 @@ export function KeychronSettings({ keychron }: Props) {
       const enabled = e.target.checked
       setNkroEnabled(enabled)
       await api.keychronSetNkro(enabled)
+      onSettingChanged?.()
     },
-    [api],
+    [api, onSettingChanged],
   )
 
   // --- Report Rate (v1 single / v2 dual) ---
@@ -113,8 +120,9 @@ export function KeychronSettings({ keychron }: Props) {
         setReportRate(rate)
         await api.keychronSetReportRate(rate)
       }
+      onSettingChanged?.()
     },
-    [api, isV2, pollRate24g],
+    [api, isV2, pollRate24g, onSettingChanged],
   )
 
   const handleFrRate = useCallback(
@@ -123,8 +131,9 @@ export function KeychronSettings({ keychron }: Props) {
       const rate = parseInt(e.target.value, 10)
       setPollRate24g(rate)
       await api.keychronSetPollRateV2(pollRateUsb, rate)
+      onSettingChanged?.()
     },
-    [api, pollRateUsb],
+    [api, pollRateUsb, onSettingChanged],
   )
 
   // --- Wireless LPM ---
@@ -134,8 +143,9 @@ export function KeychronSettings({ keychron }: Props) {
       const v = parseInt(e.target.value, 10) || 5
       setBacklitTime(v)
       await api.keychronSetWirelessLpm(v, idleTime)
+      onSettingChanged?.()
     },
-    [api, idleTime],
+    [api, idleTime, onSettingChanged],
   )
 
   const handleIdleTime = useCallback(
@@ -144,8 +154,9 @@ export function KeychronSettings({ keychron }: Props) {
       const v = parseInt(e.target.value, 10) || 60
       setIdleTime(v)
       await api.keychronSetWirelessLpm(backlitTime, v)
+      onSettingChanged?.()
     },
-    [api, backlitTime],
+    [api, backlitTime, onSettingChanged],
   )
 
   // --- Snap Click ---
@@ -159,8 +170,9 @@ export function KeychronSettings({ keychron }: Props) {
       setSnapEntries(newEntries)
       await api.keychronSetSnapClick(index, type, entry.key1, entry.key2)
       await api.keychronSaveSnapClick()
+      onSettingChanged?.()
     },
-    [api, snapEntries],
+    [api, snapEntries, onSettingChanged],
   )
 
   const handleRawKeycodeSelect = useCallback(
@@ -174,11 +186,11 @@ export function KeychronSettings({ keychron }: Props) {
       api
         .keychronSetSnapClick(popoverState.index, newEntry.type, newEntry.key1, newEntry.key2)
         .then(() => {
-          api.keychronSaveSnapClick()
+          api.keychronSaveSnapClick().then(() => onSettingChanged?.())
         })
       setPopoverState(null)
     },
-    [popoverState, snapEntries, api],
+    [popoverState, snapEntries, api, onSettingChanged],
   )
 
   const handleKeycodeSelect = useCallback(
@@ -424,6 +436,51 @@ export function KeychronSettings({ keychron }: Props) {
               onClose={() => setPopoverState(null)}
             />
           )}
+        </section>
+      )}
+
+      {/* Factory Reset */}
+      <section className="border-t border-edge pt-3">
+        <h4 className="mb-2 text-sm font-semibold text-content-muted">
+          {t('keychron.factoryReset', 'Factory Reset')}
+        </h4>
+        <p className="mb-3 text-xs text-content-muted">
+          {t(
+            'keychron.factoryResetInfo',
+            'Factory reset restores all settings to their defaults. This cannot be triggered via USB — use the hardware key combo instead.',
+          )}
+        </p>
+        <button
+          className="rounded-md border border-edge bg-surface px-3 py-1.5 text-sm hover:bg-surface-hover"
+          onClick={() => setShowFactoryReset(true)}
+          data-testid="keychron-factory-reset-btn"
+        >
+          {t('keychron.howToFactoryReset', 'How to Factory Reset...')}
+        </button>
+        {showFactoryReset && (
+          <FactoryResetDialog onClose={() => setShowFactoryReset(false)} />
+        )}
+      </section>
+
+      {/* FW Flasher placeholder */}
+      {keychron.hasDfu && (
+        <section>
+          <h4 className="mb-2 text-sm font-semibold text-content-muted">
+            {t('keychron.firmwareUpdate', 'Firmware Update')}
+          </h4>
+          {keychron.mcuInfo && (
+            <p className="mb-2 text-xs text-content-muted">
+              {t('keychron.mcuDetected', 'MCU')}: {keychron.mcuInfo}
+            </p>
+          )}
+          <button
+            className="rounded-md border border-edge bg-surface px-3 py-1.5 text-sm opacity-50 cursor-not-allowed"
+            disabled
+            title={t('keychron.fwFlasherComingSoon', 'Firmware flashing is coming soon')}
+            data-testid="keychron-fw-flash-btn"
+          >
+            {t('keychron.flashFirmware', 'Flash Firmware...')}
+          </button>
         </section>
       )}
 

@@ -12,10 +12,20 @@ export interface SnapClickEntry {
 
 /** OS indicator configuration. */
 export interface OsIndicatorConfig {
+  availableMask: number
   disableMask: number
   hue: number
   sat: number
   val: number
+}
+
+/** A single Mixed RGB effect entry (8 bytes on wire). */
+export interface MixedRGBEffect {
+  effect: number
+  hue: number
+  sat: number
+  speed: number
+  time: number // display duration in ms (LE32 on wire)
 }
 
 /** Per-key RGB state. */
@@ -31,7 +41,7 @@ export interface KeychronRGBState {
   mixedRGBLayers: number
   mixedRGBEffectsPerLayer: number
   mixedRGBRegions: number[]
-  mixedRGBEffects: number[][]
+  mixedRGBEffects: MixedRGBEffect[][]
 }
 
 /** Analog key configuration for a single key. */
@@ -53,6 +63,10 @@ export interface SOCDPair {
 
 /** OKMC (DKS) slot configuration. */
 export interface OKMCSlotConfig {
+  shallowAct: number
+  shallowDeact: number
+  deepAct: number
+  deepDeact: number
   keycodes: number[]
   events: number[] // 4 nibble-pairs per event slot
 }
@@ -126,6 +140,7 @@ export interface KeychronState {
   hasAnalog: boolean
   hasDfu: boolean
   hasDefaultLayer: boolean
+  defaultLayer: number
 
   // RGB state (populated when hasRgb is true)
   rgb: KeychronRGBState | null
@@ -168,6 +183,7 @@ export function emptyKeychronState(): KeychronState {
     hasAnalog: false,
     hasDfu: false,
     hasDefaultLayer: false,
+    defaultLayer: -1,
     rgb: null,
     analog: null,
   }

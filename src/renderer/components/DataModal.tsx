@@ -29,9 +29,9 @@ interface Props {
   hubNeedsDisplayName?: boolean
   hubFavUploading?: string | null
   hubFavUploadResult?: FavHubEntryResult | null
-  onFavUploadToHub?: (type: FavoriteType, entryId: string) => void
-  onFavUpdateOnHub?: (type: FavoriteType, entryId: string) => void
-  onFavRemoveFromHub?: (type: FavoriteType, entryId: string) => void
+  onFavUploadToHub?: (type: string, entryId: string) => void
+  onFavUpdateOnHub?: (type: string, entryId: string) => void
+  onFavRemoveFromHub?: (type: string, entryId: string) => void
   onFavRenameOnHub?: (entryId: string, hubPostId: string, newLabel: string) => void
 }
 

@@ -111,4 +111,8 @@ export const IpcChannels = {
 
   // Favorite Store extensions
   FAVORITE_STORE_SET_HUB_POST_ID: 'favorite-store:set-hub-post-id',
+
+  // Keychron DFU Flasher (renderer ↔ main)
+  KEYCHRON_DFU_FLASH: 'keychron:dfu-flash',
+  KEYCHRON_DFU_OUTPUT: 'keychron:dfu-output',
 } as const

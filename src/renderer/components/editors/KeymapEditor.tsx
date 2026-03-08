@@ -579,6 +579,8 @@ interface Props {
   onOpenLighting?: () => void
   onOpenKeychron?: () => void
   onOpenKeychronRgb?: () => void
+  onOpenKeychronAnalog?: () => void
+  onOpenKeychronFlasher?: () => void
   onOpenCombo?: () => void
   onOpenAltRepeatKey?: () => void
   onOpenKeyOverride?: () => void
@@ -674,6 +676,8 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
   onOpenLighting,
   onOpenKeychron,
   onOpenKeychronRgb,
+  onOpenKeychronFlasher,
+  onOpenKeychronAnalog,
   onOpenCombo,
   onOpenAltRepeatKey,
   onOpenKeyOverride,
@@ -1743,7 +1747,9 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
       { tab: 'quantum', key: 'keyOverride', label: t('editor.keyOverride.title'), onClick: onOpenKeyOverride, testId: 'key-override-settings-btn', enabled: !!onOpenKeyOverride },
       { tab: 'backlight', key: 'lighting', label: t('editor.lighting.title'), onClick: onOpenLighting, testId: 'lighting-settings-btn', enabled: !!onOpenLighting },
       { tab: 'quantum', key: 'keychron', label: t('keychron.settings', 'Keychron'), onClick: onOpenKeychron, testId: 'keychron-settings-btn', enabled: !!onOpenKeychron },
-      { tab: 'lighting', key: 'keychron-rgb', label: t('keychron.rgb', 'Keychron RGB'), onClick: onOpenKeychronRgb, testId: 'keychron-rgb-settings-btn', enabled: !!onOpenKeychronRgb },
+      { tab: 'backlight', key: 'keychron-rgb', label: t('keychron.rgb', 'Keychron RGB'), onClick: onOpenKeychronRgb, testId: 'keychron-rgb-settings-btn', enabled: !!onOpenKeychronRgb },
+      { tab: 'quantum', key: 'keychron-analog', label: t('keychron.analog.title', 'Keychron HE'), onClick: onOpenKeychronAnalog, testId: 'keychron-analog-settings-btn', enabled: !!onOpenKeychronAnalog },
+      { tab: 'quantum', key: 'keychron-flasher', label: t('keychron.flasher.title', 'Keychron Flasher'), onClick: onOpenKeychronFlasher, testId: 'keychron-flasher-btn', enabled: !!onOpenKeychronFlasher },
     ]
 
     const content: Record<string, React.ReactNode> = {}
@@ -1773,7 +1779,7 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
     }
 
     return content
-  }, [tapHoldSupported, mouseKeysSupported, magicSupported, autoShiftSupported, graveEscapeSupported, oneShotKeysSupported, onOpenLighting, onOpenKeychron, onOpenCombo, onOpenAltRepeatKey, onOpenKeyOverride, t])
+  }, [tapHoldSupported, mouseKeysSupported, magicSupported, autoShiftSupported, graveEscapeSupported, oneShotKeysSupported, onOpenLighting, onOpenKeychron, onOpenKeychronRgb, onOpenKeychronAnalog, onOpenKeychronFlasher, onOpenCombo, onOpenAltRepeatKey, onOpenKeyOverride, t])
 
   const tabContentOverride = useTileContentOverride(tapDanceEntries, deserializedMacros, handleKeycodeSelect)
 

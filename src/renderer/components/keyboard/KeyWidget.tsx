@@ -42,6 +42,7 @@ interface Props {
   onDoubleClick?: (key: KleKey, rect: DOMRect, maskClicked: boolean) => void
   hoverMaskParts?: boolean
   selectedFill?: boolean
+  customFill?: string
   scale?: number
 }
 
@@ -60,6 +61,7 @@ function KeyWidgetInner({
   onDoubleClick,
   hoverMaskParts,
   selectedFill = true,
+  customFill,
   scale = 1,
 }: Props) {
   const [hoveredPart, setHoveredPart] = useState<'outer' | 'inner' | null>(null)
@@ -85,7 +87,7 @@ function KeyWidgetInner({
   // For masked keys with inner selected, use default fill (stroke-only selection)
   const masked = isMask(keycode)
   const innerSelected = selected && selectedMaskPart && masked
-  let fillColor = KEY_BG_COLOR
+  let fillColor = customFill ?? KEY_BG_COLOR
   let invertText = false
   if (pressed) fillColor = KEY_PRESSED_COLOR
   else if (selected && !innerSelected && selectedFill) { fillColor = KEY_SELECTED_COLOR; invertText = true }

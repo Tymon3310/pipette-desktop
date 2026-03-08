@@ -27,8 +27,8 @@ import type { NotificationFetchResult } from '../shared/types/notification'
 const vialAPI = {
   // --- Device Management (node-hid via IPC) ---
   listDevices: (): Promise<DeviceInfo[]> => listDevices(),
-  openDevice: (vendorId: number, productId: number): Promise<boolean> =>
-    openHidDevice(vendorId, productId),
+  openDevice: (vendorId: number, productId: number, serialNumber?: string): Promise<boolean> =>
+    openHidDevice(vendorId, productId, serialNumber),
   closeDevice: (): Promise<void> => closeHidDevice(),
   isDeviceOpen: (): Promise<boolean> => isDeviceOpen(),
 
@@ -157,7 +157,7 @@ const vialAPI = {
     keychronProtocol.setKeychronIndicators(disableMask, hue, sat, val),
   keychronSetMixedRGBRegions: (startIndex: number, regions: number[]): Promise<void> =>
     keychronProtocol.setKeychronMixedRGBRegions(startIndex, regions),
-  keychronSetMixedRGBEffects: (regionIndex: number, startIndex: number, effects: number[]): Promise<void> =>
+  keychronSetMixedRGBEffects: (regionIndex: number, startIndex: number, effects: import('../shared/types/keychron').MixedRGBEffect[]): Promise<void> =>
     keychronProtocol.setKeychronMixedRGBEffects(regionIndex, startIndex, effects),
   keychronAnalogReload: (rows: number, cols: number): Promise<unknown> =>
     keychronProtocol.reloadKeychronAnalog(rows, cols),
@@ -167,6 +167,8 @@ const vialAPI = {
     keychronProtocol.getKeychronAnalogProfilesInfo(),
   keychronAnalogGetCurve: (): Promise<number[]> =>
     keychronProtocol.getKeychronAnalogCurve(),
+  keychronAnalogSetCurve: (curvePoints: number[]): Promise<boolean> =>
+    keychronProtocol.setKeychronAnalogCurve(curvePoints),
   keychronAnalogGetGameControllerMode: (): Promise<number> =>
     keychronProtocol.getKeychronAnalogGameControllerMode(),
   keychronAnalogSetProfile: (profileIndex: number): Promise<boolean> =>
@@ -361,6 +363,20 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.EXPORT_LOCAL_DATA),
   importLocalData: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.IMPORT_LOCAL_DATA),
+
+  // --- Keychron DFU Flasher ---
+  keychronDfuFlash: (firmwareData: ArrayBuffer): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.KEYCHRON_DFU_FLASH, firmwareData),
+  keychronDfuOnOutput: (callback: (data: { log?: string; progress?: number }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { log?: string; progress?: number }): void => {
+      callback(data)
+    }
+    ipcRenderer.on(IpcChannels.KEYCHRON_DFU_OUTPUT, handler)
+    return () => ipcRenderer.removeListener(IpcChannels.KEYCHRON_DFU_OUTPUT, handler)
+  },
+
+  // --- Special Commands ---
+  jumpToBootloader: (): Promise<void> => protocol.jumpToBootloader(),
 }
 
 contextBridge.exposeInMainWorld('vialAPI', vialAPI)

@@ -77,6 +77,7 @@ import {
   AMC_GET_GAME_CONTROLLER_MODE,
   AMC_SET_GAME_CONTROLLER_MODE,
   AMC_GET_CURVE,
+  AMC_SET_CURVE,
   AMC_GET_PROFILE_RAW,
   AMC_CALIBRATE,
   AMC_GET_CALIBRATE_STATE,
@@ -86,6 +87,11 @@ import {
   ADV_MODE_CLEAR,
   ADV_MODE_OKMC,
   ADV_MODE_TOGGLE,
+  BOOTLOADER_JUMP,
+  BL_AWAIT_CONFIRM,
+  BL_CONFIRMED,
+  BL_TIMEOUT,
+  BL_EXCEEDED,
 } from '../shared/constants/keychron'
 import type {
   KeychronState,
@@ -96,6 +102,8 @@ import type {
   OKMCSlotConfig,
   SOCDPair,
   OsIndicatorConfig,
+  MixedRGBEffect,
+  AnalogProfile,
 } from '../shared/types/keychron'
 import { emptyKeychronState } from '../shared/types/keychron'
 
@@ -515,12 +523,17 @@ export async function saveKeychronRGB(): Promise<void> {
 /** Get OS indicator configuration. */
 export async function getKeychronIndicators(): Promise<OsIndicatorConfig | null> {
   const resp = await sendReceive(cmd(KC_KEYCHRON_RGB, GET_INDICATORS_CONFIG))
-  if (resp[0] === KC_KEYCHRON_RGB && resp[1] === GET_INDICATORS_CONFIG) {
+  if (
+    resp[0] === KC_KEYCHRON_RGB &&
+    resp[1] === GET_INDICATORS_CONFIG &&
+    resp[2] === 0 // status == success
+  ) {
     return {
-      disableMask: resp[2],
-      hue: resp[3],
-      sat: resp[4],
-      val: resp[5],
+      availableMask: resp[3],
+      disableMask: resp[4],
+      hue: resp[5],
+      sat: resp[6],
+      val: resp[7],
     }
   }
   return null
@@ -541,43 +554,54 @@ export async function setKeychronIndicators(
 /** Get total LED count. */
 export async function getKeychronLedCount(): Promise<number> {
   const resp = await sendReceive(cmd(KC_KEYCHRON_RGB, RGB_GET_LED_COUNT))
-  if (resp[0] === KC_KEYCHRON_RGB && resp[1] === RGB_GET_LED_COUNT) {
-    return resp[2] | (resp[3] << 8)
+  if (
+    resp[0] === KC_KEYCHRON_RGB &&
+    resp[1] === RGB_GET_LED_COUNT &&
+    resp[2] === 0 // status
+  ) {
+    return resp[3]
   }
   return 0
 }
 
 /**
  * Get LED index mapping (row,col → LED index).
- * Fetches in batches, returns a Map of "row,col" → LED index.
+ * Queries per-row using column bitmask, matching vial-gui's
+ * reload_led_matrix_mapping() approach.
  */
 export async function getKeychronLedMatrix(
-  ledCount: number,
+  _ledCount: number,
+  rows?: number,
+  cols?: number,
 ): Promise<Map<string, number>> {
   const matrix = new Map<string, number>()
-  let idx = 0
-  while (idx < ledCount) {
+  // Need rows/cols to query per-row. If not provided, use sensible max.
+  const maxRows = rows ?? 8
+  const maxCols = cols ?? 24
+
+  for (let row = 0; row < maxRows; row++) {
+    const colMask = (1 << maxCols) - 1
     const pkt = new Uint8Array(MSG_LEN)
     pkt[0] = KC_KEYCHRON_RGB
     pkt[1] = RGB_GET_LED_IDX
-    pkt[2] = idx & 0xff
-    pkt[3] = (idx >> 8) & 0xff
+    pkt[2] = row
+    pkt[3] = colMask & 0xff
+    pkt[4] = (colMask >> 8) & 0xff
+    pkt[5] = (colMask >> 16) & 0xff
+    pkt[6] = 0 // padding
     const resp = await sendReceive(pkt)
-    if (resp[0] === KC_KEYCHRON_RGB && resp[1] === RGB_GET_LED_IDX) {
-      const count = resp[2]
-      for (let i = 0; i < count; i++) {
-        const offset = 3 + i * 4
-        const row = resp[offset]
-        const col = resp[offset + 1]
-        const ledIdx = resp[offset + 2] | (resp[offset + 3] << 8)
-        if (row !== 0xff && col !== 0xff) {
+    if (
+      resp[0] === KC_KEYCHRON_RGB &&
+      resp[1] === RGB_GET_LED_IDX &&
+      resp[2] === 0 // status
+    ) {
+      // LED indices start at data[3], one per column (0xFF = no LED)
+      for (let col = 0; col < Math.min(maxCols, 24); col++) {
+        const ledIdx = resp[3 + col]
+        if (ledIdx !== 0xff) {
           matrix.set(`${row},${col}`, ledIdx)
         }
       }
-      idx += count
-      if (count === 0) break // no more LEDs
-    } else {
-      break
     }
   }
   return matrix
@@ -586,8 +610,12 @@ export async function getKeychronLedMatrix(
 /** Get per-key RGB effect type. */
 export async function getKeychronPerKeyRGBType(): Promise<number> {
   const resp = await sendReceive(cmd(KC_KEYCHRON_RGB, PER_KEY_RGB_GET_TYPE))
-  if (resp[0] === KC_KEYCHRON_RGB && resp[1] === PER_KEY_RGB_GET_TYPE) {
-    return resp[2]
+  if (
+    resp[0] === KC_KEYCHRON_RGB &&
+    resp[1] === PER_KEY_RGB_GET_TYPE &&
+    resp[2] === 0 // status
+  ) {
+    return resp[3]
   }
   return PER_KEY_RGB_SOLID
 }
@@ -611,13 +639,16 @@ export async function getKeychronPerKeyColors(
     const pkt = new Uint8Array(MSG_LEN)
     pkt[0] = KC_KEYCHRON_RGB
     pkt[1] = PER_KEY_RGB_GET_COLOR
-    pkt[2] = idx & 0xff
-    pkt[3] = (idx >> 8) & 0xff
-    pkt[4] = batch
+    pkt[2] = idx // 1-byte start index
+    pkt[3] = batch
     const resp = await sendReceive(pkt)
-    if (resp[0] === KC_KEYCHRON_RGB && resp[1] === PER_KEY_RGB_GET_COLOR) {
+    if (
+      resp[0] === KC_KEYCHRON_RGB &&
+      resp[1] === PER_KEY_RGB_GET_COLOR &&
+      resp[2] === 0 // status
+    ) {
       for (let i = 0; i < batch; i++) {
-        const offset = 2 + i * 3
+        const offset = 3 + i * 3
         colors.push([resp[offset], resp[offset + 1], resp[offset + 2]])
       }
     }
@@ -633,16 +664,10 @@ export async function setKeychronPerKeyColor(
   s: number,
   v: number,
 ): Promise<void> {
-  const pkt = new Uint8Array(MSG_LEN)
-  pkt[0] = KC_KEYCHRON_RGB
-  pkt[1] = PER_KEY_RGB_SET_COLOR
-  pkt[2] = ledIndex & 0xff
-  pkt[3] = (ledIndex >> 8) & 0xff
-  pkt[4] = 1 // count
-  pkt[5] = h
-  pkt[6] = s
-  pkt[7] = v
-  await sendReceive(pkt)
+  // Protocol: [0xA8] [0x0A] [index] [1] [hue] [sat] [val]
+  await sendReceive(
+    cmd(KC_KEYCHRON_RGB, PER_KEY_RGB_SET_COLOR, ledIndex, 1, h, s, v),
+  )
 }
 
 /** Get Mixed RGB info: layers and effects per layer. */
@@ -651,8 +676,12 @@ export async function getKeychronMixedRGBInfo(): Promise<{
   effectsPerLayer: number
 }> {
   const resp = await sendReceive(cmd(KC_KEYCHRON_RGB, MIXED_EFFECT_RGB_GET_INFO))
-  if (resp[0] === KC_KEYCHRON_RGB && resp[1] === MIXED_EFFECT_RGB_GET_INFO) {
-    return { layers: resp[2], effectsPerLayer: resp[3] }
+  if (
+    resp[0] === KC_KEYCHRON_RGB &&
+    resp[1] === MIXED_EFFECT_RGB_GET_INFO &&
+    resp[2] === 0 // status
+  ) {
+    return { layers: resp[3], effectsPerLayer: resp[4] }
   }
   return { layers: 0, effectsPerLayer: 0 }
 }
@@ -664,17 +693,24 @@ export async function getKeychronMixedRGBRegions(
   const regions: number[] = []
   let idx = 0
   while (idx < ledCount) {
+    // Max 29 regions per packet (32 - cmd - subcmd - status)
     const batch = Math.min(29, ledCount - idx)
     const pkt = new Uint8Array(MSG_LEN)
     pkt[0] = KC_KEYCHRON_RGB
     pkt[1] = MIXED_EFFECT_RGB_GET_REGIONS
-    pkt[2] = idx & 0xff
-    pkt[3] = (idx >> 8) & 0xff
+    pkt[2] = idx // start index
+    pkt[3] = batch
     const resp = await sendReceive(pkt)
-    if (resp[0] === KC_KEYCHRON_RGB && resp[1] === MIXED_EFFECT_RGB_GET_REGIONS) {
+    if (
+      resp[0] === KC_KEYCHRON_RGB &&
+      resp[1] === MIXED_EFFECT_RGB_GET_REGIONS &&
+      resp[2] === 0 // status
+    ) {
       for (let i = 0; i < batch; i++) {
         regions.push(resp[3 + i])
       }
+    } else {
+      break
     }
     idx += batch
   }
@@ -688,12 +724,13 @@ export async function setKeychronMixedRGBRegions(
 ): Promise<void> {
   let idx = 0
   while (idx < regions.length) {
+    // Max 28 per packet (32 - cmd - subcmd - start - count)
     const batch = Math.min(28, regions.length - idx)
     const pkt = new Uint8Array(MSG_LEN)
     pkt[0] = KC_KEYCHRON_RGB
     pkt[1] = MIXED_EFFECT_RGB_SET_REGIONS
-    pkt[2] = (startIndex + idx) & 0xff
-    pkt[3] = ((startIndex + idx) >> 8) & 0xff
+    pkt[2] = startIndex + idx
+    pkt[3] = batch
     for (let i = 0; i < batch; i++) {
       pkt[4 + i] = regions[idx + i]
     }
@@ -702,50 +739,83 @@ export async function setKeychronMixedRGBRegions(
   }
 }
 
-/** Get Mixed RGB effect list for a region. */
+/**
+ * Get Mixed RGB effect list for a region.
+ * Each effect is 8 bytes: {effect, hue, sat, speed, time(LE32)}.
+ * Max 3 effects per packet (3×8 = 24 bytes).
+ */
 export async function getKeychronMixedRGBEffects(
   regionIndex: number,
   effectsPerLayer: number,
-): Promise<number[]> {
-  const effects: number[] = []
+): Promise<MixedRGBEffect[]> {
+  const effects: MixedRGBEffect[] = []
   let idx = 0
   while (idx < effectsPerLayer) {
+    const batch = Math.min(3, effectsPerLayer - idx)
     const pkt = new Uint8Array(MSG_LEN)
     pkt[0] = KC_KEYCHRON_RGB
     pkt[1] = MIXED_EFFECT_RGB_GET_EFFECT_LIST
     pkt[2] = regionIndex
     pkt[3] = idx
+    pkt[4] = batch
     const resp = await sendReceive(pkt)
-    if (resp[0] === KC_KEYCHRON_RGB && resp[1] === MIXED_EFFECT_RGB_GET_EFFECT_LIST) {
-      const count = resp[2]
-      for (let i = 0; i < count; i++) {
-        effects.push(resp[3 + i])
+    if (
+      resp[0] === KC_KEYCHRON_RGB &&
+      resp[1] === MIXED_EFFECT_RGB_GET_EFFECT_LIST &&
+      resp[2] === 0 // status
+    ) {
+      for (let i = 0; i < batch; i++) {
+        const off = 3 + i * 8
+        effects.push({
+          effect: resp[off],
+          hue: resp[off + 1],
+          sat: resp[off + 2],
+          speed: resp[off + 3],
+          time:
+            resp[off + 4] |
+            (resp[off + 5] << 8) |
+            (resp[off + 6] << 16) |
+            (resp[off + 7] << 24),
+        })
       }
-      idx += count
-      if (count === 0) break
     } else {
       break
     }
+    idx += batch
   }
   return effects
 }
 
-/** Set Mixed RGB effect list for a region. */
+/**
+ * Set Mixed RGB effect list for a region.
+ * Each effect is 8 bytes: {effect, hue, sat, speed, time(LE32)}.
+ */
 export async function setKeychronMixedRGBEffects(
   regionIndex: number,
   startIndex: number,
-  effects: number[],
+  effects: MixedRGBEffect[],
 ): Promise<void> {
   let idx = 0
   while (idx < effects.length) {
-    const batch = Math.min(28, effects.length - idx)
+    // Max 3 per packet
+    const batch = Math.min(3, effects.length - idx)
     const pkt = new Uint8Array(MSG_LEN)
     pkt[0] = KC_KEYCHRON_RGB
     pkt[1] = MIXED_EFFECT_RGB_SET_EFFECT_LIST
     pkt[2] = regionIndex
     pkt[3] = startIndex + idx
+    pkt[4] = batch
     for (let i = 0; i < batch; i++) {
-      pkt[4 + i] = effects[idx + i]
+      const eff = effects[idx + i]
+      const off = 5 + i * 8
+      pkt[off] = eff.effect
+      pkt[off + 1] = eff.hue
+      pkt[off + 2] = eff.sat
+      pkt[off + 3] = eff.speed
+      pkt[off + 4] = eff.time & 0xff
+      pkt[off + 5] = (eff.time >> 8) & 0xff
+      pkt[off + 6] = (eff.time >> 16) & 0xff
+      pkt[off + 7] = (eff.time >> 24) & 0xff
     }
     await sendReceive(pkt)
     idx += batch
@@ -803,6 +873,16 @@ export async function getKeychronAnalogCurve(): Promise<number[]> {
     }
   }
   return curve
+}
+
+/** Set Analog Matrix joystick response curve. */
+export async function setKeychronAnalogCurve(curvePoints: number[]): Promise<boolean> {
+  const packet = cmd(KC_ANALOG_MATRIX, AMC_SET_CURVE)
+  for (let i = 0; i < 8; i++) {
+    packet[i + 2] = curvePoints[i] ?? 0
+  }
+  const resp = await sendReceive(packet)
+  return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_SET_CURVE
 }
 
 /** Get Game Controller Mode for Analog. */
@@ -1266,19 +1346,24 @@ export async function getKeychronAnalogOkmcConfigs(
     // We only strictly need the raw keycodes and events array for the UI right now,
     // but parsing travel is useful if we edit it. The UI can handle the raw `events` array.
     const keycodes: number[] = []
-    const events: number[] = [] // 8 nibbles (4 bytes) per action? Wait, action is okmc_action_t action[4] which is 8 bytes.
+    const events: number[] = []
+
+    const shallowAct = allData[base + 0]
+    const shallowDeact = allData[base + 1]
+    const deepAct = allData[base + 2]
+    const deepDeact = allData[base + 3]
 
     // keycodes: 4 x uint16 LE
     for (let j = 0; j < 4; j++) {
-      keycodes.push(allData[base + 3 + j * 2] | (allData[base + 4 + j * 2] << 8))
+      keycodes.push(allData[base + 4 + j * 2] | (allData[base + 5 + j * 2] << 8))
     }
 
     // actions: 4 x 2 bytes
     for (let j = 0; j < 8; j++) {
-      events.push(allData[base + 11 + j])
+      events.push(allData[base + 12 + j])
     }
 
-    result.push({ keycodes, events })
+    result.push({ shallowAct, shallowDeact, deepAct, deepDeact, keycodes, events })
   }
 
   return result
@@ -1461,6 +1546,10 @@ export async function reloadKeychron(): Promise<KeychronState | null> {
     }
   }
 
+  if (state.hasDefaultLayer) {
+    state.defaultLayer = await getKeychronDefaultLayer()
+  }
+
   if (state.hasWireless) {
     const lpm = await getKeychronWirelessLpm()
     state.wirelessBacklitTime = lpm.backlitTime
@@ -1548,6 +1637,49 @@ export async function reloadKeychronAnalog(
   rows: number,
   cols: number,
 ): Promise<KeychronAnalogState | null> {
+  // Mock data for testing without HE hardware
+  if (process.env.DEBUG_KEYCHRON_ANALOG) {
+    const mockProfiles: AnalogProfile[] = []
+    for (let p = 0; p < 3; p++) {
+      const keyConfigs = new Map<string, AnalogKeyConfig>()
+      for (let r = 0; r < Math.min(rows, 6); r++) {
+        for (let c = 0; c < Math.min(cols, 16); c++) {
+          keyConfigs.set(`${r},${c}`, {
+            mode: 0, // AKM_MODE_NORMAL
+            actuationPoint: 20, // 2.0mm
+            sensitivity: 5, // 0.5mm
+            releaseSensitivity: 5,
+          })
+        }
+      }
+      const socdPairs: SOCDPair[] = [
+        { type: 1, key1Row: 2, key1Col: 1, key2Row: 2, key2Col: 3 }, // A and D
+        { type: 2, key1Row: 1, key1Col: 2, key2Row: 3, key2Col: 2 }, // W and S
+      ]
+      const okmcConfigs: OKMCSlotConfig[] = Array.from({ length: 4 }, () => ({
+        keycodes: [0, 0, 0, 0],
+        events: [0, 0, 0, 0],
+      }))
+      mockProfiles.push({
+        name: `Profile ${p + 1}`,
+        keyConfigs,
+        socdPairs,
+        okmcConfigs,
+      })
+    }
+    return {
+      version: 1,
+      profileCount: 3,
+      currentProfile: 0,
+      profileSize: 512,
+      okmcCount: 4,
+      socdCount: 8,
+      profiles: mockProfiles,
+      curve: [0, 25, 50, 75, 100],
+      gameControllerMode: 0,
+    }
+  }
+
   const version = await getKeychronAnalogVersion()
   if (version < 0) return null
 
@@ -1606,4 +1738,71 @@ export async function reloadKeychronAnalog(
   }
 
   return analog
+}
+
+// =====================================================================
+// Keychron Bootloader Jump (proprietary protocol)
+// =====================================================================
+
+/**
+ * Keychron-proprietary bootloader jump using KC_MISC_CMD_GROUP + BOOTLOADER_JUMP (0x15).
+ *
+ * Reverse-engineered from the Keychron Launcher source.
+ * The keyboard implements a state machine:
+ *   BL_IDLE(0) → BL_WAITING(1) → BL_HOLDING(2) → BL_AWAIT_CONFIRM(3) → BL_CONFIRMED(4)
+ *
+ * The host sends [0xA7, 0x15], then polls the response. When the keyboard reaches
+ * BL_AWAIT_CONFIRM, the host sends [0xA7, 0x15] again to confirm the jump.
+ * The keyboard then reboots into the DFU bootloader.
+ *
+ * @param onState - Optional callback that receives each state update for UI feedback
+ * @param timeoutMs - Maximum time to wait for BL_CONFIRMED (default 60s)
+ * @returns The final bootloader state
+ */
+export async function keychronJumpBootloader(
+  onState?: (state: number) => void,
+  timeoutMs = 60_000,
+): Promise<number> {
+  const pkt = new Uint8Array(MSG_LEN)
+  pkt[0] = KC_MISC_CMD_GROUP
+  pkt[1] = BOOTLOADER_JUMP
+
+  // Initial request — kicks off the state machine
+  const firstResp = await sendReceive(pkt)
+  const firstState = firstResp[3]
+  onState?.(firstState)
+
+  // If keyboard immediately confirmed (unlikely but handle it)
+  if (firstState === BL_CONFIRMED) return BL_CONFIRMED
+  if (firstState === BL_TIMEOUT || firstState === BL_EXCEEDED) return firstState
+
+  // Poll the state machine until confirmed, timed out, or exceeded
+  const deadline = Date.now() + timeoutMs
+  const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+  while (Date.now() < deadline) {
+    await delay(200)
+
+    const resp = await sendReceive(pkt)
+    const state = resp[3]
+    onState?.(state)
+
+    if (state === BL_AWAIT_CONFIRM) {
+      // Confirm the jump — send the same packet again
+      // After this the keyboard reboots and the HID connection drops.
+      // Use a try/catch because the device will disconnect mid-response.
+      try {
+        await sendReceive(pkt)
+      } catch {
+        // Expected — device disconnected during reboot
+      }
+      return BL_CONFIRMED
+    }
+
+    if (state === BL_CONFIRMED) return BL_CONFIRMED
+    if (state === BL_TIMEOUT) return BL_TIMEOUT
+    if (state === BL_EXCEEDED) return BL_EXCEEDED
+  }
+
+  return BL_TIMEOUT
 }

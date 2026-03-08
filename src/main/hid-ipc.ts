@@ -16,8 +16,8 @@ export function setupHidIpc(): void {
 
   secureHandle(
     IpcChannels.HID_OPEN_DEVICE,
-    (_event, vendorId: number, productId: number) =>
-      hidService.openHidDevice(vendorId, productId),
+    (_event, vendorId: number, productId: number, serialNumber?: string) =>
+      hidService.openHidDevice(vendorId, productId, serialNumber),
   )
 
   secureHandle(IpcChannels.HID_CLOSE_DEVICE, () => hidService.closeHidDevice())

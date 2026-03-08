@@ -88,9 +88,9 @@ interface HubOrphanButtonsProps {
   hubMyPosts?: HubMyPost[]
   hubUploading?: string | null
   fileDisabled?: boolean
-  onUploadToHub?: (entryId: string) => void
-  onReuploadToHub?: (entryId: string, orphanedPostId: string) => void
-  onDeleteOrphanedHubPost?: (entryId: string, orphanedPostId: string) => void
+  onUploadToHub?: (type: string, entryId: string) => void
+  onReuploadToHub?: (type: string, entryId: string, orphanedPostId: string) => void
+  onDeleteOrphanedHubPost?: (type: string, entryId: string, orphanedPostId: string) => void
 }
 
 function HubOrphanButtons({
@@ -114,7 +114,7 @@ function HubOrphanButtons({
           <button
             type="button"
             className={HUB_BTN}
-            onClick={() => onReuploadToHub(entry.id, orphanPost.id)}
+            onClick={() => onReuploadToHub('layout', entry.id, orphanPost.id)}
             disabled={disabled}
             data-testid="layout-store-reupload-hub"
           >
@@ -125,7 +125,7 @@ function HubOrphanButtons({
           <button
             type="button"
             className={HUB_BTN}
-            onClick={() => onDeleteOrphanedHubPost(entry.id, orphanPost.id)}
+            onClick={() => onDeleteOrphanedHubPost('layout', entry.id, orphanPost.id)}
             disabled={disabled}
             data-testid="layout-store-delete-orphan-hub"
           >
@@ -142,7 +142,7 @@ function HubOrphanButtons({
     <button
       type="button"
       className={HUB_BTN}
-      onClick={() => onUploadToHub(entry.id)}
+      onClick={() => onUploadToHub('layout', entry.id)}
       disabled={disabled}
       data-testid="layout-store-upload-hub"
     >
@@ -218,11 +218,11 @@ export interface LayoutStoreContentProps {
   onExportEntryKeymapC?: (entryId: string) => void
   onExportEntryPdf?: (entryId: string) => void
   onOverwriteSave?: (overwriteEntryId: string, label: string) => void
-  onUploadToHub?: (entryId: string) => void
-  onUpdateOnHub?: (entryId: string) => void
-  onRemoveFromHub?: (entryId: string) => void
-  onReuploadToHub?: (entryId: string, orphanedPostId: string) => void
-  onDeleteOrphanedHubPost?: (entryId: string, orphanedPostId: string) => void
+  onUploadToHub?: (type: string, entryId: string) => void
+  onUpdateOnHub?: (type: string, entryId: string) => void
+  onRemoveFromHub?: (type: string, entryId: string) => void
+  onReuploadToHub?: (type: string, entryId: string, orphanedPostId: string) => void
+  onDeleteOrphanedHubPost?: (type: string, entryId: string, orphanedPostId: string) => void
   keyboardName: string
   hubOrigin?: string
   hubMyPosts?: HubMyPost[]
@@ -595,7 +595,7 @@ export function LayoutStoreContent({
                               <button
                                 type="button"
                                 className={CONFIRM_DELETE_BTN}
-                                onClick={() => { onRemoveFromHub?.(entry.id); setConfirmHubRemoveId(null) }}
+                                onClick={() => { onRemoveFromHub?.('layout', entry.id); setConfirmHubRemoveId(null) }}
                                 data-testid="layout-store-hub-remove-confirm"
                               >
                                 {t('hub.confirmRemove')}
@@ -616,7 +616,7 @@ export function LayoutStoreContent({
                                 <button
                                   type="button"
                                   className={HUB_BTN}
-                                  onClick={() => onUpdateOnHub(entry.id)}
+                                  onClick={() => onUpdateOnHub('layout', entry.id)}
                                   disabled={!!hubUploading || fileDisabled}
                                   data-testid="layout-store-update-hub"
                                 >

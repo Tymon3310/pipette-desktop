@@ -903,7 +903,7 @@ describe('LayoutStoreModal', () => {
       const btns = screen.getAllByTestId('layout-store-upload-hub')
       fireEvent.click(btns[0])
 
-      expect(onUploadToHub).toHaveBeenCalledWith('entry-1')
+      expect(onUploadToHub).toHaveBeenCalledWith('layout', 'entry-1')
     })
 
     it('shows Update and Remove buttons when entry has hubPostId', () => {
@@ -939,7 +939,7 @@ describe('LayoutStoreModal', () => {
       )
 
       fireEvent.click(screen.getByTestId('layout-store-update-hub'))
-      expect(onUpdateOnHub).toHaveBeenCalledWith('entry-1')
+      expect(onUpdateOnHub).toHaveBeenCalledWith('layout', 'entry-1')
     })
 
     it('shows inline confirmation for Remove', () => {
@@ -981,7 +981,7 @@ describe('LayoutStoreModal', () => {
       fireEvent.click(screen.getByTestId('layout-store-remove-hub'))
       fireEvent.click(screen.getByTestId('layout-store-hub-remove-confirm'))
 
-      expect(onRemoveFromHub).toHaveBeenCalledWith('entry-1')
+      expect(onRemoveFromHub).toHaveBeenCalledWith('layout', 'entry-1')
     })
 
     it('cancels Remove confirmation', () => {
@@ -1246,7 +1246,7 @@ describe('LayoutStoreModal', () => {
 
       fireEvent.click(screen.getByTestId('layout-store-reupload-hub'))
 
-      expect(onReuploadToHub).toHaveBeenCalledWith('entry-1', 'orphan-post-1')
+      expect(onReuploadToHub).toHaveBeenCalledWith('layout', 'entry-1', 'orphan-post-1')
     })
 
     it('calls onDeleteOrphanedHubPost with entryId and orphanedPostId when Delete clicked', () => {
@@ -1263,7 +1263,7 @@ describe('LayoutStoreModal', () => {
 
       fireEvent.click(screen.getByTestId('layout-store-delete-orphan-hub'))
 
-      expect(onDeleteOrphanedHubPost).toHaveBeenCalledWith('entry-1', 'orphan-post-1')
+      expect(onDeleteOrphanedHubPost).toHaveBeenCalledWith('layout', 'entry-1', 'orphan-post-1')
     })
 
     it('does not match orphan post from different keyboard', () => {
@@ -1315,6 +1315,7 @@ describe('LayoutStoreModal', () => {
           onRename={vi.fn()}
           onDelete={vi.fn()}
           hubNeedsDisplayName
+          keyboardName="TestBoard"
         />,
       )
 
@@ -1331,6 +1332,7 @@ describe('LayoutStoreModal', () => {
           onLoad={vi.fn()}
           onRename={vi.fn()}
           onDelete={vi.fn()}
+          keyboardName="TestBoard"
         />,
       )
 
@@ -1347,6 +1349,7 @@ describe('LayoutStoreModal', () => {
           onDelete={vi.fn()}
           hubNeedsDisplayName
           onUploadToHub={vi.fn()}
+          keyboardName="TestBoard"
         />,
       )
 
@@ -1364,6 +1367,7 @@ describe('LayoutStoreModal', () => {
           hubKeyboardPosts={HUB_POSTS}
           onRemoveFromHub={vi.fn()}
           hubNeedsDisplayName
+          keyboardName="TestBoard"
         />,
       )
 
@@ -1384,6 +1388,7 @@ describe('LayoutStoreModal', () => {
           hubKeyboardPosts={HUB_POSTS}
           onUpdateOnHub={vi.fn()}
           onRemoveFromHub={vi.fn()}
+          keyboardName="TestBoard"
         />,
       )
 

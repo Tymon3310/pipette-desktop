@@ -135,4 +135,5 @@ export interface VilFile {
   altRepeatKey: AltRepeatKeyEntry[]
   qmkSettings: Record<string, number[]>
   layerNames?: string[]
+  keychron?: Record<string, unknown>
 }
