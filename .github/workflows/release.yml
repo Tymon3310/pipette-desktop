@@ -61,6 +61,7 @@ jobs:
       - run: pnpm exec electron-vite build
 
       - name: Build Electron app
+        shell: bash
         run: |
           if [ -n "${{ secrets.CSC_LINK }}" ]; then
             export CSC_LINK="${{ secrets.CSC_LINK }}"
