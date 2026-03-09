@@ -28,7 +28,7 @@ import {
 } from '../../shared/constants/protocol'
 import { mapToRecord, recordToMap } from '../../shared/vil-file'
 import { vilToVialGuiJson } from '../../shared/vil-compat'
-import { splitMacroBuffer, deserializeMacro, serializeMacro, macroActionsToJson, jsonToMacroActions, type MacroAction } from '../../preload/macro'
+import { splitMacroBuffer, deserializeMacro, macroActionsToJson, jsonToMacroActions, type MacroAction } from '../../preload/macro'
 import { recreateKeyboardKeycodes } from '../../shared/keycodes/keycodes'
 import { serializeKeychronState, restoreKeychronSettings } from '../../shared/keychron-serialize'
 import { parseKle } from '../../shared/kle/kle-parser'

@@ -11,7 +11,7 @@
  */
 
 import { ipcRenderer } from 'electron'
-import { sendReceive, send } from './hid-transport.js'
+import { sendReceive } from './hid-transport.js'
 import { IpcChannels } from '../shared/ipc/channels.js'
 import {
   MSG_LEN,

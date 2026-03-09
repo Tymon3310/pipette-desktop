@@ -25,8 +25,8 @@ export function setupKeychronDfuIpc(): void {
     const firmwarePath = path.join(tempDir, `keychron_firmware_${Date.now()}.bin`)
     try {
       await fs.writeFile(firmwarePath, Buffer.from(firmwareData as ArrayBuffer))
-    } catch (err: any) {
-      return { success: false, error: `Failed to write temp firmware file: ${err.message}` }
+    } catch (err: unknown) {
+      return { success: false, error: `Failed to write temp firmware file: ${(err as Error).message}` }
     }
 
     return new Promise((resolve) => {
@@ -34,7 +34,7 @@ export function setupKeychronDfuIpc(): void {
       log('info', `Waiting for DFU device to flash temporary file...`)
       event.sender.send(IpcChannels.KEYCHRON_DFU_OUTPUT, { log: 'Waiting for DFU device (up to 60s)...', progress: 0 })
 
-      let dfuFound = false
+
       const timeout = Date.now() + 60000
 
       const checkDfuDevice = () => {
@@ -52,7 +52,6 @@ export function setupKeychronDfuIpc(): void {
         
         ls.on('close', (code) => {
           if (code === 0 && output.includes('Found DFU')) {
-            dfuFound = true
             startFlashing()
           } else {
             // Check again in 1 second

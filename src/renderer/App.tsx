@@ -24,7 +24,7 @@ import { AltRepeatKeyPanelModal } from './components/editors/AltRepeatKeyPanelMo
 import { KeyOverridePanelModal } from './components/editors/KeyOverridePanelModal'
 import { RGBConfigurator } from './components/editors/RGBConfigurator'
 import { UnlockDialog } from './components/editors/UnlockDialog'
-import { QmkSettings } from './components/editors/QmkSettings'
+
 import { KeychronSettings } from './components/editors/KeychronSettings'
 import { KeychronRGB } from './components/editors/KeychronRGB'
 import { KeychronDfuFlasher } from './components/editors/KeychronDfuFlasher'
@@ -321,7 +321,6 @@ export function App() {
   const [keychronAnalogData, setKeychronAnalogData] = useState<import('../shared/types/keychron').KeychronAnalogState | null>(
     keyboard.keychron?.analog ?? null
   )
-  const [showQmkSettingsModal, setShowQmkSettingsModal] = useState<number | null>(null)
 
   const keychronSupported = !device.isDummy && keyboard.keychron != null
 

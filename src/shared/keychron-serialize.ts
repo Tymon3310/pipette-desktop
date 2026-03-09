@@ -7,7 +7,7 @@
  * All keys use snake_case to match vial-gui's Python naming convention.
  */
 
-import type { KeychronState, KeychronRGBState } from '../shared/types/keychron'
+import type { KeychronState } from '../shared/types/keychron'
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                            */
