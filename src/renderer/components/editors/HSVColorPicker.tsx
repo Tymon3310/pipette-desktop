@@ -52,11 +52,7 @@ export function hsvToRgb(h: number, s: number, v: number): [number, number, numb
   } else {
     ;[r1, g1, b1] = [c, 0, x]
   }
-  return [
-    Math.round((r1 + m) * 255),
-    Math.round((g1 + m) * 255),
-    Math.round((b1 + m) * 255),
-  ]
+  return [Math.round((r1 + m) * 255), Math.round((g1 + m) * 255), Math.round((b1 + m) * 255)]
 }
 
 export function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
@@ -73,11 +69,7 @@ export function rgbToHsv(r: number, g: number, b: number): [number, number, numb
   else hDeg = 60 * ((rN - gN) / delta + 4)
   if (hDeg < 0) hDeg += 360
   const s = cmax === 0 ? 0 : delta / cmax
-  return [
-    Math.round((hDeg / 360) * 255),
-    Math.round(s * 255),
-    Math.round(cmax * 255),
-  ]
+  return [Math.round((hDeg / 360) * 255), Math.round(s * 255), Math.round(cmax * 255)]
 }
 
 export function rgbToHex(r: number, g: number, b: number): string {
@@ -109,9 +101,7 @@ const PALETTE: ReadonlyArray<PaletteEntry> = (() => {
   }
 
   function makeRow(s: number, v: number): PaletteEntry[] {
-    return Array.from({ length: COLS }, (_, col) =>
-      makeEntry(Math.round(col * HUE_STEP), s, v),
-    )
+    return Array.from({ length: COLS }, (_, col) => makeEntry(Math.round(col * HUE_STEP), s, v))
   }
 
   const chromaticRows: ReadonlyArray<{ s: number; v: number }> = [
@@ -282,10 +272,7 @@ export function HSVColorPicker({
       {mode === 'palette' ? (
         <>
           {/* 10x10 Palette grid */}
-          <div
-            data-testid="palette-grid"
-            className="grid grid-cols-[repeat(10,1.5rem)] gap-0"
-          >
+          <div data-testid="palette-grid" className="grid grid-cols-[repeat(10,1.5rem)] gap-0">
             {PALETTE.map((entry, i) => {
               const selected = i === nearestIdx
               return (

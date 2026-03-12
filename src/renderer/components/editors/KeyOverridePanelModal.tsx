@@ -66,7 +66,6 @@ const optionEntries = Object.entries(KeyOverrideOptions).filter(
   (pair): pair is [string, number] => typeof pair[1] === 'number',
 )
 
-
 const KO_FIELDS = [
   { key: 'triggerKey', prefix: 'TK' },
   { key: 'replacementKey', prefix: 'RK' },
@@ -115,7 +114,10 @@ export function KeyOverridePanelModal({
   const [selectedIndex, setSelectedIndex] = useState<number | null>(initialIndex ?? null)
   const [editedEntry, setEditedEntry] = useState<KeyOverrideEntry | null>(null)
   const [selectedField, setSelectedField] = useState<KeycodeFieldName | null>(null)
-  const [popoverState, setPopoverState] = useState<{ field: KeycodeFieldName; anchorRect: DOMRect } | null>(null)
+  const [popoverState, setPopoverState] = useState<{
+    field: KeycodeFieldName
+    anchorRect: DOMRect
+  } | null>(null)
   const preEditValueRef = useRef<number>(0)
 
   const favStore = useFavoriteStore({
@@ -124,23 +126,36 @@ export function KeyOverridePanelModal({
     apply: (data) => setEditedEntry(data as KeyOverrideEntry),
   })
 
-  const clearAction = useConfirmAction(useCallback(() => {
-    setEditedEntry((prev) => prev ? {
-      triggerKey: 0, replacementKey: 0, layers: 0xffff,
-      triggerMods: 0, negativeMods: 0, suppressedMods: 0,
-      options: 0, enabled: false,
-    } : prev)
-    setSelectedField(null)
-    setPopoverState(null)
-  }, []))
+  const clearAction = useConfirmAction(
+    useCallback(() => {
+      setEditedEntry((prev) =>
+        prev
+          ? {
+              triggerKey: 0,
+              replacementKey: 0,
+              layers: 0xffff,
+              triggerMods: 0,
+              negativeMods: 0,
+              suppressedMods: 0,
+              options: 0,
+              enabled: false,
+            }
+          : prev,
+      )
+      setSelectedField(null)
+      setPopoverState(null)
+    }, []),
+  )
 
-  const revertAction = useConfirmAction(useCallback(() => {
-    if (selectedIndex === null || !entries[selectedIndex]) return
-    clearPending()
-    setEditedEntry(entries[selectedIndex])
-    setSelectedField(null)
-    setPopoverState(null)
-  }, [selectedIndex, entries, clearPending]))
+  const revertAction = useConfirmAction(
+    useCallback(() => {
+      if (selectedIndex === null || !entries[selectedIndex]) return
+      clearPending()
+      setEditedEntry(entries[selectedIndex])
+      setSelectedField(null)
+      setPopoverState(null)
+    }, [selectedIndex, entries, clearPending]),
+  )
 
   useEffect(() => {
     setSelectedField(null)
@@ -186,9 +201,14 @@ export function KeyOverridePanelModal({
     })
   }, [])
 
-  const updateField = useCallback((field: KeycodeFieldName, code: number) => {
-    updateEntry(field, code)
-  }, [updateEntry])
+  const updateField = useCallback(
+    (field: KeycodeFieldName, code: number) => {
+      updateEntry(field, code)
+      setPopoverState(null)
+      setSelectedField(null)
+    },
+    [updateEntry],
+  )
 
   const maskedSelection = useMaskedKeycodeSelection({
     onUpdate(code: number) {
@@ -204,7 +224,11 @@ export function KeyOverridePanelModal({
     quickSelect,
   })
 
-  const tabContentOverride = useTileContentOverride(tapDanceEntries, deserializedMacros, maskedSelection.handleKeycodeSelect)
+  const tabContentOverride = useTileContentOverride(
+    tapDanceEntries,
+    deserializedMacros,
+    maskedSelection.handleKeycodeSelect,
+  )
 
   const handleFieldDoubleClick = useCallback(
     (field: KeycodeFieldName, rect: DOMRect) => {
@@ -238,11 +262,11 @@ export function KeyOverridePanelModal({
   )
 
   const handleToggleEnabled = useCallback(() => {
-    setEditedEntry((prev) => prev ? { ...prev, enabled: !prev.enabled } : prev)
+    setEditedEntry((prev) => (prev ? { ...prev, enabled: !prev.enabled } : prev))
   }, [])
 
   const handleToggleOption = useCallback((flag: number) => {
-    setEditedEntry((prev) => prev ? { ...prev, options: prev.options ^ flag } : prev)
+    setEditedEntry((prev) => (prev ? { ...prev, options: prev.options ^ flag } : prev))
   }, [])
 
   const canEnable = editedEntry !== null && isConfigured(editedEntry)
@@ -282,12 +306,18 @@ export function KeyOverridePanelModal({
                   className={`relative flex min-h-0 flex-col items-start rounded-md border p-1.5 pl-2 text-[11px] leading-tight transition-colors ${tileStyle(configured, entry.enabled)}`}
                   onClick={() => setSelectedIndex(i)}
                 >
-                  <span className="absolute top-1 left-1.5 text-[10px] text-content-secondary/60">{i}</span>
+                  <span className="absolute top-1 left-1.5 text-[10px] text-content-secondary/60">
+                    {i}
+                  </span>
                   {configured ? (
                     <span className="mt-3 inline-grid grid-cols-[auto_1fr] gap-x-1 gap-y-0.5 overflow-hidden">
                       {KO_FIELDS.map(({ key, prefix }) => {
                         let label = ''
-                        if (key === 'triggerKey' && entry.triggerKey === 0 && entry.triggerMods !== 0) {
+                        if (
+                          key === 'triggerKey' &&
+                          entry.triggerKey === 0 &&
+                          entry.triggerMods !== 0
+                        ) {
                           label = t('editor.keyOverride.modsOnly')
                         } else if (entry[key] !== 0) {
                           label = codeToLabel(entry[key])
@@ -344,8 +374,15 @@ export function KeyOverridePanelModal({
                         <KeycodeField
                           value={editedEntry[key]}
                           selected={selectedField === key}
-                          selectedMaskPart={selectedField === key && maskedSelection.editingPart === 'inner'}
-                          onSelect={() => { if (!selectedField) { preEditValueRef.current = editedEntry[key]; setSelectedField(key) } }}
+                          selectedMaskPart={
+                            selectedField === key && maskedSelection.editingPart === 'inner'
+                          }
+                          onSelect={() => {
+                            if (!selectedField) {
+                              preEditValueRef.current = editedEntry[key]
+                              setSelectedField(key)
+                            }
+                          }}
                           onMaskPartClick={(part) => {
                             if (selectedField === key) {
                               maskedSelection.setEditingPart(part)
@@ -355,7 +392,9 @@ export function KeyOverridePanelModal({
                               setSelectedField(key)
                             }
                           }}
-                          onDoubleClick={selectedField ? (rect) => handleFieldDoubleClick(key, rect) : undefined}
+                          onDoubleClick={
+                            selectedField ? (rect) => handleFieldDoubleClick(key, rect) : undefined
+                          }
                           label={t(labelKey)}
                         />
                         {selectedField === key && !popoverState && !quickSelect && editedEntry[key] !== preEditValueRef.current && (
@@ -379,7 +418,9 @@ export function KeyOverridePanelModal({
                       basicViewType={basicViewType}
                       onClose={() => {
                         if (selectedField) {
-                          setEditedEntry((prev) => prev ? { ...prev, [selectedField]: preEditValueRef.current } : prev)
+                          setEditedEntry((prev) =>
+                            prev ? { ...prev, [selectedField]: preEditValueRef.current } : prev,
+                          )
                         }
                         maskedSelection.clearMask()
                         setSelectedField(null)
@@ -457,7 +498,10 @@ export function KeyOverridePanelModal({
                   <ConfirmButton
                     testId="ko-modal-clear"
                     confirming={clearAction.confirming}
-                    onClick={() => { revertAction.reset(); clearAction.trigger() }}
+                    onClick={() => {
+                      revertAction.reset()
+                      clearAction.trigger()
+                    }}
                     labelKey="common.clear"
                     confirmLabelKey="common.confirmClear"
                     className="rounded-lg border px-4 py-2 text-[13px] font-semibold"
@@ -465,7 +509,10 @@ export function KeyOverridePanelModal({
                   <ConfirmButton
                     testId="ko-modal-revert"
                     confirming={revertAction.confirming}
-                    onClick={() => { clearAction.reset(); revertAction.trigger() }}
+                    onClick={() => {
+                      clearAction.reset()
+                      revertAction.trigger()
+                    }}
                     labelKey="common.revert"
                     confirmLabelKey="common.confirmRevert"
                     className="rounded-lg border px-4 py-2 text-[13px] font-semibold"
@@ -531,7 +578,9 @@ export function KeyOverridePanelModal({
         onClick={(e) => e.stopPropagation()}
       >
         {!selectedField && (
-          <div className={`flex items-center justify-between shrink-0 ${hasEntries ? 'px-6 pt-6 pb-4' : 'mb-4'}`}>
+          <div
+            className={`flex items-center justify-between shrink-0 ${hasEntries ? 'px-6 pt-6 pb-4' : 'mb-4'}`}
+          >
             <h3 className="text-lg font-semibold">{headerTitle}</h3>
             <ModalCloseButton testid="ko-modal-close" onClick={handleClose} />
           </div>

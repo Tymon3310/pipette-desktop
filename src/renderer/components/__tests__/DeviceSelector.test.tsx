@@ -87,7 +87,14 @@ describe('DeviceSelector', () => {
   })
 
   it('disables all buttons when connecting', () => {
-    render(<DeviceSelector {...defaultProps} devices={[mockDevice]} connecting={true} onOpenSettings={vi.fn()} />)
+    render(
+      <DeviceSelector
+        {...defaultProps}
+        devices={[mockDevice]}
+        connecting={true}
+        onOpenSettings={vi.fn()}
+      />,
+    )
     const buttons = screen.getAllByRole('button')
     for (const button of buttons) {
       expect(button).toBeDisabled()
@@ -164,7 +171,15 @@ describe('DeviceSelector', () => {
   })
 
   it('disables data button when connecting', () => {
-    render(<DeviceSelector {...defaultProps} devices={[mockDevice]} connecting={true} onOpenData={vi.fn()} onOpenSettings={vi.fn()} />)
+    render(
+      <DeviceSelector
+        {...defaultProps}
+        devices={[mockDevice]}
+        connecting={true}
+        onOpenData={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    )
     expect(screen.getByTestId('data-button')).toBeDisabled()
     expect(screen.getByTestId('settings-button')).toBeDisabled()
   })

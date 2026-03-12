@@ -115,5 +115,4 @@ describe('HSVColorPicker', () => {
       expect(s).toBe(0)
     }
   })
-
 })

@@ -91,10 +91,7 @@ describe('KLE Parser', () => {
     })
 
     it('resets x to rx at end of row', () => {
-      const result = parseKle([
-        [{ r: 10, rx: 2, ry: 1 }, '0,0', '0,1'],
-        ['1,0'],
-      ])
+      const result = parseKle([[{ r: 10, rx: 2, ry: 1 }, '0,0', '0,1'], ['1,0']])
       // After first row, x should reset to rx=2
       expect(result.keys[2].x).toBe(2)
       // y should be incremented from cluster

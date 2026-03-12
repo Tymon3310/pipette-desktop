@@ -2,7 +2,11 @@
 
 import { useTranslation } from 'react-i18next'
 import { ModalCloseButton } from './ModalCloseButton'
-import { FavoriteStoreContent, TYPE_LABEL_KEYS, type FavoriteStoreContentProps } from './FavoriteStoreContent'
+import {
+  FavoriteStoreContent,
+  TYPE_LABEL_KEYS,
+  type FavoriteStoreContentProps,
+} from './FavoriteStoreContent'
 import type { FavoriteType } from '../../../shared/types/favorite-store'
 
 interface Props extends FavoriteStoreContentProps {
@@ -10,11 +14,7 @@ interface Props extends FavoriteStoreContentProps {
   onClose: () => void
 }
 
-export function FavoriteStoreModal({
-  favoriteType,
-  onClose,
-  ...contentProps
-}: Props) {
+export function FavoriteStoreModal({ favoriteType, onClose, ...contentProps }: Props) {
   const { t } = useTranslation()
 
   return (

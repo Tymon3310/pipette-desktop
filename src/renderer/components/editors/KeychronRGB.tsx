@@ -6,10 +6,7 @@ import type { KeychronRGBState, MixedRGBEffect } from '../../../shared/types/key
 import { HSVColorPicker } from './HSVColorPicker'
 import { KeyboardWidget } from '../keyboard/KeyboardWidget'
 import type { KleKey } from '../../../shared/kle/types'
-import {
-  PER_KEY_RGB_TYPE_NAMES,
-  PER_KEY_RGB_SOLID,
-} from '../../../shared/constants/keychron'
+import { PER_KEY_RGB_TYPE_NAMES, PER_KEY_RGB_SOLID } from '../../../shared/constants/keychron'
 import { VIALRGB_EFFECTS } from '../../../shared/constants/lighting'
 
 // Keychron custom VialRGB effect IDs
@@ -18,14 +15,14 @@ const EFFECT_MIXED_RGB = 49
 
 // Distinct zone colors (saturated, evenly spaced hues)
 const ZONE_COLORS = [
-  'hsl(210, 80%, 55%)',  // blue
-  'hsl(0, 80%, 55%)',    // red
-  'hsl(120, 70%, 45%)',  // green
-  'hsl(45, 90%, 50%)',   // amber
-  'hsl(280, 70%, 55%)',  // purple
-  'hsl(180, 70%, 45%)',  // teal
-  'hsl(330, 75%, 55%)',  // pink
-  'hsl(60, 85%, 42%)',   // yellow-green
+  'hsl(210, 80%, 55%)', // blue
+  'hsl(0, 80%, 55%)', // red
+  'hsl(120, 70%, 45%)', // green
+  'hsl(45, 90%, 50%)', // amber
+  'hsl(280, 70%, 55%)', // purple
+  'hsl(180, 70%, 45%)', // teal
+  'hsl(330, 75%, 55%)', // pink
+  'hsl(60, 85%, 42%)', // yellow-green
 ]
 
 /** Convert QMK-style HSV (0-255 each) to a CSS hsl() string. */
@@ -171,7 +168,7 @@ export function KeychronRGB({
 
   // Local state for immediate per-key preview updates
   const [localPerKeyColors, setLocalPerKeyColors] = useState<[number, number, number][]>(
-    rgb.perKeyColors ?? []
+    rgb.perKeyColors ?? [],
   )
 
   useEffect(() => {
@@ -191,7 +188,7 @@ export function KeychronRGB({
   const perKeyColorMap = useMemo(() => {
     const m = new Map<string, string>()
     if (localPerKeyColors.length === 0) return m
-    
+
     for (const [pos, ledIdx] of ledMatrix.entries()) {
       if (ledIdx < localPerKeyColors.length) {
         const [h, s, v] = localPerKeyColors[ledIdx]
@@ -221,9 +218,7 @@ export function KeychronRGB({
   const [mixedRegionEffectTab, setMixedRegionEffectTab] = useState<number>(0)
 
   // Create local map for UI updates: Region -> MixedRGBEffect[]
-  const [localMixedEffects, setLocalMixedEffects] = useState<
-    Map<number, MixedRGBEffect[]>
-  >(() => {
+  const [localMixedEffects, setLocalMixedEffects] = useState<Map<number, MixedRGBEffect[]>>(() => {
     const m = new Map<number, MixedRGBEffect[]>()
     if (rgb.mixedRGBEffects) {
       for (const [regionIdx, effects] of rgb.mixedRGBEffects.entries()) {
@@ -233,11 +228,14 @@ export function KeychronRGB({
     return m
   })
 
-  const sendMixedEffects = useCallback(async (regionIdx: number, slots: MixedRGBEffect[]) => {
-    if (!api.keychronSetMixedRGBEffects) return
-    await api.keychronSetMixedRGBEffects(regionIdx, 0, slots)
-    scheduleSave()
-  }, [api, scheduleSave])
+  const sendMixedEffects = useCallback(
+    async (regionIdx: number, slots: MixedRGBEffect[]) => {
+      if (!api.keychronSetMixedRGBEffects) return
+      await api.keychronSetMixedRGBEffects(regionIdx, 0, slots)
+      scheduleSave()
+    },
+    [api, scheduleSave],
+  )
 
   const handleMixedKeyClick = useCallback(
     (key: KleKey, _maskClicked: boolean, event?: { ctrlKey: boolean; shiftKey: boolean }) => {
@@ -347,7 +345,8 @@ export function KeychronRGB({
 
   const emptyKeycodes = useRef(new Map<string, string>()).current
 
-  const btnClass = 'rounded-md border border-edge bg-surface px-3 py-1.5 text-sm hover:bg-surface-hover transition-colors'
+  const btnClass =
+    'rounded-md border border-edge bg-surface px-3 py-1.5 text-sm hover:bg-surface-hover transition-colors'
   const disabledClass = 'pointer-events-none opacity-40'
 
   return (
@@ -372,7 +371,9 @@ export function KeychronRGB({
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-sm text-content-muted">{t('keychron.brightness', 'Brightness:')}</label>
+              <label className="text-sm text-content-muted">
+                {t('keychron.brightness', 'Brightness:')}
+              </label>
               <input
                 type="range"
                 min={0}
@@ -464,7 +465,10 @@ export function KeychronRGB({
       <Section title={t('keychron.perKeyRgb', 'Per-Key RGB')}>
         {!isPerKeyActive && (
           <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
-            {t('keychron.perKeyNotActive', 'Per-Key RGB is not the active effect. Select "Per-Key RGB" in the Global RGB Mode dropdown above to edit key colors.')}
+            {t(
+              'keychron.perKeyNotActive',
+              'Per-Key RGB is not the active effect. Select "Per-Key RGB" in the Global RGB Mode dropdown above to edit key colors.',
+            )}
           </div>
         )}
         <div className={`flex flex-col gap-4 ${!isPerKeyActive ? disabledClass : ''}`}>
@@ -492,9 +496,14 @@ export function KeychronRGB({
 
           <div className="flex flex-col gap-6 mt-4 sm:flex-row">
             <div className="flex-1 rounded-lg border border-edge p-4 bg-surface-alt">
-              <span className="mb-3 block text-sm font-medium text-content">{t('keychron.perKeyEffectType', 'Effect Type')}</span>
+              <span className="mb-3 block text-sm font-medium text-content">
+                {t('keychron.perKeyEffectType', 'Effect Type')}
+              </span>
               <p className="text-xs text-content-muted mb-3 flex-1">
-                {t('keychron.perKeyEffectDescription', 'Choose the animation effect that plays on top of your custom per-key colors.')}
+                {t(
+                  'keychron.perKeyEffectDescription',
+                  'Choose the animation effect that plays on top of your custom per-key colors.',
+                )}
               </p>
               <div className="flex flex-col gap-2">
                 <select
@@ -540,16 +549,24 @@ export function KeychronRGB({
         <Section title={t('keychron.mixedRgb', 'Mixed RGB')}>
           {!isMixedActive && (
             <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-warning">
-              {t('keychron.mixedNotActive', 'Mixed RGB is not the active effect. Select "Mixed RGB" in the Global RGB Mode dropdown above to edit zones.')}
+              {t(
+                'keychron.mixedNotActive',
+                'Mixed RGB is not the active effect. Select "Mixed RGB" in the Global RGB Mode dropdown above to edit zones.',
+              )}
             </div>
           )}
           <div className={`flex flex-col gap-4 ${!isMixedActive ? disabledClass : ''}`}>
             <p className="text-sm text-content-muted">
-              {t('keychron.mixedRgbDescription', 'Divide your keyboard into regions, each with its own effect playlist.')}
+              {t(
+                'keychron.mixedRgbDescription',
+                'Divide your keyboard into regions, each with its own effect playlist.',
+              )}
             </p>
 
             <div className="flex items-center gap-4">
-              <span className="text-sm font-medium">{t('keychron.paintRegion', 'Paint Region:')}</span>
+              <span className="text-sm font-medium">
+                {t('keychron.paintRegion', 'Paint Region:')}
+              </span>
               <select
                 className="rounded border border-edge bg-surface px-3 py-1.5 text-sm"
                 value={mixedRegionToApply}
@@ -613,9 +630,15 @@ export function KeychronRGB({
 
               <div className="pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 {localMixedEffects.get(mixedRegionEffectTab)?.map((slot, slotIdx) => (
-                  <div key={slotIdx} className="rounded border border-edge bg-surface-alt p-3 flex flex-col gap-3">
+                  <div
+                    key={slotIdx}
+                    className="rounded border border-edge bg-surface-alt p-3 flex flex-col gap-3"
+                  >
                     <span className="text-sm font-semibold text-content">
-                      {t('keychron.effectSlot', { defaultValue: `Effect ${slotIdx + 1}`, n: slotIdx + 1 })}
+                      {t('keychron.effectSlot', {
+                        defaultValue: `Effect ${slotIdx + 1}`,
+                        n: slotIdx + 1,
+                      })}
                     </span>
                     <div className="flex flex-col gap-2">
                       <label className="text-xs text-content-muted">Effect</label>
@@ -667,7 +690,9 @@ export function KeychronRGB({
                           />
                         </div>
                         <div className="flex-1">
-                          <label className="text-xs text-content-muted">Duration: {slot.time ?? 0} ms</label>
+                          <label className="text-xs text-content-muted">
+                            Duration: {slot.time ?? 0} ms
+                          </label>
                           <input
                             type="number"
                             min="100"
@@ -692,7 +717,9 @@ export function KeychronRGB({
                       </div>
 
                       <details className="mt-2 text-sm text-content-muted">
-                        <summary className="cursor-pointer hover:text-content">Color Picker</summary>
+                        <summary className="cursor-pointer hover:text-content">
+                          Color Picker
+                        </summary>
                         <div className="mt-2 bg-surface p-2 rounded">
                           <HSVColorPicker
                             hue={slot.hue}
@@ -718,7 +745,9 @@ export function KeychronRGB({
                                 return next
                               })
                             }}
-                            onValueChange={() => { /* firmware mixed effects don't include V */ }}
+                            onValueChange={() => {
+                              /* firmware mixed effects don't include V */
+                            }}
                           />
                         </div>
                       </details>

@@ -80,7 +80,12 @@ function deserializeV1(data: number[]): MacroAction[] {
     } else {
       // Text character
       let text = ''
-      while (i < data.length && data[i] !== SS_TAP_CODE && data[i] !== SS_DOWN_CODE && data[i] !== SS_UP_CODE) {
+      while (
+        i < data.length &&
+        data[i] !== SS_TAP_CODE &&
+        data[i] !== SS_DOWN_CODE &&
+        data[i] !== SS_UP_CODE
+      ) {
         text += String.fromCharCode(data[i])
         i++
       }
@@ -133,7 +138,11 @@ function deserializeV2(data: number[]): MacroAction[] {
           pushOrMergeKeycode(actions, type, data[i])
           i++
         }
-      } else if (actionCode === VIAL_MACRO_EXT_TAP || actionCode === VIAL_MACRO_EXT_DOWN || actionCode === VIAL_MACRO_EXT_UP) {
+      } else if (
+        actionCode === VIAL_MACRO_EXT_TAP ||
+        actionCode === VIAL_MACRO_EXT_DOWN ||
+        actionCode === VIAL_MACRO_EXT_UP
+      ) {
         // 2-byte keycode action (little-endian)
         const type = actionTypeFromCode(VIAL_MACRO_EXT_TAP, VIAL_MACRO_EXT_DOWN, actionCode)
         i += 2
@@ -149,7 +158,7 @@ function deserializeV2(data: number[]): MacroAction[] {
         // Delay
         i += 2
         if (i + 1 >= data.length) break
-        const delay = (data[i] - 1) + (data[i + 1] - 1) * 255
+        const delay = data[i] - 1 + (data[i + 1] - 1) * 255
         actions.push({ type: 'delay', delay })
         i += 2
       } else {
@@ -179,7 +188,11 @@ export function deserializeMacro(data: number[], vialProtocol: number): MacroAct
 }
 
 /** Deserialize all macros from the device buffer. */
-export function deserializeAllMacros(buffer: number[], vialProtocol: number, macroCount: number): MacroAction[][] {
+export function deserializeAllMacros(
+  buffer: number[],
+  vialProtocol: number,
+  macroCount: number,
+): MacroAction[][] {
   return splitMacroBuffer(buffer, macroCount).map((m) => deserializeMacro(m, vialProtocol))
 }
 

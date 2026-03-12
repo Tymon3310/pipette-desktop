@@ -397,11 +397,17 @@ describe('Keychron Protocol — Snap Click', () => {
       // 3 entries: each is (type, key1, key2)
       const r = resp(0xa7, 0x08, 0x00)
       // Entry 0: type=1, key1=0x04, key2=0x07
-      r[3] = 1; r[4] = 0x04; r[5] = 0x07
+      r[3] = 1
+      r[4] = 0x04
+      r[5] = 0x07
       // Entry 1: type=2, key1=0x16, key2=0x13
-      r[6] = 2; r[7] = 0x16; r[8] = 0x13
+      r[6] = 2
+      r[7] = 0x16
+      r[8] = 0x13
       // Entry 2: type=0, key1=0, key2=0
-      r[9] = 0; r[10] = 0; r[11] = 0
+      r[9] = 0
+      r[10] = 0
+      r[11] = 0
       mockSendReceive.mockResolvedValueOnce(r)
 
       const entries = await getKeychronSnapClickEntries(3)
@@ -422,9 +428,9 @@ describe('Keychron Protocol — Snap Click', () => {
       const pkt = sentPacket()
       expect(pkt[0]).toBe(0xa7)
       expect(pkt[1]).toBe(0x09) // SNAP_CLICK_SET
-      expect(pkt[2]).toBe(0)   // index
-      expect(pkt[3]).toBe(1)   // count
-      expect(pkt[4]).toBe(1)   // type
+      expect(pkt[2]).toBe(0) // index
+      expect(pkt[3]).toBe(1) // count
+      expect(pkt[4]).toBe(1) // type
       expect(pkt[5]).toBe(0x04) // key1
       expect(pkt[6]).toBe(0x07) // key2
       expect(result).toBe(true)
@@ -529,7 +535,13 @@ describe('Keychron Protocol — RGB', () => {
 
       const config = await getKeychronIndicators()
 
-      expect(config).toEqual({ availableMask: 0x07, disableMask: 1, hue: 0x80, sat: 0xff, val: 0xc0 })
+      expect(config).toEqual({
+        availableMask: 0x07,
+        disableMask: 1,
+        hue: 0x80,
+        sat: 0xff,
+        val: 0xc0,
+      })
     })
 
     it('returns null on failure', async () => {
@@ -647,10 +659,14 @@ describe('Keychron Protocol — Analog Matrix', () => {
     it('gets curve as 8 points', async () => {
       const r = resp(0xa9, 0x20)
       // 4 pairs of (x, y)
-      r[2] = 0; r[3] = 0
-      r[4] = 25; r[5] = 30
-      r[6] = 50; r[7] = 60
-      r[8] = 100; r[9] = 100
+      r[2] = 0
+      r[3] = 0
+      r[4] = 25
+      r[5] = 30
+      r[6] = 50
+      r[7] = 60
+      r[8] = 100
+      r[9] = 100
       mockSendReceive.mockResolvedValueOnce(r)
 
       const curve = await getKeychronAnalogCurve()
@@ -749,20 +765,29 @@ describe('Keychron Protocol — Analog Matrix', () => {
   describe('getKeychronRealtimeTravel', () => {
     it('parses realtime travel data', async () => {
       const r = resp(0xa9, 0x30, 0x00) // success
-      r[3] = 2; r[4] = 5  // row, col
-      r[5] = 20; r[6] = 40 // travelMm, travelRaw
-      r[7] = 0x00; r[8] = 0x10 // value LE16 = 4096
-      r[9] = 0x00; r[10] = 0x01 // zero LE16 = 256
-      r[11] = 0x00; r[12] = 0x20 // full LE16 = 8192
+      r[3] = 2
+      r[4] = 5 // row, col
+      r[5] = 20
+      r[6] = 40 // travelMm, travelRaw
+      r[7] = 0x00
+      r[8] = 0x10 // value LE16 = 4096
+      r[9] = 0x00
+      r[10] = 0x01 // zero LE16 = 256
+      r[11] = 0x00
+      r[12] = 0x20 // full LE16 = 8192
       r[13] = 1 // state
       mockSendReceive.mockResolvedValueOnce(r)
 
       const result = await getKeychronRealtimeTravel(2, 5)
 
       expect(result).toEqual({
-        row: 2, col: 5,
-        travelMm: 20, travelRaw: 40,
-        value: 4096, zero: 256, full: 8192,
+        row: 2,
+        col: 5,
+        travelMm: 20,
+        travelRaw: 40,
+        value: 4096,
+        zero: 256,
+        full: 8192,
         state: 1,
       })
     })

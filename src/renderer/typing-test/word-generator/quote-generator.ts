@@ -16,9 +16,7 @@ const LENGTH_RANGES: Record<QuoteLength, [number, number]> = {
 
 export function selectQuote(length: QuoteLength): Quote {
   const [min, max] = LENGTH_RANGES[length]
-  const filtered = (quotes as Quote[]).filter(
-    (q) => q.length >= min && q.length <= max,
-  )
+  const filtered = (quotes as Quote[]).filter((q) => q.length >= min && q.length <= max)
 
   if (filtered.length === 0) {
     return (quotes as Quote[])[randomInt(0, (quotes as Quote[]).length - 1)]

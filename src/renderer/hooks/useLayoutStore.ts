@@ -36,79 +36,95 @@ export function useLayoutStore({
     }
   }, [deviceUid])
 
-  const saveLayout = useCallback(async (label: string): Promise<string | null> => {
-    setError(null)
-    setSaving(true)
-    try {
-      const json = JSON.stringify(serialize(), null, 2)
-      const result = await window.vialAPI.snapshotStoreSave(deviceUid, json, deviceName, label)
-      if (!result.success) {
-        setError(result.error === 'max entries reached' ? t('layoutStore.maxEntriesReached') : t('layoutStore.saveFailed'))
+  const saveLayout = useCallback(
+    async (label: string): Promise<string | null> => {
+      setError(null)
+      setSaving(true)
+      try {
+        const json = JSON.stringify(serialize(), null, 2)
+        const result = await window.vialAPI.snapshotStoreSave(deviceUid, json, deviceName, label)
+        if (!result.success) {
+          setError(
+            result.error === 'max entries reached'
+              ? t('layoutStore.maxEntriesReached')
+              : t('layoutStore.saveFailed'),
+          )
+          return null
+        }
+        await refreshEntries()
+        return result.entry?.id ?? null
+      } catch {
+        setError(t('layoutStore.saveFailed'))
         return null
+      } finally {
+        setSaving(false)
       }
-      await refreshEntries()
-      return result.entry?.id ?? null
-    } catch {
-      setError(t('layoutStore.saveFailed'))
-      return null
-    } finally {
-      setSaving(false)
-    }
-  }, [deviceUid, deviceName, serialize, refreshEntries, t])
+    },
+    [deviceUid, deviceName, serialize, refreshEntries, t],
+  )
 
-  const loadLayout = useCallback(async (entryId: string): Promise<boolean> => {
-    setError(null)
-    setLoading(true)
-    try {
-      const result = await window.vialAPI.snapshotStoreLoad(deviceUid, entryId)
-      if (!result.success || !result.data) {
+  const loadLayout = useCallback(
+    async (entryId: string): Promise<boolean> => {
+      setError(null)
+      setLoading(true)
+      try {
+        const result = await window.vialAPI.snapshotStoreLoad(deviceUid, entryId)
+        if (!result.success || !result.data) {
+          setError(t('layoutStore.loadFailed'))
+          return false
+        }
+
+        const parsed: unknown = JSON.parse(result.data)
+        if (!isVilFile(parsed)) {
+          setError(t('layoutStore.loadFailed'))
+          return false
+        }
+
+        await applyVilFile(parsed)
+        return true
+      } catch {
         setError(t('layoutStore.loadFailed'))
         return false
+      } finally {
+        setLoading(false)
       }
+    },
+    [deviceUid, applyVilFile, t],
+  )
 
-      const parsed: unknown = JSON.parse(result.data)
-      if (!isVilFile(parsed)) {
-        setError(t('layoutStore.loadFailed'))
+  const renameEntry = useCallback(
+    async (entryId: string, newLabel: string): Promise<boolean> => {
+      setError(null)
+      try {
+        const result = await window.vialAPI.snapshotStoreRename(deviceUid, entryId, newLabel)
+        if (!result.success) {
+          return false
+        }
+        await refreshEntries()
+        return true
+      } catch {
         return false
       }
+    },
+    [deviceUid, refreshEntries],
+  )
 
-      await applyVilFile(parsed)
-      return true
-    } catch {
-      setError(t('layoutStore.loadFailed'))
-      return false
-    } finally {
-      setLoading(false)
-    }
-  }, [deviceUid, applyVilFile, t])
-
-  const renameEntry = useCallback(async (entryId: string, newLabel: string): Promise<boolean> => {
-    setError(null)
-    try {
-      const result = await window.vialAPI.snapshotStoreRename(deviceUid, entryId, newLabel)
-      if (!result.success) {
+  const deleteEntry = useCallback(
+    async (entryId: string): Promise<boolean> => {
+      setError(null)
+      try {
+        const result = await window.vialAPI.snapshotStoreDelete(deviceUid, entryId)
+        if (!result.success) {
+          return false
+        }
+        await refreshEntries()
+        return true
+      } catch {
         return false
       }
-      await refreshEntries()
-      return true
-    } catch {
-      return false
-    }
-  }, [deviceUid, refreshEntries])
-
-  const deleteEntry = useCallback(async (entryId: string): Promise<boolean> => {
-    setError(null)
-    try {
-      const result = await window.vialAPI.snapshotStoreDelete(deviceUid, entryId)
-      if (!result.success) {
-        return false
-      }
-      await refreshEntries()
-      return true
-    } catch {
-      return false
-    }
-  }, [deviceUid, refreshEntries])
+    },
+    [deviceUid, refreshEntries],
+  )
 
   return {
     entries,

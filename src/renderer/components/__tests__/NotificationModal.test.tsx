@@ -12,8 +12,18 @@ vi.mock('react-i18next', () => ({
 }))
 
 const sampleNotifications: AppNotification[] = [
-  { title: 'Update Available', body: 'Version 2.0 is out', type: 'Info', publishedAt: '2025-01-02T00:00:00Z' },
-  { title: 'Maintenance', body: 'Server maintenance\nscheduled for tonight', type: 'Warning', publishedAt: '2025-01-01T00:00:00Z' },
+  {
+    title: 'Update Available',
+    body: 'Version 2.0 is out',
+    type: 'Info',
+    publishedAt: '2025-01-02T00:00:00Z',
+  },
+  {
+    title: 'Maintenance',
+    body: 'Server maintenance\nscheduled for tonight',
+    type: 'Warning',
+    publishedAt: '2025-01-01T00:00:00Z',
+  },
 ]
 
 describe('NotificationModal', () => {

@@ -28,7 +28,13 @@ import {
 } from '../../shared/constants/protocol'
 import { mapToRecord, recordToMap } from '../../shared/vil-file'
 import { vilToVialGuiJson } from '../../shared/vil-compat'
-import { splitMacroBuffer, deserializeMacro, macroActionsToJson, jsonToMacroActions, type MacroAction } from '../../preload/macro'
+import {
+  splitMacroBuffer,
+  deserializeMacro,
+  macroActionsToJson,
+  jsonToMacroActions,
+  type MacroAction,
+} from '../../preload/macro'
 import { recreateKeyboardKeycodes } from '../../shared/keycodes/keycodes'
 import { serializeKeychronState, restoreKeychronSettings } from '../../shared/keychron-serialize'
 import { parseKle } from '../../shared/kle/kle-parser'
@@ -280,8 +286,7 @@ export function useKeyboard() {
           for (let layer = 0; layer < newState.layers; layer++) {
             for (let row = 0; row < newState.rows; row++) {
               for (let col = 0; col < newState.cols; col++) {
-                const idx =
-                  (layer * newState.rows * newState.cols + row * newState.cols + col) * 2
+                const idx = (layer * newState.rows * newState.cols + row * newState.cols + col) * 2
                 if (idx + 1 < buffer.length) {
                   newState.keymap.set(
                     `${layer},${row},${col}`,
@@ -461,9 +466,8 @@ export function useKeyboard() {
 
   const loadDummy = useCallback((definition: KeyboardDefinition) => {
     const rawLayers = definition.dynamic_keymap?.layer_count ?? 4
-    const dummyLayers = Number.isInteger(rawLayers) && rawLayers >= 1 && rawLayers <= 32
-      ? rawLayers
-      : 4
+    const dummyLayers =
+      Number.isInteger(rawLayers) && rawLayers >= 1 && rawLayers <= 32 ? rawLayers : 4
     const DUMMY_MACRO_COUNT = 16
     const DUMMY_MACRO_BUFFER_SIZE = 900
 
@@ -479,6 +483,10 @@ export function useKeyboard() {
     newState.cols = definition.matrix.cols
     newState.layoutOptions = 0
     newState.unlockStatus = { unlocked: true, inProgress: false, keys: [] }
+
+    if ('keychron' in definition && definition.keychron) {
+      newState.keychron = definition.keychron as KeychronState
+    }
 
     // Parse KLE layout
     if (definition.layouts?.keymap) {
@@ -557,12 +565,7 @@ export function useKeyboard() {
   )
 
   const setEncoder = useCallback(
-    async (
-      layer: number,
-      idx: number,
-      direction: number,
-      keycode: number,
-    ) => {
+    async (layer: number, idx: number, direction: number, keycode: number) => {
       if (!stateRef.current.isDummy) {
         await window.vialAPI.setEncoder(layer, idx, direction, keycode)
       }
@@ -576,21 +579,27 @@ export function useKeyboard() {
     [bumpActivity],
   )
 
-  const setLayoutOptions = useCallback(async (options: number) => {
-    if (!stateRef.current.isDummy) {
-      await window.vialAPI.setLayoutOptions(options)
-    }
-    setState((s) => ({ ...s, layoutOptions: options }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setLayoutOptions = useCallback(
+    async (options: number) => {
+      if (!stateRef.current.isDummy) {
+        await window.vialAPI.setLayoutOptions(options)
+      }
+      setState((s) => ({ ...s, layoutOptions: options }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
-  const setMacroBuffer = useCallback(async (buffer: number[], parsedMacros?: MacroAction[][]) => {
-    if (!stateRef.current.isDummy) {
-      await window.vialAPI.setMacroBuffer(buffer)
-    }
-    setState((s) => ({ ...s, macroBuffer: buffer, parsedMacros: parsedMacros ?? null }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setMacroBuffer = useCallback(
+    async (buffer: number[], parsedMacros?: MacroAction[][]) => {
+      if (!stateRef.current.isDummy) {
+        await window.vialAPI.setMacroBuffer(buffer)
+      }
+      setState((s) => ({ ...s, macroBuffer: buffer, parsedMacros: parsedMacros ?? null }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
   const setTapDanceEntry = useCallback(
     async (index: number, entry: TapDanceEntry) => {
@@ -654,106 +663,160 @@ export function useKeyboard() {
 
   // --- Lighting setters ---
 
-  const setBacklightBrightness = useCallback(async (v: number) => {
-    if (!stateRef.current.isDummy) {
-      await window.vialAPI.setLightingValue(QMK_BACKLIGHT_BRIGHTNESS, v)
-    }
-    setState((s) => ({ ...s, backlightBrightness: v }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setBacklightBrightness = useCallback(
+    async (v: number) => {
+      if (!stateRef.current.isDummy) {
+        await window.vialAPI.setLightingValue(QMK_BACKLIGHT_BRIGHTNESS, v)
+      }
+      setState((s) => ({ ...s, backlightBrightness: v }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
-  const setBacklightEffect = useCallback(async (v: number) => {
-    if (!stateRef.current.isDummy) {
-      await window.vialAPI.setLightingValue(QMK_BACKLIGHT_EFFECT, v)
-    }
-    setState((s) => ({ ...s, backlightEffect: v }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setBacklightEffect = useCallback(
+    async (v: number) => {
+      if (!stateRef.current.isDummy) {
+        await window.vialAPI.setLightingValue(QMK_BACKLIGHT_EFFECT, v)
+      }
+      setState((s) => ({ ...s, backlightEffect: v }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
-  const setRgblightBrightness = useCallback(async (v: number) => {
-    if (!stateRef.current.isDummy) {
-      await window.vialAPI.setLightingValue(QMK_RGBLIGHT_BRIGHTNESS, v)
-    }
-    setState((s) => ({ ...s, rgblightBrightness: v }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setRgblightBrightness = useCallback(
+    async (v: number) => {
+      if (!stateRef.current.isDummy) {
+        await window.vialAPI.setLightingValue(QMK_RGBLIGHT_BRIGHTNESS, v)
+      }
+      setState((s) => ({ ...s, rgblightBrightness: v }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
-  const setRgblightEffect = useCallback(async (index: number) => {
-    if (!stateRef.current.isDummy) {
-      await window.vialAPI.setLightingValue(QMK_RGBLIGHT_EFFECT, index)
-    }
-    setState((s) => ({ ...s, rgblightEffect: index }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setRgblightEffect = useCallback(
+    async (index: number) => {
+      if (!stateRef.current.isDummy) {
+        await window.vialAPI.setLightingValue(QMK_RGBLIGHT_EFFECT, index)
+      }
+      setState((s) => ({ ...s, rgblightEffect: index }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
-  const setRgblightEffectSpeed = useCallback(async (v: number) => {
-    if (!stateRef.current.isDummy) {
-      await window.vialAPI.setLightingValue(QMK_RGBLIGHT_EFFECT_SPEED, v)
-    }
-    setState((s) => ({ ...s, rgblightEffectSpeed: v }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setRgblightEffectSpeed = useCallback(
+    async (v: number) => {
+      if (!stateRef.current.isDummy) {
+        await window.vialAPI.setLightingValue(QMK_RGBLIGHT_EFFECT_SPEED, v)
+      }
+      setState((s) => ({ ...s, rgblightEffectSpeed: v }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
-  const setRgblightColor = useCallback(async (h: number, s: number) => {
-    if (!stateRef.current.isDummy) {
-      await window.vialAPI.setLightingValue(QMK_RGBLIGHT_COLOR, h, s)
-    }
-    setState((prev) => ({ ...prev, rgblightHue: h, rgblightSat: s }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setRgblightColor = useCallback(
+    async (h: number, s: number) => {
+      if (!stateRef.current.isDummy) {
+        await window.vialAPI.setLightingValue(QMK_RGBLIGHT_COLOR, h, s)
+      }
+      setState((prev) => ({ ...prev, rgblightHue: h, rgblightSat: s }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
-  const setVialRGBMode = useCallback(async (mode: number) => {
-    const s = stateRef.current
-    if (!s.isDummy) {
-      await window.vialAPI.setVialRGBMode(mode, s.vialRGBSpeed, s.vialRGBHue, s.vialRGBSat, s.vialRGBVal)
-    }
-    setState((prev) => ({ ...prev, vialRGBMode: mode }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setVialRGBMode = useCallback(
+    async (mode: number) => {
+      const s = stateRef.current
+      if (!s.isDummy) {
+        await window.vialAPI.setVialRGBMode(
+          mode,
+          s.vialRGBSpeed,
+          s.vialRGBHue,
+          s.vialRGBSat,
+          s.vialRGBVal,
+        )
+      }
+      setState((prev) => ({ ...prev, vialRGBMode: mode }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
-  const setVialRGBSpeed = useCallback(async (speed: number) => {
-    const s = stateRef.current
-    if (!s.isDummy) {
-      await window.vialAPI.setVialRGBMode(s.vialRGBMode, speed, s.vialRGBHue, s.vialRGBSat, s.vialRGBVal)
-    }
-    setState((prev) => ({ ...prev, vialRGBSpeed: speed }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setVialRGBSpeed = useCallback(
+    async (speed: number) => {
+      const s = stateRef.current
+      if (!s.isDummy) {
+        await window.vialAPI.setVialRGBMode(
+          s.vialRGBMode,
+          speed,
+          s.vialRGBHue,
+          s.vialRGBSat,
+          s.vialRGBVal,
+        )
+      }
+      setState((prev) => ({ ...prev, vialRGBSpeed: speed }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
-  const setVialRGBColor = useCallback(async (h: number, s: number) => {
-    const st = stateRef.current
-    if (!st.isDummy) {
-      await window.vialAPI.setVialRGBMode(st.vialRGBMode, st.vialRGBSpeed, h, s, st.vialRGBVal)
-    }
-    setState((prev) => ({ ...prev, vialRGBHue: h, vialRGBSat: s }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setVialRGBColor = useCallback(
+    async (h: number, s: number) => {
+      const st = stateRef.current
+      if (!st.isDummy) {
+        await window.vialAPI.setVialRGBMode(st.vialRGBMode, st.vialRGBSpeed, h, s, st.vialRGBVal)
+      }
+      setState((prev) => ({ ...prev, vialRGBHue: h, vialRGBSat: s }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
-  const setVialRGBBrightness = useCallback(async (v: number) => {
-    const s = stateRef.current
-    if (!s.isDummy) {
-      await window.vialAPI.setVialRGBMode(s.vialRGBMode, s.vialRGBSpeed, s.vialRGBHue, s.vialRGBSat, v)
-    }
-    setState((prev) => ({ ...prev, vialRGBVal: v }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setVialRGBBrightness = useCallback(
+    async (v: number) => {
+      const s = stateRef.current
+      if (!s.isDummy) {
+        await window.vialAPI.setVialRGBMode(
+          s.vialRGBMode,
+          s.vialRGBSpeed,
+          s.vialRGBHue,
+          s.vialRGBSat,
+          v,
+        )
+      }
+      setState((prev) => ({ ...prev, vialRGBVal: v }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
-  const setVialRGBHSV = useCallback(async (h: number, s: number, v: number) => {
-    const st = stateRef.current
-    if (!st.isDummy) {
-      await window.vialAPI.setVialRGBMode(st.vialRGBMode, st.vialRGBSpeed, h, s, v)
-    }
-    setState((prev) => ({ ...prev, vialRGBHue: h, vialRGBSat: s, vialRGBVal: v }))
-    bumpActivity()
-  }, [bumpActivity])
+  const setVialRGBHSV = useCallback(
+    async (h: number, s: number, v: number) => {
+      const st = stateRef.current
+      if (!st.isDummy) {
+        await window.vialAPI.setVialRGBMode(st.vialRGBMode, st.vialRGBSpeed, h, s, v)
+      }
+      setState((prev) => ({ ...prev, vialRGBHue: h, vialRGBSat: s, vialRGBVal: v }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
-  const updateQmkSettingsValue = useCallback((qsid: number, data: number[]) => {
-    setState((s) => ({
-      ...s,
-      qmkSettingsValues: { ...s.qmkSettingsValues, [String(qsid)]: data },
-    }))
-    bumpActivity()
-  }, [bumpActivity])
+  const updateQmkSettingsValue = useCallback(
+    (qsid: number, data: number[]) => {
+      setState((s) => ({
+        ...s,
+        qmkSettingsValues: { ...s.qmkSettingsValues, [String(qsid)]: data },
+      }))
+      bumpActivity()
+    },
+    [bumpActivity],
+  )
 
   const saveLayerNamesRef = useRef<((names: string[]) => void) | null>(null)
 
@@ -771,16 +834,27 @@ export function useKeyboard() {
 
   const serialize = useCallback((): VilFile => {
     const s = stateRef.current
-    const macrosSrc = s.parsedMacros
-      ?? splitMacroBuffer(s.macroBuffer, s.macroCount).map((m) => deserializeMacro(m, s.vialProtocol))
-    const kcData = serializeKeychronState(s.keychron, s.vialRGBSupported ? {
-        mode: s.vialRGBMode,
-        speed: s.vialRGBSpeed,
-        hue: s.vialRGBHue,
-        sat: s.vialRGBSat,
-        val: s.vialRGBVal,
-      } : null)
-    console.log('[KB] serialize() keychron:', kcData ? Object.keys(kcData) : null, 'state.keychron:', s.keychron != null)
+    const macrosSrc =
+      s.parsedMacros ??
+      splitMacroBuffer(s.macroBuffer, s.macroCount).map((m) => deserializeMacro(m, s.vialProtocol))
+    const kcData = serializeKeychronState(
+      s.keychron,
+      s.vialRGBSupported
+        ? {
+            mode: s.vialRGBMode,
+            speed: s.vialRGBSpeed,
+            hue: s.vialRGBHue,
+            sat: s.vialRGBSat,
+            val: s.vialRGBVal,
+          }
+        : null,
+    )
+    console.log(
+      '[KB] serialize() keychron:',
+      kcData ? Object.keys(kcData) : null,
+      'state.keychron:',
+      s.keychron != null,
+    )
     return {
       uid: s.uid,
       keymap: mapToRecord(s.keymap),
@@ -801,8 +875,9 @@ export function useKeyboard() {
   const serializeVialGui = useCallback((): string => {
     const s = stateRef.current
     const vil = serialize()
-    const macrosSrc = s.parsedMacros
-      ?? splitMacroBuffer(s.macroBuffer, s.macroCount).map((m) => deserializeMacro(m, s.vialProtocol))
+    const macrosSrc =
+      s.parsedMacros ??
+      splitMacroBuffer(s.macroBuffer, s.macroCount).map((m) => deserializeMacro(m, s.vialProtocol))
     const macroActions = macrosSrc.map((m) => JSON.parse(macroActionsToJson(m)) as unknown[])
     return vilToVialGuiJson(vil, {
       rows: s.rows,
@@ -861,13 +936,17 @@ export function useKeyboard() {
           await api.setMacroBuffer(vil.macros)
         }
         console.log('[KB] applyVilFile: macros done')
-      } catch (err) { console.error('[KB] applyVilFile: macros failed:', err) }
+      } catch (err) {
+        console.error('[KB] applyVilFile: macros failed:', err)
+      }
 
       // Apply layout options
       try {
         await api.setLayoutOptions(vil.layoutOptions)
         console.log('[KB] applyVilFile: layout options done')
-      } catch (err) { console.error('[KB] applyVilFile: layout options failed:', err) }
+      } catch (err) {
+        console.error('[KB] applyVilFile: layout options failed:', err)
+      }
 
       // Apply tap dance entries
       try {
@@ -875,7 +954,9 @@ export function useKeyboard() {
           await api.setTapDance(i, vil.tapDance[i])
         }
         console.log('[KB] applyVilFile: tap dance done')
-      } catch (err) { console.error('[KB] applyVilFile: tap dance failed:', err) }
+      } catch (err) {
+        console.error('[KB] applyVilFile: tap dance failed:', err)
+      }
 
       // Apply combo entries
       try {
@@ -883,7 +964,9 @@ export function useKeyboard() {
           await api.setCombo(i, vil.combo[i])
         }
         console.log('[KB] applyVilFile: combos done')
-      } catch (err) { console.error('[KB] applyVilFile: combos failed:', err) }
+      } catch (err) {
+        console.error('[KB] applyVilFile: combos failed:', err)
+      }
 
       // Apply key override entries
       try {
@@ -891,7 +974,9 @@ export function useKeyboard() {
           await api.setKeyOverride(i, vil.keyOverride[i])
         }
         console.log('[KB] applyVilFile: key overrides done')
-      } catch (err) { console.error('[KB] applyVilFile: key overrides failed:', err) }
+      } catch (err) {
+        console.error('[KB] applyVilFile: key overrides failed:', err)
+      }
 
       // Apply alt repeat key entries
       try {
@@ -899,7 +984,9 @@ export function useKeyboard() {
           await api.setAltRepeatKey(i, vil.altRepeatKey[i])
         }
         console.log('[KB] applyVilFile: alt repeat key done')
-      } catch (err) { console.error('[KB] applyVilFile: alt repeat key failed:', err) }
+      } catch (err) {
+        console.error('[KB] applyVilFile: alt repeat key failed:', err)
+      }
 
       // Apply QMK settings
       try {
@@ -907,7 +994,9 @@ export function useKeyboard() {
           await api.qmkSettingsSet(Number(qsid), data)
         }
         console.log('[KB] applyVilFile: QMK settings done')
-      } catch (err) { console.error('[KB] applyVilFile: QMK settings failed:', err) }
+      } catch (err) {
+        console.error('[KB] applyVilFile: QMK settings failed:', err)
+      }
 
       // Apply Keychron settings
       console.log('[KB] Keychron restore check:', {
@@ -933,12 +1022,19 @@ export function useKeyboard() {
             if (kcState) {
               setState((s) => ({ ...s, keychron: kcState as KeychronState }))
             }
-          } catch { /* reload is best-effort */ }
+          } catch {
+            /* reload is best-effort */
+          }
         } catch (err) {
           console.error('[KB] Keychron settings restore failed:', err)
         }
       } else {
-        console.warn('[KB] Skipping Keychron restore — vil.keychron:', !!vil.keychron, 'state.keychron:', !!stateRef.current.keychron)
+        console.warn(
+          '[KB] Skipping Keychron restore — vil.keychron:',
+          !!vil.keychron,
+          'state.keychron:',
+          !!stateRef.current.keychron,
+        )
       }
     }
 

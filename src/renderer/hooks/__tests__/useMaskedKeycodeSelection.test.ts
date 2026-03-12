@@ -451,7 +451,9 @@ describe('useMaskedKeycodeSelection', () => {
     const { result, rerender } = renderHook(
       ({ resetKey, initialValue }: { resetKey: unknown; initialValue?: number }) =>
         useMaskedKeycodeSelection({ onUpdate, onCommit, resetKey, initialValue }),
-      { initialProps: { resetKey: null as unknown, initialValue: undefined as number | undefined } },
+      {
+        initialProps: { resetKey: null as unknown, initialValue: undefined as number | undefined },
+      },
     )
 
     // Manually enter mask mode with 'outer' part before selecting a field
@@ -474,7 +476,9 @@ describe('useMaskedKeycodeSelection', () => {
     const { result, rerender } = renderHook(
       ({ resetKey, initialValue }: { resetKey: unknown; initialValue?: number }) =>
         useMaskedKeycodeSelection({ onUpdate, onCommit, resetKey, initialValue }),
-      { initialProps: { resetKey: null as unknown, initialValue: undefined as number | undefined } },
+      {
+        initialProps: { resetKey: null as unknown, initialValue: undefined as number | undefined },
+      },
     )
 
     act(() => {
@@ -494,7 +498,9 @@ describe('useMaskedKeycodeSelection', () => {
     const { result, rerender } = renderHook(
       ({ resetKey, initialValue }: { resetKey: unknown; initialValue?: number }) =>
         useMaskedKeycodeSelection({ onUpdate, onCommit, resetKey, initialValue }),
-      { initialProps: { resetKey: null as unknown, initialValue: undefined as number | undefined } },
+      {
+        initialProps: { resetKey: null as unknown, initialValue: undefined as number | undefined },
+      },
     )
 
     // Use enterMaskMode and consume it with first resetKey change

@@ -3,7 +3,12 @@
 
 import { jsPDF } from 'jspdf'
 import type { KleKey } from './kle/types'
-import type { AltRepeatKeyEntry, ComboEntry, KeyOverrideEntry, TapDanceEntry } from './types/protocol'
+import type {
+  AltRepeatKeyEntry,
+  ComboEntry,
+  KeyOverrideEntry,
+  TapDanceEntry,
+} from './types/protocol'
 import { filterVisibleKeys, hasSecondaryRect, repositionLayoutKeys } from './kle/filter-keys'
 import { computeUnionPolygon, insetAxisAlignedPolygon } from './kle/rect-union'
 import {
@@ -153,7 +158,12 @@ function drawKey(
     const outerLabel = sanitizeLabel(
       input.findOuterKeycode(qmkId)?.label.replace(/\n?\(kc\)$/, '') ?? label,
     )
-    const outerSize = fitText(doc, outerLabel, w * 0.9, Math.min(MASKED_LABEL_MAX, scale * MASKED_LABEL_SCALE))
+    const outerSize = fitText(
+      doc,
+      outerLabel,
+      w * 0.9,
+      Math.min(MASKED_LABEL_MAX, scale * MASKED_LABEL_SCALE),
+    )
     doc.setFontSize(outerSize)
     doc.setTextColor(0)
     doc.text(outerLabel, x + w / 2, y + h * 0.22, {
@@ -164,7 +174,12 @@ function drawKey(
     // Inner label (base key) in inner rect
     const innerLabel = sanitizeLabel(input.findInnerKeycode(qmkId)?.label ?? '')
     if (innerLabel) {
-      const innerSize = fitText(doc, innerLabel, innerW * 0.9, Math.min(MASKED_LABEL_MAX, scale * MASKED_LABEL_SCALE))
+      const innerSize = fitText(
+        doc,
+        innerLabel,
+        innerW * 0.9,
+        Math.min(MASKED_LABEL_MAX, scale * MASKED_LABEL_SCALE),
+      )
       doc.setFontSize(innerSize)
       doc.text(innerLabel, x + w / 2, innerY + innerH / 2, {
         align: 'center',
@@ -180,7 +195,12 @@ function drawKey(
       : [pdfKeyLabel(label, qmkId)]
     doc.setTextColor(0)
     for (let i = 0; i < lines.length; i++) {
-      const fontSize = fitText(doc, lines[i], w * 0.9, Math.min(NORMAL_LABEL_MAX, scale * NORMAL_LABEL_SCALE))
+      const fontSize = fitText(
+        doc,
+        lines[i],
+        w * 0.9,
+        Math.min(NORMAL_LABEL_MAX, scale * NORMAL_LABEL_SCALE),
+      )
       doc.setFontSize(fontSize)
       const lineY = y + (h / (lines.length + 1)) * (i + 1)
       doc.text(lines[i], x + w / 2, lineY, {
@@ -213,7 +233,7 @@ function drawEncoder(
   const spacing = scale * SPACING_FRACTION
   const cx = offsetX + key.x * scale + (key.width * scale - spacing) / 2
   const cy = offsetY + key.y * scale + (key.height * scale - spacing) / 2
-  const r = Math.min(key.width, key.height) * scale / 2 - spacing / 2
+  const r = (Math.min(key.width, key.height) * scale) / 2 - spacing / 2
 
   doc.setDrawColor(0)
   doc.setFillColor(255, 255, 255)
@@ -228,12 +248,22 @@ function drawEncoder(
   doc.setTextColor(0)
 
   // Direction label on top
-  const dirSize = fitText(doc, dirLabel, r * 1.6, Math.min(ENCODER_DIR_MAX, scale * ENCODER_DIR_SCALE))
+  const dirSize = fitText(
+    doc,
+    dirLabel,
+    r * 1.6,
+    Math.min(ENCODER_DIR_MAX, scale * ENCODER_DIR_SCALE),
+  )
   doc.setFontSize(dirSize)
   doc.text(dirLabel, cx, cy - r * 0.3, { align: 'center', baseline: 'middle' })
 
   // Key label on bottom
-  const labelSize = fitText(doc, label, r * 1.6, Math.min(ENCODER_LABEL_MAX, scale * ENCODER_LABEL_SCALE))
+  const labelSize = fitText(
+    doc,
+    label,
+    r * 1.6,
+    Math.min(ENCODER_LABEL_MAX, scale * ENCODER_LABEL_SCALE),
+  )
   doc.setFontSize(labelSize)
   doc.text(label, cx, cy + r * 0.3, { align: 'center', baseline: 'middle' })
 
@@ -280,12 +310,7 @@ interface CardGrid {
   nextCard(): number
 }
 
-function createCardGrid(
-  doc: jsPDF,
-  title: string,
-  columns: number,
-  cardHeight: number,
-): CardGrid {
+function createCardGrid(doc: jsPDF, title: string, columns: number, cardHeight: number): CardGrid {
   const cardWidth = (USABLE_WIDTH - CARD_GAP * (columns - 1)) / columns
   const pageHeights: number[] = []
   let curY = 0
@@ -305,7 +330,9 @@ function createCardGrid(
   startPage(false)
 
   return {
-    get curY() { return curY },
+    get curY() {
+      return curY
+    },
     cardWidth,
     pageHeights,
     nextCard(): number {
@@ -346,7 +373,13 @@ export function isEmptyMacro(actions: PdfMacroAction[]): boolean {
 }
 
 export function isEmptyCombo(entry: ComboEntry): boolean {
-  return entry.key1 === 0 && entry.key2 === 0 && entry.key3 === 0 && entry.key4 === 0 && entry.output === 0
+  return (
+    entry.key1 === 0 &&
+    entry.key2 === 0 &&
+    entry.key3 === 0 &&
+    entry.key4 === 0 &&
+    entry.output === 0
+  )
 }
 
 export function isEmptyTapDance(entry: TapDanceEntry): boolean {
@@ -374,8 +407,7 @@ const MOD_NAMES: [number, string][] = [
 
 function formatMods(mods: number): string {
   if (mods === 0) return ''
-  return MOD_NAMES
-    .filter(([bit]) => (mods & bit) !== 0)
+  return MOD_NAMES.filter(([bit]) => (mods & bit) !== 0)
     .map(([, name]) => name)
     .join('+')
 }
@@ -405,7 +437,7 @@ function drawKeyBadge(
   label: string,
   x: number,
   y: number,
-  fillColor: [number, number, number] = [0xF1, 0xF5, 0xF9],
+  fillColor: [number, number, number] = [0xf1, 0xf5, 0xf9],
   textColor: [number, number, number] = [0, 0, 0],
 ): number {
   doc.setFontSize(BADGE_FONT_SIZE)
@@ -426,11 +458,7 @@ function drawKeyBadge(
 /**
  * Draw combo pages. Returns page heights for footer positioning.
  */
-function drawComboPages(
-  doc: jsPDF,
-  combos: ComboEntry[],
-  input: PdfExportInput,
-): number[] {
+function drawComboPages(doc: jsPDF, combos: ComboEntry[], input: PdfExportInput): number[] {
   const configured = combos.filter((c) => !isEmptyCombo(c))
   if (configured.length === 0) return []
 
@@ -496,12 +524,21 @@ function drawTapDancePages(
 
     // Header row: TD index badge + tapping term
     const headerY = grid.curY + CARD_PADDING
-    drawKeyBadge(doc, `TD${idx}`, cardX + CARD_PADDING, headerY, [0x1E, 0x29, 0x3B], [255, 255, 255])
+    drawKeyBadge(
+      doc,
+      `TD${idx}`,
+      cardX + CARD_PADDING,
+      headerY,
+      [0x1e, 0x29, 0x3b],
+      [255, 255, 255],
+    )
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(BADGE_FONT_SIZE)
     doc.setTextColor(120)
-    doc.text(`${td.tappingTerm}ms`, cardX + CARD_PADDING + 18, headerY + BADGE_HEIGHT / 2, { baseline: 'middle' })
+    doc.text(`${td.tappingTerm}ms`, cardX + CARD_PADDING + 18, headerY + BADGE_HEIGHT / 2, {
+      baseline: 'middle',
+    })
 
     // Action rows
     const actions: [string, number][] = [
@@ -521,7 +558,12 @@ function drawTapDancePages(
       doc.text(rowLabel, cardX + CARD_PADDING, rowY + TD_ROW_HEIGHT / 2, { baseline: 'middle' })
 
       if (keycode !== 0) {
-        drawKeyBadge(doc, pdfKeycodeLabel(keycode, input), cardX + CARD_PADDING + 18, rowY + (TD_ROW_HEIGHT - BADGE_HEIGHT) / 2)
+        drawKeyBadge(
+          doc,
+          pdfKeycodeLabel(keycode, input),
+          cardX + CARD_PADDING + 18,
+          rowY + (TD_ROW_HEIGHT - BADGE_HEIGHT) / 2,
+        )
       }
     }
   }
@@ -554,12 +596,24 @@ function drawKeyOverridePages(
 
     // Header row: KO index badge + enabled status
     const headerY = grid.curY + CARD_PADDING
-    drawKeyBadge(doc, `KO${idx}`, cardX + CARD_PADDING, headerY, [0x1E, 0x29, 0x3B], [255, 255, 255])
+    drawKeyBadge(
+      doc,
+      `KO${idx}`,
+      cardX + CARD_PADDING,
+      headerY,
+      [0x1e, 0x29, 0x3b],
+      [255, 255, 255],
+    )
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(BADGE_FONT_SIZE)
     doc.setTextColor(ko.enabled ? 100 : 180)
-    doc.text(ko.enabled ? 'Enabled' : 'Disabled', cardX + CARD_PADDING + 18, headerY + BADGE_HEIGHT / 2, { baseline: 'middle' })
+    doc.text(
+      ko.enabled ? 'Enabled' : 'Disabled',
+      cardX + CARD_PADDING + 18,
+      headerY + BADGE_HEIGHT / 2,
+      { baseline: 'middle' },
+    )
 
     // Trigger row: key + mods
     const triggerY = headerY + KO_ROW_HEIGHT
@@ -567,7 +621,12 @@ function drawKeyOverridePages(
     doc.text('Trigger:', cardX + CARD_PADDING, triggerY + KO_ROW_HEIGHT / 2, { baseline: 'middle' })
     let trigBadgeX = cardX + CARD_PADDING + 18
     if (ko.triggerKey !== 0) {
-      const w = drawKeyBadge(doc, pdfKeycodeLabel(ko.triggerKey, input), trigBadgeX, triggerY + (KO_ROW_HEIGHT - BADGE_HEIGHT) / 2)
+      const w = drawKeyBadge(
+        doc,
+        pdfKeycodeLabel(ko.triggerKey, input),
+        trigBadgeX,
+        triggerY + (KO_ROW_HEIGHT - BADGE_HEIGHT) / 2,
+      )
       trigBadgeX += w + 1
     }
     const modsStr = formatMods(ko.triggerMods)
@@ -584,7 +643,12 @@ function drawKeyOverridePages(
     doc.setTextColor(120)
     doc.text('Output:', cardX + CARD_PADDING, replaceY + KO_ROW_HEIGHT / 2, { baseline: 'middle' })
     if (ko.replacementKey !== 0) {
-      drawKeyBadge(doc, pdfKeycodeLabel(ko.replacementKey, input), cardX + CARD_PADDING + 18, replaceY + (KO_ROW_HEIGHT - BADGE_HEIGHT) / 2)
+      drawKeyBadge(
+        doc,
+        pdfKeycodeLabel(ko.replacementKey, input),
+        cardX + CARD_PADDING + 18,
+        replaceY + (KO_ROW_HEIGHT - BADGE_HEIGHT) / 2,
+      )
     }
   }
 
@@ -617,7 +681,7 @@ function drawAltRepeatKeyPages(
     const badgeY = grid.curY + (SINGLE_ROW_CARD_HEIGHT - BADGE_HEIGHT) / 2
     const badgeMidY = badgeY + BADGE_HEIGHT / 2
 
-    const w0 = drawKeyBadge(doc, `AR${idx}`, badgeX, badgeY, [0x1E, 0x29, 0x3B], [255, 255, 255])
+    const w0 = drawKeyBadge(doc, `AR${idx}`, badgeX, badgeY, [0x1e, 0x29, 0x3b], [255, 255, 255])
     badgeX += w0 + 2
 
     if (ar.lastKey !== 0) {
@@ -647,7 +711,10 @@ function drawAltRepeatKeyPages(
     if (!ar.enabled) {
       doc.setFontSize(BADGE_FONT_SIZE)
       doc.setTextColor(180)
-      doc.text('(off)', cardX + grid.cardWidth - CARD_PADDING, badgeMidY, { align: 'right', baseline: 'middle' })
+      doc.text('(off)', cardX + grid.cardWidth - CARD_PADDING, badgeMidY, {
+        align: 'right',
+        baseline: 'middle',
+      })
     }
   }
 
@@ -660,11 +727,7 @@ function drawAltRepeatKeyPages(
  * Draw macro pages. Returns page heights for footer positioning.
  * Each macro is rendered as a single-row card with M{idx} badge and inline actions.
  */
-function drawMacroPages(
-  doc: jsPDF,
-  macros: PdfMacroAction[][],
-  input: PdfExportInput,
-): number[] {
+function drawMacroPages(doc: jsPDF, macros: PdfMacroAction[][], input: PdfExportInput): number[] {
   const configured = macros
     .map((actions, idx) => ({ actions, idx }))
     .filter(({ actions }) => !isEmptyMacro(actions))
@@ -684,7 +747,7 @@ function drawMacroPages(
     const maxX = cardX + grid.cardWidth - CARD_PADDING
 
     // M{idx} badge
-    const w0 = drawKeyBadge(doc, `M${idx}`, badgeX, badgeY, [0x1E, 0x29, 0x3B], [255, 255, 255])
+    const w0 = drawKeyBadge(doc, `M${idx}`, badgeX, badgeY, [0x1e, 0x29, 0x3b], [255, 255, 255])
     badgeX += w0 + 2
 
     // Render actions inline with truncation
@@ -742,11 +805,7 @@ function drawMacroPages(
  * Append summary section pages (combos, tap dance, key overrides, alt repeat keys, macros).
  * Each draw function adds pages to the doc and returns per-page heights.
  */
-function appendSummaryPages(
-  doc: jsPDF,
-  input: PdfExportInput,
-  pageHeights: number[],
-): void {
+function appendSummaryPages(doc: jsPDF, input: PdfExportInput, pageHeights: number[]): void {
   if (input.tapDance) {
     pageHeights.push(...drawTapDancePages(doc, input.tapDance, input))
   }
@@ -805,11 +864,9 @@ export function generateKeymapPdf(input: PdfExportInput): string {
 
   // Scale keyboard to fit usable page width, capped so page height stays reasonable
   const MAX_PAGE_HEIGHT = PAGE_WIDTH // cap at square page to avoid jsPDF orientation swap
-  const maxContentHeight = MAX_PAGE_HEIGHT - MARGIN * 2 - LAYER_HEADER_HEIGHT - FOOTER_HEIGHT - BORDER_PAD * 2
-  const scale = Math.min(
-    USABLE_WIDTH / bounds.width,
-    maxContentHeight / bounds.height,
-  )
+  const maxContentHeight =
+    MAX_PAGE_HEIGHT - MARGIN * 2 - LAYER_HEADER_HEIGHT - FOOTER_HEIGHT - BORDER_PAD * 2
+  const scale = Math.min(USABLE_WIDTH / bounds.width, maxContentHeight / bounds.height)
   // Visual keyboard dimensions (keys are visually smaller due to inter-key spacing)
   const spacing = scale * SPACING_FRACTION
   const visualW = bounds.width * scale - spacing

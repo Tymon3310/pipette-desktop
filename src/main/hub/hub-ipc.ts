@@ -3,12 +3,49 @@
 
 import { secureHandle } from '../ipc-guard'
 import { IpcChannels } from '../../shared/ipc/channels'
-import { HUB_ERROR_DISPLAY_NAME_CONFLICT, HUB_ERROR_ACCOUNT_DEACTIVATED, HUB_ERROR_RATE_LIMITED } from '../../shared/types/hub'
-import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyKeyboardPostsResult, HubUserResult, HubFetchMyPostsParams, HubUploadFavoritePostParams, HubUpdateFavoritePostParams } from '../../shared/types/hub'
+import {
+  HUB_ERROR_DISPLAY_NAME_CONFLICT,
+  HUB_ERROR_ACCOUNT_DEACTIVATED,
+  HUB_ERROR_RATE_LIMITED,
+} from '../../shared/types/hub'
+import type {
+  HubUploadPostParams,
+  HubUpdatePostParams,
+  HubPatchPostParams,
+  HubUploadResult,
+  HubDeleteResult,
+  HubFetchMyPostsResult,
+  HubFetchMyKeyboardPostsResult,
+  HubUserResult,
+  HubFetchMyPostsParams,
+  HubUploadFavoritePostParams,
+  HubUpdateFavoritePostParams,
+} from '../../shared/types/hub'
 import { getIdToken } from '../sync/google-auth'
-import { Hub401Error, Hub403Error, Hub409Error, Hub429Error, authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin, uploadFeaturePostToHub, updateFeaturePostOnHub } from './hub-client'
+import {
+  Hub401Error,
+  Hub403Error,
+  Hub409Error,
+  Hub429Error,
+  authenticateWithHub,
+  uploadPostToHub,
+  updatePostOnHub,
+  patchPostOnHub,
+  deletePostFromHub,
+  fetchMyPosts,
+  fetchMyPostsByKeyboard,
+  fetchAuthMe,
+  patchAuthMe,
+  getHubOrigin,
+  uploadFeaturePostToHub,
+  updateFeaturePostOnHub,
+} from './hub-client'
 import type { HubAuthResult, HubUploadFiles } from './hub-client'
-import { isValidFavoriteType, FAV_TYPE_TO_EXPORT_KEY, serializeFavData } from '../../shared/favorite-data'
+import {
+  isValidFavoriteType,
+  FAV_TYPE_TO_EXPORT_KEY,
+  serializeFavData,
+} from '../../shared/favorite-data'
 import { serialize as serializeKeycode } from '../../shared/keycodes/keycodes'
 import type { FavoriteType, FavoriteIndex } from '../../shared/types/favorite-store'
 import { readFile } from 'node:fs/promises'
@@ -26,7 +63,8 @@ function validatePostId(postId: string): void {
 }
 
 function validateDisplayName(displayName: unknown): string {
-  if (displayName == null || typeof displayName !== 'string') throw new Error('Display name must not be empty')
+  if (displayName == null || typeof displayName !== 'string')
+    throw new Error('Display name must not be empty')
   const trimmed = displayName.trim()
   if (trimmed.length === 0) throw new Error('Display name must not be empty')
   if (trimmed.length > DISPLAY_NAME_MAX_LENGTH) throw new Error('Display name too long')
@@ -45,7 +83,8 @@ function validateKeyboardName(name: unknown): string {
 const TITLE_MAX_LENGTH = 200
 
 function validateTitle(title: unknown): string {
-  if (typeof title !== 'string' || title.trim().length === 0) throw new Error('Title must not be empty')
+  if (typeof title !== 'string' || title.trim().length === 0)
+    throw new Error('Title must not be empty')
   const trimmed = title.trim()
   if (trimmed.length > TITLE_MAX_LENGTH) throw new Error('Title too long')
   return trimmed
@@ -202,11 +241,13 @@ async function buildFavoriteExportJson(type: FavoriteType, entryId: string): Pro
     scope: 'fav' as const,
     exportedAt: new Date().toISOString(),
     categories: {
-      [exportKey]: [{
-        label: entry.label,
-        savedAt: entry.savedAt,
-        data: serializedData,
-      }],
+      [exportKey]: [
+        {
+          label: entry.label,
+          savedAt: entry.savedAt,
+          data: serializedData,
+        },
+      ],
     },
   }
 
@@ -253,9 +294,7 @@ export function setupHubIpc(): void {
       try {
         validatePostId(params.postId)
         const title = validateTitle(params.title)
-        await withTokenRetry((jwt) =>
-          patchPostOnHub(jwt, params.postId, { title }),
-        )
+        await withTokenRetry((jwt) => patchPostOnHub(jwt, params.postId, { title }))
         return { success: true }
       } catch (err) {
         return { success: false, error: extractError(err, 'Patch failed') }
@@ -282,9 +321,7 @@ export function setupHubIpc(): void {
       try {
         const page = clampInt(params?.page, 1, Number.MAX_SAFE_INTEGER)
         const perPage = clampInt(params?.per_page, 1, 100)
-        const result = await withTokenRetry((jwt) =>
-          fetchMyPosts(jwt, { page, per_page: perPage }),
-        )
+        const result = await withTokenRetry((jwt) => fetchMyPosts(jwt, { page, per_page: perPage }))
         const totalPages = computeTotalPages(result.total, result.per_page)
         return {
           success: true,
@@ -302,17 +339,14 @@ export function setupHubIpc(): void {
     },
   )
 
-  secureHandle(
-    IpcChannels.HUB_FETCH_AUTH_ME,
-    async (): Promise<HubUserResult> => {
-      try {
-        const user = await withTokenRetry((jwt) => fetchAuthMe(jwt))
-        return { success: true, user }
-      } catch (err) {
-        return { success: false, error: extractError(err, 'Fetch auth failed') }
-      }
-    },
-  )
+  secureHandle(IpcChannels.HUB_FETCH_AUTH_ME, async (): Promise<HubUserResult> => {
+    try {
+      const user = await withTokenRetry((jwt) => fetchAuthMe(jwt))
+      return { success: true, user }
+    } catch (err) {
+      return { success: false, error: extractError(err, 'Fetch auth failed') }
+    }
+  })
 
   secureHandle(
     IpcChannels.HUB_PATCH_AUTH_ME,
@@ -335,9 +369,7 @@ export function setupHubIpc(): void {
     async (_event, keyboardName: unknown): Promise<HubFetchMyKeyboardPostsResult> => {
       try {
         const validated = validateKeyboardName(keyboardName)
-        const posts = await withTokenRetry((jwt) =>
-          fetchMyPostsByKeyboard(jwt, validated),
-        )
+        const posts = await withTokenRetry((jwt) => fetchMyPostsByKeyboard(jwt, validated))
         return { success: true, posts }
       } catch (err) {
         return { success: false, error: extractError(err, 'Fetch keyboard posts failed') }
@@ -367,7 +399,11 @@ export function setupHubIpc(): void {
     const title = validateTitle(params.title)
     const postType = FAV_TYPE_TO_EXPORT_KEY[params.type]
     const jsonStr = await buildFavoriteExportJson(params.type, params.entryId)
-    return { title, postType, jsonFile: { name: `${postType}.json`, data: Buffer.from(jsonStr, 'utf-8') } }
+    return {
+      title,
+      postType,
+      jsonFile: { name: `${postType}.json`, data: Buffer.from(jsonStr, 'utf-8') },
+    }
   }
 
   secureHandle(

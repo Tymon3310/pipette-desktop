@@ -23,8 +23,17 @@ export async function listDevices(): Promise<DeviceInfo[]> {
 /**
  * Open a HID device by vendorId and productId.
  */
-export async function openHidDevice(vendorId: number, productId: number, serialNumber?: string): Promise<boolean> {
-  const result = await ipcRenderer.invoke(IpcChannels.HID_OPEN_DEVICE, vendorId, productId, serialNumber)
+export async function openHidDevice(
+  vendorId: number,
+  productId: number,
+  serialNumber?: string,
+): Promise<boolean> {
+  const result = await ipcRenderer.invoke(
+    IpcChannels.HID_OPEN_DEVICE,
+    vendorId,
+    productId,
+    serialNumber,
+  )
   deviceOpen = result === true
   return deviceOpen
 }
@@ -42,10 +51,7 @@ export async function closeHidDevice(): Promise<void> {
  * Mutex and retry logic are handled in the main process.
  */
 export async function sendReceive(data: Uint8Array): Promise<Uint8Array> {
-  const result: number[] = await ipcRenderer.invoke(
-    IpcChannels.HID_SEND_RECEIVE,
-    Array.from(data),
-  )
+  const result: number[] = await ipcRenderer.invoke(IpcChannels.HID_SEND_RECEIVE, Array.from(data))
   return new Uint8Array(result)
 }
 

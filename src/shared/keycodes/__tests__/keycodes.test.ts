@@ -816,8 +816,7 @@ describe('AnyKeycode expression evaluator', () => {
   })
 
   it('evaluates LT(layer, kc)', () => {
-    const expected =
-      keycodesV5.kc.QK_LAYER_TAP | ((2 & 0x0f) << 8) | (keycodesV5.kc.KC_A & 0xff)
+    const expected = keycodesV5.kc.QK_LAYER_TAP | ((2 & 0x0f) << 8) | (keycodesV5.kc.KC_A & 0xff)
     expect(deserialize('LT(2, KC_A)')).toBe(expected)
   })
 
@@ -848,8 +847,7 @@ describe('AnyKeycode expression evaluator', () => {
   })
 
   it('evaluates LT0(kc) shortcut', () => {
-    const expected =
-      keycodesV5.kc.QK_LAYER_TAP | ((0 & 0x0f) << 8) | (keycodesV5.kc.KC_B & 0xff)
+    const expected = keycodesV5.kc.QK_LAYER_TAP | ((0 & 0x0f) << 8) | (keycodesV5.kc.KC_B & 0xff)
     expect(deserialize('LT0(KC_B)')).toBe(expected)
   })
 
@@ -1429,9 +1427,17 @@ describe('serializeForCExport', () => {
 
     it('Pipette-only Mod-Tap keycodes return hex', () => {
       const pipetteOnlyModTaps = [
-        'LCSG_T(kc)', 'LSAG_T(kc)',
-        'RCS_T(kc)', 'RCA_T(kc)', 'RSA_T(kc)', 'RAG_T(kc)', 'RSG_T(kc)',
-        'RCSG_T(kc)', 'RSAG_T(kc)', 'RMEH_T(kc)', 'RALL_T(kc)',
+        'LCSG_T(kc)',
+        'LSAG_T(kc)',
+        'RCS_T(kc)',
+        'RCA_T(kc)',
+        'RSA_T(kc)',
+        'RAG_T(kc)',
+        'RSG_T(kc)',
+        'RCSG_T(kc)',
+        'RSAG_T(kc)',
+        'RMEH_T(kc)',
+        'RALL_T(kc)',
       ]
       for (const qmkId of pipetteOnlyModTaps) {
         const outerCode = kc[qmkId]
@@ -1511,7 +1517,10 @@ describe('serializeForCExport', () => {
 // --- LT (Layer-Tap) helpers ---
 
 describe('isLTKeycode()', () => {
-  beforeEach(() => { setProtocol(5); recreateKeycodes() })
+  beforeEach(() => {
+    setProtocol(5)
+    recreateKeycodes()
+  })
 
   it('returns true for Layer-Tap range keycodes', () => {
     expect(isLTKeycode(0x4000)).toBe(true) // LT0(KC_NO)
@@ -1529,7 +1538,10 @@ describe('isLTKeycode()', () => {
 })
 
 describe('extractLTLayer() / buildLTKeycode()', () => {
-  beforeEach(() => { setProtocol(5); recreateKeycodes() })
+  beforeEach(() => {
+    setProtocol(5)
+    recreateKeycodes()
+  })
 
   it('extracts correct layer from LT keycode', () => {
     expect(extractLTLayer(0x4004)).toBe(0) // LT0(KC_A)
@@ -1554,7 +1566,10 @@ describe('extractLTLayer() / buildLTKeycode()', () => {
 })
 
 describe('isSHTKeycode()', () => {
-  beforeEach(() => { setProtocol(5); recreateKeycodes() })
+  beforeEach(() => {
+    setProtocol(5)
+    recreateKeycodes()
+  })
 
   it('returns true for Swap Hands Tap range keycodes', () => {
     const base = resolve('SH_T(kc)')
@@ -1571,7 +1586,10 @@ describe('isSHTKeycode()', () => {
 })
 
 describe('buildSHTKeycode()', () => {
-  beforeEach(() => { setProtocol(5); recreateKeycodes() })
+  beforeEach(() => {
+    setProtocol(5)
+    recreateKeycodes()
+  })
 
   it('builds correct SH_T keycode', () => {
     const base = resolve('SH_T(kc)')

@@ -7,9 +7,7 @@ export interface LayoutOption {
   labels: string[] // [label] for boolean, [label, opt0, opt1, ...] for select
 }
 
-export function parseLayoutLabels(
-  labels: (string | string[])[] | undefined,
-): LayoutOption[] {
+export function parseLayoutLabels(labels: (string | string[])[] | undefined): LayoutOption[] {
   if (!labels) return []
   return labels.map((label, index) => {
     if (typeof label === 'string') {
@@ -31,10 +29,7 @@ export function optionBits(option: LayoutOption): number {
 }
 
 /** Unpack layout options from a packed integer (VIA reversed bit order) */
-export function unpackLayoutOptions(
-  packed: number,
-  options: LayoutOption[],
-): Map<number, number> {
+export function unpackLayoutOptions(packed: number, options: LayoutOption[]): Map<number, number> {
   const result = new Map<number, number>()
   // -1 is the sentinel for "not yet loaded"; treat as empty
   if (packed < 0) return result
@@ -52,10 +47,7 @@ export function unpackLayoutOptions(
 }
 
 /** Pack layout options into an integer (VIA reversed bit order) */
-export function packLayoutOptions(
-  values: Map<number, number>,
-  options: LayoutOption[],
-): number {
+export function packLayoutOptions(values: Map<number, number>, options: LayoutOption[]): number {
   const reversed = [...options].reverse()
   let packed = 0
   let bitOffset = 0

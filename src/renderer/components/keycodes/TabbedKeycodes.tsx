@@ -2,11 +2,22 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { findKeycode, type Keycode, getKeycodeRevision, isBasic, getAvailableLMMods } from '../../../shared/keycodes/keycodes'
+import {
+  findKeycode,
+  type Keycode,
+  getKeycodeRevision,
+  isBasic,
+  getAvailableLMMods,
+} from '../../../shared/keycodes/keycodes'
 import { parseKle } from '../../../shared/kle/kle-parser'
 import type { BasicViewType, SplitKeyMode } from '../../../shared/types/app-config'
 import { useAppConfig } from '../../hooks/useAppConfig'
-import { KEYCODE_CATEGORIES, groupByLayoutRow, type KeycodeCategory, type KeycodeGroup } from './categories'
+import {
+  KEYCODE_CATEGORIES,
+  groupByLayoutRow,
+  type KeycodeCategory,
+  type KeycodeGroup,
+} from './categories'
 import { getLayoutsForViewType } from './display-keyboard-defs'
 import { X } from 'lucide-react'
 import { KeycodeGrid } from './KeycodeGrid'
@@ -32,13 +43,17 @@ interface Props {
   onKeycodeSelect?: (keycode: Keycode) => void
   onKeycodeDoubleClick?: (keycode: Keycode) => void
   onConfirm?: () => void // Confirm current selection (Enter key)
-  onKeycodeMultiSelect?: (keycode: Keycode, event: { ctrlKey: boolean; shiftKey: boolean }, tabKeycodes: Keycode[]) => void
+  onKeycodeMultiSelect?: (
+    keycode: Keycode,
+    event: { ctrlKey: boolean; shiftKey: boolean },
+    tabKeycodes: Keycode[],
+  ) => void
   pickerSelectedKeycodes?: Set<string>
   onBackgroundClick?: () => void
   onClose?: () => void
   highlightedKeycodes?: Set<string>
   maskOnly?: boolean // When true, only show keycodes with value < 0xFF (for mask inner byte editing)
-  lmMode?: boolean  // When true, show MOD_* keycodes for LM inner editing
+  lmMode?: boolean // When true, show MOD_* keycodes for LM inner editing
   tabFooterContent?: Record<string, React.ReactNode> // Tab-specific footer content keyed by tab ID
   tabBarRight?: React.ReactNode // Content rendered at the right end of the tab bar
   panelOverlay?: React.ReactNode // Content rendered as a right-side overlay over the keycodes grid
@@ -134,9 +149,8 @@ export function TabbedKeycodes({
   const revision = getKeycodeRevision()
 
   const categories = useMemo(
-    () => lmMode
-      ? [LM_CATEGORY]
-      : KEYCODE_CATEGORIES.filter((c) => c.getKeycodes().some(isVisible)),
+    () =>
+      lmMode ? [LM_CATEGORY] : KEYCODE_CATEGORIES.filter((c) => c.getKeycodes().some(isVisible)),
     [lmMode, isVisible, revision],
   )
 
@@ -147,7 +161,13 @@ export function TabbedKeycodes({
     let keycodes: Keycode[]
 
     // For keyboard views (ANSI/ISO/JIS), order by physical layout position
-    if (cat.id === 'basic' && resolvedBasicViewType != null && resolvedBasicViewType !== 'list' && !lmMode) {
+    if (
+      cat.id === 'basic' &&
+      resolvedBasicViewType != null &&
+      resolvedBasicViewType !== 'list' &&
+      !maskOnly &&
+      !lmMode
+    ) {
       const layouts = getLayoutsForViewType(resolvedBasicViewType)
       // Largest layout has the most keys — extract QMK IDs in physical row-major order
       const kleLayout = parseKle(layouts[0].kle)
@@ -165,17 +185,20 @@ export function TabbedKeycodes({
       // Append remaining keycodes from view-specific groups (not on the keyboard)
       const groups = cat.getGroups?.(resolvedBasicViewType)?.filter((g) => g.keycodes.some(isVisible))
       const remaining = groups
-        ? groups.flatMap((g) => g.keycodes.filter((kc) => !layoutIds.has(kc.qmkId) && isVisible(kc)))
+        ? groups.flatMap((g) =>
+            g.keycodes.filter((kc) => !layoutIds.has(kc.qmkId) && isVisible(kc)),
+          )
         : []
       keycodes = [...layoutKeycodes, ...remaining]
     } else {
       const groups = cat.getGroups?.()?.filter((g) => g.keycodes.some(isVisible))
       if (!groups) keycodes = cat.getKeycodes().filter(isVisible)
-      else keycodes = groups.flatMap((g) =>
-        g.sections
-          ? g.sections.flatMap((s) => s.filter(isVisible))
-          : g.keycodes.filter(isVisible),
-      )
+      else
+        keycodes = groups.flatMap((g) =>
+          g.sections
+            ? g.sections.flatMap((s) => s.filter(isVisible))
+            : g.keycodes.filter(isVisible),
+        )
     }
 
     // When split keys are active, expand each base keycode with its shifted
@@ -186,7 +209,7 @@ export function TabbedKeycodes({
         const shifted = getShiftedKeycode(kc.qmkId)
         if (shifted) {
           expanded.push(shifted) // top half
-          expanded.push(kc)     // bottom half
+          expanded.push(kc) // bottom half
         } else {
           expanded.push(kc)
         }
@@ -205,19 +228,16 @@ export function TabbedKeycodes({
     }
   }, [categories, activeTab])
 
-  const handleKeycodeHover = useCallback(
-    (kc: Keycode, rect: DOMRect) => {
-      const containerRect = containerRef.current?.getBoundingClientRect()
-      if (!containerRect) return
-      setTooltip({
-        keycode: kc,
-        top: rect.top - containerRect.top,
-        left: rect.left - containerRect.left + rect.width / 2,
-        containerWidth: containerRect.width,
-      })
-    },
-    [],
-  )
+  const handleKeycodeHover = useCallback((kc: Keycode, rect: DOMRect) => {
+    const containerRect = containerRef.current?.getBoundingClientRect()
+    if (!containerRect) return
+    setTooltip({
+      keycode: kc,
+      top: rect.top - containerRect.top,
+      left: rect.left - containerRect.left + rect.width / 2,
+      containerWidth: containerRect.width,
+    })
+  }, [])
 
   const handleKeycodeHoverEnd = useCallback(() => {
     setTooltip(null)
@@ -227,7 +247,11 @@ export function TabbedKeycodes({
     (kc: Keycode, event: React.MouseEvent) => {
       const isModified = event.ctrlKey || event.metaKey || event.shiftKey
       if (isModified && onKeycodeMultiSelect) {
-        onKeycodeMultiSelect(kc, { ctrlKey: event.ctrlKey || event.metaKey, shiftKey: event.shiftKey }, activeTabKeycodes)
+        onKeycodeMultiSelect(
+          kc,
+          { ctrlKey: event.ctrlKey || event.metaKey, shiftKey: event.shiftKey },
+          activeTabKeycodes,
+        )
       } else {
         onKeycodeSelect?.(kc)
       }
@@ -256,7 +280,8 @@ export function TabbedKeycodes({
     return (
       <div key={group.labelKey}>
         <h4 className="text-xs font-normal text-content-muted px-1 pt-2 pb-1">
-          {t(group.labelKey)}{hint && ` - ${hint}`}
+          {t(group.labelKey)}
+          {hint && ` - ${hint}`}
         </h4>
         {group.sections ? (
           <div className="space-y-1">
@@ -275,7 +300,13 @@ export function TabbedKeycodes({
 
   function renderCategoryContent(category: KeycodeCategory): React.ReactNode {
     // Keyboard view for basic tab (ANSI, ISO, or JIS)
-    if (category.id === 'basic' && resolvedBasicViewType !== 'list' && resolvedBasicViewType != null && !lmMode) {
+    if (
+      category.id === 'basic' &&
+      resolvedBasicViewType !== 'list' &&
+      resolvedBasicViewType != null &&
+      !maskOnly &&
+      !lmMode
+    ) {
       return (
         <BasicKeyboardView
           viewType={resolvedBasicViewType}
@@ -292,7 +323,10 @@ export function TabbedKeycodes({
       )
     }
 
-    const override = tabContentOverride && Object.hasOwn(tabContentOverride, category.id) ? tabContentOverride[category.id] : null
+    const override =
+      tabContentOverride && Object.hasOwn(tabContentOverride, category.id)
+        ? tabContentOverride[category.id]
+        : null
     const groups = category.getGroups?.()?.filter((g) => g.keycodes.some(isVisible))
 
     // Override only — no groups to show below
@@ -312,7 +346,12 @@ export function TabbedKeycodes({
 
     // Override + groups — render override above groups
     if (override) {
-      return <>{override}{groupContent}</>
+      return (
+        <>
+          {override}
+          {groupContent}
+        </>
+      )
     }
     return groupContent
   }
@@ -335,7 +374,10 @@ export function TabbedKeycodes({
                   ? 'border-b-accent text-accent font-semibold'
                   : 'border-b-transparent text-content-secondary hover:text-content'
               }`}
-              onClick={() => { setActiveTab(cat.id); setTooltip(null) }}
+              onClick={() => {
+                setActiveTab(cat.id)
+                setTooltip(null)
+              }}
             >
               {t(cat.labelKey)}
             </button>
@@ -376,9 +418,7 @@ export function TabbedKeycodes({
         </div>
 
         {tabFooterContent?.[activeTab] && (
-          <div className="border-t border-edge-subtle px-3 py-2">
-            {tabFooterContent[activeTab]}
-          </div>
+          <div className="border-t border-edge-subtle px-3 py-2">{tabFooterContent[activeTab]}</div>
         )}
 
         {showHint && (

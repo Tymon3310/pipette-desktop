@@ -19,7 +19,10 @@ interface Props {
 }
 
 /** Return remapped display label for a keycode, or undefined if unchanged */
-export function getRemapDisplayLabel(qmkId: string, remapLabel?: (qmkId: string) => string): string | undefined {
+export function getRemapDisplayLabel(
+  qmkId: string,
+  remapLabel?: (qmkId: string) => string,
+): string | undefined {
   if (!remapLabel) return undefined
   const remapped = remapLabel(qmkId)
   return remapped !== qmkId ? remapped : undefined

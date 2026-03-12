@@ -10,7 +10,13 @@ interface UseAutoLockOptions {
   onLock: () => void
 }
 
-export function useAutoLock({ unlocked, autoLockMinutes, activityCounter, suspended, onLock }: UseAutoLockOptions): void {
+export function useAutoLock({
+  unlocked,
+  autoLockMinutes,
+  activityCounter,
+  suspended,
+  onLock,
+}: UseAutoLockOptions): void {
   const onLockRef = useRef(onLock)
   onLockRef.current = onLock
 

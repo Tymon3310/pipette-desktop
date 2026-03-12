@@ -82,7 +82,10 @@ describe('macro', () => {
       // Two macros: [0x41, 0x42] and [0x43, 0x44]
       const buffer = [0x41, 0x42, 0x00, 0x43, 0x44, 0x00]
       const result = splitMacroBuffer(buffer, 2)
-      expect(result).toEqual([[0x41, 0x42], [0x43, 0x44]])
+      expect(result).toEqual([
+        [0x41, 0x42],
+        [0x43, 0x44],
+      ])
     })
 
     it('respects macroCount limit and stops after N macros', () => {
@@ -357,19 +360,22 @@ describe('macro', () => {
     it('merges consecutive same-type 1-byte keycode actions', () => {
       // Two consecutive tap actions: should merge into one
       const data = [
-        SS_QMK_PREFIX, SS_TAP_CODE, 0x04,
-        SS_QMK_PREFIX, SS_TAP_CODE, 0x05,
-        SS_QMK_PREFIX, SS_TAP_CODE, 0x06,
+        SS_QMK_PREFIX,
+        SS_TAP_CODE,
+        0x04,
+        SS_QMK_PREFIX,
+        SS_TAP_CODE,
+        0x05,
+        SS_QMK_PREFIX,
+        SS_TAP_CODE,
+        0x06,
       ]
       const actions = deserializeMacro(data, V2)
       expect(actions).toEqual([{ type: 'tap', keycodes: [0x04, 0x05, 0x06] }])
     })
 
     it('does not merge different action types', () => {
-      const data = [
-        SS_QMK_PREFIX, SS_TAP_CODE, 0x04,
-        SS_QMK_PREFIX, SS_DOWN_CODE, 0x05,
-      ]
+      const data = [SS_QMK_PREFIX, SS_TAP_CODE, 0x04, SS_QMK_PREFIX, SS_DOWN_CODE, 0x05]
       const actions = deserializeMacro(data, V2)
       expect(actions).toEqual([
         { type: 'tap', keycodes: [0x04] },
@@ -379,19 +385,20 @@ describe('macro', () => {
 
     it('merges mixed 1-byte and 2-byte keycodes of the same type', () => {
       // 1-byte tap then 2-byte tap (ext) — same type, should merge
-      const data = [
-        SS_QMK_PREFIX, SS_TAP_CODE, 0x04,
-        SS_QMK_PREFIX, VIAL_MACRO_EXT_TAP, 0x04, 0x51,
-      ]
+      const data = [SS_QMK_PREFIX, SS_TAP_CODE, 0x04, SS_QMK_PREFIX, VIAL_MACRO_EXT_TAP, 0x04, 0x51]
       const actions = deserializeMacro(data, V2)
       expect(actions).toEqual([{ type: 'tap', keycodes: [0x04, 0x5104] }])
     })
 
     it('does not merge keycodes across text or delay boundaries', () => {
       const data = [
-        SS_QMK_PREFIX, SS_TAP_CODE, 0x04,
+        SS_QMK_PREFIX,
+        SS_TAP_CODE,
+        0x04,
         0x41, // text "A"
-        SS_QMK_PREFIX, SS_TAP_CODE, 0x05,
+        SS_QMK_PREFIX,
+        SS_TAP_CODE,
+        0x05,
       ]
       const actions = deserializeMacro(data, V2)
       expect(actions).toEqual([
@@ -403,9 +410,16 @@ describe('macro', () => {
 
     it('does not merge keycodes across delay boundaries', () => {
       const data = [
-        SS_QMK_PREFIX, SS_TAP_CODE, 0x04,
-        SS_QMK_PREFIX, SS_DELAY_CODE, 101, 1, // delay 100ms
-        SS_QMK_PREFIX, SS_TAP_CODE, 0x05,
+        SS_QMK_PREFIX,
+        SS_TAP_CODE,
+        0x04,
+        SS_QMK_PREFIX,
+        SS_DELAY_CODE,
+        101,
+        1, // delay 100ms
+        SS_QMK_PREFIX,
+        SS_TAP_CODE,
+        0x05,
       ]
       const actions = deserializeMacro(data, V2)
       expect(actions).toEqual([
@@ -519,10 +533,7 @@ describe('macro', () => {
         const actions: MacroAction[] = [{ type: 'tap', keycodes: [0x04, 0x05] }]
         const bytes = serializeMacro(actions, V2)
         // Each keycode gets its own SS_QMK_PREFIX + SS_TAP_CODE pair
-        expect(bytes).toEqual([
-          SS_QMK_PREFIX, SS_TAP_CODE, 0x04,
-          SS_QMK_PREFIX, SS_TAP_CODE, 0x05,
-        ])
+        expect(bytes).toEqual([SS_QMK_PREFIX, SS_TAP_CODE, 0x04, SS_QMK_PREFIX, SS_TAP_CODE, 0x05])
       })
     })
   })
@@ -589,7 +600,8 @@ describe('macro', () => {
 
     it('v2: JSON round-trip preserves action grouping without binary', () => {
       // M keycodes (M0-M15) require keyboard init, so use LSFT(KC_A) as stand-in
-      const input = '[["text","aaa"],["tap","KC_3"],["tap","LCTL_T(KC_3)","KC_BSLASH","KC_Y","KC_X"],["down","KC_TAB","KC_6"],["up","KC_LCTRL","TD(3)","LSFT(KC_A)"]]'
+      const input =
+        '[["text","aaa"],["tap","KC_3"],["tap","LCTL_T(KC_3)","KC_BSLASH","KC_Y","KC_X"],["down","KC_TAB","KC_6"],["up","KC_LCTRL","TD(3)","LSFT(KC_A)"]]'
       const actions = jsonToMacroActions(input)!
       expect(actions).not.toBeNull()
       const output = macroActionsToJson(actions)
@@ -599,7 +611,8 @@ describe('macro', () => {
     it('v2: binary round-trip merges consecutive same-type keycodes (matches Python)', () => {
       // Binary format merges consecutive same-type keycodes on deserialization,
       // matching Python vial-gui behavior.
-      const input = '[["text","aaa"],["tap","KC_3"],["tap","LCTL_T(KC_3)","KC_BSLASH","KC_Y","KC_X"],["down","KC_TAB","KC_6"],["up","KC_LCTRL","TD(3)","LSFT(KC_A)"]]'
+      const input =
+        '[["text","aaa"],["tap","KC_3"],["tap","LCTL_T(KC_3)","KC_BSLASH","KC_Y","KC_X"],["down","KC_TAB","KC_6"],["up","KC_LCTRL","TD(3)","LSFT(KC_A)"]]'
       const actions = jsonToMacroActions(input)!
       const bytes = serializeMacro(actions, V2)
       const result = deserializeMacro(bytes, V2)
@@ -630,10 +643,7 @@ describe('macro', () => {
   // ----------------------------------------------------------------
   describe('serializeAllMacros / deserializeAllMacros', () => {
     it('joins multiple macros with NUL separator', () => {
-      const macros: MacroAction[][] = [
-        [{ type: 'text', text: 'A' }],
-        [{ type: 'text', text: 'B' }],
-      ]
+      const macros: MacroAction[][] = [[{ type: 'text', text: 'A' }], [{ type: 'text', text: 'B' }]]
       const buffer = serializeAllMacros(macros, V2)
       // "A" = 0x41, NUL, "B" = 0x42, NUL
       expect(buffer).toEqual([0x41, 0x00, 0x42, 0x00])

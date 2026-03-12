@@ -15,7 +15,9 @@ const mockFavoriteStoreList = vi.fn().mockResolvedValue({ success: true, entries
 const mockFavoriteStoreRename = vi.fn().mockResolvedValue({ success: true })
 const mockFavoriteStoreDelete = vi.fn().mockResolvedValue({ success: true })
 const mockFavoriteStoreExport = vi.fn().mockResolvedValue({ success: true })
-const mockFavoriteStoreImport = vi.fn().mockResolvedValue({ success: true, imported: 2, skipped: 0 })
+const mockFavoriteStoreImport = vi
+  .fn()
+  .mockResolvedValue({ success: true, imported: 2, skipped: 0 })
 
 Object.defineProperty(window, 'vialAPI', {
   value: {
@@ -174,7 +176,9 @@ describe('useFavoriteManage', () => {
   it('sets importing flag during import', async () => {
     let resolveImport!: (value: { success: boolean; imported: number; skipped: number }) => void
     mockFavoriteStoreImport.mockReturnValueOnce(
-      new Promise((resolve) => { resolveImport = resolve })
+      new Promise((resolve) => {
+        resolveImport = resolve
+      }),
     )
 
     const { result } = renderHook(() => useFavoriteManage('tapDance'))

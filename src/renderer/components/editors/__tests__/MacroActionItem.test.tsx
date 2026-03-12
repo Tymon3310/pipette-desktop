@@ -59,9 +59,7 @@ describe('MacroActionItem', () => {
     const textAction: MacroAction = { type: 'text', text: 'hello' }
 
     it('renders text input with value', () => {
-      render(
-        <MacroActionItem action={textAction} index={0} {...defaultCallbacks} />,
-      )
+      render(<MacroActionItem action={textAction} index={0} {...defaultCallbacks} />)
       const input = screen.getByPlaceholderText('Text') as HTMLInputElement
       expect(input.value).toBe('hello')
     })
@@ -76,57 +74,51 @@ describe('MacroActionItem', () => {
     })
 
     it('shows no warning for valid ASCII text', () => {
-      render(
-        <MacroActionItem action={textAction} index={0} {...defaultCallbacks} />,
-      )
-      expect(screen.queryByText('Only ASCII characters (A-Z, 0-9, symbols) are supported')).not.toBeInTheDocument()
+      render(<MacroActionItem action={textAction} index={0} {...defaultCallbacks} />)
+      expect(
+        screen.queryByText('Only ASCII characters (A-Z, 0-9, symbols) are supported'),
+      ).not.toBeInTheDocument()
       const input = screen.getByPlaceholderText('Text')
       expect(input.className).toContain('border-edge')
     })
 
     it('shows warning and red border for non-ASCII text', () => {
       const nonAsciiAction: MacroAction = { type: 'text', text: 'こんにちは' }
-      render(
-        <MacroActionItem action={nonAsciiAction} index={0} {...defaultCallbacks} />,
-      )
-      expect(screen.getByText('Only ASCII characters (A-Z, 0-9, symbols) are supported')).toBeInTheDocument()
+      render(<MacroActionItem action={nonAsciiAction} index={0} {...defaultCallbacks} />)
+      expect(
+        screen.getByText('Only ASCII characters (A-Z, 0-9, symbols) are supported'),
+      ).toBeInTheDocument()
       const input = screen.getByPlaceholderText('Text')
       expect(input.className).toContain('border-danger')
     })
 
     it('shows warning for mixed ASCII and non-ASCII text', () => {
       const mixedAction: MacroAction = { type: 'text', text: 'Hello こんにちは' }
-      render(
-        <MacroActionItem action={mixedAction} index={0} {...defaultCallbacks} />,
-      )
-      expect(screen.getByText('Only ASCII characters (A-Z, 0-9, symbols) are supported')).toBeInTheDocument()
+      render(<MacroActionItem action={mixedAction} index={0} {...defaultCallbacks} />)
+      expect(
+        screen.getByText('Only ASCII characters (A-Z, 0-9, symbols) are supported'),
+      ).toBeInTheDocument()
     })
   })
 
   describe('tap action', () => {
     it('renders KeycodeField buttons for keycodes', () => {
       const tapAction: MacroAction = { type: 'tap', keycodes: [0x41] }
-      render(
-        <MacroActionItem action={tapAction} index={0} {...defaultCallbacks} />,
-      )
+      render(<MacroActionItem action={tapAction} index={0} {...defaultCallbacks} />)
       const keycodeFields = screen.getAllByTestId('keycode-field')
       expect(keycodeFields).toHaveLength(1)
     })
 
     it('renders multiple KeycodeField buttons for multiple keycodes', () => {
       const multiAction: MacroAction = { type: 'tap', keycodes: [0x04, 0x05] }
-      render(
-        <MacroActionItem action={multiAction} index={0} {...defaultCallbacks} />,
-      )
+      render(<MacroActionItem action={multiAction} index={0} {...defaultCallbacks} />)
       const keycodeFields = screen.getAllByTestId('keycode-field')
       expect(keycodeFields).toHaveLength(2)
     })
 
     it('renders add keycode button', () => {
       const tapAction: MacroAction = { type: 'tap', keycodes: [0x41] }
-      render(
-        <MacroActionItem action={tapAction} index={0} {...defaultCallbacks} />,
-      )
+      render(<MacroActionItem action={tapAction} index={0} {...defaultCallbacks} />)
       expect(screen.getByTestId('macro-add-keycode')).toBeInTheDocument()
     })
 
@@ -134,7 +126,12 @@ describe('MacroActionItem', () => {
       const onKeycodeAdd = vi.fn()
       const tapAction: MacroAction = { type: 'tap', keycodes: [0x41] }
       render(
-        <MacroActionItem action={tapAction} index={0} {...defaultCallbacks} onKeycodeAdd={onKeycodeAdd} />,
+        <MacroActionItem
+          action={tapAction}
+          index={0}
+          {...defaultCallbacks}
+          onKeycodeAdd={onKeycodeAdd}
+        />,
       )
       fireEvent.click(screen.getByTestId('macro-add-keycode'))
       expect(onKeycodeAdd).toHaveBeenCalled()
@@ -144,7 +141,12 @@ describe('MacroActionItem', () => {
       const onKeycodeClick = vi.fn()
       const tapAction: MacroAction = { type: 'tap', keycodes: [0x41] }
       render(
-        <MacroActionItem action={tapAction} index={0} {...defaultCallbacks} onKeycodeClick={onKeycodeClick} />,
+        <MacroActionItem
+          action={tapAction}
+          index={0}
+          {...defaultCallbacks}
+          onKeycodeClick={onKeycodeClick}
+        />,
       )
       fireEvent.click(screen.getByTestId('keycode-field'))
       // KeycodeField uses a timeout for single click when onDoubleClick is not provided
@@ -155,7 +157,12 @@ describe('MacroActionItem', () => {
     it('reflects selectedKeycodeIndex via aria-pressed', () => {
       const tapAction: MacroAction = { type: 'tap', keycodes: [0x41, 0x42] }
       render(
-        <MacroActionItem action={tapAction} index={0} {...defaultCallbacks} selectedKeycodeIndex={0} />,
+        <MacroActionItem
+          action={tapAction}
+          index={0}
+          {...defaultCallbacks}
+          selectedKeycodeIndex={0}
+        />,
       )
       const keycodeFields = screen.getAllByTestId('keycode-field')
       expect(keycodeFields[0]).toHaveAttribute('aria-pressed', 'true')
@@ -166,7 +173,11 @@ describe('MacroActionItem', () => {
   describe('down action', () => {
     it('renders KeycodeField button', () => {
       render(
-        <MacroActionItem action={{ type: 'down', keycodes: [0x10] }} index={0} {...defaultCallbacks} />,
+        <MacroActionItem
+          action={{ type: 'down', keycodes: [0x10] }}
+          index={0}
+          {...defaultCallbacks}
+        />,
       )
       expect(screen.getByTestId('keycode-field')).toBeInTheDocument()
     })
@@ -175,7 +186,11 @@ describe('MacroActionItem', () => {
   describe('up action', () => {
     it('renders KeycodeField button', () => {
       render(
-        <MacroActionItem action={{ type: 'up', keycodes: [0x20] }} index={0} {...defaultCallbacks} />,
+        <MacroActionItem
+          action={{ type: 'up', keycodes: [0x20] }}
+          index={0}
+          {...defaultCallbacks}
+        />,
       )
       expect(screen.getByTestId('keycode-field')).toBeInTheDocument()
     })
@@ -185,24 +200,25 @@ describe('MacroActionItem', () => {
     const delayAction: MacroAction = { type: 'delay', delay: 250 }
 
     it('renders number input with delay value', () => {
-      render(
-        <MacroActionItem action={delayAction} index={0} {...defaultCallbacks} />,
-      )
+      render(<MacroActionItem action={delayAction} index={0} {...defaultCallbacks} />)
       const input = screen.getByDisplayValue('250') as HTMLInputElement
       expect(input.type).toBe('number')
     })
 
     it('shows ms label', () => {
-      render(
-        <MacroActionItem action={delayAction} index={0} {...defaultCallbacks} />,
-      )
+      render(<MacroActionItem action={delayAction} index={0} {...defaultCallbacks} />)
       expect(screen.getByText('ms')).toBeInTheDocument()
     })
 
     it('calls onChange with parsed delay value', () => {
       const onChange = vi.fn()
       render(
-        <MacroActionItem action={delayAction} index={1} {...defaultCallbacks} onChange={onChange} />,
+        <MacroActionItem
+          action={delayAction}
+          index={1}
+          {...defaultCallbacks}
+          onChange={onChange}
+        />,
       )
       fireEvent.change(screen.getByDisplayValue('250'), { target: { value: '500' } })
       expect(onChange).toHaveBeenCalledWith(1, { type: 'delay', delay: 500 })
@@ -211,7 +227,12 @@ describe('MacroActionItem', () => {
     it('clamps negative delay to 0', () => {
       const onChange = vi.fn()
       render(
-        <MacroActionItem action={delayAction} index={0} {...defaultCallbacks} onChange={onChange} />,
+        <MacroActionItem
+          action={delayAction}
+          index={0}
+          {...defaultCallbacks}
+          onChange={onChange}
+        />,
       )
       fireEvent.change(screen.getByDisplayValue('250'), { target: { value: '-10' } })
       expect(onChange).toHaveBeenCalledWith(0, { type: 'delay', delay: 0 })
@@ -239,7 +260,12 @@ describe('MacroActionItem', () => {
     it('calls onDelete with index when delete button clicked', () => {
       const onDelete = vi.fn()
       render(
-        <MacroActionItem action={{ type: 'text', text: '' }} index={4} {...defaultCallbacks} onDelete={onDelete} />,
+        <MacroActionItem
+          action={{ type: 'text', text: '' }}
+          index={4}
+          {...defaultCallbacks}
+          onDelete={onDelete}
+        />,
       )
       const buttons = screen.getAllByRole('button')
       fireEvent.click(buttons[buttons.length - 1])
@@ -248,7 +274,12 @@ describe('MacroActionItem', () => {
 
     it('shows top indicator when dropIndicator is above', () => {
       const { container } = render(
-        <MacroActionItem action={{ type: 'text', text: '' }} index={0} {...defaultCallbacks} dropIndicator="above" />,
+        <MacroActionItem
+          action={{ type: 'text', text: '' }}
+          index={0}
+          {...defaultCallbacks}
+          dropIndicator="above"
+        />,
       )
       const outerDiv = container.firstElementChild as HTMLElement
       expect(outerDiv.className).toContain('border-t-accent')
@@ -256,7 +287,12 @@ describe('MacroActionItem', () => {
 
     it('shows bottom indicator when dropIndicator is below', () => {
       const { container } = render(
-        <MacroActionItem action={{ type: 'text', text: '' }} index={0} {...defaultCallbacks} dropIndicator="below" />,
+        <MacroActionItem
+          action={{ type: 'text', text: '' }}
+          index={0}
+          {...defaultCallbacks}
+          dropIndicator="below"
+        />,
       )
       const outerDiv = container.firstElementChild as HTMLElement
       expect(outerDiv.className).toContain('border-b-accent')

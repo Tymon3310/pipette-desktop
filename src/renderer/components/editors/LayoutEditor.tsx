@@ -59,24 +59,18 @@ export function LayoutEditor({
       <div className="space-y-3">
         {options.map((opt) => (
           <div key={opt.index} className="flex items-center gap-3">
-            <span className="min-w-[120px] text-sm text-content">
-              {opt.labels[0]}
-            </span>
+            <span className="min-w-[120px] text-sm text-content">{opt.labels[0]}</span>
             {opt.labels.length <= 2 ? (
               <input
                 type="checkbox"
                 checked={(values.get(opt.index) ?? 0) === 1}
-                onChange={(e) =>
-                  handleChange(opt.index, e.target.checked ? 1 : 0)
-                }
+                onChange={(e) => handleChange(opt.index, e.target.checked ? 1 : 0)}
                 className="h-4 w-4 rounded border-edge"
               />
             ) : (
               <select
                 value={values.get(opt.index) ?? 0}
-                onChange={(e) =>
-                  handleChange(opt.index, Number(e.target.value))
-                }
+                onChange={(e) => handleChange(opt.index, Number(e.target.value))}
                 className="rounded border border-edge bg-surface px-2 py-1 text-sm"
               >
                 {opt.labels.slice(1).map((label, i) => (
@@ -90,9 +84,7 @@ export function LayoutEditor({
         ))}
       </div>
 
-      <h3 className="text-sm font-medium text-content-secondary">
-        {t('editor.layout.preview')}
-      </h3>
+      <h3 className="text-sm font-medium text-content-secondary">{t('editor.layout.preview')}</h3>
       <div className="overflow-auto">
         <div className="inline-block rounded-xl border border-edge-subtle bg-surface-alt p-5">
           <KeyboardWidget

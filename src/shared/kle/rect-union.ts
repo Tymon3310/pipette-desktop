@@ -104,10 +104,7 @@ export function computeUnionPolygon(
       }
     }
     if (!moved) break
-  } while (
-    !(col === startCol && row === startRow) &&
-    raw.length < (cols + rows) * 4
-  )
+  } while (!(col === startCol && row === startRow) && raw.length < (cols + rows) * 4)
 
   return removeCollinear(raw)
 }
@@ -121,8 +118,7 @@ function removeCollinear(verts: [number, number][]): [number, number][] {
     const curr = verts[i]
     const next = verts[(i + 1) % n]
     const cross =
-      (curr[0] - prev[0]) * (next[1] - curr[1]) -
-      (curr[1] - prev[1]) * (next[0] - curr[0])
+      (curr[0] - prev[0]) * (next[1] - curr[1]) - (curr[1] - prev[1]) * (next[0] - curr[0])
     if (Math.abs(cross) > 1e-10) out.push(curr)
   }
   return out
@@ -140,10 +136,7 @@ interface CornerArc {
  * Convert an ordered polygon (clockwise, screen coords) to an SVG path string
  * with rounded arcs at convex (outer) corners.
  */
-export function polygonToSvgPath(
-  vertices: [number, number][],
-  r: number,
-): string {
+export function polygonToSvgPath(vertices: [number, number][], r: number): string {
   const n = vertices.length
   if (n < 3) return ''
 

@@ -36,7 +36,9 @@ vi.mock('../../assets/app-icon.png', () => ({ default: 'test-app-icon.png' }))
 
 vi.mock('../editors/ModalCloseButton', () => ({
   ModalCloseButton: ({ testid, onClick }: { testid: string; onClick: () => void }) => (
-    <button data-testid={testid} onClick={onClick}>close</button>
+    <button data-testid={testid} onClick={onClick}>
+      close
+    </button>
   ),
 }))
 
@@ -133,19 +135,25 @@ describe('SettingsModal', () => {
   })
 
   function renderAndSwitchToTools(props?: Partial<Parameters<typeof SettingsModal>[0]>) {
-    const result = render(<SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} {...props} />)
+    const result = render(
+      <SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} {...props} />,
+    )
     fireEvent.click(screen.getByTestId('settings-tab-tools'))
     return result
   }
 
   function renderAndSwitchToData(props?: Partial<Parameters<typeof SettingsModal>[0]>) {
-    const result = render(<SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} {...props} />)
+    const result = render(
+      <SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} {...props} />,
+    )
     fireEvent.click(screen.getByTestId('settings-tab-data'))
     return result
   }
 
   function renderAndSwitchToTroubleshooting(props?: Partial<Parameters<typeof SettingsModal>[0]>) {
-    const result = render(<SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} {...props} />)
+    const result = render(
+      <SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} {...props} />,
+    )
     fireEvent.click(screen.getByTestId('settings-tab-troubleshooting'))
     return result
   }
@@ -289,7 +297,9 @@ describe('SettingsModal', () => {
   it('shows confirmation before resetting sync targets', async () => {
     const sync = makeSyncMock({
       ...FULLY_CONFIGURED,
-      scanRemote: vi.fn().mockResolvedValue({ keyboards: ['0xABCD'], favorites: ['tapDance'], undecryptable: [] }),
+      scanRemote: vi
+        .fn()
+        .mockResolvedValue({ keyboards: ['0xABCD'], favorites: ['tapDance'], undecryptable: [] }),
     })
     renderAndSwitchToTroubleshooting({ sync })
 
@@ -312,14 +322,19 @@ describe('SettingsModal', () => {
 
     fireEvent.click(screen.getByTestId('sync-reset-data-confirm'))
     await waitFor(() => {
-      expect(sync.resetSyncTargets).toHaveBeenCalledWith({ keyboards: ['0xABCD'], favorites: false })
+      expect(sync.resetSyncTargets).toHaveBeenCalledWith({
+        keyboards: ['0xABCD'],
+        favorites: false,
+      })
     })
   })
 
   it('cancels reset data confirmation', async () => {
     const sync = makeSyncMock({
       ...FULLY_CONFIGURED,
-      scanRemote: vi.fn().mockResolvedValue({ keyboards: ['0xABCD'], favorites: [], undecryptable: [] }),
+      scanRemote: vi
+        .fn()
+        .mockResolvedValue({ keyboards: ['0xABCD'], favorites: [], undecryptable: [] }),
     })
     renderAndSwitchToTroubleshooting({ sync })
 
@@ -363,14 +378,18 @@ describe('SettingsModal', () => {
 
   it('hides close button and prevents backdrop close while busy', async () => {
     let resolveSet: (value: { success: boolean }) => void
-    const setPromise = new Promise<{ success: boolean }>((resolve) => { resolveSet = resolve })
+    const setPromise = new Promise<{ success: boolean }>((resolve) => {
+      resolveSet = resolve
+    })
     const sync = makeSyncMock({
       setPassword: vi.fn().mockReturnValue(setPromise),
       validatePassword: vi.fn().mockResolvedValue({ score: 4, feedback: [] }),
     })
     renderAndSwitchToData({ sync })
 
-    fireEvent.change(screen.getByTestId('sync-password-input'), { target: { value: 'Str0ng!Pass99' } })
+    fireEvent.change(screen.getByTestId('sync-password-input'), {
+      target: { value: 'Str0ng!Pass99' },
+    })
     await waitFor(() => {
       expect(screen.getByTestId('sync-password-save')).not.toBeDisabled()
     })
@@ -439,7 +458,9 @@ describe('SettingsModal', () => {
 
   it('shows authenticating state while sign-in is in progress', async () => {
     let resolveAuth: () => void
-    const authPromise = new Promise<void>((resolve) => { resolveAuth = resolve })
+    const authPromise = new Promise<void>((resolve) => {
+      resolveAuth = resolve
+    })
     renderAndSwitchToData({
       sync: makeSyncMock({ startAuth: vi.fn().mockReturnValue(authPromise) }),
     })
@@ -473,14 +494,18 @@ describe('SettingsModal', () => {
 
   it('hides password controls and shows busy banner while setting password', async () => {
     let resolveSet: (value: { success: boolean }) => void
-    const setPromise = new Promise<{ success: boolean }>((resolve) => { resolveSet = resolve })
+    const setPromise = new Promise<{ success: boolean }>((resolve) => {
+      resolveSet = resolve
+    })
     const sync = makeSyncMock({
       setPassword: vi.fn().mockReturnValue(setPromise),
       validatePassword: vi.fn().mockResolvedValue({ score: 4, feedback: [] }),
     })
     renderAndSwitchToData({ sync })
 
-    fireEvent.change(screen.getByTestId('sync-password-input'), { target: { value: 'Str0ng!Pass99' } })
+    fireEvent.change(screen.getByTestId('sync-password-input'), {
+      target: { value: 'Str0ng!Pass99' },
+    })
 
     await waitFor(() => {
       expect(screen.getByTestId('sync-password-save')).not.toBeDisabled()
@@ -504,10 +529,14 @@ describe('SettingsModal', () => {
 
   it('disables change password button while busy', async () => {
     let resolveImport: (value: { success: boolean }) => void
-    const importPromise = new Promise<{ success: boolean }>((resolve) => { resolveImport = resolve })
+    const importPromise = new Promise<{ success: boolean }>((resolve) => {
+      resolveImport = resolve
+    })
     mockImportLocalData.mockReturnValueOnce(importPromise)
 
-    render(<SettingsModal sync={makeSyncMock(FULLY_CONFIGURED)} {...defaultProps} onClose={onClose} />)
+    render(
+      <SettingsModal sync={makeSyncMock(FULLY_CONFIGURED)} {...defaultProps} onClose={onClose} />,
+    )
 
     // Switch to troubleshooting tab to trigger import
     fireEvent.click(screen.getByTestId('settings-tab-troubleshooting'))
@@ -528,7 +557,9 @@ describe('SettingsModal', () => {
 
   it('hides change password controls and shows busy banner while saving', async () => {
     let resolveChange: (value: { success: boolean }) => void
-    const changePromise = new Promise<{ success: boolean }>((resolve) => { resolveChange = resolve })
+    const changePromise = new Promise<{ success: boolean }>((resolve) => {
+      resolveChange = resolve
+    })
     const sync = makeSyncMock({
       ...FULLY_CONFIGURED,
       changePassword: vi.fn().mockReturnValue(changePromise),
@@ -537,7 +568,9 @@ describe('SettingsModal', () => {
     renderAndSwitchToData({ sync })
 
     fireEvent.click(screen.getByTestId('sync-password-change-btn'))
-    fireEvent.change(screen.getByTestId('sync-password-input'), { target: { value: 'NewStr0ng!Pass' } })
+    fireEvent.change(screen.getByTestId('sync-password-input'), {
+      target: { value: 'NewStr0ng!Pass' },
+    })
 
     await waitFor(() => {
       expect(screen.getByTestId('sync-password-save')).not.toBeDisabled()
@@ -629,7 +662,9 @@ describe('SettingsModal', () => {
 
     expect(screen.getByTestId('sync-status-label')).toHaveTextContent('statusBar.sync.partial')
     expect(screen.getByTestId('sync-status-partial-details')).toBeInTheDocument()
-    expect(screen.getByTestId('sync-status-partial-details')).toHaveTextContent('favorites/tapDance')
+    expect(screen.getByTestId('sync-status-partial-details')).toHaveTextContent(
+      'favorites/tapDance',
+    )
     expect(screen.getByTestId('sync-status-partial-details')).toHaveTextContent('favorites/macro')
   })
 
@@ -726,7 +761,11 @@ describe('SettingsModal', () => {
 
     await waitFor(() => {
       expect(mockResetKeyboardData).toHaveBeenCalledWith('test-uid-1')
-      expect(mockResetLocalTargets).toHaveBeenCalledWith({ keyboards: false, favorites: false, appSettings: true })
+      expect(mockResetLocalTargets).toHaveBeenCalledWith({
+        keyboards: false,
+        favorites: false,
+        appSettings: true,
+      })
     })
   })
 
@@ -739,7 +778,9 @@ describe('SettingsModal', () => {
   it('shows sync reset checkboxes after scan', async () => {
     const sync = makeSyncMock({
       ...FULLY_CONFIGURED,
-      scanRemote: vi.fn().mockResolvedValue({ keyboards: ['0xABCD'], favorites: ['tapDance'], undecryptable: [] }),
+      scanRemote: vi
+        .fn()
+        .mockResolvedValue({ keyboards: ['0xABCD'], favorites: ['tapDance'], undecryptable: [] }),
     })
     renderAndSwitchToTroubleshooting({ sync })
 
@@ -794,7 +835,9 @@ describe('SettingsModal', () => {
     fireEvent.click(screen.getByTestId('local-data-import'))
 
     await waitFor(() => {
-      expect(screen.getByTestId('local-data-import-result')).toHaveTextContent('sync.importComplete')
+      expect(screen.getByTestId('local-data-import-result')).toHaveTextContent(
+        'sync.importComplete',
+      )
     })
   })
 
@@ -830,7 +873,9 @@ describe('SettingsModal', () => {
 
   it('disables import, export, and checkboxes when busy', async () => {
     let resolveImport: (value: { success: boolean }) => void
-    const importPromise = new Promise<{ success: boolean }>((resolve) => { resolveImport = resolve })
+    const importPromise = new Promise<{ success: boolean }>((resolve) => {
+      resolveImport = resolve
+    })
     mockImportLocalData.mockReturnValueOnce(importPromise)
 
     renderAndSwitchToTroubleshooting()
@@ -905,7 +950,9 @@ describe('SettingsModal', () => {
       const onDefaultLayoutChange = vi.fn()
       renderAndSwitchToTools({ onDefaultLayoutChange })
 
-      fireEvent.change(screen.getByTestId('settings-default-layout-selector'), { target: { value: 'dvorak' } })
+      fireEvent.change(screen.getByTestId('settings-default-layout-selector'), {
+        target: { value: 'dvorak' },
+      })
       expect(onDefaultLayoutChange).toHaveBeenCalledWith('dvorak')
     })
 
@@ -943,7 +990,14 @@ describe('SettingsModal', () => {
 
     it('calls onThemeChange when a theme option is clicked', () => {
       const onThemeChange = vi.fn()
-      render(<SettingsModal sync={makeSyncMock()} {...defaultProps} onThemeChange={onThemeChange} onClose={onClose} />)
+      render(
+        <SettingsModal
+          sync={makeSyncMock()}
+          {...defaultProps}
+          onThemeChange={onThemeChange}
+          onClose={onClose}
+        />,
+      )
       fireEvent.click(screen.getByTestId('settings-tab-tools'))
 
       fireEvent.click(screen.getByTestId('theme-option-dark'))
@@ -973,7 +1027,9 @@ describe('SettingsModal', () => {
       const onAutoLockTimeChange = vi.fn()
       renderAndSwitchToTools({ onAutoLockTimeChange })
 
-      fireEvent.change(screen.getByTestId('settings-auto-lock-time-selector'), { target: { value: '30' } })
+      fireEvent.change(screen.getByTestId('settings-auto-lock-time-selector'), {
+        target: { value: '30' },
+      })
       expect(onAutoLockTimeChange).toHaveBeenCalledWith(30)
     })
 
@@ -981,7 +1037,6 @@ describe('SettingsModal', () => {
       renderAndSwitchToTools({ autoLockTime: 50 as const })
       expect(screen.getByTestId('settings-auto-lock-time-selector')).toHaveValue('50')
     })
-
   })
 
   describe('Language selector (Tools tab)', () => {
@@ -994,7 +1049,9 @@ describe('SettingsModal', () => {
       const { default: i18nMock } = await import('../../i18n')
       renderAndSwitchToTools()
 
-      fireEvent.change(screen.getByTestId('settings-language-selector'), { target: { value: 'ja' } })
+      fireEvent.change(screen.getByTestId('settings-language-selector'), {
+        target: { value: 'ja' },
+      })
       expect(mockAppConfigSet).toHaveBeenCalledWith('language', 'ja')
       expect(i18nMock.changeLanguage).toHaveBeenCalledWith('ja')
     })
@@ -1162,7 +1219,9 @@ describe('SettingsModal', () => {
           hubDisplayName: null,
         })
 
-        expect(screen.getByTestId('hub-display-name-required')).toHaveTextContent('hub.displayNameRequired')
+        expect(screen.getByTestId('hub-display-name-required')).toHaveTextContent(
+          'hub.displayNameRequired',
+        )
       })
 
       it('does not show required hint when display name is set', () => {
@@ -1192,7 +1251,9 @@ describe('SettingsModal', () => {
         fireEvent.click(screen.getByTestId('hub-display-name-save'))
 
         await waitFor(() => {
-          expect(screen.getByTestId('hub-display-name-error')).toHaveTextContent('hub.displayNameTaken')
+          expect(screen.getByTestId('hub-display-name-error')).toHaveTextContent(
+            'hub.displayNameTaken',
+          )
         })
       })
 
@@ -1213,7 +1274,9 @@ describe('SettingsModal', () => {
         fireEvent.click(screen.getByTestId('hub-display-name-save'))
 
         await waitFor(() => {
-          expect(screen.getByTestId('hub-display-name-error')).toHaveTextContent('hub.displayNameSaveFailed')
+          expect(screen.getByTestId('hub-display-name-error')).toHaveTextContent(
+            'hub.displayNameSaveFailed',
+          )
         })
       })
     })
@@ -1229,7 +1292,9 @@ describe('SettingsModal', () => {
 
   describe('Notification tab', () => {
     function renderAndSwitchToNotification(props?: Partial<Parameters<typeof SettingsModal>[0]>) {
-      const result = render(<SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} {...props} />)
+      const result = render(
+        <SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} {...props} />,
+      )
       fireEvent.click(screen.getByTestId('settings-tab-notification'))
       return result
     }
@@ -1260,8 +1325,18 @@ describe('SettingsModal', () => {
       mockNotificationFetch.mockResolvedValueOnce({
         success: true,
         notifications: [
-          { title: 'Update v2.0', body: 'New features', type: 'Info', publishedAt: '2025-06-01T00:00:00Z' },
-          { title: 'Maintenance', body: 'Scheduled downtime', type: 'Warning', publishedAt: '2025-05-15T00:00:00Z' },
+          {
+            title: 'Update v2.0',
+            body: 'New features',
+            type: 'Info',
+            publishedAt: '2025-06-01T00:00:00Z',
+          },
+          {
+            title: 'Maintenance',
+            body: 'Scheduled downtime',
+            type: 'Warning',
+            publishedAt: '2025-05-15T00:00:00Z',
+          },
         ],
       })
       renderAndSwitchToNotification()
@@ -1312,7 +1387,11 @@ describe('SettingsModal', () => {
 
     it('re-fetches when switching away during in-flight fetch and returning', async () => {
       let resolveFetch!: (value: NotificationFetchResult) => void
-      mockNotificationFetch.mockReturnValueOnce(new Promise((resolve) => { resolveFetch = resolve }))
+      mockNotificationFetch.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFetch = resolve
+        }),
+      )
 
       render(<SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} />)
 
@@ -1324,12 +1403,19 @@ describe('SettingsModal', () => {
       fireEvent.click(screen.getByTestId('settings-tab-tools'))
 
       // Resolve the in-flight fetch (cancelled by cleanup)
-      resolveFetch({ success: true, notifications: [{ title: 'Old', body: 'b', type: 'Info', publishedAt: '2025-01-01T00:00:00Z' }] })
+      resolveFetch({
+        success: true,
+        notifications: [
+          { title: 'Old', body: 'b', type: 'Info', publishedAt: '2025-01-01T00:00:00Z' },
+        ],
+      })
 
       // Set up new mock for second fetch
       mockNotificationFetch.mockResolvedValueOnce({
         success: true,
-        notifications: [{ title: 'Fresh', body: 'b', type: 'Info', publishedAt: '2025-06-01T00:00:00Z' }],
+        notifications: [
+          { title: 'Fresh', body: 'b', type: 'Info', publishedAt: '2025-06-01T00:00:00Z' },
+        ],
       })
 
       // Switch back to notification tab - should re-fetch
@@ -1346,7 +1432,9 @@ describe('SettingsModal', () => {
     it('does not re-fetch when switching tabs after successful load', async () => {
       mockNotificationFetch.mockResolvedValueOnce({
         success: true,
-        notifications: [{ title: 'Cached', body: 'b', type: 'Info', publishedAt: '2025-06-01T00:00:00Z' }],
+        notifications: [
+          { title: 'Cached', body: 'b', type: 'Info', publishedAt: '2025-06-01T00:00:00Z' },
+        ],
       })
       renderAndSwitchToNotification()
 
@@ -1371,7 +1459,9 @@ describe('SettingsModal', () => {
     it('renders notifications as semantic list items', async () => {
       mockNotificationFetch.mockResolvedValueOnce({
         success: true,
-        notifications: [{ title: 'Test', body: 'body', type: 'Info', publishedAt: '2025-06-01T00:00:00Z' }],
+        notifications: [
+          { title: 'Test', body: 'body', type: 'Info', publishedAt: '2025-06-01T00:00:00Z' },
+        ],
       })
       renderAndSwitchToNotification()
 
@@ -1386,7 +1476,9 @@ describe('SettingsModal', () => {
 
   describe('About tab', () => {
     function renderAndSwitchToAbout(props?: Partial<Parameters<typeof SettingsModal>[0]>) {
-      const result = render(<SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} {...props} />)
+      const result = render(
+        <SettingsModal sync={makeSyncMock()} {...defaultProps} onClose={onClose} {...props} />,
+      )
       fireEvent.click(screen.getByTestId('settings-tab-about'))
       return result
     }
@@ -1470,7 +1562,9 @@ describe('SettingsModal', () => {
     it('hides keyboard section when no keyboards in scan result', async () => {
       const sync = makeSyncMock({
         ...FULLY_CONFIGURED,
-        scanRemote: vi.fn().mockResolvedValue({ keyboards: [], favorites: ['tapDance'], undecryptable: [] }),
+        scanRemote: vi
+          .fn()
+          .mockResolvedValue({ keyboards: [], favorites: ['tapDance'], undecryptable: [] }),
       })
       renderAndSwitchToTroubleshooting({ sync })
 
@@ -1526,13 +1620,17 @@ describe('SettingsModal', () => {
       fireEvent.click(screen.getByTestId('sync-reset-data-confirm'))
 
       await waitFor(() => {
-        expect(sync.resetSyncTargets).toHaveBeenCalledWith({ keyboards: ['0xABCD'], favorites: false })
+        expect(sync.resetSyncTargets).toHaveBeenCalledWith({
+          keyboards: ['0xABCD'],
+          favorites: false,
+        })
         expect(sync.deleteFiles).toHaveBeenCalledWith(['f1'])
       })
     })
 
     it('re-scans after deletion', async () => {
-      const scanRemote = vi.fn()
+      const scanRemote = vi
+        .fn()
         .mockResolvedValueOnce({ keyboards: ['0xABCD'], favorites: [], undecryptable: [] })
         .mockResolvedValueOnce({ keyboards: [], favorites: [], undecryptable: [] })
       const sync = makeSyncMock({
@@ -1562,7 +1660,11 @@ describe('SettingsModal', () => {
   describe('remote password check UI', () => {
     it('shows checking spinner when checkingRemotePassword is true', () => {
       renderAndSwitchToData({
-        sync: makeSyncMock({ ...FULLY_CONFIGURED, hasPassword: false, checkingRemotePassword: true }),
+        sync: makeSyncMock({
+          ...FULLY_CONFIGURED,
+          hasPassword: false,
+          checkingRemotePassword: true,
+        }),
       })
 
       expect(screen.getByTestId('sync-checking-remote')).toBeInTheDocument()

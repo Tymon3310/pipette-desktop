@@ -117,40 +117,44 @@ export function TypingTestView({
     togglesRef.current = { punctuation: config.punctuation, numbers: config.numbers }
   }
 
-  const handleModeChange = useCallback((mode: TypingTestMode) => {
-    const { punctuation, numbers } = togglesRef.current
+  const handleModeChange = useCallback(
+    (mode: TypingTestMode) => {
+      const { punctuation, numbers } = togglesRef.current
 
-    switch (mode) {
-      case 'words':
-        onConfigChange({
-          mode: 'words',
-          wordCount: config.mode === 'words' ? config.wordCount : 30,
-          punctuation,
-          numbers,
-        })
-        break
-      case 'time':
-        onConfigChange({
-          mode: 'time',
-          duration: config.mode === 'time' ? config.duration : 30,
-          punctuation,
-          numbers,
-        })
-        break
-      case 'quote':
-        onConfigChange({
-          mode: 'quote',
-          quoteLength: config.mode === 'quote' ? config.quoteLength : 'medium',
-        })
-        break
-    }
-  }, [config, onConfigChange])
+      switch (mode) {
+        case 'words':
+          onConfigChange({
+            mode: 'words',
+            wordCount: config.mode === 'words' ? config.wordCount : 30,
+            punctuation,
+            numbers,
+          })
+          break
+        case 'time':
+          onConfigChange({
+            mode: 'time',
+            duration: config.mode === 'time' ? config.duration : 30,
+            punctuation,
+            numbers,
+          })
+          break
+        case 'quote':
+          onConfigChange({
+            mode: 'quote',
+            quoteLength: config.mode === 'quote' ? config.quoteLength : 'medium',
+          })
+          break
+      }
+    },
+    [config, onConfigChange],
+  )
 
   const hasPunctuationNumbers = config.mode === 'words' || config.mode === 'time'
 
-  const displayTime = config.mode === 'time' && remainingSeconds !== null
-    ? formatTime(remainingSeconds)
-    : formatTime(elapsedSeconds)
+  const displayTime =
+    config.mode === 'time' && remainingSeconds !== null
+      ? formatTime(remainingSeconds)
+      : formatTime(elapsedSeconds)
 
   return (
     <div data-testid="typing-test-view" className="flex flex-col items-center gap-6 px-6 py-8">
@@ -253,7 +257,10 @@ export function TypingTestView({
       <div className={`flex items-center gap-8 text-sm ${showStats ? '' : 'invisible'}`}>
         <div className="flex items-center gap-1.5">
           <span className="text-content-muted">{t('editor.typingTest.wpm')}:</span>
-          <span data-testid="typing-test-wpm" className="font-mono text-lg font-semibold text-accent">
+          <span
+            data-testid="typing-test-wpm"
+            className="font-mono text-lg font-semibold text-accent"
+          >
             {wpm}
           </span>
         </div>
@@ -363,7 +370,9 @@ export function TypingTestView({
       <div className="-my-2">
         <button
           type="button"
-          data-testid={state.status === 'finished' ? 'typing-test-restart' : 'typing-test-restart-running'}
+          data-testid={
+            state.status === 'finished' ? 'typing-test-restart' : 'typing-test-restart-running'
+          }
           className="rounded-md border border-edge p-1.5 text-content-secondary transition-colors hover:text-content"
           onClick={onRestart}
           aria-label={t('editor.typingTest.restart')}
@@ -375,7 +384,10 @@ export function TypingTestView({
 
       {/* Finished results */}
       {state.status === 'finished' && (
-        <div data-testid="typing-test-results" className="flex flex-wrap items-center gap-6 border-t border-edge pt-4 text-lg">
+        <div
+          data-testid="typing-test-results"
+          className="flex flex-wrap items-center gap-6 border-t border-edge pt-4 text-lg"
+        >
           <span className="font-semibold">{t('editor.typingTest.finished')}</span>
           <span className="text-content-muted">
             {t('editor.typingTest.wpm')}: <span className="font-semibold text-accent">{wpm}</span>
@@ -390,7 +402,6 @@ export function TypingTestView({
           )}
         </div>
       )}
-
     </div>
   )
 }
@@ -405,7 +416,15 @@ interface WordDisplayProps {
   compositionText?: string
 }
 
-function WordDisplay({ word, wordIndex, currentWordIndex, currentInput, wordResults, cursorBlink, compositionText = '' }: WordDisplayProps) {
+function WordDisplay({
+  word,
+  wordIndex,
+  currentWordIndex,
+  currentInput,
+  wordResults,
+  cursorBlink,
+  compositionText = '',
+}: WordDisplayProps) {
   const testId = `word-${wordIndex}`
 
   // Completed word — per-character coloring
@@ -488,20 +507,21 @@ function WordDisplay({ word, wordIndex, currentWordIndex, currentInput, wordResu
         })}
         {/* Extra composition chars beyond word length */}
         {typedLength + compositionLength > word.length &&
-          compositionChars
-            .slice(Math.max(0, word.length - typedLength))
-            .map((char, i) => (
-              <span key={`comp-extra-${i}`} className={COMPOSITION_CHAR_CLASS}>
-                {char}
-              </span>
-            ))}
+          compositionChars.slice(Math.max(0, word.length - typedLength)).map((char, i) => (
+            <span key={`comp-extra-${i}`} className={COMPOSITION_CHAR_CLASS}>
+              {char}
+            </span>
+          ))}
         {/* Extra typed chars beyond word length */}
         {typedLength > word.length &&
           currentInput
             .slice(word.length)
             .split('')
             .map((char, i) => (
-              <span key={`extra-${i}`} className="text-danger underline decoration-danger/50 decoration-2 underline-offset-[3px]">
+              <span
+                key={`extra-${i}`}
+                className="text-danger underline decoration-danger/50 decoration-2 underline-offset-[3px]"
+              >
                 {char}
               </span>
             ))}

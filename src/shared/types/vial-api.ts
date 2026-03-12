@@ -15,10 +15,32 @@ import type {
 import type { SnapshotMeta } from './snapshot-store'
 import type { FavoriteType, SavedFavoriteMeta, FavoriteImportResult } from './favorite-store'
 import type { AppConfig } from './app-config'
-import type { SyncAuthStatus, SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, UndecryptableFile, SyncScope, SyncDataScanResult, StoredKeyboardInfo } from './sync'
+import type {
+  SyncAuthStatus,
+  SyncProgress,
+  PasswordStrength,
+  SyncResetTargets,
+  LocalResetTargets,
+  UndecryptableFile,
+  SyncScope,
+  SyncDataScanResult,
+  StoredKeyboardInfo,
+} from './sync'
 import type { PipetteSettings } from './pipette-settings'
 import type { LanguageListEntry } from './language-store'
-import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyKeyboardPostsResult, HubFetchMyPostsParams, HubUserResult, HubUploadFavoritePostParams, HubUpdateFavoritePostParams } from './hub'
+import type {
+  HubUploadPostParams,
+  HubUpdatePostParams,
+  HubPatchPostParams,
+  HubUploadResult,
+  HubDeleteResult,
+  HubFetchMyPostsResult,
+  HubFetchMyKeyboardPostsResult,
+  HubFetchMyPostsParams,
+  HubUserResult,
+  HubUploadFavoritePostParams,
+  HubUpdateFavoritePostParams,
+} from './hub'
 import type { NotificationFetchResult } from './notification'
 
 export interface VialAPI {
@@ -42,12 +64,7 @@ export interface VialAPI {
   getDefinitionRaw(size: number): Promise<number[]>
   getDefinition(): Promise<KeyboardDefinition | null>
   getEncoder(layer: number, index: number): Promise<[number, number]>
-  setEncoder(
-    layer: number,
-    index: number,
-    direction: number,
-    keycode: number,
-  ): Promise<void>
+  setEncoder(layer: number, index: number, direction: number, keycode: number): Promise<void>
 
   // Macro
   getMacroCount(): Promise<number>
@@ -99,33 +116,87 @@ export interface VialAPI {
   keychronSetReportRate(rate: number): Promise<boolean>
   keychronSetPollRateV2(usbRate: number, frRate: number): Promise<boolean>
   keychronSetWirelessLpm(backlitTime: number, idleTime: number): Promise<boolean>
-  keychronSetSnapClick(index: number, snapType: number, key1: number, key2: number): Promise<boolean>
+  keychronSetSnapClick(
+    index: number,
+    snapType: number,
+    key1: number,
+    key2: number,
+  ): Promise<boolean>
   keychronSaveSnapClick(): Promise<boolean>
   keychronSetPerKeyRGBType(effectType: number): Promise<void>
   keychronSetPerKeyColor(ledIndex: number, h: number, s: number, v: number): Promise<void>
   keychronSaveRGB(): Promise<void>
   keychronSetIndicators(disableMask: number, hue: number, sat: number, val: number): Promise<void>
   keychronSetMixedRGBRegions(startIndex: number, regions: number[]): Promise<void>
-  keychronSetMixedRGBEffects(regionIndex: number, startIndex: number, effects: import('./keychron').MixedRGBEffect[]): Promise<void>
+  keychronSetMixedRGBEffects(
+    regionIndex: number,
+    startIndex: number,
+    effects: import('./keychron').MixedRGBEffect[],
+  ): Promise<void>
   keychronAnalogReload(rows: number, cols: number): Promise<unknown>
   keychronAnalogGetVersion(): Promise<number>
-  keychronAnalogGetProfilesInfo(): Promise<{ currentProfile: number; profileCount: number; profileSize: number; okmcCount: number; socdCount: number }>
+  keychronAnalogGetProfilesInfo(): Promise<{
+    currentProfile: number
+    profileCount: number
+    profileSize: number
+    okmcCount: number
+    socdCount: number
+  }>
   keychronAnalogGetCurve(): Promise<number[]>
   keychronAnalogSetCurve(curvePoints: number[]): Promise<boolean>
   keychronAnalogGetGameControllerMode(): Promise<number>
   keychronAnalogSetProfile(profileIndex: number): Promise<boolean>
-  keychronAnalogSetTravel(profile: number, mode: number, actPt: number, sens: number, rlsSens: number, entire: boolean, rowMask?: number[]): Promise<boolean>
-  keychronAnalogSetSocd(profile: number, row1: number, col1: number, row2: number, col2: number, index: number, socdType: number): Promise<boolean>
+  keychronAnalogSetTravel(
+    profile: number,
+    mode: number,
+    actPt: number,
+    sens: number,
+    rlsSens: number,
+    entire: boolean,
+    rowMask?: number[],
+  ): Promise<boolean>
+  keychronAnalogSetSocd(
+    profile: number,
+    row1: number,
+    col1: number,
+    row2: number,
+    col2: number,
+    index: number,
+    socdType: number,
+  ): Promise<boolean>
   keychronAnalogSaveProfile(profile: number): Promise<boolean>
   keychronAnalogResetProfile(profile: number): Promise<boolean>
   keychronAnalogSetGameControllerMode(mode: number): Promise<boolean>
   keychronAnalogGetProfileRaw(profile: number, offset: number, size: number): Promise<number[]>
   keychronAnalogStartCalibration(calibType: number): Promise<boolean>
   keychronAnalogGetCalibrationState(): Promise<{ calibrated: number; state: number } | null>
-  keychronAnalogGetRealtimeTravel(row: number, col: number): Promise<{ row: number; col: number; travelMm: number; travelRaw: number; value: number; zero: number; full: number; state: number } | null>
+  keychronAnalogGetRealtimeTravel(
+    row: number,
+    col: number,
+  ): Promise<{
+    row: number
+    col: number
+    travelMm: number
+    travelRaw: number
+    value: number
+    zero: number
+    full: number
+    state: number
+  } | null>
   keychronAnalogSetProfileName(profile: number, name: string): Promise<boolean>
   keychronAnalogSetAdvanceModeClear(profile: number, row: number, col: number): Promise<boolean>
-  keychronAnalogSetAdvanceModeDks(profile: number, row: number, col: number, okmcIndex: number, shallowAct: number, shallowDeact: number, deepAct: number, deepDeact: number, keycodes: number[], actions: number[]): Promise<boolean>
+  keychronAnalogSetAdvanceModeDks(
+    profile: number,
+    row: number,
+    col: number,
+    okmcIndex: number,
+    shallowAct: number,
+    shallowDeact: number,
+    deepAct: number,
+    deepDeact: number,
+    keycodes: number[],
+    actions: number[],
+  ): Promise<boolean>
   keychronAnalogSetAdvanceModeToggle(profile: number, row: number, col: number): Promise<boolean>
 
   // Keychron DFU Flasher
@@ -136,32 +207,82 @@ export interface VialAPI {
   jumpToBootloader(): Promise<void>
 
   // File I/O (IPC to main for native file dialogs)
-  saveLayout(json: string, deviceName?: string): Promise<{ success: boolean; filePath?: string; error?: string }>
-  loadLayout(title?: string): Promise<{ success: boolean; data?: string; filePath?: string; error?: string }>
-  exportKeymapC(content: string, deviceName?: string): Promise<{ success: boolean; filePath?: string; error?: string }>
-  exportPdf(base64Data: string, deviceName?: string): Promise<{ success: boolean; filePath?: string; error?: string }>
-  exportCsv(content: string, defaultName?: string): Promise<{ success: boolean; filePath?: string; error?: string }>
+  saveLayout(
+    json: string,
+    deviceName?: string,
+  ): Promise<{ success: boolean; filePath?: string; error?: string }>
+  loadLayout(
+    title?: string,
+  ): Promise<{ success: boolean; data?: string; filePath?: string; error?: string }>
+  exportKeymapC(
+    content: string,
+    deviceName?: string,
+  ): Promise<{ success: boolean; filePath?: string; error?: string }>
+  exportPdf(
+    base64Data: string,
+    deviceName?: string,
+  ): Promise<{ success: boolean; filePath?: string; error?: string }>
+  exportCsv(
+    content: string,
+    defaultName?: string,
+  ): Promise<{ success: boolean; filePath?: string; error?: string }>
   sideloadJson(title?: string): Promise<{ success: boolean; data?: unknown; error?: string }>
 
+  // Debug
+  getDebugFlags(): Promise<Record<string, string | undefined>>
+
   // Snapshot Store (internal save/load)
-  snapshotStoreList(uid: string): Promise<{ success: boolean; entries?: SnapshotMeta[]; error?: string }>
-  snapshotStoreSave(uid: string, json: string, deviceName: string, label: string): Promise<{ success: boolean; entry?: SnapshotMeta; error?: string }>
-  snapshotStoreLoad(uid: string, entryId: string): Promise<{ success: boolean; data?: string; error?: string }>
-  snapshotStoreRename(uid: string, entryId: string, newLabel: string): Promise<{ success: boolean; error?: string }>
+  snapshotStoreList(
+    uid: string,
+  ): Promise<{ success: boolean; entries?: SnapshotMeta[]; error?: string }>
+  snapshotStoreSave(
+    uid: string,
+    json: string,
+    deviceName: string,
+    label: string,
+  ): Promise<{ success: boolean; entry?: SnapshotMeta; error?: string }>
+  snapshotStoreLoad(
+    uid: string,
+    entryId: string,
+  ): Promise<{ success: boolean; data?: string; error?: string }>
+  snapshotStoreRename(
+    uid: string,
+    entryId: string,
+    newLabel: string,
+  ): Promise<{ success: boolean; error?: string }>
   snapshotStoreDelete(uid: string, entryId: string): Promise<{ success: boolean; error?: string }>
 
   // Favorite Store (internal save/load)
-  favoriteStoreList(type: string): Promise<{ success: boolean; entries?: SavedFavoriteMeta[]; error?: string }>
-  favoriteStoreSave(type: string, json: string, label: string): Promise<{ success: boolean; entry?: SavedFavoriteMeta; error?: string }>
-  favoriteStoreLoad(type: string, entryId: string): Promise<{ success: boolean; data?: string; error?: string }>
-  favoriteStoreRename(type: string, entryId: string, newLabel: string): Promise<{ success: boolean; error?: string }>
+  favoriteStoreList(
+    type: string,
+  ): Promise<{ success: boolean; entries?: SavedFavoriteMeta[]; error?: string }>
+  favoriteStoreSave(
+    type: string,
+    json: string,
+    label: string,
+  ): Promise<{ success: boolean; entry?: SavedFavoriteMeta; error?: string }>
+  favoriteStoreLoad(
+    type: string,
+    entryId: string,
+  ): Promise<{ success: boolean; data?: string; error?: string }>
+  favoriteStoreRename(
+    type: string,
+    entryId: string,
+    newLabel: string,
+  ): Promise<{ success: boolean; error?: string }>
   favoriteStoreDelete(type: string, entryId: string): Promise<{ success: boolean; error?: string }>
-  favoriteStoreExport(scope: string, entryId?: string): Promise<{ success: boolean; error?: string }>
+  favoriteStoreExport(
+    scope: string,
+    entryId?: string,
+  ): Promise<{ success: boolean; error?: string }>
   favoriteStoreImport(): Promise<FavoriteImportResult>
 
   // Pipette Settings Store
   pipetteSettingsGet(uid: string): Promise<PipetteSettings | null>
-  pipetteSettingsSet(uid: string, prefs: PipetteSettings): Promise<{ success: boolean; error?: string }>
+  pipetteSettingsSet(
+    uid: string,
+    prefs: PipetteSettings,
+  ): Promise<{ success: boolean; error?: string }>
 
   // App Config
   appConfigGetAll(): Promise<AppConfig>
@@ -171,7 +292,10 @@ export interface VialAPI {
   syncAuthStart(): Promise<{ success: boolean; error?: string }>
   syncAuthStatus(): Promise<SyncAuthStatus>
   syncAuthSignOut(): Promise<{ success: boolean; error?: string }>
-  syncExecute(direction: 'download' | 'upload', scope?: SyncScope): Promise<{ success: boolean; error?: string }>
+  syncExecute(
+    direction: 'download' | 'upload',
+    scope?: SyncScope,
+  ): Promise<{ success: boolean; error?: string }>
   syncSetPassword(password: string): Promise<{ success: boolean; error?: string }>
   syncChangePassword(newPassword: string): Promise<{ success: boolean; error?: string }>
   syncResetTargets(targets: SyncResetTargets): Promise<{ success: boolean; error?: string }>
@@ -217,12 +341,20 @@ export interface VialAPI {
   openExternal(url: string): Promise<void>
 
   // Snapshot Store extensions
-  snapshotStoreSetHubPostId(uid: string, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }>
+  snapshotStoreSetHubPostId(
+    uid: string,
+    entryId: string,
+    hubPostId: string | null,
+  ): Promise<{ success: boolean; error?: string }>
 
   // Hub Feature posts (favorites)
   hubUploadFavoritePost(params: HubUploadFavoritePostParams): Promise<HubUploadResult>
   hubUpdateFavoritePost(params: HubUpdateFavoritePostParams): Promise<HubUploadResult>
 
   // Favorite Store extensions
-  favoriteStoreSetHubPostId(type: FavoriteType, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }>
+  favoriteStoreSetHubPostId(
+    type: FavoriteType,
+    entryId: string,
+    hubPostId: string | null,
+  ): Promise<{ success: boolean; error?: string }>
 }

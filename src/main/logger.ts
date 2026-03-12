@@ -3,14 +3,7 @@
 
 import { app } from 'electron'
 import { join } from 'node:path'
-import {
-  existsSync,
-  mkdirSync,
-  statSync,
-  renameSync,
-  unlinkSync,
-  appendFileSync,
-} from 'node:fs'
+import { existsSync, mkdirSync, statSync, renameSync, unlinkSync, appendFileSync } from 'node:fs'
 
 const LOG_FILE_PREFIX = 'pipette-'
 const LOG_FILE_EXT = '.log'

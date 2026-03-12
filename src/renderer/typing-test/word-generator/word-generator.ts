@@ -26,10 +26,7 @@ export async function getLanguageData(name: string): Promise<LanguageData> {
   return languageCache.get('english')!
 }
 
-function sampleWords(
-  wordList: readonly string[],
-  count: number,
-): string[] {
+function sampleWords(wordList: readonly string[], count: number): string[] {
   if (wordList.length === 0) {
     throw new Error('Word list is empty')
   }
@@ -127,14 +124,22 @@ function applyOptions(words: string[], options?: GenerateOptions): string[] {
   return result
 }
 
-export function generateWordsSync(wordCount: number = 30, options?: GenerateOptions, language?: string): GeneratedWords {
+export function generateWordsSync(
+  wordCount: number = 30,
+  options?: GenerateOptions,
+  language?: string,
+): GeneratedWords {
   const fallback = english as LanguageData
   const langData = language ? (getLanguageDataSync(language) ?? fallback) : fallback
   const words = applyOptions(sampleWords(langData.words, wordCount), options)
   return { words }
 }
 
-export async function generateWords(wordCount: number = 30, options?: GenerateOptions, language?: string): Promise<GeneratedWords> {
+export async function generateWords(
+  wordCount: number = 30,
+  options?: GenerateOptions,
+  language?: string,
+): Promise<GeneratedWords> {
   const langData = language ? await getLanguageData(language) : (english as LanguageData)
   const words = applyOptions(sampleWords(langData.words, wordCount), options)
   return { words }

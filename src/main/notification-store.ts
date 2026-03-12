@@ -58,9 +58,7 @@ export async function fetchNotifications(): Promise<NotificationFetchResult> {
       deviceId: 'all',
       type: 'notification',
       collection: 'pipette-notification',
-      filters: [
-        { field: 'publishedAt', op: '<=', value: Date.now() },
-      ],
+      filters: [{ field: 'publishedAt', op: '<=', value: Date.now() }],
       orderBy: { field: 'publishedAt', direction: 'desc' },
       limit: 10,
     }
@@ -75,7 +73,7 @@ export async function fetchNotifications(): Promise<NotificationFetchResult> {
       log('warn', `Notification fetch failed: HTTP ${response.status}`)
       return { success: false, error: `HTTP ${response.status}` }
     }
-    const data = await response.json() as Record<string, unknown>
+    const data = (await response.json()) as Record<string, unknown>
     const rawList = data.notifications
     if (!Array.isArray(rawList)) {
       log('warn', 'Notification fetch: response.notifications is not an array')

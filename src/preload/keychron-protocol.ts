@@ -92,6 +92,9 @@ import {
   BL_CONFIRMED,
   BL_TIMEOUT,
   BL_EXCEEDED,
+  OKMC_ACTION_PRESS,
+  OKMC_ACTION_RELEASE,
+  OKMC_ACTION_NONE,
 } from '../shared/constants/keychron'
 import type {
   KeychronState,
@@ -106,6 +109,17 @@ import type {
   AnalogProfile,
 } from '../shared/types/keychron'
 import { emptyKeychronState } from '../shared/types/keychron'
+
+// Unify all Keychron debug toggles if a global debug flag is set
+if (process.env.DEBUG_KEYCHRON_ALL || process.env.DEBUG_FAKE_DEVICE) {
+  process.env.DEBUG_KEYCHRON_ANALOG = '1'
+  process.env.DEBUG_KEYCHRON_RGB = '1'
+  process.env.DEBUG_KEYCHRON_SNAP_CLICK = '1'
+  process.env.DEBUG_KEYCHRON_DEBOUNCE = '1'
+  process.env.DEBUG_KEYCHRON_NKRO = '1'
+  process.env.DEBUG_KEYCHRON_REPORT_RATE = '1'
+  process.env.DEBUG_KEYCHRON_WIRELESS = '1'
+}
 
 // --- Packet helpers (match protocol.ts style) ---
 
@@ -218,11 +232,7 @@ export async function getKeychronDefaultLayer(): Promise<number> {
 /** Get debounce settings. Returns { type, time }. */
 export async function getKeychronDebounce(): Promise<{ type: number; time: number }> {
   const resp = await sendReceive(cmd(KC_MISC_CMD_GROUP, DEBOUNCE_GET))
-  if (
-    resp[0] === KC_MISC_CMD_GROUP &&
-    resp[1] === DEBOUNCE_GET &&
-    resp[2] === KC_SUCCESS
-  ) {
+  if (resp[0] === KC_MISC_CMD_GROUP && resp[1] === DEBOUNCE_GET && resp[2] === KC_SUCCESS) {
     return { type: resp[4], time: resp[5] }
   }
   return { type: 0, time: 5 }
@@ -233,14 +243,9 @@ export async function setKeychronDebounce(
   debounceType: number,
   debounceTime: number,
 ): Promise<boolean> {
-  const resp = await sendReceive(
-    cmd(KC_MISC_CMD_GROUP, DEBOUNCE_SET, debounceType, debounceTime),
-  )
-  return (
-    resp[0] === KC_MISC_CMD_GROUP &&
-    resp[1] === DEBOUNCE_SET &&
-    resp[2] === KC_SUCCESS
-  )
+  if (process.env.DEBUG_KEYCHRON_DEBOUNCE || process.env.DEBUG_KEYCHRON_ALL) return true
+  const resp = await sendReceive(cmd(KC_MISC_CMD_GROUP, DEBOUNCE_SET, debounceType, debounceTime))
+  return resp[0] === KC_MISC_CMD_GROUP && resp[1] === DEBOUNCE_SET && resp[2] === KC_SUCCESS
 }
 
 // =====================================================================
@@ -254,11 +259,7 @@ export async function getKeychronNkro(): Promise<{
   adaptive: boolean
 }> {
   const resp = await sendReceive(cmd(KC_MISC_CMD_GROUP, NKRO_GET))
-  if (
-    resp[0] === KC_MISC_CMD_GROUP &&
-    resp[1] === NKRO_GET &&
-    resp[2] === KC_SUCCESS
-  ) {
+  if (resp[0] === KC_MISC_CMD_GROUP && resp[1] === NKRO_GET && resp[2] === KC_SUCCESS) {
     const flags = resp[3]
     return {
       enabled: !!(flags & 0x01),
@@ -271,14 +272,9 @@ export async function getKeychronNkro(): Promise<{
 
 /** Set NKRO enabled/disabled. Returns true on success. */
 export async function setKeychronNkro(enabled: boolean): Promise<boolean> {
-  const resp = await sendReceive(
-    cmd(KC_MISC_CMD_GROUP, NKRO_SET, enabled ? 1 : 0),
-  )
-  return (
-    resp[0] === KC_MISC_CMD_GROUP &&
-    resp[1] === NKRO_SET &&
-    resp[2] === KC_SUCCESS
-  )
+  if (process.env.DEBUG_KEYCHRON_NKRO || process.env.DEBUG_KEYCHRON_ALL) return true
+  const resp = await sendReceive(cmd(KC_MISC_CMD_GROUP, NKRO_SET, enabled ? 1 : 0))
+  return resp[0] === KC_MISC_CMD_GROUP && resp[1] === NKRO_SET && resp[2] === KC_SUCCESS
 }
 
 // =====================================================================
@@ -301,11 +297,7 @@ export async function getKeychronReportRate(miscProtocolVersion: number): Promis
   const isV2 = miscProtocolVersion === 3
   const resp = await sendReceive(cmd(KC_MISC_CMD_GROUP, REPORT_RATE_GET))
 
-  if (
-    resp[0] === KC_MISC_CMD_GROUP &&
-    resp[1] === REPORT_RATE_GET &&
-    resp[2] === KC_SUCCESS
-  ) {
+  if (resp[0] === KC_MISC_CMD_GROUP && resp[1] === REPORT_RATE_GET && resp[2] === KC_SUCCESS) {
     if (isV2) {
       // v2 dual rate: data[3]=current_usb, data[4]=support_usb,
       //               data[5]=support_fr, data[6]=current_fr
@@ -351,27 +343,16 @@ export async function getKeychronReportRate(miscProtocolVersion: number): Promis
 
 /** Set report rate (v1 single rate). Returns true on success. */
 export async function setKeychronReportRate(rate: number): Promise<boolean> {
+  if (process.env.DEBUG_KEYCHRON_REPORT_RATE || process.env.DEBUG_KEYCHRON_ALL) return true
   const resp = await sendReceive(cmd(KC_MISC_CMD_GROUP, REPORT_RATE_SET, rate))
-  return (
-    resp[0] === KC_MISC_CMD_GROUP &&
-    resp[1] === REPORT_RATE_SET &&
-    resp[2] === KC_SUCCESS
-  )
+  return resp[0] === KC_MISC_CMD_GROUP && resp[1] === REPORT_RATE_SET && resp[2] === KC_SUCCESS
 }
 
 /** Set dual polling rates (v2): separate USB and 2.4 GHz rates. */
-export async function setKeychronPollRateV2(
-  usbRate: number,
-  frRate: number,
-): Promise<boolean> {
-  const resp = await sendReceive(
-    cmd(KC_MISC_CMD_GROUP, REPORT_RATE_SET, usbRate, frRate),
-  )
-  return (
-    resp[0] === KC_MISC_CMD_GROUP &&
-    resp[1] === REPORT_RATE_SET &&
-    resp[2] === KC_SUCCESS
-  )
+export async function setKeychronPollRateV2(usbRate: number, frRate: number): Promise<boolean> {
+  if (process.env.DEBUG_KEYCHRON_REPORT_RATE || process.env.DEBUG_KEYCHRON_ALL) return true
+  const resp = await sendReceive(cmd(KC_MISC_CMD_GROUP, REPORT_RATE_SET, usbRate, frRate))
+  return resp[0] === KC_MISC_CMD_GROUP && resp[1] === REPORT_RATE_SET && resp[2] === KC_SUCCESS
 }
 
 // =====================================================================
@@ -381,11 +362,7 @@ export async function setKeychronPollRateV2(
 /** Get Snap Click info. Returns the max count of configurable pairs. */
 export async function getKeychronSnapClickInfo(): Promise<number> {
   const resp = await sendReceive(cmd(KC_MISC_CMD_GROUP, SNAP_CLICK_GET_INFO))
-  if (
-    resp[0] === KC_MISC_CMD_GROUP &&
-    resp[1] === SNAP_CLICK_GET_INFO &&
-    resp[2] === KC_SUCCESS
-  ) {
+  if (resp[0] === KC_MISC_CMD_GROUP && resp[1] === SNAP_CLICK_GET_INFO && resp[2] === KC_SUCCESS) {
     return resp[3]
   }
   return 0
@@ -395,21 +372,13 @@ export async function getKeychronSnapClickInfo(): Promise<number> {
  * Get all Snap Click entries.
  * Each entry is 3 bytes: (type, key1, key2). Fetches up to 8 per packet.
  */
-export async function getKeychronSnapClickEntries(
-  count: number,
-): Promise<SnapClickEntry[]> {
+export async function getKeychronSnapClickEntries(count: number): Promise<SnapClickEntry[]> {
   const entries: SnapClickEntry[] = []
   let idx = 0
   while (idx < count) {
     const batchSize = Math.min(8, count - idx)
-    const resp = await sendReceive(
-      cmd(KC_MISC_CMD_GROUP, SNAP_CLICK_GET, idx, batchSize),
-    )
-    if (
-      resp[0] === KC_MISC_CMD_GROUP &&
-      resp[1] === SNAP_CLICK_GET &&
-      resp[2] === KC_SUCCESS
-    ) {
+    const resp = await sendReceive(cmd(KC_MISC_CMD_GROUP, SNAP_CLICK_GET, idx, batchSize))
+    if (resp[0] === KC_MISC_CMD_GROUP && resp[1] === SNAP_CLICK_GET && resp[2] === KC_SUCCESS) {
       for (let i = 0; i < batchSize; i++) {
         const offset = 3 + i * 3
         entries.push({
@@ -431,32 +400,18 @@ export async function setKeychronSnapClick(
   key1: number,
   key2: number,
 ): Promise<boolean> {
+  if (process.env.DEBUG_KEYCHRON_SNAP_CLICK || process.env.DEBUG_KEYCHRON_ALL) return true
   const resp = await sendReceive(
-    cmd(
-      KC_MISC_CMD_GROUP,
-      SNAP_CLICK_SET,
-      index,
-      1,
-      snapType,
-      key1 & 0xff,
-      key2 & 0xff,
-    ),
+    cmd(KC_MISC_CMD_GROUP, SNAP_CLICK_SET, index, 1, snapType, key1 & 0xff, key2 & 0xff),
   )
-  return (
-    resp[0] === KC_MISC_CMD_GROUP &&
-    resp[1] === SNAP_CLICK_SET &&
-    resp[2] === KC_SUCCESS
-  )
+  return resp[0] === KC_MISC_CMD_GROUP && resp[1] === SNAP_CLICK_SET && resp[2] === KC_SUCCESS
 }
 
 /** Save Snap Click settings to EEPROM. Returns true on success. */
 export async function saveKeychronSnapClick(): Promise<boolean> {
+  if (process.env.DEBUG_KEYCHRON_SNAP_CLICK || process.env.DEBUG_KEYCHRON_ALL) return true
   const resp = await sendReceive(cmd(KC_MISC_CMD_GROUP, SNAP_CLICK_SAVE))
-  return (
-    resp[0] === KC_MISC_CMD_GROUP &&
-    resp[1] === SNAP_CLICK_SAVE &&
-    resp[2] === KC_SUCCESS
-  )
+  return resp[0] === KC_MISC_CMD_GROUP && resp[1] === SNAP_CLICK_SAVE && resp[2] === KC_SUCCESS
 }
 
 // =====================================================================
@@ -469,11 +424,7 @@ export async function getKeychronWirelessLpm(): Promise<{
   idleTime: number
 }> {
   const resp = await sendReceive(cmd(KC_MISC_CMD_GROUP, WIRELESS_LPM_GET))
-  if (
-    resp[0] === KC_MISC_CMD_GROUP &&
-    resp[1] === WIRELESS_LPM_GET &&
-    resp[2] === KC_SUCCESS
-  ) {
+  if (resp[0] === KC_MISC_CMD_GROUP && resp[1] === WIRELESS_LPM_GET && resp[2] === KC_SUCCESS) {
     // data[3..4] = backlit_time LE16, data[5..6] = idle_time LE16
     const backlitTime = resp[3] | (resp[4] << 8)
     const idleTime = resp[5] | (resp[6] << 8)
@@ -487,6 +438,7 @@ export async function setKeychronWirelessLpm(
   backlitTime: number,
   idleTime: number,
 ): Promise<boolean> {
+  if (process.env.DEBUG_KEYCHRON_WIRELESS || process.env.DEBUG_KEYCHRON_ALL) return true
   const pkt = new Uint8Array(MSG_LEN)
   pkt[0] = KC_MISC_CMD_GROUP
   pkt[1] = WIRELESS_LPM_SET
@@ -495,11 +447,7 @@ export async function setKeychronWirelessLpm(
   pkt[4] = idleTime & 0xff
   pkt[5] = (idleTime >> 8) & 0xff
   const resp = await sendReceive(pkt)
-  return (
-    resp[0] === KC_MISC_CMD_GROUP &&
-    resp[1] === WIRELESS_LPM_SET &&
-    resp[2] === KC_SUCCESS
-  )
+  return resp[0] === KC_MISC_CMD_GROUP && resp[1] === WIRELESS_LPM_SET && resp[2] === KC_SUCCESS
 }
 
 // =====================================================================
@@ -517,6 +465,7 @@ export async function getKeychronRGBProtocolVersion(): Promise<number> {
 
 /** Save Keychron RGB settings to EEPROM. */
 export async function saveKeychronRGB(): Promise<void> {
+  if (process.env.DEBUG_KEYCHRON_RGB || process.env.DEBUG_KEYCHRON_ALL) return
   await sendReceive(cmd(KC_KEYCHRON_RGB, RGB_SAVE))
 }
 
@@ -546,9 +495,8 @@ export async function setKeychronIndicators(
   sat: number,
   val: number,
 ): Promise<void> {
-  await sendReceive(
-    cmd(KC_KEYCHRON_RGB, SET_INDICATORS_CONFIG, disableMask, hue, sat, val),
-  )
+  if (process.env.DEBUG_KEYCHRON_RGB || process.env.DEBUG_KEYCHRON_ALL) return
+  await sendReceive(cmd(KC_KEYCHRON_RGB, SET_INDICATORS_CONFIG, disableMask, hue, sat, val))
 }
 
 /** Get total LED count. */
@@ -622,6 +570,7 @@ export async function getKeychronPerKeyRGBType(): Promise<number> {
 
 /** Set per-key RGB effect type. */
 export async function setKeychronPerKeyRGBType(effectType: number): Promise<void> {
+  if (process.env.DEBUG_KEYCHRON_RGB || process.env.DEBUG_KEYCHRON_ALL) return
   await sendReceive(cmd(KC_KEYCHRON_RGB, PER_KEY_RGB_SET_TYPE, effectType))
 }
 
@@ -664,10 +613,9 @@ export async function setKeychronPerKeyColor(
   s: number,
   v: number,
 ): Promise<void> {
+  if (process.env.DEBUG_KEYCHRON_RGB || process.env.DEBUG_KEYCHRON_ALL) return
   // Protocol: [0xA8] [0x0A] [index] [1] [hue] [sat] [val]
-  await sendReceive(
-    cmd(KC_KEYCHRON_RGB, PER_KEY_RGB_SET_COLOR, ledIndex, 1, h, s, v),
-  )
+  await sendReceive(cmd(KC_KEYCHRON_RGB, PER_KEY_RGB_SET_COLOR, ledIndex, 1, h, s, v))
 }
 
 /** Get Mixed RGB info: layers and effects per layer. */
@@ -687,9 +635,7 @@ export async function getKeychronMixedRGBInfo(): Promise<{
 }
 
 /** Get Mixed RGB region assignments. Returns array of region IDs per LED. */
-export async function getKeychronMixedRGBRegions(
-  ledCount: number,
-): Promise<number[]> {
+export async function getKeychronMixedRGBRegions(ledCount: number): Promise<number[]> {
   const regions: number[] = []
   let idx = 0
   while (idx < ledCount) {
@@ -722,6 +668,7 @@ export async function setKeychronMixedRGBRegions(
   startIndex: number,
   regions: number[],
 ): Promise<void> {
+  if (process.env.DEBUG_KEYCHRON_RGB || process.env.DEBUG_KEYCHRON_ALL) return
   let idx = 0
   while (idx < regions.length) {
     // Max 28 per packet (32 - cmd - subcmd - start - count)
@@ -772,10 +719,7 @@ export async function getKeychronMixedRGBEffects(
           sat: resp[off + 2],
           speed: resp[off + 3],
           time:
-            resp[off + 4] |
-            (resp[off + 5] << 8) |
-            (resp[off + 6] << 16) |
-            (resp[off + 7] << 24),
+            resp[off + 4] | (resp[off + 5] << 8) | (resp[off + 6] << 16) | (resp[off + 7] << 24),
         })
       }
     } else {
@@ -795,6 +739,7 @@ export async function setKeychronMixedRGBEffects(
   startIndex: number,
   effects: MixedRGBEffect[],
 ): Promise<void> {
+  if (process.env.DEBUG_KEYCHRON_RGB || process.env.DEBUG_KEYCHRON_ALL) return
   let idx = 0
   while (idx < effects.length) {
     // Max 3 per packet
@@ -877,6 +822,8 @@ export async function getKeychronAnalogCurve(): Promise<number[]> {
 
 /** Set Analog Matrix joystick response curve. */
 export async function setKeychronAnalogCurve(curvePoints: number[]): Promise<boolean> {
+  if (process.env.DEBUG_KEYCHRON_ANALOG || process.env.DEBUG_KEYCHRON_ALL) return true
+  if (curvePoints.length !== 8) return false
   const packet = cmd(KC_ANALOG_MATRIX, AMC_SET_CURVE)
   for (let i = 0; i < 8; i++) {
     packet[i + 2] = curvePoints[i] ?? 0
@@ -900,12 +847,9 @@ export async function getKeychronAnalogGameControllerMode(): Promise<number> {
 
 /** Select Analog Profile. */
 export async function setKeychronAnalogProfile(profileIndex: number): Promise<boolean> {
-  const resp = await sendReceive(cmd(KC_ANALOG_MATRIX, AMC_SELECT_PROFILE, profileIndex))
-  return (
-    resp[0] === KC_ANALOG_MATRIX &&
-    resp[1] === AMC_SELECT_PROFILE &&
-    resp[2] === KC_SUCCESS
-  )
+  if (process.env.DEBUG_KEYCHRON_ANALOG) return true
+  const resp = await sendReceive(cmd(KC_ANALOG_MATRIX, AMC_SELECT_PROFILE, profileIndex, 0, 0, 0, 0))
+  return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_SELECT_PROFILE && resp[2] === KC_SUCCESS
 }
 
 /** Set Analog Travel/Actuation. */
@@ -920,23 +864,9 @@ export async function setKeychronAnalogTravel(
 ): Promise<boolean> {
   if (entire) {
     const resp = await sendReceive(
-      cmd(
-        KC_ANALOG_MATRIX,
-        AMC_SET_TRAVEL,
-        profile,
-        mode,
-        actPt,
-        sens,
-        rlsSens,
-        1,
-        0,
-      ),
+      cmd(KC_ANALOG_MATRIX, AMC_SET_TRAVEL, profile, mode, actPt, sens, rlsSens, 1, 0),
     )
-    return (
-      resp[0] === KC_ANALOG_MATRIX &&
-      resp[1] === AMC_SET_TRAVEL &&
-      resp[2] === KC_SUCCESS
-    )
+    return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_SET_TRAVEL && resp[2] === KC_SUCCESS
   } else {
     // Requires mapping row masks
     const pkt = new Uint8Array(MSG_LEN)
@@ -960,11 +890,7 @@ export async function setKeychronAnalogTravel(
       }
     }
     const resp = await sendReceive(pkt)
-    return (
-      resp[0] === KC_ANALOG_MATRIX &&
-      resp[1] === AMC_SET_TRAVEL &&
-      resp[2] === KC_SUCCESS
-    )
+    return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_SET_TRAVEL && resp[2] === KC_SUCCESS
   }
 }
 
@@ -976,53 +902,31 @@ export async function setKeychronAnalogSocd(
   row2: number,
   col2: number,
   index: number,
-  socdType: number,
+  pair: SOCDPair,
 ): Promise<boolean> {
+  if (process.env.DEBUG_KEYCHRON_ANALOG) return true
   const resp = await sendReceive(
-    cmd(
-      KC_ANALOG_MATRIX,
-      AMC_SET_SOCD,
-      profile,
-      row1,
-      col1,
-      row2,
-      col2,
-      index,
-      socdType,
-    ),
+    cmd(KC_ANALOG_MATRIX, AMC_SET_SOCD, profile, row1, col1, row2, col2, index, pair.socdType),
   )
-  return (
-    resp[0] === KC_ANALOG_MATRIX &&
-    resp[1] === AMC_SET_SOCD &&
-    resp[2] === KC_SUCCESS
-  )
+  return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_SET_SOCD && resp[2] === KC_SUCCESS
 }
 
 /** Save Analog Profile to EEPROM. */
 export async function saveKeychronAnalogProfile(profile: number): Promise<boolean> {
   const resp = await sendReceive(cmd(KC_ANALOG_MATRIX, AMC_SAVE_PROFILE, profile))
-  return (
-    resp[0] === KC_ANALOG_MATRIX &&
-    resp[1] === AMC_SAVE_PROFILE &&
-    resp[2] === KC_SUCCESS
-  )
+  return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_SAVE_PROFILE && resp[2] === KC_SUCCESS
 }
 
 /** Reset Analog Profile to defaults. */
 export async function resetKeychronAnalogProfile(profile: number): Promise<boolean> {
   const resp = await sendReceive(cmd(KC_ANALOG_MATRIX, AMC_RESET_PROFILE, profile))
-  return (
-    resp[0] === KC_ANALOG_MATRIX &&
-    resp[1] === AMC_RESET_PROFILE &&
-    resp[2] === KC_SUCCESS
-  )
+  return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_RESET_PROFILE && resp[2] === KC_SUCCESS
 }
 
 /** Set Game Controller Mode. */
 export async function setKeychronAnalogGameControllerMode(mode: number): Promise<boolean> {
-  const resp = await sendReceive(
-    cmd(KC_ANALOG_MATRIX, AMC_SET_GAME_CONTROLLER_MODE, mode),
-  )
+  if (process.env.DEBUG_KEYCHRON_ANALOG) return true
+  const resp = await sendReceive(cmd(KC_ANALOG_MATRIX, AMC_SET_GAME_CONTROLLER_MODE, mode))
   return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_SET_GAME_CONTROLLER_MODE
 }
 
@@ -1055,11 +959,7 @@ export async function getKeychronAnalogProfileRaw(
 /** Start calibration process. */
 export async function startKeychronCalibration(calibType: number): Promise<boolean> {
   const resp = await sendReceive(cmd(KC_ANALOG_MATRIX, AMC_CALIBRATE, calibType))
-  return (
-    resp[0] === KC_ANALOG_MATRIX &&
-    resp[1] === AMC_CALIBRATE &&
-    resp[2] === KC_SUCCESS
-  )
+  return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_CALIBRATE && resp[2] === KC_SUCCESS
 }
 
 /** Get current calibration state. */
@@ -1091,9 +991,7 @@ export async function getKeychronRealtimeTravel(
   full: number
   state: number
 } | null> {
-  const resp = await sendReceive(
-    cmd(KC_ANALOG_MATRIX, AMC_GET_REALTIME_TRAVEL, row, col),
-  )
+  const resp = await sendReceive(cmd(KC_ANALOG_MATRIX, AMC_GET_REALTIME_TRAVEL, row, col))
   if (
     resp[0] === KC_ANALOG_MATRIX &&
     resp[1] === AMC_GET_REALTIME_TRAVEL &&
@@ -1118,8 +1016,12 @@ export async function setKeychronAnalogProfileName(
   profile: number,
   name: string,
 ): Promise<boolean> {
+  if (process.env.DEBUG_KEYCHRON_ANALOG) return true
+
+  // Standard limit is 30 bytes for the name
+  const MAX_LEN = 30
   const nameBytes = new TextEncoder().encode(name)
-  const actualLen = Math.min(nameBytes.length, 30)
+  const actualLen = Math.min(nameBytes.length, MAX_LEN)
   const pkt = new Uint8Array(MSG_LEN)
   pkt[0] = KC_ANALOG_MATRIX
   pkt[1] = AMC_SET_PROFILE_NAME
@@ -1129,11 +1031,7 @@ export async function setKeychronAnalogProfileName(
     pkt[4 + i] = nameBytes[i]
   }
   const resp = await sendReceive(pkt)
-  return (
-    resp[0] === KC_ANALOG_MATRIX &&
-    resp[1] === AMC_SET_PROFILE_NAME &&
-    resp[2] === KC_SUCCESS
-  )
+  return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_SET_PROFILE_NAME && resp[2] === KC_SUCCESS
 }
 
 /** Clear advance mode from a key. */
@@ -1153,11 +1051,7 @@ export async function setKeychronAnalogAdvanceModeClear(
       0,
     ),
   )
-  return (
-    resp[0] === KC_ANALOG_MATRIX &&
-    resp[1] === AMC_SET_ADVANCE_MODE &&
-    resp[2] === KC_SUCCESS
-  )
+  return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_SET_ADVANCE_MODE && resp[2] === KC_SUCCESS
 }
 
 /** Set DKS advance mode on a key. */
@@ -1185,14 +1079,14 @@ export async function setKeychronAnalogAdvanceModeDks(
   pkt[8] = shallowDeact
   pkt[9] = deepAct
   pkt[10] = deepDeact
-  
+
   // Pack keycodes
   for (let i = 0; i < 4; i++) {
     const kc = keycodes[i] || 0
     pkt[11 + i * 2] = kc & 0xff
     pkt[12 + i * 2] = (kc >> 8) & 0xff
   }
-  
+
   // Pack actions
   for (let i = 0; i < 4; i++) {
     const action = actions[i] || 0
@@ -1200,11 +1094,7 @@ export async function setKeychronAnalogAdvanceModeDks(
   }
 
   const resp = await sendReceive(pkt)
-  return (
-    resp[0] === KC_ANALOG_MATRIX &&
-    resp[1] === AMC_SET_ADVANCE_MODE &&
-    resp[2] === KC_SUCCESS
-  )
+  return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_SET_ADVANCE_MODE && resp[2] === KC_SUCCESS
 }
 
 // =====================================================================
@@ -1247,8 +1137,7 @@ function parseAnalogKeyConfig(
     if (mode === 0) config.mode = globalConfig.mode
     if (actPt === 0) config.actuationPoint = globalConfig.actuationPoint
     if (rpdTrigSen === 0) config.sensitivity = globalConfig.sensitivity
-    if (rpdTrigSenDeact === 0)
-      config.releaseSensitivity = globalConfig.releaseSensitivity
+    if (rpdTrigSenDeact === 0) config.releaseSensitivity = globalConfig.releaseSensitivity
   }
 
   return config
@@ -1269,7 +1158,7 @@ export async function getKeychronAnalogKeyConfigs(
   // Read global config
   const globalData = await getKeychronAnalogProfileRaw(profile, globalOffset, 4)
   if (!globalData || globalData.length < 4) return new Map()
-  
+
   const globalConfig = parseAnalogKeyConfig(new Uint8Array(globalData), 0)
 
   // Read per-key configs in chunks
@@ -1412,7 +1301,13 @@ export async function getKeychronAnalogSocdPairs(
         key2Col: (b1 >> 3) & 0x1f,
       })
     } else {
-      socdPairs.push({ type: 0 /* SOCD_PRI_NONE */, key1Row: 0, key1Col: 0, key2Row: 0, key2Col: 0 })
+      socdPairs.push({
+        type: 0 /* SOCD_PRI_NONE */,
+        key1Row: 0,
+        key1Col: 0,
+        key2Row: 0,
+        key2Col: 0,
+      })
     }
   }
 
@@ -1430,11 +1325,11 @@ export async function getKeychronAnalogProfileNameStr(
   const nameOffset = 4 + rows * cols * 4 + okmcCount * 19 + socdCount * 3
   const nameData = await getKeychronAnalogProfileRaw(profile, nameOffset, 30)
   if (!nameData || nameData.length === 0) return ''
-  
+
   const bytes = new Uint8Array(nameData)
   let nullIdx = bytes.indexOf(0)
   if (nullIdx === -1) nullIdx = bytes.length
-  
+
   return new TextDecoder().decode(bytes.slice(0, nullIdx))
 }
 
@@ -1455,11 +1350,7 @@ export async function setKeychronAnalogAdvanceModeToggle(
       0,
     ),
   )
-  return (
-    resp[0] === KC_ANALOG_MATRIX &&
-    resp[1] === AMC_SET_ADVANCE_MODE &&
-    resp[2] === KC_SUCCESS
-  )
+  return resp[0] === KC_ANALOG_MATRIX && resp[1] === AMC_SET_ADVANCE_MODE && resp[2] === KC_SUCCESS
 }
 
 // =====================================================================
@@ -1497,21 +1388,17 @@ export async function reloadKeychron(): Promise<KeychronState | null> {
 
   // Compute feature detection flags
   state.hasDebounce =
-    !!(state.features & FEATURE_DYNAMIC_DEBOUNCE) ||
-    !!(state.miscFeatures & MISC_DEBOUNCE)
-  state.hasNkro =
-    !!(state.features & FEATURE_NKRO) || !!(state.miscFeatures & MISC_NKRO)
+    !!(state.features & FEATURE_DYNAMIC_DEBOUNCE) || !!(state.miscFeatures & MISC_DEBOUNCE)
+  state.hasNkro = !!(state.features & FEATURE_NKRO) || !!(state.miscFeatures & MISC_NKRO)
   state.hasReportRate = !!(state.miscFeatures & MISC_REPORT_RATE)
   state.hasSnapClick =
-    !!(state.features & FEATURE_SNAP_CLICK) ||
-    !!(state.miscFeatures & MISC_SNAP_CLICK)
+    !!(state.features & FEATURE_SNAP_CLICK) || !!(state.miscFeatures & MISC_SNAP_CLICK)
   state.hasWireless =
     !!(state.features & (FEATURE_BLUETOOTH | FEATURE_P24G)) ||
     !!(state.miscFeatures & MISC_WIRELESS_LPM)
   state.hasRgb = !!(state.features & FEATURE_KEYCHRON_RGB)
   state.hasAnalog = !!(state.features & FEATURE_ANALOG_MATRIX)
-  state.hasDfu =
-    !!(state.miscFeatures & MISC_DFU_INFO) || state.mcuInfo.includes('STM32')
+  state.hasDfu = !!(state.miscFeatures & MISC_DFU_INFO) || state.mcuInfo.includes('STM32')
   state.hasDefaultLayer = !!(state.features & FEATURE_DEFAULT_LAYER)
 
   // Step 6: Load individual features
@@ -1555,6 +1442,11 @@ export async function reloadKeychron(): Promise<KeychronState | null> {
     state.wirelessBacklitTime = lpm.backlitTime
     state.wirelessIdleTime = lpm.idleTime
   }
+  if (state.hasWireless) {
+    const lpm = await getKeychronWirelessLpm()
+    state.wirelessBacklitTime = lpm.backlitTime
+    state.wirelessIdleTime = lpm.idleTime
+  }
 
   if (state.hasRgb) {
     state.rgb = await reloadKeychronRGB()
@@ -1575,6 +1467,38 @@ export async function reloadKeychron(): Promise<KeychronState | null> {
     if (state.snapClickEntries.length === 0) {
       state.snapClickEntries = Array(4).fill({ type: 0, key1: 0, key2: 0 })
     }
+  }
+  if (process.env.DEBUG_KEYCHRON_DEBOUNCE) {
+    state.hasDebounce = true
+    state.debounceType = 0
+    state.debounceTime = 5
+  }
+  if (process.env.DEBUG_KEYCHRON_NKRO) {
+    state.hasNkro = true
+    state.nkroSupported = true
+    state.nkroEnabled = true
+  }
+  if (process.env.DEBUG_KEYCHRON_REPORT_RATE) {
+    state.hasReportRate = true
+    state.reportRate = REPORT_RATE_1000HZ
+    state.reportRateMask = 0x7f
+  }
+  if (process.env.DEBUG_KEYCHRON_WIRELESS) {
+    state.hasWireless = true
+    state.wirelessBacklitTime = 30
+    state.wirelessIdleTime = 300
+  }
+
+  if (
+    process.env.DEBUG_KEYCHRON_ANALOG ||
+    process.env.DEBUG_KEYCHRON_RGB ||
+    process.env.DEBUG_KEYCHRON_SNAP_CLICK ||
+    process.env.DEBUG_KEYCHRON_DEBOUNCE ||
+    process.env.DEBUG_KEYCHRON_NKRO ||
+    process.env.DEBUG_KEYCHRON_REPORT_RATE ||
+    process.env.DEBUG_KEYCHRON_WIRELESS
+  ) {
+    state.isDebug = true;
   }
 
   // Note: Analog Matrix reload is handled separately due to its complexity
@@ -1609,6 +1533,10 @@ async function reloadKeychronRGB(): Promise<KeychronRGBState> {
   if (rgb.ledCount > 0) {
     rgb.ledMatrix = await getKeychronLedMatrix(rgb.ledCount)
     rgb.perKeyColors = await getKeychronPerKeyColors(rgb.ledCount)
+  }
+
+  if (process.env.DEBUG_KEYCHRON_RGB || process.env.DEBUG_KEYCHRON_ALL) {
+    rgb.isDebug = true
   }
 
   // Mixed RGB info
@@ -1657,8 +1585,17 @@ export async function reloadKeychronAnalog(
         { type: 2, key1Row: 1, key1Col: 2, key2Row: 3, key2Col: 2 }, // W and S
       ]
       const okmcConfigs: OKMCSlotConfig[] = Array.from({ length: 4 }, () => ({
-        keycodes: [0, 0, 0, 0],
-        events: [0, 0, 0, 0],
+        shallowAct: 15,
+        shallowDeact: 10,
+        deepAct: 30,
+        deepDeact: 25,
+        keycodes: [0x04, 0x05, 0x06, 0x07], // A, B, C, D
+        events: [
+          OKMC_ACTION_PRESS, OKMC_ACTION_NONE, OKMC_ACTION_NONE, OKMC_ACTION_NONE, // Key 1 Shallow/Deep/DeepRls/ShallowRls
+          OKMC_ACTION_NONE, OKMC_ACTION_PRESS, OKMC_ACTION_NONE, OKMC_ACTION_NONE, // Key 2 Shallow/Deep/DeepRls/ShallowRls
+          OKMC_ACTION_NONE, OKMC_ACTION_NONE, OKMC_ACTION_RELEASE, OKMC_ACTION_NONE,   // Key 3 Shallow/Deep/DeepRls/ShallowRls
+          OKMC_ACTION_NONE, OKMC_ACTION_NONE, OKMC_ACTION_NONE, OKMC_ACTION_RELEASE,   // Key 4 Shallow/Deep/DeepRls/ShallowRls
+        ],
       }))
       mockProfiles.push({
         name: `Profile ${p + 1}`,
@@ -1672,11 +1609,12 @@ export async function reloadKeychronAnalog(
       profileCount: 3,
       currentProfile: 0,
       profileSize: 512,
-      okmcCount: 4,
       socdCount: 8,
+      okmcCount: 4,
       profiles: mockProfiles,
       curve: [0, 25, 50, 75, 100],
       gameControllerMode: 0,
+      isDebug: true,
     }
   }
 
@@ -1715,12 +1653,7 @@ export async function reloadKeychronAnalog(
       analog.okmcCount,
       analog.socdCount,
     )
-    const okmcConfigs = await getKeychronAnalogOkmcConfigs(
-      i,
-      rows,
-      cols,
-      analog.okmcCount,
-    )
+    const okmcConfigs = await getKeychronAnalogOkmcConfigs(i, rows, cols, analog.okmcCount)
     const name = await getKeychronAnalogProfileNameStr(
       i,
       rows,

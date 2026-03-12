@@ -23,9 +23,7 @@ vi.mock('react-i18next', () => ({
 let capturedOnKeyClick: ((key: { row: number; col: number }) => void) | undefined
 
 vi.mock('../../keyboard/KeyboardWidget', () => ({
-  KeyboardWidget: (props: {
-    onKeyClick?: (key: { row: number; col: number }) => void
-  }) => {
+  KeyboardWidget: (props: { onKeyClick?: (key: { row: number; col: number }) => void }) => {
     capturedOnKeyClick = props.onKeyClick
     return <div data-testid="keyboard-widget">KeyboardWidget</div>
   },
@@ -35,26 +33,15 @@ const QK_BOOT = 0x7c00
 const MACRO_0 = 0x7700 // M0 keycode value
 
 vi.mock('../../keycodes/TabbedKeycodes', () => ({
-  TabbedKeycodes: (props: {
-    onKeycodeSelect?: (kc: { qmkId: string }) => void
-  }) => (
+  TabbedKeycodes: (props: { onKeycodeSelect?: (kc: { qmkId: string }) => void }) => (
     <div data-testid="tabbed-keycodes">
-      <button
-        data-testid="kc-boot"
-        onClick={() => props.onKeycodeSelect?.({ qmkId: 'QK_BOOT' })}
-      >
+      <button data-testid="kc-boot" onClick={() => props.onKeycodeSelect?.({ qmkId: 'QK_BOOT' })}>
         QK_BOOT
       </button>
-      <button
-        data-testid="kc-a"
-        onClick={() => props.onKeycodeSelect?.({ qmkId: 'KC_A' })}
-      >
+      <button data-testid="kc-a" onClick={() => props.onKeycodeSelect?.({ qmkId: 'KC_A' })}>
         A
       </button>
-      <button
-        data-testid="kc-m0"
-        onClick={() => props.onKeycodeSelect?.({ qmkId: 'M0' })}
-      >
+      <button data-testid="kc-m0" onClick={() => props.onKeycodeSelect?.({ qmkId: 'M0' })}>
         M0
       </button>
     </div>
@@ -140,13 +127,7 @@ describe('KeymapEditor — QK_BOOT unlock check', () => {
   })
 
   it('calls onUnlock when assigning QK_BOOT while locked', () => {
-    render(
-      <KeymapEditor
-        {...defaultProps}
-        unlocked={false}
-        onUnlock={onUnlock}
-      />,
-    )
+    render(<KeymapEditor {...defaultProps} unlocked={false} onUnlock={onUnlock} />)
 
     act(() => capturedOnKeyClick?.({ row: 0, col: 0 }))
     expect(screen.getByText('[0,0]')).toBeInTheDocument()
@@ -158,13 +139,7 @@ describe('KeymapEditor — QK_BOOT unlock check', () => {
   })
 
   it('does NOT call onUnlock when assigning non-boot keycode while locked', () => {
-    render(
-      <KeymapEditor
-        {...defaultProps}
-        unlocked={false}
-        onUnlock={onUnlock}
-      />,
-    )
+    render(<KeymapEditor {...defaultProps} unlocked={false} onUnlock={onUnlock} />)
 
     act(() => capturedOnKeyClick?.({ row: 0, col: 0 }))
     fireEvent.click(screen.getByTestId('kc-a'))
@@ -174,13 +149,7 @@ describe('KeymapEditor — QK_BOOT unlock check', () => {
   })
 
   it('assigns QK_BOOT without unlock when already unlocked', () => {
-    render(
-      <KeymapEditor
-        {...defaultProps}
-        unlocked={true}
-        onUnlock={onUnlock}
-      />,
-    )
+    render(<KeymapEditor {...defaultProps} unlocked={true} onUnlock={onUnlock} />)
 
     act(() => capturedOnKeyClick?.({ row: 0, col: 0 }))
     fireEvent.click(screen.getByTestId('kc-boot'))
@@ -191,11 +160,7 @@ describe('KeymapEditor — QK_BOOT unlock check', () => {
 
   it('executes pending action after unlock completes', () => {
     const { rerender } = render(
-      <KeymapEditor
-        {...defaultProps}
-        unlocked={false}
-        onUnlock={onUnlock}
-      />,
+      <KeymapEditor {...defaultProps} unlocked={false} onUnlock={onUnlock} />,
     )
 
     act(() => capturedOnKeyClick?.({ row: 0, col: 0 }))
@@ -204,25 +169,13 @@ describe('KeymapEditor — QK_BOOT unlock check', () => {
     expect(onSetKey).not.toHaveBeenCalled()
 
     // Simulate unlock completing by re-rendering with unlocked=true
-    rerender(
-      <KeymapEditor
-        {...defaultProps}
-        unlocked={true}
-        onUnlock={onUnlock}
-      />,
-    )
+    rerender(<KeymapEditor {...defaultProps} unlocked={true} onUnlock={onUnlock} />)
 
     expect(onSetKey).toHaveBeenCalledWith(0, 0, 0, QK_BOOT)
   })
 
   it('does NOT call onUnlock when no key is selected (no-op)', () => {
-    render(
-      <KeymapEditor
-        {...defaultProps}
-        unlocked={false}
-        onUnlock={onUnlock}
-      />,
-    )
+    render(<KeymapEditor {...defaultProps} unlocked={false} onUnlock={onUnlock} />)
 
     // No key selected — clicking QK_BOOT should be a no-op (not TD/macro)
     fireEvent.click(screen.getByTestId('kc-boot'))
@@ -243,7 +196,10 @@ describe('KeymapEditor — macro unlock gate', () => {
     layers: 2,
     currentLayer: 0,
     onLayerChange: vi.fn(),
-    keymap: new Map([['0,0,0', 4], ['0,0,1', 5]]),
+    keymap: new Map([
+      ['0,0,0', 4],
+      ['0,0,1', 5],
+    ]),
     encoderLayout: new Map<string, number>(),
     encoderCount: 0,
     layoutOptions: new Map<number, number>(),
@@ -263,13 +219,7 @@ describe('KeymapEditor — macro unlock gate', () => {
   })
 
   it('calls onUnlock with macroWarning when clicking macro key while locked', () => {
-    render(
-      <KeymapEditor
-        {...macroProps}
-        unlocked={false}
-        onUnlock={onUnlock}
-      />,
-    )
+    render(<KeymapEditor {...macroProps} unlocked={false} onUnlock={onUnlock} />)
 
     // No key selected — clicking M0 triggers openMacroModal path
     fireEvent.click(screen.getByTestId('kc-m0'))
@@ -279,13 +229,7 @@ describe('KeymapEditor — macro unlock gate', () => {
   })
 
   it('opens macro modal when clicking macro key while unlocked', () => {
-    render(
-      <KeymapEditor
-        {...macroProps}
-        unlocked={true}
-        onUnlock={onUnlock}
-      />,
-    )
+    render(<KeymapEditor {...macroProps} unlocked={true} onUnlock={onUnlock} />)
 
     // No key selected — clicking M0 opens macro modal
     fireEvent.click(screen.getByTestId('kc-m0'))
@@ -295,12 +239,7 @@ describe('KeymapEditor — macro unlock gate', () => {
   })
 
   it('does not open macro modal when unlocked is undefined (backwards compat)', () => {
-    render(
-      <KeymapEditor
-        {...macroProps}
-        onUnlock={onUnlock}
-      />,
-    )
+    render(<KeymapEditor {...macroProps} onUnlock={onUnlock} />)
 
     // unlocked is undefined — should NOT gate (backwards compat)
     fireEvent.click(screen.getByTestId('kc-m0'))

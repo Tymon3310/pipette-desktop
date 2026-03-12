@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { SYNC_STATUS_CLASS } from './sync-ui'
 import type { SyncStatusType } from '../../shared/types/sync'
 
-const TYPING_TEST_BASE = 'flex items-center justify-center gap-1 rounded border px-2.5 py-1 text-xs leading-none transition-colors'
+const TYPING_TEST_BASE =
+  'flex items-center justify-center gap-1 rounded border px-2.5 py-1 text-xs leading-none transition-colors'
 const TYPING_TEST_ACTIVE = `${TYPING_TEST_BASE} border-accent bg-accent/10 text-accent`
 const TYPING_TEST_INACTIVE = `${TYPING_TEST_BASE} border-edge text-content-secondary hover:text-content`
 
@@ -44,13 +45,18 @@ export function StatusBar({
   const { t } = useTranslation()
 
   return (
-    <div className="flex items-center justify-between border-t border-edge bg-surface-alt px-4 py-1.5 text-xs leading-none text-content-secondary" data-testid="status-bar">
+    <div
+      className="flex items-center justify-between border-t border-edge bg-surface-alt px-4 py-1.5 text-xs leading-none text-content-secondary"
+      data-testid="status-bar"
+    >
       <div className="flex items-center gap-3">
         <span>{deviceName}</span>
         {loadedLabel && (
           <>
             <span className="text-edge">|</span>
-            <span className="text-content-muted" data-testid="loaded-label">{loadedLabel}</span>
+            <span className="text-content-muted" data-testid="loaded-label">
+              {loadedLabel}
+            </span>
           </>
         )}
         <span className="text-edge">|</span>
@@ -90,7 +96,9 @@ export function StatusBar({
             <span className="text-edge">|</span>
           </>
         )}
-        <span className={unlocked ? 'text-warning' : 'text-accent'} data-testid="lock-status">{unlocked ? t('statusBar.unlocked') : t('statusBar.locked')}</span>
+        <span className={unlocked ? 'text-warning' : 'text-accent'} data-testid="lock-status">
+          {unlocked ? t('statusBar.unlocked') : t('statusBar.locked')}
+        </span>
         {syncStatus !== 'none' && (
           <>
             <span className="text-edge">|</span>
@@ -102,7 +110,10 @@ export function StatusBar({
         {hubConnected !== undefined && (
           <>
             <span className="text-edge">|</span>
-            <span className={hubConnected ? 'text-accent' : 'text-content-muted'} data-testid="hub-status">
+            <span
+              className={hubConnected ? 'text-accent' : 'text-content-muted'}
+              data-testid="hub-status"
+            >
               {hubConnected ? t('hub.hubConnected') : t('hub.hubDisconnected')}
             </span>
           </>
@@ -113,11 +124,17 @@ export function StatusBar({
           <button
             type="button"
             data-testid="typing-test-button"
-            aria-label={typingTestMode ? t('editor.typingTest.exitTypingMode') : t('editor.typingTest.switchToTypingMode')}
+            aria-label={
+              typingTestMode
+                ? t('editor.typingTest.exitTypingMode')
+                : t('editor.typingTest.switchToTypingMode')
+            }
             className={typingTestMode ? TYPING_TEST_ACTIVE : TYPING_TEST_INACTIVE}
             onClick={onTypingTestModeChange}
           >
-            {typingTestMode ? t('editor.typingTest.exitTypingMode') : t('editor.typingTest.switchToTypingMode')}
+            {typingTestMode
+              ? t('editor.typingTest.exitTypingMode')
+              : t('editor.typingTest.switchToTypingMode')}
           </button>
         )}
         {onDisconnect && (

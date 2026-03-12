@@ -6,19 +6,31 @@ import type { KleKey } from '../types'
 
 function makeKey(overrides: Partial<KleKey> = {}): KleKey {
   return {
-    x: 0, y: 0,
-    width: 1, height: 1,
-    x2: 0, y2: 0,
-    width2: 1, height2: 1,
-    rotation: 0, rotationX: 0, rotationY: 0,
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    x2: 0,
+    y2: 0,
+    width2: 1,
+    height2: 1,
+    rotation: 0,
+    rotationX: 0,
+    rotationY: 0,
     color: '#cccccc',
     labels: Array(12).fill(null),
     textColor: Array(12).fill(null),
     textSize: Array(12).fill(null),
-    row: 0, col: 0,
-    encoderIdx: -1, encoderDir: -1,
-    layoutIndex: -1, layoutOption: -1,
-    decal: false, nub: false, stepped: false, ghost: false,
+    row: 0,
+    col: 0,
+    encoderIdx: -1,
+    encoderDir: -1,
+    layoutIndex: -1,
+    layoutOption: -1,
+    decal: false,
+    nub: false,
+    stepped: false,
+    ghost: false,
     ...overrides,
   }
 }
@@ -42,9 +54,7 @@ describe('filterVisibleKeys', () => {
   })
 
   it('includes keys with no layout index regardless of options', () => {
-    const keys = [
-      makeKey({ row: 0, col: 0, layoutIndex: -1 }),
-    ]
+    const keys = [makeKey({ row: 0, col: 0, layoutIndex: -1 })]
     const result = filterVisibleKeys(keys, new Map([[0, 1]]))
     expect(result).toHaveLength(1)
   })
@@ -89,10 +99,7 @@ describe('filterVisibleKeys', () => {
 
 describe('repositionLayoutKeys', () => {
   it('returns keys unchanged when no layout options are set', () => {
-    const keys = [
-      makeKey({ x: 0, y: 0, row: 0, col: 0 }),
-      makeKey({ x: 1, y: 0, row: 0, col: 1 }),
-    ]
+    const keys = [makeKey({ x: 0, y: 0, row: 0, col: 0 }), makeKey({ x: 1, y: 0, row: 0, col: 1 })]
     const result = repositionLayoutKeys(keys, new Map())
     expect(result).toBe(keys)
   })
@@ -137,7 +144,13 @@ describe('repositionLayoutKeys', () => {
       // Group 1, option 1 at (5, 4) — should shift to y=0
       makeKey({ x: 5, y: 4, row: 1, col: 5, layoutIndex: 1, layoutOption: 1 }),
     ]
-    const result = repositionLayoutKeys(keys, new Map([[0, 1], [1, 1]]))
+    const result = repositionLayoutKeys(
+      keys,
+      new Map([
+        [0, 1],
+        [1, 1],
+      ]),
+    )
     // Group 0 option 1: y = 3 + (0 - 3) = 0
     expect(result[1].y).toBe(0)
     // Group 1 option 1: y = 4 + (0 - 4) = 0
@@ -150,15 +163,25 @@ describe('repositionLayoutKeys', () => {
       makeKey({ x: 0, y: 1, layoutIndex: 0, layoutOption: 0 }),
       // Option 1 at raw (0.5, 3), 180° around (0.5, 3.5)
       // Visual bbox: corners rotated → min = (-0.5, 3)
-      makeKey({ x: 0.5, y: 3, rotation: 180, rotationX: 0.5, rotationY: 3.5, row: 1, col: 0, layoutIndex: 0, layoutOption: 1 }),
+      makeKey({
+        x: 0.5,
+        y: 3,
+        rotation: 180,
+        rotationX: 0.5,
+        rotationY: 3.5,
+        row: 1,
+        col: 0,
+        layoutIndex: 0,
+        layoutOption: 1,
+      }),
     ]
     const result = repositionLayoutKeys(keys, new Map([[0, 1]]))
     // Visual shift = opt0_visual(0,1) - opt1_visual(-0.5,3) = (0.5, -2)
-    expect(result[1].x).toBe(1)           // 0.5 + 0.5
-    expect(result[1].y).toBe(1)           // 3 + (-2)
-    expect(result[1].rotationX).toBe(1)   // 0.5 + 0.5
+    expect(result[1].x).toBe(1) // 0.5 + 0.5
+    expect(result[1].y).toBe(1) // 3 + (-2)
+    expect(result[1].rotationX).toBe(1) // 0.5 + 0.5
     expect(result[1].rotationY).toBe(1.5) // 3.5 + (-2)
-    expect(result[1].rotation).toBe(180)  // unchanged
+    expect(result[1].rotation).toBe(180) // unchanged
   })
 
   it('passes non-layout keys through unchanged', () => {
@@ -179,7 +202,13 @@ describe('repositionLayoutKeys', () => {
       makeKey({ x: 1, y: 0, layoutIndex: 1, layoutOption: 0 }),
       makeKey({ x: 0, y: 0, layoutIndex: -1 }),
     ]
-    const result = repositionLayoutKeys(keys, new Map([[0, 0], [1, 0]]))
+    const result = repositionLayoutKeys(
+      keys,
+      new Map([
+        [0, 0],
+        [1, 0],
+      ]),
+    )
     expect(result).toBe(keys)
   })
 

@@ -24,11 +24,7 @@ export function rotatePoint(
 }
 
 /** Compute bounding-box corners of a key (both rects), accounting for rotation. */
-function keyCorners(
-  key: KleKey,
-  s: number,
-  spacing: number,
-): [number, number][] {
+function keyCorners(key: KleKey, s: number, spacing: number): [number, number][] {
   const x0 = s * key.x
   const y0 = s * key.y
   const x1 = s * (key.x + key.width) - spacing
@@ -41,10 +37,7 @@ function keyCorners(
   ]
   // Include secondary rect corners for stepped/ISO keys
   const has2 =
-    key.width2 !== key.width ||
-    key.height2 !== key.height ||
-    key.x2 !== 0 ||
-    key.y2 !== 0
+    key.width2 !== key.width || key.height2 !== key.height || key.x2 !== 0 || key.y2 !== 0
   if (has2) {
     const sx0 = x0 + s * key.x2
     const sy0 = y0 + s * key.y2
@@ -69,10 +62,16 @@ interface Props {
   highlightedKeys?: Set<string>
   everPressedKeys?: Set<string>
   remappedKeys?: Set<string>
+  customLabels?: Map<string, string>
+  bottomLabels?: Map<string, string>
   multiSelectedKeys?: Set<string>
   layoutOptions?: Map<number, number>
   selectedMaskPart?: boolean
-  onKeyClick?: (key: KleKey, maskClicked: boolean, event?: { ctrlKey: boolean; shiftKey: boolean }) => void
+  onKeyClick?: (
+    key: KleKey,
+    maskClicked: boolean,
+    event?: { ctrlKey: boolean; shiftKey: boolean },
+  ) => void
   onKeyDoubleClick?: (key: KleKey, rect: DOMRect, maskClicked: boolean) => void
   onEncoderClick?: (key: KleKey, direction: number) => void
   onEncoderDoubleClick?: (key: KleKey, direction: number, rect: DOMRect) => void
@@ -93,6 +92,8 @@ function KeyboardWidgetInner({
   highlightedKeys,
   everPressedKeys,
   remappedKeys,
+  customLabels,
+  bottomLabels,
   multiSelectedKeys,
   layoutOptions,
   onKeyClick,
@@ -189,6 +190,8 @@ function KeyboardWidgetInner({
             everPressed={everPressedKeys?.has(posKey)}
             remapped={remappedKeys?.has(posKey)}
             customFill={keyColors?.get(posKey)}
+            customLabel={customLabels?.get(posKey)}
+            bottomLabel={bottomLabels?.get(posKey)}
             onClick={readOnly ? undefined : onKeyClick}
             onDoubleClick={readOnly ? undefined : onKeyDoubleClick}
             scale={scale}
@@ -234,6 +237,8 @@ function KeyboardWidgetInner({
             everPressed={everPressedKeys?.has(posKey)}
             remapped={remappedKeys?.has(posKey)}
             customFill={keyColors?.get(posKey)}
+            customLabel={customLabels?.get(posKey)}
+            bottomLabel={bottomLabels?.get(posKey)}
             onClick={readOnly ? undefined : onKeyClick}
             onDoubleClick={readOnly ? undefined : onKeyDoubleClick}
             scale={scale}

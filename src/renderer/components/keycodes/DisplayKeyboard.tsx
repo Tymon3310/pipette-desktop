@@ -21,8 +21,12 @@ interface SteppedKeyInfo {
 
 /** Detect a stepped key and return its bounding box + clip-path, or undefined for normal keys */
 function computeSteppedKeyInfo(
-  w: number, h: number,
-  x2: number, y2: number, w2: number, h2: number,
+  w: number,
+  h: number,
+  x2: number,
+  y2: number,
+  w2: number,
+  h2: number,
 ): SteppedKeyInfo | undefined {
   if (x2 === 0 && y2 === 0 && w2 === w && h2 === h) return undefined
 
@@ -32,16 +36,21 @@ function computeSteppedKeyInfo(
   const bboxH = Math.max(h, y2 + h2) - top
 
   // Primary and secondary rects as percentages of bounding box
-  const px = -left / bboxW * 100
-  const prx = (-left + w) / bboxW * 100
-  const pby = (-top + h) / bboxH * 100
-  const sx = (x2 - left) / bboxW * 100
-  const srx = (x2 - left + w2) / bboxW * 100
-  const sby = (y2 - top + h2) / bboxH * 100
+  const px = (-left / bboxW) * 100
+  const prx = ((-left + w) / bboxW) * 100
+  const pby = ((-top + h) / bboxH) * 100
+  const sx = ((x2 - left) / bboxW) * 100
+  const srx = ((x2 - left + w2) / bboxW) * 100
+  const sby = ((y2 - top + h2) / bboxH) * 100
 
   // L-shape polygon vertices (percentages of bounding box)
   const pts: [number, number][] = [
-    [sx, 0], [srx, 0], [prx, pby], [px, pby], [px, sby], [sx, sby],
+    [sx, 0],
+    [srx, 0],
+    [prx, pby],
+    [px, pby],
+    [px, sby],
+    [sx, sby],
   ]
 
   const p = (v: number) => `${v.toFixed(1)}%`
@@ -98,7 +107,12 @@ export function DisplayKeyboard({
       if (!kc) continue
 
       const stepped = computeSteppedKeyInfo(
-        key.width, key.height, key.x2, key.y2, key.width2, key.height2,
+        key.width,
+        key.height,
+        key.x2,
+        key.y2,
+        key.width2,
+        key.height2,
       )
 
       // For stepped keys, use the bounding box; for normal keys, use key dimensions directly

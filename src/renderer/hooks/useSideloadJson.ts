@@ -12,11 +12,7 @@ export function isKeyboardDefinition(data: unknown): data is KeyboardDefinition 
   if (!isRecord(data)) return false
 
   const matrix = data.matrix
-  if (
-    !isRecord(matrix) ||
-    typeof matrix.rows !== 'number' ||
-    typeof matrix.cols !== 'number'
-  ) {
+  if (!isRecord(matrix) || typeof matrix.rows !== 'number' || typeof matrix.cols !== 'number') {
     return false
   }
 
@@ -36,9 +32,10 @@ export function isKeyboardDefinition(data: unknown): data is KeyboardDefinition 
   return true
 }
 
-export function useSideloadJson(
-  applyDefinition: (def: KeyboardDefinition) => void,
-): { sideloadJson: () => Promise<void>; error: string | null } {
+export function useSideloadJson(applyDefinition: (def: KeyboardDefinition) => void): {
+  sideloadJson: () => Promise<void>
+  error: string | null
+} {
   const { t } = useTranslation()
   const [error, setError] = useState<string | null>(null)
 

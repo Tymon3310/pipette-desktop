@@ -4,7 +4,13 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useInlineRename } from '../../hooks/useInlineRename'
 import { ModalCloseButton } from './ModalCloseButton'
-import { ACTION_BTN, CONFIRM_DELETE_BTN, DELETE_BTN, SectionHeader, formatDate } from './store-modal-shared'
+import {
+  ACTION_BTN,
+  CONFIRM_DELETE_BTN,
+  DELETE_BTN,
+  SectionHeader,
+  formatDate,
+} from './store-modal-shared'
 import { ROW_CLASS } from './modal-controls'
 import type { SnapshotMeta } from '../../../shared/types/snapshot-store'
 import type { HubMyPost } from '../../../shared/types/hub'
@@ -26,11 +32,16 @@ interface Props extends LayoutStoreContentProps {
   onClose: () => void
 }
 
-const FORMAT_BTN = 'text-[11px] font-medium text-content-muted bg-surface/50 border border-edge px-2 py-0.5 rounded hover:text-content hover:border-content-muted disabled:opacity-50'
-const IMPORT_BTN = 'rounded-lg border border-edge bg-surface/30 px-3 py-1.5 text-xs font-semibold text-content-muted hover:text-content hover:border-content-muted'
-const EXPORT_BTN = 'rounded-lg border border-edge bg-surface/30 px-3 py-1.5 text-xs font-semibold text-content-muted hover:text-content hover:border-content-muted disabled:opacity-50'
-const HUB_BTN = 'text-[11px] font-medium text-accent bg-accent/10 border border-accent/30 px-2 py-0.5 rounded hover:bg-accent/20 hover:border-accent/50 disabled:opacity-50'
-const SHARE_LINK_BTN = 'text-[11px] font-medium text-accent bg-accent/10 border border-accent/30 px-2 py-0.5 rounded hover:bg-accent/20 hover:border-accent/50'
+const FORMAT_BTN =
+  'text-[11px] font-medium text-content-muted bg-surface/50 border border-edge px-2 py-0.5 rounded hover:text-content hover:border-content-muted disabled:opacity-50'
+const IMPORT_BTN =
+  'rounded-lg border border-edge bg-surface/30 px-3 py-1.5 text-xs font-semibold text-content-muted hover:text-content hover:border-content-muted'
+const EXPORT_BTN =
+  'rounded-lg border border-edge bg-surface/30 px-3 py-1.5 text-xs font-semibold text-content-muted hover:text-content hover:border-content-muted disabled:opacity-50'
+const HUB_BTN =
+  'text-[11px] font-medium text-accent bg-accent/10 border border-accent/30 px-2 py-0.5 rounded hover:bg-accent/20 hover:border-accent/50 disabled:opacity-50'
+const SHARE_LINK_BTN =
+  'text-[11px] font-medium text-accent bg-accent/10 border border-accent/30 px-2 py-0.5 rounded hover:bg-accent/20 hover:border-accent/50'
 
 interface FormatButtonsProps {
   className: string
@@ -41,7 +52,14 @@ interface FormatButtonsProps {
   onPdf?: () => void
 }
 
-function FormatButtons({ className, testIdPrefix, disabled, onVil, onKeymapC, onPdf }: FormatButtonsProps) {
+function FormatButtons({
+  className,
+  testIdPrefix,
+  disabled,
+  onVil,
+  onKeymapC,
+  onPdf,
+}: FormatButtonsProps) {
   const { t } = useTranslation()
   return (
     <>
@@ -104,7 +122,9 @@ function HubOrphanButtons({
   onDeleteOrphanedHubPost,
 }: HubOrphanButtonsProps) {
   const { t } = useTranslation()
-  const orphanPost = hubMyPosts?.find((p) => p.title === entry.label && p.keyboard_name === keyboardName)
+  const orphanPost = hubMyPosts?.find(
+    (p) => p.title === entry.label && p.keyboard_name === keyboardName,
+  )
   const disabled = !!hubUploading || fileDisabled
 
   if (orphanPost) {
@@ -327,7 +347,13 @@ export function LayoutStoreContent({
   const hasImportSideload = onImportVil || onSideloadJson
   const hasEntryExport = onExportEntryVil || onExportEntryKeymapC || onExportEntryPdf
   const hasCurrentExport = onExportVil || onExportKeymapC || onExportPdf
-  const hasHubActions = onUploadToHub || onUpdateOnHub || onRemoveFromHub || onReuploadToHub || onDeleteOrphanedHubPost || hubNeedsDisplayName
+  const hasHubActions =
+    onUploadToHub ||
+    onUpdateOnHub ||
+    onRemoveFromHub ||
+    onReuploadToHub ||
+    onDeleteOrphanedHubPost ||
+    hubNeedsDisplayName
   const isPanel = !!listClassName
   const fixedSection = isPanel ? ' shrink-0' : ''
   const sectionGap = isPanel ? 'pt-3' : 'pt-5'
@@ -336,21 +362,25 @@ export function LayoutStoreContent({
   return (
     <div className={isPanel ? 'flex flex-col h-full' : ''}>
       {/* File status */}
-      {fileStatus && fileStatus !== 'idle' && (
-        <FileStatusDisplay fileStatus={fileStatus} />
-      )}
+      {fileStatus && fileStatus !== 'idle' && <FileStatusDisplay fileStatus={fileStatus} />}
 
       {/* Save & Export section (unified card in panel mode) */}
       {isPanel ? (
         (!isDummy || hasCurrentExport) && (
-          <div className={`${sectionGap}${fixedSection}`} data-testid="layout-store-current-section">
+          <div
+            className={`${sectionGap}${fixedSection}`}
+            data-testid="layout-store-current-section"
+          >
             <div className="rounded-lg border border-edge bg-surface/20 p-3">
               {!isDummy && (
                 <form onSubmit={handleSaveSubmit} className="flex gap-2">
                   <input
                     type="text"
                     value={saveLabel}
-                    onChange={(e) => { setSaveLabel(e.target.value); setConfirmOverwriteId(null) }}
+                    onChange={(e) => {
+                      setSaveLabel(e.target.value)
+                      setConfirmOverwriteId(null)
+                    }}
                     placeholder={t('layoutStore.labelPlaceholder')}
                     maxLength={200}
                     className="flex-1 rounded-lg border border-edge bg-surface px-3 py-1.5 text-xs text-content placeholder:text-content-muted focus:border-accent focus:outline-none"
@@ -411,7 +441,10 @@ export function LayoutStoreContent({
                 <input
                   type="text"
                   value={saveLabel}
-                  onChange={(e) => { setSaveLabel(e.target.value); setConfirmOverwriteId(null) }}
+                  onChange={(e) => {
+                    setSaveLabel(e.target.value)
+                    setConfirmOverwriteId(null)
+                  }}
                   placeholder={t('layoutStore.labelPlaceholder')}
                   maxLength={200}
                   className="flex-1 rounded-lg border border-edge bg-surface px-3 py-1.5 text-xs text-content placeholder:text-content-muted focus:border-accent focus:outline-none"
@@ -452,7 +485,10 @@ export function LayoutStoreContent({
 
           {/* Export Current State section */}
           {hasCurrentExport && (
-            <div className={`${sectionGap}${fixedSection}`} data-testid="layout-store-current-section">
+            <div
+              className={`${sectionGap}${fixedSection}`}
+              data-testid="layout-store-current-section"
+            >
               <SectionHeader label={t('layoutStore.export')} />
               <div className="flex justify-end gap-2">
                 <FormatButtons
@@ -475,200 +511,229 @@ export function LayoutStoreContent({
           <SectionHeader label={t('layoutStore.history')} count={entries.length} />
 
           {loading && (
-            <div className="py-4 text-center text-[13px] text-content-muted">{t('common.loading')}</div>
+            <div className="py-4 text-center text-[13px] text-content-muted">
+              {t('common.loading')}
+            </div>
           )}
 
           {!loading && entries.length === 0 && (
-            <div className="py-4 text-center text-[13px] text-content-muted" data-testid="layout-store-empty">
+            <div
+              className="py-4 text-center text-[13px] text-content-muted"
+              data-testid="layout-store-empty"
+            >
               {t('layoutStore.noSavedLayouts')}
             </div>
           )}
 
           {!loading && entries.length > 0 && (
-            <div className={`flex flex-col gap-1.5${isPanel ? ` flex-1 ${listClassName}` : ''}`} data-testid="layout-store-list">
+            <div
+              className={`flex flex-col gap-1.5${isPanel ? ` flex-1 ${listClassName}` : ''}`}
+              data-testid="layout-store-list"
+            >
               {entries.map((entry) => {
                 const entryHubPostId = getEntryHubPostId(entry)
-                return (<div
-                  key={entry.id}
-                  className={`rounded-lg border border-edge bg-surface/20 p-3 hover:border-content-muted/30 ${rename.confirmedId === entry.id ? 'confirm-flash' : ''}`}
-                  data-testid="layout-store-entry"
-                >
-                  {/* Top row: label + action buttons */}
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="min-w-0 flex-1">
-                      {rename.editingId === entry.id ? (
-                        <input
-                          type="text"
-                          value={rename.editLabel}
-                          onChange={(e) => rename.setEditLabel(e.target.value)}
-                          onBlur={() => commitRename(entry.id)}
-                          onKeyDown={(e) => handleRenameKeyDown(e, entry.id)}
-                          maxLength={200}
-                          className="w-full border-b border-edge bg-transparent px-1 text-sm font-semibold text-content outline-none focus:border-accent"
-                          data-testid="layout-store-rename-input"
-                          autoFocus
-                        />
-                      ) : (
-                        <div
-                          className="truncate text-sm font-semibold text-content cursor-pointer"
-                          data-testid="layout-store-entry-label"
-                          onClick={() => rename.startRename(entry.id, entry.label)}
-                        >
-                          {entry.label || t('layoutStore.noLabel')}
+                return (
+                  <div
+                    key={entry.id}
+                    className={`rounded-lg border border-edge bg-surface/20 p-3 hover:border-content-muted/30 ${rename.confirmedId === entry.id ? 'confirm-flash' : ''}`}
+                    data-testid="layout-store-entry"
+                  >
+                    {/* Top row: label + action buttons */}
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="min-w-0 flex-1">
+                        {rename.editingId === entry.id ? (
+                          <input
+                            type="text"
+                            value={rename.editLabel}
+                            onChange={(e) => rename.setEditLabel(e.target.value)}
+                            onBlur={() => commitRename(entry.id)}
+                            onKeyDown={(e) => handleRenameKeyDown(e, entry.id)}
+                            maxLength={200}
+                            className="w-full border-b border-edge bg-transparent px-1 text-sm font-semibold text-content outline-none focus:border-accent"
+                            data-testid="layout-store-rename-input"
+                            autoFocus
+                          />
+                        ) : (
+                          <div
+                            className="truncate text-sm font-semibold text-content cursor-pointer"
+                            data-testid="layout-store-entry-label"
+                            onClick={() => rename.startRename(entry.id, entry.label)}
+                          >
+                            {entry.label || t('layoutStore.noLabel')}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-0.5 ml-2 shrink-0">
+                        {confirmDeleteId === entry.id ? (
+                          <>
+                            <button
+                              type="button"
+                              className={CONFIRM_DELETE_BTN}
+                              onClick={() => {
+                                onDelete(entry.id)
+                                setConfirmDeleteId(null)
+                              }}
+                              data-testid="layout-store-delete-confirm"
+                            >
+                              {t('layoutStore.confirmDelete')}
+                            </button>
+                            <button
+                              type="button"
+                              className={ACTION_BTN}
+                              onClick={() => setConfirmDeleteId(null)}
+                              data-testid="layout-store-delete-cancel"
+                            >
+                              {t('common.cancel')}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className={ACTION_BTN}
+                              onClick={() => onLoad(entry.id)}
+                              data-testid="layout-store-load-btn"
+                            >
+                              {t('layoutStore.load')}
+                            </button>
+                            <button
+                              type="button"
+                              className={DELETE_BTN}
+                              onClick={() => setConfirmDeleteId(entry.id)}
+                              data-testid="layout-store-delete-btn"
+                            >
+                              {t('layoutStore.delete')}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Row 2: date + format tags */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-content-muted font-mono">
+                        {formatDate(entry.savedAt)}
+                      </span>
+                      {hasEntryExport && (
+                        <div className="flex gap-1">
+                          <FormatButtons
+                            className={FORMAT_BTN}
+                            testIdPrefix="layout-store-entry-export"
+                            disabled={fileDisabled}
+                            onVil={onExportEntryVil ? () => onExportEntryVil(entry.id) : undefined}
+                            onKeymapC={
+                              onExportEntryKeymapC
+                                ? () => onExportEntryKeymapC(entry.id)
+                                : undefined
+                            }
+                            onPdf={onExportEntryPdf ? () => onExportEntryPdf(entry.id) : undefined}
+                          />
                         </div>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-0.5 ml-2 shrink-0">
-                      {confirmDeleteId === entry.id ? (
-                        <>
-                          <button
-                            type="button"
-                            className={CONFIRM_DELETE_BTN}
-                            onClick={() => { onDelete(entry.id); setConfirmDeleteId(null) }}
-                            data-testid="layout-store-delete-confirm"
+                    {/* Row 3: Hub actions */}
+                    {hasHubActions && (
+                      <div
+                        className="mt-1.5 border-t border-edge pt-1.5"
+                        data-testid="layout-store-hub-row"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-medium text-accent">
+                            {t('hub.pipetteHub')}
+                          </span>
+                          <div className="flex gap-1">
+                            {entryHubPostId && hubOrigin && (
+                              <ShareLink
+                                url={`${hubOrigin}/post/${encodeURIComponent(entryHubPostId)}`}
+                              />
+                            )}
+                            {entryHubPostId && confirmHubRemoveId === entry.id && (
+                              <>
+                                <button
+                                  type="button"
+                                  className={CONFIRM_DELETE_BTN}
+                                  onClick={() => {
+                                    onRemoveFromHub?.('layout', entry.id)
+                                    setConfirmHubRemoveId(null)
+                                  }}
+                                  data-testid="layout-store-hub-remove-confirm"
+                                >
+                                  {t('hub.confirmRemove')}
+                                </button>
+                                <button
+                                  type="button"
+                                  className={ACTION_BTN}
+                                  onClick={() => setConfirmHubRemoveId(null)}
+                                  data-testid="layout-store-hub-remove-cancel"
+                                >
+                                  {t('common.cancel')}
+                                </button>
+                              </>
+                            )}
+                            {entryHubPostId && confirmHubRemoveId !== entry.id && (
+                              <>
+                                {onUpdateOnHub && (
+                                  <button
+                                    type="button"
+                                    className={HUB_BTN}
+                                    onClick={() => onUpdateOnHub('layout', entry.id)}
+                                    disabled={!!hubUploading || fileDisabled}
+                                    data-testid="layout-store-update-hub"
+                                  >
+                                    {hubUploading === entry.id
+                                      ? t('hub.updating')
+                                      : t('hub.updateOnHub')}
+                                  </button>
+                                )}
+                                {onRemoveFromHub && (
+                                  <button
+                                    type="button"
+                                    className={HUB_BTN}
+                                    onClick={() => setConfirmHubRemoveId(entry.id)}
+                                    disabled={!!hubUploading || fileDisabled}
+                                    data-testid="layout-store-remove-hub"
+                                  >
+                                    {t('hub.removeFromHub')}
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            {!entryHubPostId && (
+                              <HubOrphanButtons
+                                entry={entry}
+                                keyboardName={keyboardName}
+                                hubMyPosts={hubMyPosts}
+                                hubUploading={hubUploading}
+                                fileDisabled={fileDisabled}
+                                onUploadToHub={onUploadToHub}
+                                onReuploadToHub={onReuploadToHub}
+                                onDeleteOrphanedHubPost={onDeleteOrphanedHubPost}
+                              />
+                            )}
+                          </div>
+                        </div>
+                        {hubNeedsDisplayName &&
+                          (entryHubPostId ? !onUpdateOnHub : !onUploadToHub) && (
+                            <div
+                              className="mt-1 text-[11px] text-content-muted"
+                              data-testid="layout-store-hub-needs-display-name"
+                            >
+                              {t('hub.needsDisplayName')}
+                            </div>
+                          )}
+                        {hubUploadResult && hubUploadResult.entryId === entry.id && (
+                          <div
+                            className={`mt-1 flex items-center text-[11px] font-medium ${hubUploadResult.kind === 'success' ? 'text-accent' : 'text-danger'}`}
+                            data-testid="layout-store-hub-result"
                           >
-                            {t('layoutStore.confirmDelete')}
-                          </button>
-                          <button
-                            type="button"
-                            className={ACTION_BTN}
-                            onClick={() => setConfirmDeleteId(null)}
-                            data-testid="layout-store-delete-cancel"
-                          >
-                            {t('common.cancel')}
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            className={ACTION_BTN}
-                            onClick={() => onLoad(entry.id)}
-                            data-testid="layout-store-load-btn"
-                          >
-                            {t('layoutStore.load')}
-                          </button>
-                          <button
-                            type="button"
-                            className={DELETE_BTN}
-                            onClick={() => setConfirmDeleteId(entry.id)}
-                            data-testid="layout-store-delete-btn"
-                          >
-                            {t('layoutStore.delete')}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Row 2: date + format tags */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-content-muted font-mono">
-                      {formatDate(entry.savedAt)}
-                    </span>
-                    {hasEntryExport && (
-                      <div className="flex gap-1">
-                        <FormatButtons
-                          className={FORMAT_BTN}
-                          testIdPrefix="layout-store-entry-export"
-                          disabled={fileDisabled}
-                          onVil={onExportEntryVil ? () => onExportEntryVil(entry.id) : undefined}
-                          onKeymapC={onExportEntryKeymapC ? () => onExportEntryKeymapC(entry.id) : undefined}
-                          onPdf={onExportEntryPdf ? () => onExportEntryPdf(entry.id) : undefined}
-                        />
+                            {hubUploadResult.message}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-
-                  {/* Row 3: Hub actions */}
-                  {hasHubActions && (
-                    <div className="mt-1.5 border-t border-edge pt-1.5" data-testid="layout-store-hub-row">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-medium text-accent">{t('hub.pipetteHub')}</span>
-                        <div className="flex gap-1">
-                          {entryHubPostId && hubOrigin && (
-                            <ShareLink url={`${hubOrigin}/post/${encodeURIComponent(entryHubPostId)}`} />
-                          )}
-                          {entryHubPostId && confirmHubRemoveId === entry.id && (
-                            <>
-                              <button
-                                type="button"
-                                className={CONFIRM_DELETE_BTN}
-                                onClick={() => { onRemoveFromHub?.('layout', entry.id); setConfirmHubRemoveId(null) }}
-                                data-testid="layout-store-hub-remove-confirm"
-                              >
-                                {t('hub.confirmRemove')}
-                              </button>
-                              <button
-                                type="button"
-                                className={ACTION_BTN}
-                                onClick={() => setConfirmHubRemoveId(null)}
-                                data-testid="layout-store-hub-remove-cancel"
-                              >
-                                {t('common.cancel')}
-                              </button>
-                            </>
-                          )}
-                          {entryHubPostId && confirmHubRemoveId !== entry.id && (
-                            <>
-                              {onUpdateOnHub && (
-                                <button
-                                  type="button"
-                                  className={HUB_BTN}
-                                  onClick={() => onUpdateOnHub('layout', entry.id)}
-                                  disabled={!!hubUploading || fileDisabled}
-                                  data-testid="layout-store-update-hub"
-                                >
-                                  {hubUploading === entry.id ? t('hub.updating') : t('hub.updateOnHub')}
-                                </button>
-                              )}
-                              {onRemoveFromHub && (
-                                <button
-                                  type="button"
-                                  className={HUB_BTN}
-                                  onClick={() => setConfirmHubRemoveId(entry.id)}
-                                  disabled={!!hubUploading || fileDisabled}
-                                  data-testid="layout-store-remove-hub"
-                                >
-                                  {t('hub.removeFromHub')}
-                                </button>
-                              )}
-                            </>
-                          )}
-                          {!entryHubPostId && (
-                            <HubOrphanButtons
-                              entry={entry}
-                              keyboardName={keyboardName}
-                              hubMyPosts={hubMyPosts}
-                              hubUploading={hubUploading}
-                              fileDisabled={fileDisabled}
-                              onUploadToHub={onUploadToHub}
-                              onReuploadToHub={onReuploadToHub}
-                              onDeleteOrphanedHubPost={onDeleteOrphanedHubPost}
-                            />
-                          )}
-                        </div>
-                      </div>
-                      {hubNeedsDisplayName && (entryHubPostId ? !onUpdateOnHub : !onUploadToHub) && (
-                        <div
-                          className="mt-1 text-[11px] text-content-muted"
-                          data-testid="layout-store-hub-needs-display-name"
-                        >
-                          {t('hub.needsDisplayName')}
-                        </div>
-                      )}
-                      {hubUploadResult && hubUploadResult.entryId === entry.id && (
-                        <div
-                          className={`mt-1 flex items-center text-[11px] font-medium ${hubUploadResult.kind === 'success' ? 'text-accent' : 'text-danger'}`}
-                          data-testid="layout-store-hub-result"
-                        >
-                          {hubUploadResult.message}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
                 )
               })}
             </div>
@@ -681,7 +746,9 @@ export function LayoutStoreContent({
         <div className={`${importGap}${fixedSection}`} data-testid="layout-store-import-section">
           {isPanel ? (
             <div className={ROW_CLASS}>
-              <span className="text-[13px] font-medium text-content">{t('layoutStore.import')}</span>
+              <span className="text-[13px] font-medium text-content">
+                {t('layoutStore.import')}
+              </span>
               <div className="flex gap-2">
                 {onImportVil && (
                   <button

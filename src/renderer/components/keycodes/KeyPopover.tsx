@@ -273,12 +273,18 @@ export function KeyPopover({
             break
           case 'modTap': {
             // Only preserve mod mask when switching from another mod-based mode
-            const mask = (wrapperMode === 'modMask' || wrapperMode === 'modTap') ? extractModMask(currentKeycode) : 0
+            const mask =
+              wrapperMode === 'modMask' || wrapperMode === 'modTap'
+                ? extractModMask(currentKeycode)
+                : 0
             onRawKeycodeSelect(buildModTapKeycode(mask, basicKey))
             break
           }
           case 'modMask': {
-            const mask = (wrapperMode === 'modMask' || wrapperMode === 'modTap') ? extractModMask(currentKeycode) : 0
+            const mask =
+              wrapperMode === 'modMask' || wrapperMode === 'modTap'
+                ? extractModMask(currentKeycode)
+                : 0
             onRawKeycodeSelect(buildModMaskKeycode(mask, basicKey))
             break
           }
@@ -318,10 +324,20 @@ export function KeyPopover({
       data-testid="key-popover"
     >
       <div className="flex border-b border-edge-subtle px-2 pt-1">
-        <button type="button" className={tabClass('key')} onClick={() => setActiveTab('key')} data-testid="popover-tab-key">
+        <button
+          type="button"
+          className={tabClass('key')}
+          onClick={() => setActiveTab('key')}
+          data-testid="popover-tab-key"
+        >
           {t('editor.keymap.keyPopover.keyTab')}
         </button>
-        <button type="button" className={tabClass('code')} onClick={() => setActiveTab('code')} data-testid="popover-tab-code">
+        <button
+          type="button"
+          className={tabClass('code')}
+          onClick={() => setActiveTab('code')}
+          data-testid="popover-tab-code"
+        >
           {t('editor.keymap.keyPopover.codeTab')}
         </button>
         <div className="ml-auto flex items-center">
@@ -331,7 +347,12 @@ export function KeyPopover({
             onClick={onClose}
             data-testid="popover-close"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="h-4 w-4"
+            >
               <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
             </svg>
           </button>
@@ -395,10 +416,7 @@ export function KeyPopover({
 
       {activeTab === 'key' && showModStrip && (
         <div className="border-b border-edge-subtle px-3 py-2">
-          <ModifierCheckboxStrip
-            modMask={currentModMask}
-            onChange={handleModStripChange}
-          />
+          <ModifierCheckboxStrip modMask={currentModMask} onChange={handleModStripChange} />
         </div>
       )}
 

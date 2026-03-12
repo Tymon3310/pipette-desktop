@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -6,16 +6,16 @@
 button:not(:disabled),
 a,
 select:not(:disabled),
-input[type="checkbox"]:not(:disabled),
-input[type="radio"]:not(:disabled),
-input[type="range"]:not(:disabled),
+input[type='checkbox']:not(:disabled),
+input[type='radio']:not(:disabled),
+input[type='range']:not(:disabled),
 summary,
-[role="button"] {
+[role='button'] {
   cursor: pointer;
 }
 
-label:has(> input[type="checkbox"]:not(:disabled)),
-label:has(> input[type="radio"]:not(:disabled)) {
+label:has(> input[type='checkbox']:not(:disabled)),
+label:has(> input[type='radio']:not(:disabled)) {
   cursor: pointer;
 }
 
@@ -115,9 +115,18 @@ label:has(> input[type="radio"]:not(:disabled)) {
 
 /* Connecting overlay animations */
 @keyframes pulse-ring {
-  0% { transform: scale(0.8); opacity: 0.6; }
-  50% { transform: scale(1.15); opacity: 0; }
-  100% { transform: scale(0.8); opacity: 0; }
+  0% {
+    transform: scale(0.8);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
 }
 
 .animate-pulse-ring {
@@ -130,8 +139,13 @@ label:has(> input[type="radio"]:not(:disabled)) {
 
 /* Typing test cursor blink — sharp on/off toggle */
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 .animate-blink {
@@ -190,8 +204,12 @@ label:has(> input[type="radio"]:not(:disabled)) {
 }
 
 @keyframes confirm-flash {
-  0% { border-color: oklch(0.623 0.214 259.1); }
-  100% { border-color: var(--color-edge); }
+  0% {
+    border-color: oklch(0.623 0.214 259.1);
+  }
+  100% {
+    border-color: var(--color-edge);
+  }
 }
 
 .confirm-flash {

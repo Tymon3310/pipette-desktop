@@ -30,11 +30,32 @@ vi.mock('react-i18next', () => ({
 }))
 
 const mockKeycodes = [
-  { qmkId: 'KC_TRNS', label: '\u25BD', tooltip: undefined, hidden: false, alias: ['KC_TRNS', 'KC_TRANSPARENT'], masked: false },
+  {
+    qmkId: 'KC_TRNS',
+    label: '\u25BD',
+    tooltip: undefined,
+    hidden: false,
+    alias: ['KC_TRNS', 'KC_TRANSPARENT'],
+    masked: false,
+  },
   { qmkId: 'KC_A', label: 'A', tooltip: 'a', hidden: false, alias: ['KC_A'], masked: false },
   { qmkId: 'KC_B', label: 'B', tooltip: 'b', hidden: false, alias: ['KC_B'], masked: false },
-  { qmkId: 'KC_ENTER', label: 'Enter', tooltip: 'Return', hidden: false, alias: ['KC_ENTER', 'KC_ENT'], masked: false },
-  { qmkId: 'KC_SPACE', label: 'Space', tooltip: 'space', hidden: false, alias: ['KC_SPACE', 'KC_SPC'], masked: false },
+  {
+    qmkId: 'KC_ENTER',
+    label: 'Enter',
+    tooltip: 'Return',
+    hidden: false,
+    alias: ['KC_ENTER', 'KC_ENT'],
+    masked: false,
+  },
+  {
+    qmkId: 'KC_SPACE',
+    label: 'Space',
+    tooltip: 'space',
+    hidden: false,
+    alias: ['KC_SPACE', 'KC_SPC'],
+    masked: false,
+  },
 ]
 
 const mockLayerKeycodes = [
@@ -42,8 +63,22 @@ const mockLayerKeycodes = [
 ]
 
 const mockLMMods = [
-  { qmkId: 'MOD_LSFT', label: 'LSft', tooltip: 'Left Shift', hidden: false, alias: ['MOD_LSFT'], masked: false },
-  { qmkId: 'MOD_LCTL', label: 'LCtl', tooltip: 'Left Control', hidden: false, alias: ['MOD_LCTL'], masked: false },
+  {
+    qmkId: 'MOD_LSFT',
+    label: 'LSft',
+    tooltip: 'Left Shift',
+    hidden: false,
+    alias: ['MOD_LSFT'],
+    masked: false,
+  },
+  {
+    qmkId: 'MOD_LCTL',
+    label: 'LCtl',
+    tooltip: 'Left Control',
+    hidden: false,
+    alias: ['MOD_LCTL'],
+    masked: false,
+  },
 ]
 
 vi.mock('../categories', () => ({
@@ -104,7 +139,8 @@ vi.mock('../../../../shared/keycodes/keycodes', () => ({
   extractLTLayer: (code: number) => (code >> 8) & 0x0f,
   extractLMLayer: (code: number) => (code >> 4) & 0x0f,
   extractLMMod: (code: number) => code & 0x1f,
-  buildLTKeycode: (layer: number, basicKey: number) => 0x4000 | ((layer & 0x0f) << 8) | (basicKey & 0xff),
+  buildLTKeycode: (layer: number, basicKey: number) =>
+    0x4000 | ((layer & 0x0f) << 8) | (basicKey & 0xff),
   buildSHTKeycode: (basicKey: number) => 0x5600 | (basicKey & 0xff),
   buildLMKeycode: (layer: number, mod: number) => 0x7000 | ((layer & 0x0f) << 4) | (mod & 0x1f),
   resolve: (name: string) => {
@@ -125,8 +161,10 @@ vi.mock('../../../../shared/keycodes/keycodes', () => ({
   isModTapKeycode: (code: number) => code >= 0x6000 && code < 0x8000,
   extractModMask: (code: number) => (code >> 8) & 0x1f,
   extractBasicKey: (code: number) => code & 0xff,
-  buildModMaskKeycode: (mask: number, key: number) => (mask === 0 ? key & 0xff : ((mask & 0x1f) << 8) | (key & 0xff)),
-  buildModTapKeycode: (mask: number, key: number) => (mask === 0 ? key & 0xff : 0x6000 | ((mask & 0x1f) << 8) | (key & 0xff)),
+  buildModMaskKeycode: (mask: number, key: number) =>
+    mask === 0 ? key & 0xff : ((mask & 0x1f) << 8) | (key & 0xff),
+  buildModTapKeycode: (mask: number, key: number) =>
+    mask === 0 ? key & 0xff : 0x6000 | ((mask & 0x1f) << 8) | (key & 0xff),
 }))
 
 vi.mock('../ModifierCheckboxStrip', () => ({
@@ -134,7 +172,15 @@ vi.mock('../ModifierCheckboxStrip', () => ({
 }))
 
 vi.mock('../LayerSelector', () => ({
-  LayerSelector: ({ layers, selectedLayer, onChange }: { layers: number; selectedLayer: number; onChange: (n: number) => void }) => (
+  LayerSelector: ({
+    layers,
+    selectedLayer,
+    onChange,
+  }: {
+    layers: number
+    selectedLayer: number
+    onChange: (n: number) => void
+  }) => (
     <div data-testid="layer-selector">
       {Array.from({ length: layers }, (_, i) => (
         <button key={i} data-testid={`layer-btn-${i}`} onClick={() => onChange(i)}>
@@ -512,18 +558,14 @@ describe('PopoverTabKey — LM maskOnly initialQuery', () => {
 
   it('shows empty search input when LM key has no modifier (mod=0)', () => {
     // LM0 with mod=0 serializes as "LM0(0x0)" — inner is not a real keycode
-    render(
-      <PopoverTabKey currentKeycode={0x7000} maskOnly onKeycodeSelect={onSelect} />,
-    )
+    render(<PopoverTabKey currentKeycode={0x7000} maskOnly onKeycodeSelect={onSelect} />)
     const input = screen.getByTestId('popover-search-input') as HTMLInputElement
     expect(input.value).toBe('')
   })
 
   it('shows stripped modifier name when LM key has a modifier set', () => {
     // LM0 with MOD_LSFT serializes as "LM0(MOD_LSFT)" — inner is MOD_LSFT
-    render(
-      <PopoverTabKey currentKeycode={0x7002} maskOnly onKeycodeSelect={onSelect} />,
-    )
+    render(<PopoverTabKey currentKeycode={0x7002} maskOnly onKeycodeSelect={onSelect} />)
     const input = screen.getByTestId('popover-search-input') as HTMLInputElement
     expect(input.value).toBe('LSFT')
   })

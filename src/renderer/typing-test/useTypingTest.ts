@@ -2,7 +2,13 @@
 
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { extractMOLayer, extractLTLayer, extractLMLayer } from './keycode-char-map'
-import { generateWords, generateWordsSync, getLanguageData, selectQuote, quoteToWords } from './word-generator'
+import {
+  generateWords,
+  generateWordsSync,
+  getLanguageData,
+  selectQuote,
+  quoteToWords,
+} from './word-generator'
 import type { TypingTestConfig, Quote } from './types'
 import { DEFAULT_CONFIG, DEFAULT_LANGUAGE } from './types'
 
@@ -67,14 +73,20 @@ export interface UseTypingTestReturn {
 }
 
 /** Return the word count and generation options for word-based modes (words/time). */
-function wordGenParams(config: TypingTestConfig & { mode: 'words' | 'time' }): { count: number; opts: { punctuation: boolean; numbers: boolean } } {
+function wordGenParams(config: TypingTestConfig & { mode: 'words' | 'time' }): {
+  count: number
+  opts: { punctuation: boolean; numbers: boolean }
+} {
   return {
     count: config.mode === 'words' ? config.wordCount : TIME_MODE_BATCH_SIZE,
     opts: { punctuation: config.punctuation, numbers: config.numbers },
   }
 }
 
-function createWordsForConfigSync(config: TypingTestConfig, language: string): { words: string[]; quote: Quote | null } {
+function createWordsForConfigSync(
+  config: TypingTestConfig,
+  language: string,
+): { words: string[]; quote: Quote | null } {
   if (config.mode === 'quote') {
     const quote = selectQuote(config.quoteLength)
     return { words: quoteToWords(quote), quote }
@@ -84,7 +96,10 @@ function createWordsForConfigSync(config: TypingTestConfig, language: string): {
   return { words, quote: null }
 }
 
-async function createWordsForConfig(config: TypingTestConfig, language: string): Promise<{ words: string[]; quote: Quote | null }> {
+async function createWordsForConfig(
+  config: TypingTestConfig,
+  language: string,
+): Promise<{ words: string[]; quote: Quote | null }> {
   if (config.mode === 'quote') {
     const quote = selectQuote(config.quoteLength)
     return { words: quoteToWords(quote), quote }
@@ -94,12 +109,20 @@ async function createWordsForConfig(config: TypingTestConfig, language: string):
   return { words, quote: null }
 }
 
-function createInitialState(config: TypingTestConfig, language: string, status: TypingTestStatus = 'waiting'): TypingTestState {
+function createInitialState(
+  config: TypingTestConfig,
+  language: string,
+  status: TypingTestStatus = 'waiting',
+): TypingTestState {
   const { words, quote } = createWordsForConfigSync(config, language)
   return freshState(words, quote, status)
 }
 
-function freshState(words: string[], quote: Quote | null, status: TypingTestStatus = 'waiting'): TypingTestState {
+function freshState(
+  words: string[],
+  quote: Quote | null,
+  status: TypingTestStatus = 'waiting',
+): TypingTestState {
   return {
     status,
     words,
@@ -154,7 +177,9 @@ export function useTypingTest(
   const [baseLayer, setBaseLayerState] = useState(0)
   const [effectiveLayer, setEffectiveLayer] = useState(0)
   const [windowFocused, setWindowFocusedState] = useState(true)
-  const [state, setState] = useState<TypingTestState>(() => createInitialState(initialConfig ?? DEFAULT_CONFIG, initialLanguage ?? DEFAULT_LANGUAGE))
+  const [state, setState] = useState<TypingTestState>(() =>
+    createInitialState(initialConfig ?? DEFAULT_CONFIG, initialLanguage ?? DEFAULT_LANGUAGE),
+  )
   const configRef = useRef(config)
   const languageRef = useRef(language)
   const baseLayerRef = useRef(baseLayer)
@@ -259,9 +284,7 @@ export function useTypingTest(
         }
       }
     }
-    const highestActiveLayer = activeLayerSet.size > 0
-      ? Math.max(...activeLayerSet)
-      : bl
+    const highestActiveLayer = activeLayerSet.size > 0 ? Math.max(...activeLayerSet) : bl
     setEffectiveLayer(highestActiveLayer)
   }, [])
 
@@ -270,49 +293,52 @@ export function useTypingTest(
     windowFocusedRef.current = focused
   }, [])
 
-  const processKeyEvent = useCallback((key: string, ctrlKey: boolean, altKey: boolean, metaKey: boolean) => {
-    if (!windowFocusedRef.current) return
-    // Ignore modifier combos, but allow AltGr (Ctrl+Alt) when it produces a printable character
-    if (metaKey) return
-    if ((ctrlKey || altKey) && key.length !== 1) return
-    if (ctrlKey && !altKey) return
-    if (altKey && !ctrlKey) return
-    if (IGNORED_KEYS.has(key)) return
+  const processKeyEvent = useCallback(
+    (key: string, ctrlKey: boolean, altKey: boolean, metaKey: boolean) => {
+      if (!windowFocusedRef.current) return
+      // Ignore modifier combos, but allow AltGr (Ctrl+Alt) when it produces a printable character
+      if (metaKey) return
+      if ((ctrlKey || altKey) && key.length !== 1) return
+      if (ctrlKey && !altKey) return
+      if (altKey && !ctrlKey) return
+      if (IGNORED_KEYS.has(key)) return
 
-    setState((s) => {
-      if (s.status !== 'waiting' && s.status !== 'running') return s
+      setState((s) => {
+        if (s.status !== 'waiting' && s.status !== 'running') return s
 
-      if (isSubmitKey(key)) {
-        if (s.status === 'waiting') {
-          return { ...s, status: 'running', startTime: Date.now() }
+        if (isSubmitKey(key)) {
+          if (s.status === 'waiting') {
+            return { ...s, status: 'running', startTime: Date.now() }
+          }
+          return handleSpace(s, configRef.current, languageRef.current)
         }
-        return handleSpace(s, configRef.current, languageRef.current)
-      }
 
-      if (key === 'Backspace') {
-        // Don't start the test on backspace
-        if (s.status === 'waiting') return s
-        return handleBackspace(s)
-      }
-
-      // Single printable character
-      if (key.length === 1) {
-        let current = s
-        if (current.status === 'waiting') {
-          current = { ...current, status: 'running', startTime: Date.now() }
+        if (key === 'Backspace') {
+          // Don't start the test on backspace
+          if (s.status === 'waiting') return s
+          return handleBackspace(s)
         }
-        current = handleChar(current, key)
-        // Auto-finish when last char of last word is typed (words/quote modes only)
-        if (configRef.current.mode !== 'time') {
-          return tryFinishLastWord(current) ?? current
-        }
-        return current
-      }
 
-      // Multi-character key names (Shift, Control, etc.) — ignore
-      return s
-    })
-  }, [])
+        // Single printable character
+        if (key.length === 1) {
+          let current = s
+          if (current.status === 'waiting') {
+            current = { ...current, status: 'running', startTime: Date.now() }
+          }
+          current = handleChar(current, key)
+          // Auto-finish when last char of last word is typed (words/quote modes only)
+          if (configRef.current.mode !== 'time') {
+            return tryFinishLastWord(current) ?? current
+          }
+          return current
+        }
+
+        // Multi-character key names (Shift, Control, etc.) — ignore
+        return s
+      })
+    },
+    [],
+  )
 
   const processCompositionStart = useCallback(() => {
     setState((s) => {
@@ -357,7 +383,7 @@ export function useTypingTest(
         if (s.status !== 'running' || !s.startTime) return s
         const elapsed = (Date.now() - s.startTime) / 60000
         if (elapsed <= 0) return s
-        const currentWpm = Math.round((s.correctChars / 5) / elapsed)
+        const currentWpm = Math.round(s.correctChars / 5 / elapsed)
         if (s.wpmHistory.length >= MAX_WPM_HISTORY) return s
         return { ...s, wpmHistory: [...s.wpmHistory, currentWpm] }
       })
@@ -385,7 +411,7 @@ export function useTypingTest(
     const end = state.endTime ?? Date.now()
     const minutes = (end - state.startTime) / 60000
     if (minutes <= 0) return 0
-    return Math.round((state.correctChars / 5) / minutes)
+    return Math.round(state.correctChars / 5 / minutes)
   }, [state.startTime, state.endTime, state.correctChars, tick])
 
   const accuracy = useMemo(() => {
@@ -464,7 +490,11 @@ function tryFinishLastWord(state: TypingTestState): TypingTestState | null {
   }
 }
 
-function handleSpace(state: TypingTestState, config: TypingTestConfig, language: string): TypingTestState {
+function handleSpace(
+  state: TypingTestState,
+  config: TypingTestConfig,
+  language: string,
+): TypingTestState {
   if (state.currentWordIndex >= state.words.length) return state
 
   const currentWord = state.words[state.currentWordIndex]
@@ -487,10 +517,14 @@ function handleSpace(state: TypingTestState, config: TypingTestConfig, language:
   if (config.mode === 'time') {
     const wordsRemaining = state.words.length - nextIndex
     if (wordsRemaining < TIME_MODE_EXTEND_THRESHOLD) {
-      const { words: moreWords } = generateWordsSync(TIME_MODE_BATCH_SIZE, {
-        punctuation: config.punctuation,
-        numbers: config.numbers,
-      }, language)
+      const { words: moreWords } = generateWordsSync(
+        TIME_MODE_BATCH_SIZE,
+        {
+          punctuation: config.punctuation,
+          numbers: config.numbers,
+        },
+        language,
+      )
       return { ...base, words: [...state.words, ...moreWords] }
     }
     return base
@@ -511,7 +545,10 @@ function handleBackspace(state: TypingTestState): TypingTestState {
   }
 }
 
-function computeWordCharCounts(word: string, typed: string): { correct: number; incorrect: number } {
+function computeWordCharCounts(
+  word: string,
+  typed: string,
+): { correct: number; incorrect: number } {
   const len = Math.max(typed.length, word.length)
   let correct = 1 // count the space separator as a correct char
   let incorrect = 0

@@ -14,9 +14,7 @@ vi.mock('react-i18next', () => ({
 
 describe('ConnectingOverlay', () => {
   it('renders connecting message with device info', () => {
-    render(
-      <ConnectingOverlay deviceName="TestKeyboard" deviceId="1234:5678" />,
-    )
+    render(<ConnectingOverlay deviceName="TestKeyboard" deviceId="1234:5678" />)
 
     expect(screen.getByText('TestKeyboard')).toBeInTheDocument()
     expect(screen.getByText('1234:5678')).toBeInTheDocument()
@@ -35,9 +33,7 @@ describe('ConnectingOverlay', () => {
   })
 
   it('hides device name and id when empty', () => {
-    const { container } = render(
-      <ConnectingOverlay deviceName="" deviceId="" syncOnly />,
-    )
+    const { container } = render(<ConnectingOverlay deviceName="" deviceId="" syncOnly />)
 
     // Device info elements should not be rendered at all
     const fontMonoEls = container.querySelectorAll('.font-mono')
@@ -105,13 +101,7 @@ describe('ConnectingOverlay', () => {
   })
 
   it('does not show sync details when syncProgress is null', () => {
-    render(
-      <ConnectingOverlay
-        deviceName="TestKeyboard"
-        deviceId="1234:5678"
-        syncProgress={null}
-      />,
-    )
+    render(<ConnectingOverlay deviceName="TestKeyboard" deviceId="1234:5678" syncProgress={null} />)
 
     expect(screen.queryByText(/\d+ \/ \d+/)).not.toBeInTheDocument()
   })
@@ -161,13 +151,7 @@ describe('ConnectingOverlay', () => {
   })
 
   it('uses syncing text when syncOnly is true', () => {
-    render(
-      <ConnectingOverlay
-        deviceName="TestKeyboard"
-        deviceId="1234:5678"
-        syncOnly
-      />,
-    )
+    render(<ConnectingOverlay deviceName="TestKeyboard" deviceId="1234:5678" syncOnly />)
 
     expect(screen.getByText('sync.syncing')).toBeInTheDocument()
   })

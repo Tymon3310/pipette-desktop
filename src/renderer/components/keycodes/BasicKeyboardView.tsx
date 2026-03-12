@@ -54,7 +54,11 @@ function getBasicGroups(viewType: string): KeycodeGroup[] {
 }
 
 /** Group remaining keycodes by their basic category group */
-function getRemainingGroups(layout: DisplayLayoutDef, visCheck: (kc: Keycode) => boolean, viewType: string): KeycodeGroup[] {
+function getRemainingGroups(
+  layout: DisplayLayoutDef,
+  visCheck: (kc: Keycode) => boolean,
+  viewType: string,
+): KeycodeGroup[] {
   const shownIds = collectLayoutQmkIds(layout.kle)
   const groups = getBasicGroups(viewType)
   const result: KeycodeGroup[] = []

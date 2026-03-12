@@ -13,4 +13,5 @@ export function toggleKnobClass(on: boolean): string {
   return `${TOGGLE_KNOB_BASE} translate-x-0.5`
 }
 
-export const ROW_CLASS = 'flex items-center justify-between gap-4 rounded-lg border border-edge bg-surface/20 px-4 py-3'
+export const ROW_CLASS =
+  'flex items-center justify-between gap-4 rounded-lg border border-edge bg-surface/20 px-4 py-3'

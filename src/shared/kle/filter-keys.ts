@@ -5,10 +5,7 @@ import type { KleKey } from './types'
 
 /** Whether the key has a secondary rectangle (stepped, ISO enter, etc.) */
 export function hasSecondaryRect(key: KleKey): boolean {
-  return (
-    key.width2 !== key.width || key.height2 !== key.height ||
-    key.x2 !== 0 || key.y2 !== 0
-  )
+  return key.width2 !== key.width || key.height2 !== key.height || key.x2 !== 0 || key.y2 !== 0
 }
 
 /**
@@ -58,10 +55,7 @@ function visualMinPos(key: KleKey): { x: number; y: number } {
  * IMPORTANT: Call on UNFILTERED keys (including all options) so that
  * option 0's min position can be computed. Filter AFTER repositioning.
  */
-export function repositionLayoutKeys(
-  keys: KleKey[],
-  layoutOptions: Map<number, number>,
-): KleKey[] {
+export function repositionLayoutKeys(keys: KleKey[], layoutOptions: Map<number, number>): KleKey[] {
   if (layoutOptions.size === 0) return keys
 
   // Phase 1: Compute visual min (x, y) per (layoutIndex, layoutOption) pair.
@@ -83,7 +77,10 @@ export function repositionLayoutKeys(
   // Phase 2: Check if any selected option != 0 (early exit if no shifts needed)
   let needsShift = false
   for (const [, opt] of layoutOptions) {
-    if (opt !== 0) { needsShift = true; break }
+    if (opt !== 0) {
+      needsShift = true
+      break
+    }
   }
   if (!needsShift) return keys
 
@@ -116,10 +113,7 @@ export function repositionLayoutKeys(
   return changed ? result : keys
 }
 
-export function filterVisibleKeys(
-  keys: KleKey[],
-  layoutOptions: Map<number, number>,
-): KleKey[] {
+export function filterVisibleKeys(keys: KleKey[], layoutOptions: Map<number, number>): KleKey[] {
   return keys.filter((key) => {
     if (key.decal) return false
     if (key.layoutIndex < 0) return true

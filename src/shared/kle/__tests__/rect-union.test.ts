@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import { describe, it, expect } from 'vitest'
-import {
-  computeUnionPolygon,
-  polygonToSvgPath,
-  computeUnionPath,
-} from '../rect-union'
+import { computeUnionPolygon, polygonToSvgPath, computeUnionPath } from '../rect-union'
 
 describe('computeUnionPolygon', () => {
   it('returns empty for non-overlapping rects', () => {

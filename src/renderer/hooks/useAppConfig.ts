@@ -18,13 +18,16 @@ export function AppConfigProvider({ children }: { children: ReactNode }): ReactN
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    window.vialAPI.appConfigGetAll().then((loaded) => {
-      setConfig(loaded)
-      void i18n.changeLanguage(loaded.language ?? 'en')
-      setLoading(false)
-    }).catch(() => {
-      setLoading(false)
-    })
+    window.vialAPI
+      .appConfigGetAll()
+      .then((loaded) => {
+        setConfig(loaded)
+        void i18n.changeLanguage(loaded.language ?? 'en')
+        setLoading(false)
+      })
+      .catch(() => {
+        setLoading(false)
+      })
   }, [])
 
   const set = useCallback(<K extends keyof AppConfig>(key: K, value: AppConfig[K]) => {
@@ -34,11 +37,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }): ReactN
     })
   }, [])
 
-  return createElement(
-    AppConfigContext.Provider,
-    { value: { config, loading, set } },
-    children,
-  )
+  return createElement(AppConfigContext.Provider, { value: { config, loading, set } }, children)
 }
 
 export function useAppConfig(): AppConfigContextValue {

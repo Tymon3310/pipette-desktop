@@ -105,7 +105,11 @@ function setupShellIpc(): void {
   secureHandle(IpcChannels.SHELL_OPEN_EXTERNAL, async (_event, url: string) => {
     if (typeof url !== 'string') throw new Error('Invalid URL')
     let parsed: URL
-    try { parsed = new URL(url) } catch { throw new Error('Invalid URL') }
+    try {
+      parsed = new URL(url)
+    } catch {
+      throw new Error('Invalid URL')
+    }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       throw new Error('Invalid URL scheme')
     }
@@ -119,6 +123,18 @@ function setupLogIpc(): void {
   })
   secureOn(IpcChannels.LOG_HID_PACKET, (_event, direction: 'TX' | 'RX', data: number[]) => {
     logHidPacket(direction, new Uint8Array(data))
+  })
+}
+
+function setupDebugIpc(): void {
+  secureHandle(IpcChannels.GET_DEBUG_FLAGS, async () => {
+    const flags: Record<string, string | undefined> = {}
+    for (const key of Object.keys(process.env)) {
+      if (key.startsWith('DEBUG_')) {
+        flags[key] = process.env[key]
+      }
+    }
+    return flags
   })
 }
 
@@ -139,6 +155,7 @@ app.whenReady().then(() => {
   setupNotificationStore()
   setupLogIpc()
   setupShellIpc()
+  setupDebugIpc()
   createWindow()
 
   app.on('activate', () => {

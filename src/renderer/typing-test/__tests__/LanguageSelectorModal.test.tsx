@@ -7,8 +7,20 @@ import type { LanguageListEntry } from '../../../shared/types/language-store'
 
 const mockLanguages: LanguageListEntry[] = [
   { name: 'english', wordCount: 200, rightToLeft: false, fileSize: 5000, status: 'bundled' },
-  { name: 'english_1k', wordCount: 1000, rightToLeft: false, fileSize: 15000, status: 'downloaded' },
-  { name: 'german', wordCount: 5000, rightToLeft: false, fileSize: 50000, status: 'not-downloaded' },
+  {
+    name: 'english_1k',
+    wordCount: 1000,
+    rightToLeft: false,
+    fileSize: 15000,
+    status: 'downloaded',
+  },
+  {
+    name: 'german',
+    wordCount: 5000,
+    rightToLeft: false,
+    fileSize: 50000,
+    status: 'not-downloaded',
+  },
   { name: 'arabic', wordCount: 3000, rightToLeft: true, fileSize: 30000, status: 'not-downloaded' },
 ]
 
@@ -181,7 +193,9 @@ describe('LanguageSelectorModal', () => {
 
   it('does not update state after unmount when langList resolves late', async () => {
     let resolveLangList: (value: LanguageListEntry[]) => void
-    const langListPromise = new Promise<LanguageListEntry[]>((resolve) => { resolveLangList = resolve })
+    const langListPromise = new Promise<LanguageListEntry[]>((resolve) => {
+      resolveLangList = resolve
+    })
     vi.mocked(window.vialAPI.langList).mockReturnValue(langListPromise)
 
     const { unmount } = render(

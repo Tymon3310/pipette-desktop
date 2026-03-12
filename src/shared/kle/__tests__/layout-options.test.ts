@@ -34,20 +34,14 @@ describe('decodeLayoutOptions', () => {
     // labels[0] = boolean (1 bit), labels[1] = 3-choice select (2 bits)
     // Reversed packing: labels[1] uses lowest bits, labels[0] uses next bit
     // options = 0b1_10 = 6 → labels[1] = 2 (bottom 2 bits), labels[0] = 1 (next bit)
-    const labels: (string | string[])[] = [
-      'Split BS',
-      ['Bottom', 'ANSI', 'Tsangan', 'WKL'],
-    ]
+    const labels: (string | string[])[] = ['Split BS', ['Bottom', 'ANSI', 'Tsangan', 'WKL']]
     const result = decodeLayoutOptions(0b110, labels)
     expect(result.get(0)).toBe(1)
     expect(result.get(1)).toBe(2)
   })
 
   it('returns all zeros for options = 0', () => {
-    const labels: (string | string[])[] = [
-      'Opt A',
-      ['Row', 'A', 'B', 'C'],
-    ]
+    const labels: (string | string[])[] = ['Opt A', ['Row', 'A', 'B', 'C']]
     const result = decodeLayoutOptions(0, labels)
     expect(result.get(0)).toBe(0)
     expect(result.get(1)).toBe(0)

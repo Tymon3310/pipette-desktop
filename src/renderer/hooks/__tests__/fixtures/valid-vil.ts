@@ -23,9 +23,7 @@ export const VALID_VIL: VilFile = {
   },
   macros: [0],
   layoutOptions: 0,
-  tapDance: [
-    { onTap: 0, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: 150 },
-  ],
+  tapDance: [{ onTap: 0, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: 150 }],
   combo: [{ key1: 0, key2: 0, key3: 0, key4: 0, output: 0 }],
   keyOverride: [
     {

@@ -38,7 +38,12 @@ export interface UseFavoriteStoreReturn {
   importFavorites: () => Promise<boolean>
 }
 
-export function useFavoriteStore({ favoriteType, serialize, apply, enabled = true }: UseFavoriteStoreOptions): UseFavoriteStoreReturn {
+export function useFavoriteStore({
+  favoriteType,
+  serialize,
+  apply,
+  enabled = true,
+}: UseFavoriteStoreOptions): UseFavoriteStoreReturn {
   const { t } = useTranslation()
   const [entries, setEntries] = useState<SavedFavoriteMeta[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -69,112 +74,131 @@ export function useFavoriteStore({ favoriteType, serialize, apply, enabled = tru
     setShowModal(false)
   }, [])
 
-  const saveFavorite = useCallback(async (label: string): Promise<boolean> => {
-    if (!enabled) return false
-    setError(null)
-    setSaving(true)
-    try {
-      const data = serialize()
-      const json = JSON.stringify({ type: favoriteType, data })
-      const result = await window.vialAPI.favoriteStoreSave(favoriteType, json, label)
-      if (!result.success) {
+  const saveFavorite = useCallback(
+    async (label: string): Promise<boolean> => {
+      if (!enabled) return false
+      setError(null)
+      setSaving(true)
+      try {
+        const data = serialize()
+        const json = JSON.stringify({ type: favoriteType, data })
+        const result = await window.vialAPI.favoriteStoreSave(favoriteType, json, label)
+        if (!result.success) {
+          setError(t('favoriteStore.saveFailed'))
+          return false
+        }
+        await refreshEntries()
+        return true
+      } catch {
         setError(t('favoriteStore.saveFailed'))
         return false
+      } finally {
+        setSaving(false)
       }
-      await refreshEntries()
-      return true
-    } catch {
-      setError(t('favoriteStore.saveFailed'))
-      return false
-    } finally {
-      setSaving(false)
-    }
-  }, [enabled, favoriteType, serialize, refreshEntries, t])
+    },
+    [enabled, favoriteType, serialize, refreshEntries, t],
+  )
 
-  const loadFavorite = useCallback(async (entryId: string): Promise<boolean> => {
-    setError(null)
-    setLoading(true)
-    try {
-      const result = await window.vialAPI.favoriteStoreLoad(favoriteType, entryId)
-      if (!result.success || !result.data) {
-        setError(t('favoriteStore.loadFailed'))
-        return false
-      }
-
-      const parsed = JSON.parse(result.data) as Record<string, unknown>
-      if (!isFavoriteDataFile(parsed, favoriteType)) {
-        setError(t('favoriteStore.loadFailed'))
-        return false
-      }
-
-      apply(parsed.data)
-      setShowModal(false)
-      return true
-    } catch {
-      setError(t('favoriteStore.loadFailed'))
-      return false
-    } finally {
-      setLoading(false)
-    }
-  }, [favoriteType, apply, t])
-
-  const renameEntry = useCallback(async (entryId: string, newLabel: string): Promise<boolean> => {
-    setError(null)
-    try {
-      const result = await window.vialAPI.favoriteStoreRename(favoriteType, entryId, newLabel)
-      if (!result.success) {
-        return false
-      }
-      await refreshEntries()
-      return true
-    } catch {
-      return false
-    }
-  }, [favoriteType, refreshEntries])
-
-  const deleteEntry = useCallback(async (entryId: string): Promise<boolean> => {
-    setError(null)
-    try {
-      const result = await window.vialAPI.favoriteStoreDelete(favoriteType, entryId)
-      if (!result.success) {
-        return false
-      }
-      await refreshEntries()
-      return true
-    } catch {
-      return false
-    }
-  }, [favoriteType, refreshEntries])
-
-  const doExport = useCallback(async (entryId?: string): Promise<boolean> => {
-    setError(null)
-    setExporting(true)
-    try {
-      const result = entryId !== undefined
-        ? await window.vialAPI.favoriteStoreExport(favoriteType, entryId)
-        : await window.vialAPI.favoriteStoreExport(favoriteType)
-      if (!result.success) {
-        if (result.error !== 'cancelled') {
-          setError(t('favoriteStore.exportFailed'))
+  const loadFavorite = useCallback(
+    async (entryId: string): Promise<boolean> => {
+      setError(null)
+      setLoading(true)
+      try {
+        const result = await window.vialAPI.favoriteStoreLoad(favoriteType, entryId)
+        if (!result.success || !result.data) {
+          setError(t('favoriteStore.loadFailed'))
+          return false
         }
+
+        const parsed = JSON.parse(result.data) as Record<string, unknown>
+        if (!isFavoriteDataFile(parsed, favoriteType)) {
+          setError(t('favoriteStore.loadFailed'))
+          return false
+        }
+
+        apply(parsed.data)
+        setShowModal(false)
+        return true
+      } catch {
+        setError(t('favoriteStore.loadFailed'))
+        return false
+      } finally {
+        setLoading(false)
+      }
+    },
+    [favoriteType, apply, t],
+  )
+
+  const renameEntry = useCallback(
+    async (entryId: string, newLabel: string): Promise<boolean> => {
+      setError(null)
+      try {
+        const result = await window.vialAPI.favoriteStoreRename(favoriteType, entryId, newLabel)
+        if (!result.success) {
+          return false
+        }
+        await refreshEntries()
+        return true
+      } catch {
         return false
       }
-      return true
-    } catch {
-      setError(t('favoriteStore.exportFailed'))
-      return false
-    } finally {
-      setExporting(false)
-    }
-  }, [favoriteType, t])
+    },
+    [favoriteType, refreshEntries],
+  )
+
+  const deleteEntry = useCallback(
+    async (entryId: string): Promise<boolean> => {
+      setError(null)
+      try {
+        const result = await window.vialAPI.favoriteStoreDelete(favoriteType, entryId)
+        if (!result.success) {
+          return false
+        }
+        await refreshEntries()
+        return true
+      } catch {
+        return false
+      }
+    },
+    [favoriteType, refreshEntries],
+  )
+
+  const doExport = useCallback(
+    async (entryId?: string): Promise<boolean> => {
+      setError(null)
+      setExporting(true)
+      try {
+        const result =
+          entryId !== undefined
+            ? await window.vialAPI.favoriteStoreExport(favoriteType, entryId)
+            : await window.vialAPI.favoriteStoreExport(favoriteType)
+        if (!result.success) {
+          if (result.error !== 'cancelled') {
+            setError(t('favoriteStore.exportFailed'))
+          }
+          return false
+        }
+        return true
+      } catch {
+        setError(t('favoriteStore.exportFailed'))
+        return false
+      } finally {
+        setExporting(false)
+      }
+    },
+    [favoriteType, t],
+  )
 
   const exportFavorites = useCallback(async (): Promise<boolean> => {
     return doExport()
   }, [doExport])
 
-  const exportEntry = useCallback(async (entryId: string): Promise<boolean> => {
-    return doExport(entryId)
-  }, [doExport])
+  const exportEntry = useCallback(
+    async (entryId: string): Promise<boolean> => {
+      return doExport(entryId)
+    },
+    [doExport],
+  )
 
   const importFavorites = useCallback(async (): Promise<boolean> => {
     setError(null)

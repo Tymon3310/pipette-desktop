@@ -20,19 +20,31 @@ import {
 
 function makeKey(overrides: Partial<KleKey> = {}): KleKey {
   return {
-    x: 0, y: 0,
-    width: 1, height: 1,
-    x2: 0, y2: 0,
-    width2: 1, height2: 1,
-    rotation: 0, rotationX: 0, rotationY: 0,
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    x2: 0,
+    y2: 0,
+    width2: 1,
+    height2: 1,
+    rotation: 0,
+    rotationX: 0,
+    rotationY: 0,
     color: '#cccccc',
     labels: Array(12).fill(null),
     textColor: Array(12).fill(null),
     textSize: Array(12).fill(null),
-    row: 0, col: 0,
-    encoderIdx: -1, encoderDir: -1,
-    layoutIndex: -1, layoutOption: -1,
-    decal: false, nub: false, stepped: false, ghost: false,
+    row: 0,
+    col: 0,
+    encoderIdx: -1,
+    encoderDir: -1,
+    layoutIndex: -1,
+    layoutOption: -1,
+    decal: false,
+    nub: false,
+    stepped: false,
+    ghost: false,
     ...overrides,
   }
 }
@@ -85,10 +97,18 @@ describe('pdf-key-draw utilities', () => {
     })
 
     it('returns 8 corners for key with secondary rect', () => {
-      const corners = keyCorners(makeKey({
-        x: 0, y: 0, width: 1.25, height: 2,
-        x2: -0.25, y2: 0, width2: 1.5, height2: 1,
-      }))
+      const corners = keyCorners(
+        makeKey({
+          x: 0,
+          y: 0,
+          width: 1.25,
+          height: 2,
+          x2: -0.25,
+          y2: 0,
+          width2: 1.5,
+          height2: 1,
+        }),
+      )
       expect(corners).toHaveLength(8)
     })
   })
@@ -148,10 +168,21 @@ describe('pdf-key-draw utilities', () => {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
       expect(() => {
-        drawKeyOutline(doc, makeKey({
-          x: 0, y: 0, width: 1, height: 1,
-          rotation: 45, rotationX: 0.5, rotationY: 0.5,
-        }), 10, 10, 20)
+        drawKeyOutline(
+          doc,
+          makeKey({
+            x: 0,
+            y: 0,
+            width: 1,
+            height: 1,
+            rotation: 45,
+            rotationX: 0.5,
+            rotationY: 0.5,
+          }),
+          10,
+          10,
+          20,
+        )
       }).not.toThrow()
     })
 
@@ -159,10 +190,22 @@ describe('pdf-key-draw utilities', () => {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
       expect(() => {
-        drawKeyOutline(doc, makeKey({
-          x: 0, y: 0, width: 1.25, height: 2,
-          x2: -0.25, y2: 0, width2: 1.5, height2: 1,
-        }), 10, 10, 20)
+        drawKeyOutline(
+          doc,
+          makeKey({
+            x: 0,
+            y: 0,
+            width: 1.25,
+            height: 2,
+            x2: -0.25,
+            y2: 0,
+            width2: 1.5,
+            height2: 1,
+          }),
+          10,
+          10,
+          20,
+        )
       }).not.toThrow()
     })
   })
@@ -172,10 +215,20 @@ describe('pdf-key-draw utilities', () => {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
       const circleSpy = vi.spyOn(doc, 'circle')
 
-      drawEncoderOutline(doc, makeKey({
-        x: 0, y: 0, width: 1, height: 1,
-        encoderIdx: 0, encoderDir: 0,
-      }), 10, 10, 20)
+      drawEncoderOutline(
+        doc,
+        makeKey({
+          x: 0,
+          y: 0,
+          width: 1,
+          height: 1,
+          encoderIdx: 0,
+          encoderDir: 0,
+        }),
+        10,
+        10,
+        20,
+      )
 
       expect(circleSpy).toHaveBeenCalled()
     })
@@ -184,11 +237,23 @@ describe('pdf-key-draw utilities', () => {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
       expect(() => {
-        drawEncoderOutline(doc, makeKey({
-          x: 0, y: 0, width: 1, height: 1,
-          encoderIdx: 0, encoderDir: 0,
-          rotation: 90, rotationX: 0.5, rotationY: 0.5,
-        }), 10, 10, 20)
+        drawEncoderOutline(
+          doc,
+          makeKey({
+            x: 0,
+            y: 0,
+            width: 1,
+            height: 1,
+            encoderIdx: 0,
+            encoderDir: 0,
+            rotation: 90,
+            rotationX: 0.5,
+            rotationY: 0.5,
+          }),
+          10,
+          10,
+          20,
+        )
       }).not.toThrow()
     })
   })

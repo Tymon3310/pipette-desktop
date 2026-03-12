@@ -115,4 +115,7 @@ export const IpcChannels = {
   // Keychron DFU Flasher (renderer ↔ main)
   KEYCHRON_DFU_FLASH: 'keychron:dfu-flash',
   KEYCHRON_DFU_OUTPUT: 'keychron:dfu-output',
+
+  // Debug (renderer → main → renderer)
+  GET_DEBUG_FLAGS: 'debug:get-flags',
 } as const

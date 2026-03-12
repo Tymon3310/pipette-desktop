@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next'
 import { LayoutStoreContent, type LayoutStoreContentProps } from './LayoutStoreModal'
 import { ModalCloseButton } from './ModalCloseButton'
 
-const PANEL_BASE = 'absolute top-0 h-full w-[440px] max-w-[90vw] flex flex-col border-edge bg-surface-alt shadow-xl transition-transform duration-300 ease-out'
+const PANEL_BASE =
+  'absolute top-0 h-full w-[440px] max-w-[90vw] flex flex-col border-edge bg-surface-alt shadow-xl transition-transform duration-300 ease-out'
 
 function panelPositionClass(open: boolean): string {
   return `${PANEL_BASE} left-0 border-r ${open ? 'translate-x-0' : '-translate-x-full'}`
@@ -16,12 +17,7 @@ interface Props extends Omit<LayoutStoreContentProps, 'keyboardName'> {
   deviceName?: string
 }
 
-export function EditorSettingsModal({
-  onClose,
-  deviceName = '',
-  isDummy,
-  ...dataProps
-}: Props) {
+export function EditorSettingsModal({ onClose, deviceName = '', isDummy, ...dataProps }: Props) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -48,7 +44,9 @@ export function EditorSettingsModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-4 pb-3 shrink-0">
-          <h2 id="editor-settings-title" className="text-lg font-bold text-content">{t('editorSettings.tabData')}</h2>
+          <h2 id="editor-settings-title" className="text-lg font-bold text-content">
+            {t('editorSettings.tabData')}
+          </h2>
           <ModalCloseButton testid="editor-settings-close" onClick={onClose} />
         </div>
 

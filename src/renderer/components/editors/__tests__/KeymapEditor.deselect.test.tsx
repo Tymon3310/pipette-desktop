@@ -30,9 +30,7 @@ vi.mock('react-i18next', () => ({
 let capturedOnKeyClick: ((key: { row: number; col: number }) => void) | undefined
 
 vi.mock('../../keyboard/KeyboardWidget', () => ({
-  KeyboardWidget: (props: {
-    onKeyClick?: (key: { row: number; col: number }) => void
-  }) => {
+  KeyboardWidget: (props: { onKeyClick?: (key: { row: number; col: number }) => void }) => {
     capturedOnKeyClick = props.onKeyClick
     return <div data-testid="keyboard-widget">KeyboardWidget</div>
   },
@@ -43,23 +41,19 @@ vi.mock('../../keycodes/TabbedKeycodes', () => ({
     onKeycodeSelect?: (kc: { qmkId: string }) => void
     onBackgroundClick?: () => void
   }) => (
-    <div data-testid="tabbed-keycodes" onClick={(e) => { if (e.target === e.currentTarget) props.onBackgroundClick?.() }}>
-      <button
-        data-testid="kc-td0"
-        onClick={() => props.onKeycodeSelect?.({ qmkId: 'TD(0)' })}
-      >
+    <div
+      data-testid="tabbed-keycodes"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) props.onBackgroundClick?.()
+      }}
+    >
+      <button data-testid="kc-td0" onClick={() => props.onKeycodeSelect?.({ qmkId: 'TD(0)' })}>
         TD(0)
       </button>
-      <button
-        data-testid="kc-a"
-        onClick={() => props.onKeycodeSelect?.({ qmkId: 'KC_A' })}
-      >
+      <button data-testid="kc-a" onClick={() => props.onKeycodeSelect?.({ qmkId: 'KC_A' })}>
         A
       </button>
-      <button
-        data-testid="kc-m0"
-        onClick={() => props.onKeycodeSelect?.({ qmkId: 'M0' })}
-      >
+      <button data-testid="kc-m0" onClick={() => props.onKeycodeSelect?.({ qmkId: 'M0' })}>
         M0
       </button>
     </div>
@@ -188,7 +182,8 @@ describe('KeymapEditor — click-outside deselect', () => {
 
     // Click on the scrollable container area (outside the keyboard frame)
     // keyboard-widget -> flex-center wrapper -> inner frame -> outer container
-    const container = screen.getByTestId('keyboard-widget').parentElement!.parentElement!.parentElement!
+    const container =
+      screen.getByTestId('keyboard-widget').parentElement!.parentElement!.parentElement!
     fireEvent.click(container)
 
     // Should be deselected — coordinate display disappears

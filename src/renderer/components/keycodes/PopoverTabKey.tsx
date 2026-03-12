@@ -2,7 +2,17 @@
 
 import { useState, useRef, useCallback, useLayoutEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { type Keycode, getKeycodeRevision, serialize, isMask, findInnerKeycode, isBasic, isLMKeycode, getAvailableLMMods, extractBasicKey } from '../../../shared/keycodes/keycodes'
+import {
+  type Keycode,
+  getKeycodeRevision,
+  serialize,
+  isMask,
+  findInnerKeycode,
+  isBasic,
+  isLMKeycode,
+  getAvailableLMMods,
+  extractBasicKey,
+} from '../../../shared/keycodes/keycodes'
 import { KEYCODE_CATEGORIES } from './categories'
 
 interface SearchEntry {
@@ -47,7 +57,15 @@ interface Props {
 
 const MAX_RESULTS = 50
 
-export function PopoverTabKey({ currentKeycode, maskOnly, modMask = 0, lmMode: lmModeProp, basicKeyOnly, onKeycodeSelect, onClose }: Props) {
+export function PopoverTabKey({
+  currentKeycode,
+  maskOnly,
+  modMask = 0,
+  lmMode: lmModeProp,
+  basicKeyOnly,
+  onKeycodeSelect,
+  onClose,
+}: Props) {
   const hasModMask = modMask > 0
   const { t } = useTranslation()
   const initialQuery = useMemo(() => {
@@ -172,7 +190,10 @@ export function PopoverTabKey({ currentKeycode, maskOnly, modMask = 0, lmMode: l
       <input
         type="text"
         value={query}
-        onChange={(e) => { setSuppressResults(false); setQuery(e.target.value) }}
+        onChange={(e) => {
+          setSuppressResults(false)
+          setQuery(e.target.value)
+        }}
         placeholder={t('editor.keymap.keyPopover.searchPlaceholder')}
         className="w-full rounded border border-edge bg-surface px-2.5 py-1.5 text-sm focus:border-accent focus:outline-none"
         autoFocus
@@ -203,7 +224,12 @@ export function PopoverTabKey({ currentKeycode, maskOnly, modMask = 0, lmMode: l
             key={`${entry.categoryId}-${entry.keycode.qmkId}`}
             type="button"
             className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-surface-dim"
-            onClick={() => { setTooltip(null); onKeycodeSelect(entry.keycode); setSuppressResults(true); setQuery(entry.keycode.label) }}
+            onClick={() => {
+              setTooltip(null)
+              onKeycodeSelect(entry.keycode)
+              setSuppressResults(true)
+              setQuery(entry.keycode.label)
+            }}
             data-testid={`popover-result-${entry.keycode.qmkId}`}
           >
             <span className="min-w-[60px] font-mono text-xs font-medium">
@@ -225,9 +251,7 @@ export function PopoverTabKey({ currentKeycode, maskOnly, modMask = 0, lmMode: l
           className="pointer-events-none absolute z-50 rounded-md border border-edge bg-surface-alt px-2.5 py-1.5 shadow-lg"
           style={{ top: tooltip.top - TOOLTIP_VERTICAL_GAP, transform: 'translateY(-100%)' }}
         >
-          <div className="text-xs font-medium text-content whitespace-nowrap">
-            {tooltip.text}
-          </div>
+          <div className="text-xs font-medium text-content whitespace-nowrap">{tooltip.text}</div>
         </div>
       )}
     </div>

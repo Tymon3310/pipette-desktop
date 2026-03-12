@@ -1,10 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import {
-  listDevices,
-  openHidDevice,
-  closeHidDevice,
-  isDeviceOpen,
-} from './hid-transport'
+import { listDevices, openHidDevice, closeHidDevice, isDeviceOpen } from './hid-transport'
 import * as protocol from './protocol'
 import * as keychronProtocol from './keychron-protocol'
 import { IpcChannels } from '../shared/ipc/channels'
@@ -12,10 +7,32 @@ import type { DeviceInfo, KeyboardDefinition } from '../shared/types/protocol'
 import type { SnapshotMeta } from '../shared/types/snapshot-store'
 import type { SavedFavoriteMeta, FavoriteImportResult } from '../shared/types/favorite-store'
 import type { AppConfig } from '../shared/types/app-config'
-import type { SyncAuthStatus, SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, UndecryptableFile, SyncDataScanResult, SyncScope, StoredKeyboardInfo } from '../shared/types/sync'
+import type {
+  SyncAuthStatus,
+  SyncProgress,
+  PasswordStrength,
+  SyncResetTargets,
+  LocalResetTargets,
+  UndecryptableFile,
+  SyncDataScanResult,
+  SyncScope,
+  StoredKeyboardInfo,
+} from '../shared/types/sync'
 import type { PipetteSettings } from '../shared/types/pipette-settings'
 import type { LanguageListEntry } from '../shared/types/language-store'
-import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyPostsParams, HubFetchMyKeyboardPostsResult, HubUserResult, HubUploadFavoritePostParams, HubUpdateFavoritePostParams } from '../shared/types/hub'
+import type {
+  HubUploadPostParams,
+  HubUpdatePostParams,
+  HubPatchPostParams,
+  HubUploadResult,
+  HubDeleteResult,
+  HubFetchMyPostsResult,
+  HubFetchMyPostsParams,
+  HubFetchMyKeyboardPostsResult,
+  HubUserResult,
+  HubUploadFavoritePostParams,
+  HubUpdateFavoritePostParams,
+} from '../shared/types/hub'
 import type { NotificationFetchResult } from '../shared/types/notification'
 
 /**
@@ -43,8 +60,7 @@ const vialAPI = {
   setLayoutOptions: (options: number): Promise<void> => protocol.setLayoutOptions(options),
 
   // --- Vial Protocol ---
-  getKeyboardId: (): Promise<{ vialProtocol: number; uid: string }> =>
-    protocol.getKeyboardId(),
+  getKeyboardId: (): Promise<{ vialProtocol: number; uid: string }> => protocol.getKeyboardId(),
   getDefinitionSize: (): Promise<number> => protocol.getDefinitionSize(),
   getDefinitionRaw: (size: number): Promise<number[]> =>
     protocol.getDefinitionRaw(size).then((buf) => Array.from(buf)),
@@ -77,8 +93,7 @@ const vialAPI = {
   // --- Macro ---
   getMacroCount: (): Promise<number> => protocol.getMacroCount(),
   getMacroBufferSize: (): Promise<number> => protocol.getMacroBufferSize(),
-  getMacroBuffer: (totalSize: number): Promise<number[]> =>
-    protocol.getMacroBuffer(totalSize),
+  getMacroBuffer: (totalSize: number): Promise<number[]> => protocol.getMacroBuffer(totalSize),
   setMacroBuffer: (data: number[]): Promise<void> => protocol.setMacroBuffer(data),
 
   // --- Lighting ---
@@ -90,23 +105,41 @@ const vialAPI = {
   // --- VialRGB ---
   getVialRGBInfo: (): Promise<{ version: number; maxBrightness: number }> =>
     protocol.getVialRGBInfo(),
-  getVialRGBMode: (): Promise<{ mode: number; speed: number; hue: number; sat: number; val: number }> =>
-    protocol.getVialRGBMode(),
+  getVialRGBMode: (): Promise<{
+    mode: number
+    speed: number
+    hue: number
+    sat: number
+    val: number
+  }> => protocol.getVialRGBMode(),
   getVialRGBSupported: (): Promise<number[]> =>
     protocol.getVialRGBSupported().then((s) => Array.from(s)),
-  setVialRGBMode: (mode: number, speed: number, hue: number, sat: number, val: number): Promise<void> =>
-    protocol.setVialRGBMode(mode, speed, hue, sat, val),
+  setVialRGBMode: (
+    mode: number,
+    speed: number,
+    hue: number,
+    sat: number,
+    val: number,
+  ): Promise<void> => protocol.setVialRGBMode(mode, speed, hue, sat, val),
 
   // --- Lock/Unlock ---
-  getUnlockStatus: (): Promise<{ unlocked: boolean; inProgress: boolean; keys: [number, number][] }> =>
-    protocol.getUnlockStatus(),
+  getUnlockStatus: (): Promise<{
+    unlocked: boolean
+    inProgress: boolean
+    keys: [number, number][]
+  }> => protocol.getUnlockStatus(),
   unlockStart: (): Promise<void> => protocol.unlockStart(),
   unlockPoll: (): Promise<number[]> => protocol.unlockPoll(),
   lock: (): Promise<void> => protocol.lock(),
 
   // --- Dynamic Entries ---
-  getDynamicEntryCount: (): Promise<{ tapDance: number; combo: number; keyOverride: number; altRepeatKey: number; featureFlags: number }> =>
-    protocol.getDynamicEntryCount(),
+  getDynamicEntryCount: (): Promise<{
+    tapDance: number
+    combo: number
+    keyOverride: number
+    altRepeatKey: number
+    featureFlags: number
+  }> => protocol.getDynamicEntryCount(),
   getTapDance: (index: number): Promise<unknown> => protocol.getTapDance(index),
   setTapDance: (index: number, entry: unknown): Promise<void> =>
     protocol.setTapDance(index, entry as Parameters<typeof protocol.setTapDance>[1]),
@@ -121,8 +154,7 @@ const vialAPI = {
     protocol.setAltRepeatKey(index, entry as Parameters<typeof protocol.setAltRepeatKey>[1]),
 
   // --- QMK Settings ---
-  qmkSettingsQuery: (startId: number): Promise<number[]> =>
-    protocol.qmkSettingsQuery(startId),
+  qmkSettingsQuery: (startId: number): Promise<number[]> => protocol.qmkSettingsQuery(startId),
   qmkSettingsGet: (qsid: number): Promise<number[]> => protocol.qmkSettingsGet(qsid),
   qmkSettingsSet: (qsid: number, data: number[]): Promise<void> =>
     protocol.qmkSettingsSet(qsid, data),
@@ -143,39 +175,67 @@ const vialAPI = {
     keychronProtocol.setKeychronPollRateV2(usbRate, frRate),
   keychronSetWirelessLpm: (backlitTime: number, idleTime: number): Promise<boolean> =>
     keychronProtocol.setKeychronWirelessLpm(backlitTime, idleTime),
-  keychronSetSnapClick: (index: number, snapType: number, key1: number, key2: number): Promise<boolean> =>
-    keychronProtocol.setKeychronSnapClick(index, snapType, key1, key2),
-  keychronSaveSnapClick: (): Promise<boolean> =>
-    keychronProtocol.saveKeychronSnapClick(),
+  keychronSetSnapClick: (
+    index: number,
+    snapType: number,
+    key1: number,
+    key2: number,
+  ): Promise<boolean> => keychronProtocol.setKeychronSnapClick(index, snapType, key1, key2),
+  keychronSaveSnapClick: (): Promise<boolean> => keychronProtocol.saveKeychronSnapClick(),
   keychronSetPerKeyRGBType: (effectType: number): Promise<void> =>
     keychronProtocol.setKeychronPerKeyRGBType(effectType),
   keychronSetPerKeyColor: (ledIndex: number, h: number, s: number, v: number): Promise<void> =>
     keychronProtocol.setKeychronPerKeyColor(ledIndex, h, s, v),
-  keychronSaveRGB: (): Promise<void> =>
-    keychronProtocol.saveKeychronRGB(),
-  keychronSetIndicators: (disableMask: number, hue: number, sat: number, val: number): Promise<void> =>
-    keychronProtocol.setKeychronIndicators(disableMask, hue, sat, val),
+  keychronSaveRGB: (): Promise<void> => keychronProtocol.saveKeychronRGB(),
+  keychronSetIndicators: (
+    disableMask: number,
+    hue: number,
+    sat: number,
+    val: number,
+  ): Promise<void> => keychronProtocol.setKeychronIndicators(disableMask, hue, sat, val),
   keychronSetMixedRGBRegions: (startIndex: number, regions: number[]): Promise<void> =>
     keychronProtocol.setKeychronMixedRGBRegions(startIndex, regions),
-  keychronSetMixedRGBEffects: (regionIndex: number, startIndex: number, effects: import('../shared/types/keychron').MixedRGBEffect[]): Promise<void> =>
-    keychronProtocol.setKeychronMixedRGBEffects(regionIndex, startIndex, effects),
+  keychronSetMixedRGBEffects: (
+    regionIndex: number,
+    startIndex: number,
+    effects: import('../shared/types/keychron').MixedRGBEffect[],
+  ): Promise<void> => keychronProtocol.setKeychronMixedRGBEffects(regionIndex, startIndex, effects),
   keychronAnalogReload: (rows: number, cols: number): Promise<unknown> =>
     keychronProtocol.reloadKeychronAnalog(rows, cols),
-  keychronAnalogGetVersion: (): Promise<number> =>
-    keychronProtocol.getKeychronAnalogVersion(),
-  keychronAnalogGetProfilesInfo: (): Promise<{ currentProfile: number; profileCount: number; profileSize: number; okmcCount: number; socdCount: number }> =>
-    keychronProtocol.getKeychronAnalogProfilesInfo(),
-  keychronAnalogGetCurve: (): Promise<number[]> =>
-    keychronProtocol.getKeychronAnalogCurve(),
+  keychronAnalogGetVersion: (): Promise<number> => keychronProtocol.getKeychronAnalogVersion(),
+  keychronAnalogGetProfilesInfo: (): Promise<{
+    currentProfile: number
+    profileCount: number
+    profileSize: number
+    okmcCount: number
+    socdCount: number
+  }> => keychronProtocol.getKeychronAnalogProfilesInfo(),
+  keychronAnalogGetCurve: (): Promise<number[]> => keychronProtocol.getKeychronAnalogCurve(),
   keychronAnalogSetCurve: (curvePoints: number[]): Promise<boolean> =>
     keychronProtocol.setKeychronAnalogCurve(curvePoints),
   keychronAnalogGetGameControllerMode: (): Promise<number> =>
     keychronProtocol.getKeychronAnalogGameControllerMode(),
   keychronAnalogSetProfile: (profileIndex: number): Promise<boolean> =>
     keychronProtocol.setKeychronAnalogProfile(profileIndex),
-  keychronAnalogSetTravel: (profile: number, mode: number, actPt: number, sens: number, rlsSens: number, entire: boolean, rowMask?: number[]): Promise<boolean> =>
+  keychronAnalogSetTravel: (
+    profile: number,
+    mode: number,
+    actPt: number,
+    sens: number,
+    rlsSens: number,
+    entire: boolean,
+    rowMask?: number[],
+  ): Promise<boolean> =>
     keychronProtocol.setKeychronAnalogTravel(profile, mode, actPt, sens, rlsSens, entire, rowMask),
-  keychronAnalogSetSocd: (profile: number, row1: number, col1: number, row2: number, col2: number, index: number, socdType: number): Promise<boolean> =>
+  keychronAnalogSetSocd: (
+    profile: number,
+    row1: number,
+    col1: number,
+    row2: number,
+    col2: number,
+    index: number,
+    socdType: number,
+  ): Promise<boolean> =>
     keychronProtocol.setKeychronAnalogSocd(profile, row1, col1, row2, col2, index, socdType),
   keychronAnalogSaveProfile: (profile: number): Promise<boolean> =>
     keychronProtocol.saveKeychronAnalogProfile(profile),
@@ -189,55 +249,148 @@ const vialAPI = {
     keychronProtocol.startKeychronCalibration(calibType),
   keychronAnalogGetCalibrationState: (): Promise<{ calibrated: number; state: number } | null> =>
     keychronProtocol.getKeychronCalibrationState(),
-  keychronAnalogGetRealtimeTravel: (row: number, col: number): Promise<{ row: number; col: number; travelMm: number; travelRaw: number; value: number; zero: number; full: number; state: number } | null> =>
-    keychronProtocol.getKeychronRealtimeTravel(row, col),
+  keychronAnalogGetRealtimeTravel: (
+    row: number,
+    col: number,
+  ): Promise<{
+    row: number
+    col: number
+    travelMm: number
+    travelRaw: number
+    value: number
+    zero: number
+    full: number
+    state: number
+  } | null> => keychronProtocol.getKeychronRealtimeTravel(row, col),
   keychronAnalogSetProfileName: (profile: number, name: string): Promise<boolean> =>
     keychronProtocol.setKeychronAnalogProfileName(profile, name),
-  keychronAnalogSetAdvanceModeClear: (profile: number, row: number, col: number): Promise<boolean> =>
-    keychronProtocol.setKeychronAnalogAdvanceModeClear(profile, row, col),
-  keychronAnalogSetAdvanceModeDks: (profile: number, row: number, col: number, okmcIndex: number, shallowAct: number, shallowDeact: number, deepAct: number, deepDeact: number, keycodes: number[], actions: number[]): Promise<boolean> =>
-    keychronProtocol.setKeychronAnalogAdvanceModeDks(profile, row, col, okmcIndex, shallowAct, shallowDeact, deepAct, deepDeact, keycodes, actions),
-  keychronAnalogSetAdvanceModeToggle: (profile: number, row: number, col: number): Promise<boolean> =>
-    keychronProtocol.setKeychronAnalogAdvanceModeToggle(profile, row, col),
+  keychronAnalogSetAdvanceModeClear: (
+    profile: number,
+    row: number,
+    col: number,
+  ): Promise<boolean> => keychronProtocol.setKeychronAnalogAdvanceModeClear(profile, row, col),
+  keychronAnalogSetAdvanceModeDks: (
+    profile: number,
+    row: number,
+    col: number,
+    okmcIndex: number,
+    shallowAct: number,
+    shallowDeact: number,
+    deepAct: number,
+    deepDeact: number,
+    keycodes: number[],
+    actions: number[],
+  ): Promise<boolean> =>
+    keychronProtocol.setKeychronAnalogAdvanceModeDks(
+      profile,
+      row,
+      col,
+      okmcIndex,
+      shallowAct,
+      shallowDeact,
+      deepAct,
+      deepDeact,
+      keycodes,
+      actions,
+    ),
+  keychronAnalogSetAdvanceModeToggle: (
+    profile: number,
+    row: number,
+    col: number,
+  ): Promise<boolean> => keychronProtocol.setKeychronAnalogAdvanceModeToggle(profile, row, col),
 
   // --- File I/O (IPC to main for native file dialogs) ---
-  saveLayout: (json: string, deviceName?: string): Promise<{ success: boolean; filePath?: string; error?: string }> =>
+  saveLayout: (
+    json: string,
+    deviceName?: string,
+  ): Promise<{ success: boolean; filePath?: string; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FILE_SAVE_LAYOUT, json, deviceName),
-  loadLayout: (title?: string): Promise<{ success: boolean; data?: string; filePath?: string; error?: string }> =>
+  loadLayout: (
+    title?: string,
+  ): Promise<{ success: boolean; data?: string; filePath?: string; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FILE_LOAD_LAYOUT, title),
-  exportKeymapC: (content: string, deviceName?: string): Promise<{ success: boolean; filePath?: string; error?: string }> =>
+  exportKeymapC: (
+    content: string,
+    deviceName?: string,
+  ): Promise<{ success: boolean; filePath?: string; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FILE_EXPORT_KEYMAP_C, content, deviceName),
-  exportPdf: (base64Data: string, deviceName?: string): Promise<{ success: boolean; filePath?: string; error?: string }> =>
+  exportPdf: (
+    base64Data: string,
+    deviceName?: string,
+  ): Promise<{ success: boolean; filePath?: string; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FILE_EXPORT_PDF, base64Data, deviceName),
-  exportCsv: (content: string, defaultName?: string): Promise<{ success: boolean; filePath?: string; error?: string }> =>
+  exportCsv: (
+    content: string,
+    defaultName?: string,
+  ): Promise<{ success: boolean; filePath?: string; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FILE_EXPORT_CSV, content, defaultName),
   sideloadJson: (title?: string): Promise<{ success: boolean; data?: unknown; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SIDELOAD_JSON, title),
 
+  // --- Debug ---
+  getDebugFlags: (): Promise<Record<string, string | undefined>> =>
+    ipcRenderer.invoke(IpcChannels.GET_DEBUG_FLAGS),
+
   // --- Snapshot Store (internal save/load via IPC) ---
-  snapshotStoreList: (uid: string): Promise<{ success: boolean; entries?: SnapshotMeta[]; error?: string }> =>
+  snapshotStoreList: (
+    uid: string,
+  ): Promise<{ success: boolean; entries?: SnapshotMeta[]; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_LIST, uid),
-  snapshotStoreSave: (uid: string, json: string, deviceName: string, label: string): Promise<{ success: boolean; entry?: SnapshotMeta; error?: string }> =>
+  snapshotStoreSave: (
+    uid: string,
+    json: string,
+    deviceName: string,
+    label: string,
+  ): Promise<{ success: boolean; entry?: SnapshotMeta; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_SAVE, uid, json, deviceName, label),
-  snapshotStoreLoad: (uid: string, entryId: string): Promise<{ success: boolean; data?: string; error?: string }> =>
+  snapshotStoreLoad: (
+    uid: string,
+    entryId: string,
+  ): Promise<{ success: boolean; data?: string; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_LOAD, uid, entryId),
-  snapshotStoreRename: (uid: string, entryId: string, newLabel: string): Promise<{ success: boolean; error?: string }> =>
+  snapshotStoreRename: (
+    uid: string,
+    entryId: string,
+    newLabel: string,
+  ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_RENAME, uid, entryId, newLabel),
-  snapshotStoreDelete: (uid: string, entryId: string): Promise<{ success: boolean; error?: string }> =>
+  snapshotStoreDelete: (
+    uid: string,
+    entryId: string,
+  ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_DELETE, uid, entryId),
 
   // --- Favorite Store (internal save/load via IPC) ---
-  favoriteStoreList: (type: string): Promise<{ success: boolean; entries?: SavedFavoriteMeta[]; error?: string }> =>
+  favoriteStoreList: (
+    type: string,
+  ): Promise<{ success: boolean; entries?: SavedFavoriteMeta[]; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FAVORITE_STORE_LIST, type),
-  favoriteStoreSave: (type: string, json: string, label: string): Promise<{ success: boolean; entry?: SavedFavoriteMeta; error?: string }> =>
+  favoriteStoreSave: (
+    type: string,
+    json: string,
+    label: string,
+  ): Promise<{ success: boolean; entry?: SavedFavoriteMeta; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FAVORITE_STORE_SAVE, type, json, label),
-  favoriteStoreLoad: (type: string, entryId: string): Promise<{ success: boolean; data?: string; error?: string }> =>
+  favoriteStoreLoad: (
+    type: string,
+    entryId: string,
+  ): Promise<{ success: boolean; data?: string; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FAVORITE_STORE_LOAD, type, entryId),
-  favoriteStoreRename: (type: string, entryId: string, newLabel: string): Promise<{ success: boolean; error?: string }> =>
+  favoriteStoreRename: (
+    type: string,
+    entryId: string,
+    newLabel: string,
+  ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FAVORITE_STORE_RENAME, type, entryId, newLabel),
-  favoriteStoreDelete: (type: string, entryId: string): Promise<{ success: boolean; error?: string }> =>
+  favoriteStoreDelete: (
+    type: string,
+    entryId: string,
+  ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FAVORITE_STORE_DELETE, type, entryId),
-  favoriteStoreExport: (scope: string, entryId?: string): Promise<{ success: boolean; error?: string }> =>
+  favoriteStoreExport: (
+    scope: string,
+    entryId?: string,
+  ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FAVORITE_STORE_EXPORT, scope, entryId),
   favoriteStoreImport: (): Promise<FavoriteImportResult> =>
     ipcRenderer.invoke(IpcChannels.FAVORITE_STORE_IMPORT),
@@ -245,33 +398,35 @@ const vialAPI = {
   // --- Pipette Settings Store (internal save/load via IPC) ---
   pipetteSettingsGet: (uid: string): Promise<PipetteSettings | null> =>
     ipcRenderer.invoke(IpcChannels.PIPETTE_SETTINGS_GET, uid),
-  pipetteSettingsSet: (uid: string, prefs: PipetteSettings): Promise<{ success: boolean; error?: string }> =>
+  pipetteSettingsSet: (
+    uid: string,
+    prefs: PipetteSettings,
+  ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.PIPETTE_SETTINGS_SET, uid, prefs),
 
   // --- Language Store (IPC to main) ---
-  langList: (): Promise<LanguageListEntry[]> =>
-    ipcRenderer.invoke(IpcChannels.LANG_LIST),
-  langGet: (name: string): Promise<unknown> =>
-    ipcRenderer.invoke(IpcChannels.LANG_GET, name),
+  langList: (): Promise<LanguageListEntry[]> => ipcRenderer.invoke(IpcChannels.LANG_LIST),
+  langGet: (name: string): Promise<unknown> => ipcRenderer.invoke(IpcChannels.LANG_GET, name),
   langDownload: (name: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.LANG_DOWNLOAD, name),
   langDelete: (name: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.LANG_DELETE, name),
 
   // --- App Config ---
-  appConfigGetAll: (): Promise<AppConfig> =>
-    ipcRenderer.invoke(IpcChannels.APP_CONFIG_GET_ALL),
+  appConfigGetAll: (): Promise<AppConfig> => ipcRenderer.invoke(IpcChannels.APP_CONFIG_GET_ALL),
   appConfigSet: (key: string, value: unknown): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.APP_CONFIG_SET, key, value),
 
   // --- Sync ---
   syncAuthStart: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SYNC_AUTH_START),
-  syncAuthStatus: (): Promise<SyncAuthStatus> =>
-    ipcRenderer.invoke(IpcChannels.SYNC_AUTH_STATUS),
+  syncAuthStatus: (): Promise<SyncAuthStatus> => ipcRenderer.invoke(IpcChannels.SYNC_AUTH_STATUS),
   syncAuthSignOut: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SYNC_AUTH_SIGN_OUT),
-  syncExecute: (direction: 'download' | 'upload', scope?: SyncScope): Promise<{ success: boolean; error?: string }> =>
+  syncExecute: (
+    direction: 'download' | 'upload',
+    scope?: SyncScope,
+  ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SYNC_EXECUTE, direction, scope),
   syncSetPassword: (password: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SYNC_SET_PASSWORD, password),
@@ -279,8 +434,7 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.SYNC_CHANGE_PASSWORD, newPassword),
   syncResetTargets: (targets: SyncResetTargets): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SYNC_RESET_TARGETS, targets),
-  syncHasPassword: (): Promise<boolean> =>
-    ipcRenderer.invoke(IpcChannels.SYNC_HAS_PASSWORD),
+  syncHasPassword: (): Promise<boolean> => ipcRenderer.invoke(IpcChannels.SYNC_HAS_PASSWORD),
   syncValidatePassword: (password: string): Promise<PasswordStrength> =>
     ipcRenderer.invoke(IpcChannels.SYNC_VALIDATE_PASSWORD, password),
   syncOnProgress: (callback: (progress: SyncProgress) => void): (() => void) => {
@@ -321,14 +475,12 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.HUB_FETCH_MY_POSTS, params),
   hubFetchMyKeyboardPosts: (keyboardName: string): Promise<HubFetchMyKeyboardPostsResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_FETCH_MY_KEYBOARD_POSTS, keyboardName),
-  hubFetchAuthMe: (): Promise<HubUserResult> =>
-    ipcRenderer.invoke(IpcChannels.HUB_FETCH_AUTH_ME),
+  hubFetchAuthMe: (): Promise<HubUserResult> => ipcRenderer.invoke(IpcChannels.HUB_FETCH_AUTH_ME),
   hubPatchAuthMe: (displayName: string): Promise<HubUserResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_PATCH_AUTH_ME, displayName),
   hubSetAuthDisplayName: (displayName: string | null): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.HUB_SET_AUTH_DISPLAY_NAME, displayName),
-  hubGetOrigin: (): Promise<string> =>
-    ipcRenderer.invoke(IpcChannels.HUB_GET_ORIGIN),
+  hubGetOrigin: (): Promise<string> => ipcRenderer.invoke(IpcChannels.HUB_GET_ORIGIN),
 
   // --- Notification ---
   notificationFetch: (): Promise<NotificationFetchResult> =>
@@ -341,11 +493,19 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.HUB_UPDATE_FAVORITE_POST, params),
 
   // --- Favorite Store extensions ---
-  favoriteStoreSetHubPostId: (type: string, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }> =>
+  favoriteStoreSetHubPostId: (
+    type: string,
+    entryId: string,
+    hubPostId: string | null,
+  ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FAVORITE_STORE_SET_HUB_POST_ID, type, entryId, hubPostId),
 
   // --- Snapshot Store extensions ---
-  snapshotStoreSetHubPostId: (uid: string, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }> =>
+  snapshotStoreSetHubPostId: (
+    uid: string,
+    entryId: string,
+    hubPostId: string | null,
+  ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_SET_HUB_POST_ID, uid, entryId, hubPostId),
 
   // --- Shell ---
@@ -367,8 +527,13 @@ const vialAPI = {
   // --- Keychron DFU Flasher ---
   keychronDfuFlash: (firmwareData: ArrayBuffer): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.KEYCHRON_DFU_FLASH, firmwareData),
-  keychronDfuOnOutput: (callback: (data: { log?: string; progress?: number }) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: { log?: string; progress?: number }): void => {
+  keychronDfuOnOutput: (
+    callback: (data: { log?: string; progress?: number }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: { log?: string; progress?: number },
+    ): void => {
       callback(data)
     }
     ipcRenderer.on(IpcChannels.KEYCHRON_DFU_OUTPUT, handler)

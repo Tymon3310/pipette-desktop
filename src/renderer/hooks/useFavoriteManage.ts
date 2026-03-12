@@ -36,50 +36,63 @@ export function useFavoriteManage(favoriteType: FavoriteType): UseFavoriteManage
     }
   }, [favoriteType])
 
-  const renameEntry = useCallback(async (entryId: string, newLabel: string): Promise<boolean> => {
-    try {
-      const result = await window.vialAPI.favoriteStoreRename(favoriteType, entryId, newLabel)
-      if (!result.success) return false
-      await refreshEntries()
-      return true
-    } catch {
-      return false
-    }
-  }, [favoriteType, refreshEntries])
+  const renameEntry = useCallback(
+    async (entryId: string, newLabel: string): Promise<boolean> => {
+      try {
+        const result = await window.vialAPI.favoriteStoreRename(favoriteType, entryId, newLabel)
+        if (!result.success) return false
+        await refreshEntries()
+        return true
+      } catch {
+        return false
+      }
+    },
+    [favoriteType, refreshEntries],
+  )
 
-  const deleteEntry = useCallback(async (entryId: string): Promise<boolean> => {
-    try {
-      const result = await window.vialAPI.favoriteStoreDelete(favoriteType, entryId)
-      if (!result.success) return false
-      await refreshEntries()
-      return true
-    } catch {
-      return false
-    }
-  }, [favoriteType, refreshEntries])
+  const deleteEntry = useCallback(
+    async (entryId: string): Promise<boolean> => {
+      try {
+        const result = await window.vialAPI.favoriteStoreDelete(favoriteType, entryId)
+        if (!result.success) return false
+        await refreshEntries()
+        return true
+      } catch {
+        return false
+      }
+    },
+    [favoriteType, refreshEntries],
+  )
 
-  const doExport = useCallback(async (entryId?: string): Promise<boolean> => {
-    setExporting(true)
-    try {
-      const result = entryId !== undefined
-        ? await window.vialAPI.favoriteStoreExport(favoriteType, entryId)
-        : await window.vialAPI.favoriteStoreExport(favoriteType)
-      if (!result.success) return false
-      return true
-    } catch {
-      return false
-    } finally {
-      setExporting(false)
-    }
-  }, [favoriteType])
+  const doExport = useCallback(
+    async (entryId?: string): Promise<boolean> => {
+      setExporting(true)
+      try {
+        const result =
+          entryId !== undefined
+            ? await window.vialAPI.favoriteStoreExport(favoriteType, entryId)
+            : await window.vialAPI.favoriteStoreExport(favoriteType)
+        if (!result.success) return false
+        return true
+      } catch {
+        return false
+      } finally {
+        setExporting(false)
+      }
+    },
+    [favoriteType],
+  )
 
   const exportAll = useCallback(async (): Promise<boolean> => {
     return doExport()
   }, [doExport])
 
-  const exportEntry = useCallback(async (entryId: string): Promise<boolean> => {
-    return doExport(entryId)
-  }, [doExport])
+  const exportEntry = useCallback(
+    async (entryId: string): Promise<boolean> => {
+      return doExport(entryId)
+    },
+    [doExport],
+  )
 
   const importFavorites = useCallback(async (): Promise<boolean> => {
     setImportResult(null)

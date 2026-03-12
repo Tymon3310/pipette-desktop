@@ -2,7 +2,13 @@
 
 import type { FavoriteType, FavoriteExportFile } from './types/favorite-store'
 
-export const FAVORITE_TYPES: readonly FavoriteType[] = ['tapDance', 'macro', 'combo', 'keyOverride', 'altRepeatKey']
+export const FAVORITE_TYPES: readonly FavoriteType[] = [
+  'tapDance',
+  'macro',
+  'combo',
+  'keyOverride',
+  'altRepeatKey',
+]
 
 export const FAV_EXPORT_KEY_MAP: Record<string, FavoriteType> = {
   macro: 'macro',
@@ -62,8 +68,13 @@ function isValidKeyOverrideData(data: unknown): boolean {
   if (!isRecord(data)) return false
   return (
     hasNumberFields(data, [
-      'triggerKey', 'replacementKey', 'layers', 'triggerMods',
-      'negativeMods', 'suppressedMods', 'options',
+      'triggerKey',
+      'replacementKey',
+      'layers',
+      'triggerMods',
+      'negativeMods',
+      'suppressedMods',
+      'options',
     ]) && typeof data.enabled === 'boolean'
   )
 }

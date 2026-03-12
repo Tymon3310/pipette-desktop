@@ -35,7 +35,8 @@ interface InlineRenameActions<TId extends string | number> {
   scheduleFlash: (id: TId) => void
 }
 
-export type InlineRename<TId extends string | number> = InlineRenameState<TId> & InlineRenameActions<TId>
+export type InlineRename<TId extends string | number> = InlineRenameState<TId> &
+  InlineRenameActions<TId>
 
 /**
  * Encapsulates the inline-rename + confirm-flash pattern used by
@@ -54,10 +55,13 @@ export function useInlineRename<TId extends string | number>(): InlineRename<TId
   // Guards against blur firing after Enter/Escape already closed the editor.
   const closingRef = useRef(false)
 
-  useEffect(() => () => {
-    clearTimeout(flashTimerRef.current)
-    clearTimeout(deferTimerRef.current)
-  }, [])
+  useEffect(
+    () => () => {
+      clearTimeout(flashTimerRef.current)
+      clearTimeout(deferTimerRef.current)
+    },
+    [],
+  )
 
   function scheduleFlash(id: TId): void {
     clearTimeout(deferTimerRef.current)

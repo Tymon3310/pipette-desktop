@@ -82,8 +82,12 @@ export function FactoryResetDialog({ onClose }: Props) {
             {t('keychron.whatResets', 'The following will be reset:')}
           </p>
           <ul className="ml-4 list-disc space-y-0.5">
-            <li>{t('keychron.resetKeymap', 'Keymap (all layers restored to firmware defaults)')}</li>
-            <li>{t('keychron.resetActuation', 'Key actuation profiles (Hall Effect keyboards)')}</li>
+            <li>
+              {t('keychron.resetKeymap', 'Keymap (all layers restored to firmware defaults)')}
+            </li>
+            <li>
+              {t('keychron.resetActuation', 'Key actuation profiles (Hall Effect keyboards)')}
+            </li>
             <li>{t('keychron.resetRgb', 'RGB lighting settings')}</li>
             <li>{t('keychron.resetDebounce', 'Debounce, NKRO, and USB report rate settings')}</li>
             <li>{t('keychron.resetWireless', 'Wireless pairing information')}</li>
@@ -104,9 +108,7 @@ export function FactoryResetDialog({ onClose }: Props) {
               <span className="inline-block rounded-lg border-2 border-edge bg-surface px-4 py-2 text-sm font-bold">
                 {key}
               </span>
-              {i < keyCombo.length - 1 && (
-                <span className="mx-1 text-content-muted">+</span>
-              )}
+              {i < keyCombo.length - 1 && <span className="mx-1 text-content-muted">+</span>}
             </span>
           ))}
         </div>

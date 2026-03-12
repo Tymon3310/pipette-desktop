@@ -13,11 +13,13 @@ import type { SnapshotMeta, SnapshotIndex } from '../shared/types/snapshot-store
 const MAX_ENTRIES_PER_KEYBOARD = 30
 
 function sanitizeFilename(name: string): string {
-  return name
-    .replace(/[/\\:*?"<>|]/g, '_')
-    .replace(/[\x00-\x1f]/g, '')
-    .replace(/\.+$/, '')
-    .trim() || 'keyboard'
+  return (
+    name
+      .replace(/[/\\:*?"<>|]/g, '_')
+      .replace(/[\x00-\x1f]/g, '')
+      .replace(/\.+$/, '')
+      .trim() || 'keyboard'
+  )
 }
 
 // Reject uid or filename values that could escape the snapshots directory
@@ -95,7 +97,10 @@ function withWriteLock<T>(uid: string, fn: () => Promise<T>): Promise<T> {
 export function setupSnapshotStore(): void {
   secureHandle(
     IpcChannels.SNAPSHOT_STORE_LIST,
-    async (_event, uid: string): Promise<{ success: boolean; entries?: SnapshotMeta[]; error?: string }> => {
+    async (
+      _event,
+      uid: string,
+    ): Promise<{ success: boolean; entries?: SnapshotMeta[]; error?: string }> => {
       try {
         validateUid(uid)
         const index = await readIndex(uid)
@@ -158,7 +163,11 @@ export function setupSnapshotStore(): void {
 
   secureHandle(
     IpcChannels.SNAPSHOT_STORE_LOAD,
-    async (_event, uid: string, entryId: string): Promise<{ success: boolean; data?: string; error?: string }> => {
+    async (
+      _event,
+      uid: string,
+      entryId: string,
+    ): Promise<{ success: boolean; data?: string; error?: string }> => {
       try {
         validateUid(uid)
         const index = await readIndex(uid)
@@ -178,13 +187,15 @@ export function setupSnapshotStore(): void {
   secureHandle(
     IpcChannels.SNAPSHOT_STORE_RENAME,
     async (_event, uid: string, entryId: string, newLabel: string) =>
-      updateEntry(uid, entryId, (entry) => { entry.label = newLabel }),
+      updateEntry(uid, entryId, (entry) => {
+        entry.label = newLabel
+      }),
   )
 
-  secureHandle(
-    IpcChannels.SNAPSHOT_STORE_DELETE,
-    async (_event, uid: string, entryId: string) =>
-      updateEntry(uid, entryId, (entry) => { entry.deletedAt = new Date().toISOString() }),
+  secureHandle(IpcChannels.SNAPSHOT_STORE_DELETE, async (_event, uid: string, entryId: string) =>
+    updateEntry(uid, entryId, (entry) => {
+      entry.deletedAt = new Date().toISOString()
+    }),
   )
 
   secureHandle(

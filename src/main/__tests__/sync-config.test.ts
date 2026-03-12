@@ -106,10 +106,12 @@ describe('app-config (electron-store)', () => {
 
     beforeEach(() => {
       handlers = new Map()
-      vi.mocked(ipcMain.handle).mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
-        handlers.set(channel, handler)
-        return undefined as unknown as Electron.IpcMain
-      })
+      vi.mocked(ipcMain.handle).mockImplementation(
+        (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, handler)
+          return undefined as unknown as Electron.IpcMain
+        },
+      )
       setupAppConfigIpc()
     })
 

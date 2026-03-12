@@ -10,29 +10,14 @@ export function AboutTabContent() {
   return (
     <div className="pt-4 space-y-6">
       <div className="flex flex-col items-center gap-3">
-        <img
-          src={appIcon}
-          alt="Pipette"
-          width={64}
-          height={64}
-          data-testid="about-app-icon"
-        />
-        <h3
-          className="text-lg font-bold text-content"
-          data-testid="about-app-name"
-        >
+        <img src={appIcon} alt="Pipette" width={64} height={64} data-testid="about-app-icon" />
+        <h3 className="text-lg font-bold text-content" data-testid="about-app-name">
           Pipette
         </h3>
-        <span
-          className="text-sm text-content-muted"
-          data-testid="about-app-version"
-        >
+        <span className="text-sm text-content-muted" data-testid="about-app-version">
           {t('settings.about.version', { version: __APP_VERSION__ })}
         </span>
-        <span
-          className="text-sm text-content-muted"
-          data-testid="about-license"
-        >
+        <span className="text-sm text-content-muted" data-testid="about-license">
           {t('settings.about.license', { license: t('settings.about.licenseValue') })}
         </span>
       </div>

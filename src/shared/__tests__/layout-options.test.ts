@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  parseLayoutLabels,
-  unpackLayoutOptions,
-  packLayoutOptions,
-} from '../layout-options'
+import { parseLayoutLabels, unpackLayoutOptions, packLayoutOptions } from '../layout-options'
 
 describe('Layout Options', () => {
   it('parses string labels as boolean options', () => {
@@ -14,18 +10,13 @@ describe('Layout Options', () => {
   })
 
   it('parses array labels as select options', () => {
-    const result = parseLayoutLabels([
-      ['Bottom Row', 'ANSI', 'Tsangan', 'WKL'],
-    ])
+    const result = parseLayoutLabels([['Bottom Row', 'ANSI', 'Tsangan', 'WKL']])
     expect(result).toHaveLength(1)
     expect(result[0].labels).toEqual(['Bottom Row', 'ANSI', 'Tsangan', 'WKL'])
   })
 
   it('unpacks and repacks to same value', () => {
-    const labels: (string | string[])[] = [
-      'Split BS',
-      ['Bottom', 'ANSI', 'Tsangan', 'WKL'],
-    ]
+    const labels: (string | string[])[] = ['Split BS', ['Bottom', 'ANSI', 'Tsangan', 'WKL']]
     const options = parseLayoutLabels(labels)
     const packed = 5 // some value
     const unpacked = unpackLayoutOptions(packed, options)

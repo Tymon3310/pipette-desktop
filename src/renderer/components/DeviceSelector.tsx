@@ -41,9 +41,7 @@ export function DeviceSelector({
     <div className="flex min-h-screen flex-col items-center justify-center bg-surface">
       <div className="w-full max-w-sm rounded-2xl bg-surface-alt px-8 pb-7 pt-9 shadow-lg">
         <div className="mb-7 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-content">
-            {t('app.title')}
-          </h1>
+          <h1 className="text-xl font-bold text-content">{t('app.title')}</h1>
           <div className="flex items-center gap-1">
             {onOpenData && (
               <button
@@ -73,9 +71,7 @@ export function DeviceSelector({
         </div>
 
         {error && (
-          <div className="mb-4 rounded-lg bg-danger/10 p-3 text-sm text-danger">
-            {error}
-          </div>
+          <div className="mb-4 rounded-lg bg-danger/10 p-3 text-sm text-danger">{error}</div>
         )}
 
         <div className="mb-5">
@@ -97,7 +93,10 @@ export function DeviceSelector({
                   <div className="font-semibold text-content">
                     {device.productName || 'Unknown Device'}
                   </div>
-                  <div className="mt-0.5 font-mono text-[11px] tracking-wide text-content-muted" data-testid="device-id">
+                  <div
+                    className="mt-0.5 font-mono text-[11px] tracking-wide text-content-muted"
+                    data-testid="device-id"
+                  >
                     {device.vendorId.toString(16).padStart(4, '0')}:
                     {device.productId.toString(16).padStart(4, '0')}
                     {device.type !== 'vial' && ` (${device.type})`}
@@ -108,13 +107,20 @@ export function DeviceSelector({
                     {t('app.connecting', { dots: '...' })}
                   </span>
                 ) : (
-                  <ChevronRight size={16} aria-hidden="true" className="text-content-muted opacity-20 transition-opacity group-hover:opacity-60" />
+                  <ChevronRight
+                    size={16}
+                    aria-hidden="true"
+                    className="text-content-muted opacity-20 transition-opacity group-hover:opacity-60"
+                  />
                 )}
               </button>
             ))}
 
             {devices.length === 0 && (
-              <div className="py-4 text-center text-sm text-content-muted" data-testid="no-device-message">
+              <div
+                className="py-4 text-center text-sm text-content-muted"
+                data-testid="no-device-message"
+              >
                 {t('app.deviceNotConnected')}
               </div>
             )}
@@ -148,9 +154,7 @@ export function DeviceSelector({
         )}
 
         {devices.length === 0 && (
-          <div className="mt-4 text-xs text-content-muted">
-            {t('app.udevHelp')}
-          </div>
+          <div className="mt-4 text-xs text-content-muted">{t('app.udevHelp')}</div>
         )}
       </div>
     </div>

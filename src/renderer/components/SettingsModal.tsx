@@ -10,7 +10,14 @@ import { formatDate, formatDateShort } from './editors/store-modal-shared'
 import { ModalTabBar, ModalTabPanel } from './editors/modal-tabs'
 import { SYNC_STATUS_CLASS } from './sync-ui'
 import type { ModalTabId } from './editors/modal-tabs'
-import type { SyncStatusType, LastSyncResult, SyncProgress, LocalResetTargets, SyncDataScanResult, StoredKeyboardInfo } from '../../shared/types/sync'
+import type {
+  SyncStatusType,
+  LastSyncResult,
+  SyncProgress,
+  LocalResetTargets,
+  SyncDataScanResult,
+  StoredKeyboardInfo,
+} from '../../shared/types/sync'
 import type { UseSyncReturn } from '../hooks/useSync'
 import type { ThemeMode } from '../hooks/useTheme'
 import type { KeyboardLayoutId, AutoLockMinutes } from '../hooks/useDevicePrefs'
@@ -44,9 +51,12 @@ function toggleSetItem<T>(prev: Set<T>, item: T, selected: boolean): Set<T> {
   return next
 }
 
-const BTN_PRIMARY = 'rounded bg-accent px-3 py-1 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50'
-const BTN_SECONDARY = 'rounded border border-edge px-3 py-1 text-sm text-content-secondary hover:bg-surface-dim disabled:opacity-50'
-const BTN_DANGER_OUTLINE = 'rounded border border-danger px-3 py-1 text-sm text-danger hover:bg-danger/10 disabled:opacity-50'
+const BTN_PRIMARY =
+  'rounded bg-accent px-3 py-1 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50'
+const BTN_SECONDARY =
+  'rounded border border-edge px-3 py-1 text-sm text-content-secondary hover:bg-surface-dim disabled:opacity-50'
+const BTN_DANGER_OUTLINE =
+  'rounded border border-danger px-3 py-1 text-sm text-danger hover:bg-danger/10 disabled:opacity-50'
 
 interface SyncStatusSectionProps {
   syncStatus: SyncStatusType
@@ -66,7 +76,10 @@ function SyncStatusSection({ syncStatus, progress, lastSyncResult }: SyncStatusS
       ) : (
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className={`text-sm ${SYNC_STATUS_CLASS[syncStatus]}`} data-testid="sync-status-label">
+            <span
+              className={`text-sm ${SYNC_STATUS_CLASS[syncStatus]}`}
+              data-testid="sync-status-label"
+            >
               {t(`statusBar.sync.${syncStatus}`)}
             </span>
             {syncStatus === 'syncing' && progress?.current != null && progress?.total != null && (
@@ -93,19 +106,21 @@ function SyncStatusSection({ syncStatus, progress, lastSyncResult }: SyncStatusS
               {t(lastSyncResult.message, lastSyncResult.message)}
             </div>
           )}
-          {syncStatus === 'partial' && lastSyncResult?.failedUnits && lastSyncResult.failedUnits.length > 0 && (
-            <div
-              className="rounded border border-warning/30 bg-warning/10 px-2 py-1 text-xs text-warning"
-              data-testid="sync-status-partial-details"
-            >
-              <div>{t(lastSyncResult.message ?? '', lastSyncResult.message ?? '')}</div>
-              <ul className="mt-1 list-disc pl-4">
-                {lastSyncResult.failedUnits.map((unit) => (
-                  <li key={unit}>{unit}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {syncStatus === 'partial' &&
+            lastSyncResult?.failedUnits &&
+            lastSyncResult.failedUnits.length > 0 && (
+              <div
+                className="rounded border border-warning/30 bg-warning/10 px-2 py-1 text-xs text-warning"
+                data-testid="sync-status-partial-details"
+              >
+                <div>{t(lastSyncResult.message ?? '', lastSyncResult.message ?? '')}</div>
+                <ul className="mt-1 list-disc pl-4">
+                  {lastSyncResult.failedUnits.map((unit) => (
+                    <li key={unit}>{unit}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
         </div>
       )}
     </section>
@@ -120,7 +135,13 @@ interface SyncDataResetSectionProps {
   onResetEnd?: () => void
 }
 
-function SyncDataResetSection({ sync, storedKeyboards, disabled, onResetStart, onResetEnd }: SyncDataResetSectionProps) {
+function SyncDataResetSection({
+  sync,
+  storedKeyboards,
+  disabled,
+  onResetStart,
+  onResetEnd,
+}: SyncDataResetSectionProps) {
   const { t } = useTranslation()
   const [scanResult, setScanResult] = useState<SyncDataScanResult | null>(null)
   const [scanning, setScanning] = useState(false)
@@ -131,7 +152,10 @@ function SyncDataResetSection({ sync, storedKeyboards, disabled, onResetStart, o
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const keyboardNameMap = useMemo(() => new Map(storedKeyboards.map((kb) => [kb.uid, kb.name])), [storedKeyboards])
+  const keyboardNameMap = useMemo(
+    () => new Map(storedKeyboards.map((kb) => [kb.uid, kb.name])),
+    [storedKeyboards],
+  )
 
   const resetSelections = useCallback(() => {
     setConfirming(false)
@@ -170,8 +194,12 @@ function SyncDataResetSection({ sync, storedKeyboards, disabled, onResetStart, o
     setConfirming(false)
   }, [scanResult, selectedUndecryptable.size])
 
-  const anySelected = selectedKeyboardUids.size > 0 || favoritesSelected || selectedUndecryptable.size > 0
-  const allUndecryptableSelected = scanResult !== null && scanResult.undecryptable.length > 0 && selectedUndecryptable.size === scanResult.undecryptable.length
+  const anySelected =
+    selectedKeyboardUids.size > 0 || favoritesSelected || selectedUndecryptable.size > 0
+  const allUndecryptableSelected =
+    scanResult !== null &&
+    scanResult.undecryptable.length > 0 &&
+    selectedUndecryptable.size === scanResult.undecryptable.length
 
   const handleDelete = useCallback(async () => {
     if (!anySelected) return
@@ -181,7 +209,7 @@ function SyncDataResetSection({ sync, storedKeyboards, disabled, onResetStart, o
     try {
       if (selectedKeyboardUids.size > 0 || favoritesSelected) {
         const targets = {
-          keyboards: selectedKeyboardUids.size > 0 ? [...selectedKeyboardUids] : false as const,
+          keyboards: selectedKeyboardUids.size > 0 ? [...selectedKeyboardUids] : (false as const),
           favorites: favoritesSelected,
         }
         const result = await sync.resetSyncTargets(targets)
@@ -211,16 +239,27 @@ function SyncDataResetSection({ sync, storedKeyboards, disabled, onResetStart, o
       setDeleting(false)
       onResetEnd?.()
     }
-  }, [sync, selectedKeyboardUids, favoritesSelected, selectedUndecryptable, resetSelections, onResetStart, onResetEnd, t])
+  }, [
+    sync,
+    selectedKeyboardUids,
+    favoritesSelected,
+    selectedUndecryptable,
+    resetSelections,
+    onResetStart,
+    onResetEnd,
+    t,
+  ])
 
-  const hasNoData = scanResult !== null && scanResult.keyboards.length === 0 && scanResult.favorites.length === 0 && scanResult.undecryptable.length === 0
+  const hasNoData =
+    scanResult !== null &&
+    scanResult.keyboards.length === 0 &&
+    scanResult.favorites.length === 0 &&
+    scanResult.undecryptable.length === 0
 
   return (
     <section className="mb-6">
       <div className="mb-2 flex items-center justify-between">
-        <h4 className="text-sm font-medium text-content-secondary">
-          {t('sync.resetSyncData')}
-        </h4>
+        <h4 className="text-sm font-medium text-content-secondary">{t('sync.resetSyncData')}</h4>
         <button
           type="button"
           className={BTN_SECONDARY}
@@ -245,15 +284,23 @@ function SyncDataResetSection({ sync, storedKeyboards, disabled, onResetStart, o
         <div className="space-y-2">
           {scanResult.keyboards.length > 0 && (
             <div>
-              <span className="text-sm text-content-muted">{t('sync.resetTarget.keyboardData')}</span>
+              <span className="text-sm text-content-muted">
+                {t('sync.resetTarget.keyboardData')}
+              </span>
               <div className="ml-4 mt-1 space-y-1">
                 {scanResult.keyboards.map((uid) => (
-                  <label key={uid} className="flex items-center gap-2 text-sm text-content" data-testid={`sync-target-keyboard-${uid}`}>
+                  <label
+                    key={uid}
+                    className="flex items-center gap-2 text-sm text-content"
+                    data-testid={`sync-target-keyboard-${uid}`}
+                  >
                     <input
                       type="checkbox"
                       checked={selectedKeyboardUids.has(uid)}
                       onChange={(e) => {
-                        setSelectedKeyboardUids((prev) => toggleSetItem(prev, uid, e.target.checked))
+                        setSelectedKeyboardUids((prev) =>
+                          toggleSetItem(prev, uid, e.target.checked),
+                        )
                         setConfirming(false)
                       }}
                       disabled={disabled || deleting}
@@ -266,7 +313,10 @@ function SyncDataResetSection({ sync, storedKeyboards, disabled, onResetStart, o
             </div>
           )}
           {scanResult.favorites.length > 0 && (
-            <label className="flex items-center gap-2 text-sm text-content" data-testid="sync-target-favorites">
+            <label
+              className="flex items-center gap-2 text-sm text-content"
+              data-testid="sync-target-favorites"
+            >
               <input
                 type="checkbox"
                 checked={favoritesSelected}
@@ -283,7 +333,10 @@ function SyncDataResetSection({ sync, storedKeyboards, disabled, onResetStart, o
           {scanResult.undecryptable.length > 0 && (
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-content-muted" data-testid="sync-data-undecryptable-count">
+                <span
+                  className="text-sm text-content-muted"
+                  data-testid="sync-data-undecryptable-count"
+                >
                   {t('sync.undecryptableCount', { count: scanResult.undecryptable.length })}
                 </span>
                 <button
@@ -392,7 +445,8 @@ function LocalDataResetGroup({
   confirmDisabled,
 }: LocalDataResetGroupProps) {
   const { t } = useTranslation()
-  const anySelected = selectedKeyboardUids.size > 0 || localTargets.favorites || localTargets.appSettings
+  const anySelected =
+    selectedKeyboardUids.size > 0 || localTargets.favorites || localTargets.appSettings
 
   return (
     <div className="space-y-2">
@@ -402,7 +456,11 @@ function LocalDataResetGroup({
           <span className="text-sm text-content-muted">{t('sync.resetTarget.keyboardData')}</span>
           <div className="ml-4 mt-1 space-y-1">
             {storedKeyboards.map((kb) => (
-              <label key={kb.uid} className="flex items-center gap-2 text-sm text-content" data-testid={`local-target-keyboard-${kb.uid}`}>
+              <label
+                key={kb.uid}
+                className="flex items-center gap-2 text-sm text-content"
+                data-testid={`local-target-keyboard-${kb.uid}`}
+              >
                 <input
                   type="checkbox"
                   checked={selectedKeyboardUids.has(kb.uid)}
@@ -417,7 +475,10 @@ function LocalDataResetGroup({
         </div>
       )}
       {/* Favorites & App Settings */}
-      <label className="flex items-center gap-2 text-sm text-content" data-testid="local-target-favorites">
+      <label
+        className="flex items-center gap-2 text-sm text-content"
+        data-testid="local-target-favorites"
+      >
         <input
           type="checkbox"
           checked={localTargets.favorites}
@@ -427,7 +488,10 @@ function LocalDataResetGroup({
         />
         {t('sync.resetTarget.favorites')}
       </label>
-      <label className="flex items-center gap-2 text-sm text-content" data-testid="local-target-appSettings">
+      <label
+        className="flex items-center gap-2 text-sm text-content"
+        data-testid="local-target-appSettings"
+      >
         <input
           type="checkbox"
           checked={localTargets.appSettings}
@@ -646,26 +710,29 @@ function HubDisplayNameField({ currentName, onSave }: HubDisplayNameFieldProps) 
     }
   }, [value, onSave, t])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && hasChanged && value.trim()) {
-      void handleSave()
-    }
-  }, [handleSave, hasChanged, value])
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && hasChanged && value.trim()) {
+        void handleSave()
+      }
+    },
+    [handleSave, hasChanged, value],
+  )
 
   return (
     <div>
-      <h4 className="mb-1 text-sm font-medium text-content-secondary">
-        {t('hub.displayName')}
-      </h4>
-      <p className="mb-2 text-xs text-content-muted">
-        {t('hub.displayNameDescription')}
-      </p>
+      <h4 className="mb-1 text-sm font-medium text-content-secondary">{t('hub.displayName')}</h4>
+      <p className="mb-2 text-xs text-content-muted">{t('hub.displayNameDescription')}</p>
       <div className="flex items-center gap-2">
         <input
           type="text"
           className="flex-1 rounded border border-edge bg-surface px-2.5 py-1.5 text-sm text-content focus:border-accent focus:outline-none"
           value={value}
-          onChange={(e) => { setValue(e.target.value); setSaved(false); setError(null) }}
+          onChange={(e) => {
+            setValue(e.target.value)
+            setSaved(false)
+            setError(null)
+          }}
           onKeyDown={handleKeyDown}
           disabled={saving}
           maxLength={50}
@@ -740,7 +807,11 @@ export function SettingsModal({
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [changingPassword, setChangingPassword] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [localTargets, setLocalTargets] = useState<LocalResetTargets>({ keyboards: false, favorites: false, appSettings: false })
+  const [localTargets, setLocalTargets] = useState<LocalResetTargets>({
+    keyboards: false,
+    favorites: false,
+    appSettings: false,
+  })
   const [confirmingLocalReset, setConfirmingLocalReset] = useState(false)
   const [authenticating, setAuthenticating] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
@@ -757,7 +828,10 @@ export function SettingsModal({
   useEffect(() => {
     if (activeTab !== 'troubleshooting' || storedKeyboardsFetchedRef.current) return
     storedKeyboardsFetchedRef.current = true
-    window.vialAPI.listStoredKeyboards().then(setStoredKeyboards).catch(() => {})
+    window.vialAPI
+      .listStoredKeyboards()
+      .then(setStoredKeyboards)
+      .catch(() => {})
   }, [activeTab])
 
   useEffect(() => {
@@ -765,26 +839,36 @@ export function SettingsModal({
 
     let cancelled = false
     setNotificationLoading(true)
-    window.vialAPI.notificationFetch().then((result) => {
-      if (cancelled) return
-      if (result.success && result.notifications) {
-        const sorted = [...result.notifications]
-          .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
-          .slice(0, 3)
-        setRecentNotifications(sorted)
-      }
-    }).catch(() => {
-      // Network errors are non-critical
-    }).finally(() => {
-      if (cancelled) return
-      notificationFetchedRef.current = true
-      setNotificationLoading(false)
-    })
-    return () => { cancelled = true }
+    window.vialAPI
+      .notificationFetch()
+      .then((result) => {
+        if (cancelled) return
+        if (result.success && result.notifications) {
+          const sorted = [...result.notifications]
+            .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+            .slice(0, 3)
+          setRecentNotifications(sorted)
+        }
+      })
+      .catch(() => {
+        // Network errors are non-critical
+      })
+      .finally(() => {
+        if (cancelled) return
+        notificationFetchedRef.current = true
+        setNotificationLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [activeTab])
 
-  useEffect(() => { setConfirmingGoogleDisconnect(false) }, [sync.authStatus.authenticated])
-  useEffect(() => { setConfirmingHubDisconnect(false) }, [hubEnabled])
+  useEffect(() => {
+    setConfirmingGoogleDisconnect(false)
+  }, [sync.authStatus.authenticated])
+  useEffect(() => {
+    setConfirmingHubDisconnect(false)
+  }, [hubEnabled])
   const authInFlight = useRef(false)
   const validationSeq = useRef(0)
 
@@ -897,11 +981,17 @@ export function SettingsModal({
         try {
           await window.vialAPI.resetKeyboardData(uid)
           deletedUids.add(uid)
-        } catch { /* continue deleting other keyboards */ }
+        } catch {
+          /* continue deleting other keyboards */
+        }
       }
       const hasNonKeyboardTargets = localTargets.favorites || localTargets.appSettings
       if (hasNonKeyboardTargets) {
-        await window.vialAPI.resetLocalTargets({ keyboards: false, favorites: localTargets.favorites, appSettings: localTargets.appSettings })
+        await window.vialAPI.resetLocalTargets({
+          keyboards: false,
+          favorites: localTargets.favorites,
+          appSettings: localTargets.appSettings,
+        })
       }
       if (deletedUids.size > 0 || hasNonKeyboardTargets) {
         setConfirmingLocalReset(false)
@@ -939,13 +1029,21 @@ export function SettingsModal({
   }, [])
 
   const isSyncing = sync.syncStatus === 'syncing'
-  const syncDisabled = busy || !sync.authStatus.authenticated || !sync.hasPassword || isSyncing || sync.syncUnavailable
+  const syncDisabled =
+    busy || !sync.authStatus.authenticated || !sync.hasPassword || isSyncing || sync.syncUnavailable
 
   function renderPasswordSection(): React.ReactNode {
     if (sync.checkingRemotePassword) {
       return (
-        <div className="flex items-center gap-2 rounded border border-accent/50 bg-accent/10 p-2 text-xs text-accent" data-testid="sync-checking-remote" role="status">
-          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-hidden="true" />
+        <div
+          className="flex items-center gap-2 rounded border border-accent/50 bg-accent/10 p-2 text-xs text-accent"
+          data-testid="sync-checking-remote"
+          role="status"
+        >
+          <span
+            className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent"
+            aria-hidden="true"
+          />
           {t('sync.checkingRemotePassword')}
         </div>
       )
@@ -973,18 +1071,31 @@ export function SettingsModal({
     return (
       <div className="space-y-2">
         {busy && (
-          <div className="flex items-center gap-2 rounded border border-accent/50 bg-accent/10 p-2 text-xs text-accent" data-testid="sync-password-busy" role="status">
-            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-hidden="true" />
+          <div
+            className="flex items-center gap-2 rounded border border-accent/50 bg-accent/10 p-2 text-xs text-accent"
+            data-testid="sync-password-busy"
+            role="status"
+          >
+            <span
+              className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent"
+              aria-hidden="true"
+            />
             {t(changingPassword ? 'sync.changingPassword' : 'sync.settingPassword')}
           </div>
         )}
         {!busy && changingPassword && (
-          <div className="rounded border border-accent/50 bg-accent/10 p-2 text-xs text-accent" data-testid="sync-change-password-info">
+          <div
+            className="rounded border border-accent/50 bg-accent/10 p-2 text-xs text-accent"
+            data-testid="sync-change-password-info"
+          >
             {t('sync.changePasswordInfo')}
           </div>
         )}
         {!busy && !changingPassword && sync.hasRemotePassword === true && (
-          <div className="rounded border border-accent/50 bg-accent/10 p-2 text-xs text-accent" data-testid="sync-existing-password-hint">
+          <div
+            className="rounded border border-accent/50 bg-accent/10 p-2 text-xs text-accent"
+            data-testid="sync-existing-password-hint"
+          >
             {t('sync.existingPasswordHint')}
           </div>
         )}
@@ -1015,7 +1126,9 @@ export function SettingsModal({
           </div>
         )}
         {passwordError && (
-          <div className="text-xs text-danger" data-testid="sync-password-error">{passwordError}</div>
+          <div className="text-xs text-danger" data-testid="sync-password-error">
+            {passwordError}
+          </div>
         )}
         {!busy && (
           <div className="flex gap-2">
@@ -1023,7 +1136,9 @@ export function SettingsModal({
               type="button"
               className="rounded bg-accent px-4 py-1.5 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
               onClick={handleSetPassword}
-              disabled={!password || (passwordScore !== null && passwordScore < 4) || sync.syncUnavailable}
+              disabled={
+                !password || (passwordScore !== null && passwordScore < 4) || sync.syncUnavailable
+              }
               data-testid="sync-password-save"
             >
               {t('sync.setPassword')}
@@ -1061,7 +1176,9 @@ export function SettingsModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-4 pb-0 shrink-0">
-          <h2 id="settings-title" className="text-lg font-bold text-content">{t('settings.title')}</h2>
+          <h2 id="settings-title" className="text-lg font-bold text-content">
+            {t('settings.title')}
+          </h2>
           {!busy && <ModalCloseButton testid="settings-close" onClick={onClose} />}
         </div>
 
@@ -1102,7 +1219,10 @@ export function SettingsModal({
 
               <section>
                 <div className={ROW_CLASS} data-testid="settings-language-row">
-                  <label htmlFor="settings-language-selector" className="text-sm font-medium text-content-secondary">
+                  <label
+                    htmlFor="settings-language-selector"
+                    className="text-sm font-medium text-content-secondary"
+                  >
                     {t('settings.language')}
                   </label>
                   <select
@@ -1133,13 +1253,18 @@ export function SettingsModal({
                 </p>
                 <div className="flex flex-col gap-3">
                   <div className={ROW_CLASS} data-testid="settings-default-basic-view-type-row">
-                    <label htmlFor="settings-default-basic-view-type-selector" className="text-[13px] font-medium text-content">
+                    <label
+                      htmlFor="settings-default-basic-view-type-selector"
+                      className="text-[13px] font-medium text-content"
+                    >
                       {t('settings.defaultBasicViewType')}
                     </label>
                     <select
                       id="settings-default-basic-view-type-selector"
                       value={defaultBasicViewType}
-                      onChange={(e) => onDefaultBasicViewTypeChange(e.target.value as BasicViewType)}
+                      onChange={(e) =>
+                        onDefaultBasicViewTypeChange(e.target.value as BasicViewType)
+                      }
                       className="rounded border border-edge bg-surface px-2.5 py-1.5 text-[13px] text-content focus:border-accent focus:outline-none"
                       data-testid="settings-default-basic-view-type-selector"
                     >
@@ -1151,7 +1276,10 @@ export function SettingsModal({
                   </div>
 
                   <div className={ROW_CLASS} data-testid="settings-default-layout-row">
-                    <label htmlFor="settings-default-layout-selector" className="text-[13px] font-medium text-content">
+                    <label
+                      htmlFor="settings-default-layout-selector"
+                      className="text-[13px] font-medium text-content"
+                    >
                       {t('settings.defaultLayout')}
                     </label>
                     <select
@@ -1196,7 +1324,11 @@ export function SettingsModal({
                       aria-checked={defaultSplitKeyMode === 'split'}
                       aria-label={t('settings.defaultSplitKeyMode')}
                       className={toggleTrackClass(defaultSplitKeyMode === 'split')}
-                      onClick={() => onDefaultSplitKeyModeChange(defaultSplitKeyMode === 'split' ? 'flat' : 'split')}
+                      onClick={() =>
+                        onDefaultSplitKeyModeChange(
+                          defaultSplitKeyMode === 'split' ? 'flat' : 'split',
+                        )
+                      }
                       data-testid="settings-default-split-key-mode-toggle"
                     >
                       <span className={toggleKnobClass(defaultSplitKeyMode === 'split')} />
@@ -1246,7 +1378,10 @@ export function SettingsModal({
                 <div className="flex flex-col gap-3">
                   <div className={ROW_CLASS} data-testid="settings-auto-lock-time-row">
                     <div className="flex flex-col gap-0.5">
-                      <label htmlFor="settings-auto-lock-time-selector" className="text-[13px] font-medium text-content">
+                      <label
+                        htmlFor="settings-auto-lock-time-selector"
+                        className="text-[13px] font-medium text-content"
+                      >
                         {t('settings.autoLockTime')}
                       </label>
                       <span className="text-xs text-content-muted">
@@ -1256,7 +1391,9 @@ export function SettingsModal({
                     <select
                       id="settings-auto-lock-time-selector"
                       value={autoLockTime}
-                      onChange={(e) => onAutoLockTimeChange(Number(e.target.value) as AutoLockMinutes)}
+                      onChange={(e) =>
+                        onAutoLockTimeChange(Number(e.target.value) as AutoLockMinutes)
+                      }
                       className="rounded border border-edge bg-surface px-2.5 py-1.5 text-[13px] text-content focus:border-accent focus:outline-none"
                       data-testid="settings-auto-lock-time-selector"
                     >
@@ -1326,7 +1463,10 @@ export function SettingsModal({
 
               {/* Sync Unavailable */}
               {sync.syncUnavailable && (
-                <div className="mb-4 flex items-center justify-between rounded border border-danger/30 bg-danger/10 p-3 text-sm text-danger" data-testid="sync-unavailable">
+                <div
+                  className="mb-4 flex items-center justify-between rounded border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
+                  data-testid="sync-unavailable"
+                >
                   <span>{t('sync.unavailable')}</span>
                   <button
                     type="button"
@@ -1350,9 +1490,7 @@ export function SettingsModal({
               {/* Sync Controls */}
               <div className="mb-2 grid grid-cols-2 gap-3">
                 <div className={ROW_CLASS} data-testid="sync-auto-row">
-                  <span className="text-[13px] font-medium text-content">
-                    {t('sync.autoSync')}
-                  </span>
+                  <span className="text-[13px] font-medium text-content">{t('sync.autoSync')}</span>
                   <button
                     type="button"
                     className={sync.config.autoSync ? BTN_SECONDARY : BTN_PRIMARY}
@@ -1381,12 +1519,19 @@ export function SettingsModal({
               </div>
 
               {/* Sync Status */}
-              <SyncStatusSection syncStatus={sync.syncStatus} progress={sync.progress} lastSyncResult={sync.lastSyncResult} />
+              <SyncStatusSection
+                syncStatus={sync.syncStatus}
+                progress={sync.progress}
+                lastSyncResult={sync.lastSyncResult}
+              />
 
               <hr className="my-4 border-edge" />
 
               {/* Pipette Hub */}
-              <h3 className="mb-3 text-[15px] font-bold text-content" data-testid="pipette-hub-title">
+              <h3
+                className="mb-3 text-[15px] font-bold text-content"
+                data-testid="pipette-hub-title"
+              >
                 {t('hub.pipetteHub')}
               </h3>
 
@@ -1410,7 +1555,10 @@ export function SettingsModal({
                       />
                     </div>
                     {!hubAuthenticated && (
-                      <p className="mt-2 text-xs text-content-muted" data-testid="hub-requires-auth">
+                      <p
+                        className="mt-2 text-xs text-content-muted"
+                        data-testid="hub-requires-auth"
+                      >
                         {t('hub.requiresAuth')}
                       </p>
                     )}
@@ -1427,7 +1575,10 @@ export function SettingsModal({
                       {t('hub.enable')}
                     </button>
                     {!hubAuthenticated && (
-                      <p className="mt-2 text-xs text-content-muted" data-testid="hub-requires-auth">
+                      <p
+                        className="mt-2 text-xs text-content-muted"
+                        data-testid="hub-requires-auth"
+                      >
                         {t('hub.requiresAuth')}
                       </p>
                     )}
@@ -1472,7 +1623,6 @@ export function SettingsModal({
                   />
                 </section>
               )}
-
             </div>
           )}
           {activeTab === 'troubleshooting' && (
@@ -1497,7 +1647,9 @@ export function SettingsModal({
                       className={`text-sm ${importResult === 'success' ? 'text-accent' : 'text-danger'}`}
                       data-testid="local-data-import-result"
                     >
-                      {importResult === 'success' ? t('sync.importComplete') : t('sync.importFailed')}
+                      {importResult === 'success'
+                        ? t('sync.importComplete')
+                        : t('sync.importFailed')}
                     </span>
                   ) : (
                     <span />
@@ -1530,7 +1682,9 @@ export function SettingsModal({
                     setSelectedKeyboardUids((prev) => toggleSetItem(prev, uid, checked))
                   }}
                   localTargets={localTargets}
-                  onToggleTarget={(key, checked) => setLocalTargets((prev) => ({ ...prev, [key]: checked }))}
+                  onToggleTarget={(key, checked) =>
+                    setLocalTargets((prev) => ({ ...prev, [key]: checked }))
+                  }
                   disabled={busy || isSyncing}
                   confirming={confirmingLocalReset}
                   onRequestConfirm={() => setConfirmingLocalReset(true)}
@@ -1553,17 +1707,27 @@ export function SettingsModal({
               ) : (
                 <ul className="space-y-4">
                   {recentNotifications.map((notification, index) => (
-                    <li key={`${notification.publishedAt}-${index}`} className="rounded-md border border-edge p-4">
+                    <li
+                      key={`${notification.publishedAt}-${index}`}
+                      className="rounded-md border border-edge p-4"
+                    >
                       <div className="mb-2 flex items-center gap-2">
-                        <span className="text-sm font-medium text-content">{notification.title}</span>
+                        <span className="text-sm font-medium text-content">
+                          {notification.title}
+                        </span>
                         <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent">
-                          {t(`notification.type.${notification.type}`, { defaultValue: notification.type })}
+                          {t(`notification.type.${notification.type}`, {
+                            defaultValue: notification.type,
+                          })}
                         </span>
                       </div>
                       <p className="whitespace-pre-line text-sm text-content-secondary">
                         {notification.body}
                       </p>
-                      <time className="mt-2 block text-xs text-content-muted" dateTime={notification.publishedAt}>
+                      <time
+                        className="mt-2 block text-xs text-content-muted"
+                        dateTime={notification.publishedAt}
+                      >
                         {formatDateShort(notification.publishedAt)}
                       </time>
                     </li>

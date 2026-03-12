@@ -82,17 +82,21 @@ describe('mergeEntries', () => {
 
   describe('updatedAt fallback', () => {
     it('uses updatedAt when present instead of savedAt', () => {
-      const local = [makeEntry({
-        id: 'x',
-        savedAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-07-01T00:00:00.000Z',
-        label: 'local-updated',
-      })]
-      const remote = [makeEntry({
-        id: 'x',
-        savedAt: '2025-06-01T00:00:00.000Z',
-        label: 'remote',
-      })]
+      const local = [
+        makeEntry({
+          id: 'x',
+          savedAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-07-01T00:00:00.000Z',
+          label: 'local-updated',
+        }),
+      ]
+      const remote = [
+        makeEntry({
+          id: 'x',
+          savedAt: '2025-06-01T00:00:00.000Z',
+          label: 'remote',
+        }),
+      ]
 
       const result = mergeEntries(local, remote)
 
@@ -102,12 +106,14 @@ describe('mergeEntries', () => {
 
     it('falls back to savedAt when updatedAt is absent', () => {
       const local = [makeEntry({ id: 'x', savedAt: '2025-01-01T00:00:00.000Z', label: 'local' })]
-      const remote = [makeEntry({
-        id: 'x',
-        savedAt: '2025-03-01T00:00:00.000Z',
-        updatedAt: '2025-06-01T00:00:00.000Z',
-        label: 'remote-updated',
-      })]
+      const remote = [
+        makeEntry({
+          id: 'x',
+          savedAt: '2025-03-01T00:00:00.000Z',
+          updatedAt: '2025-06-01T00:00:00.000Z',
+          label: 'remote-updated',
+        }),
+      ]
 
       const result = mergeEntries(local, remote)
 
@@ -119,12 +125,14 @@ describe('mergeEntries', () => {
   describe('tombstone handling', () => {
     it('propagates deletion from remote', () => {
       const local = [makeEntry({ id: 'x', savedAt: '2025-01-01T00:00:00.000Z' })]
-      const remote = [makeEntry({
-        id: 'x',
-        savedAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-06-01T00:00:00.000Z',
-        deletedAt: '2025-06-01T00:00:00.000Z',
-      })]
+      const remote = [
+        makeEntry({
+          id: 'x',
+          savedAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-06-01T00:00:00.000Z',
+          deletedAt: '2025-06-01T00:00:00.000Z',
+        }),
+      ]
 
       const result = mergeEntries(local, remote)
 
@@ -134,12 +142,14 @@ describe('mergeEntries', () => {
     })
 
     it('propagates deletion from local', () => {
-      const local = [makeEntry({
-        id: 'x',
-        savedAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-06-01T00:00:00.000Z',
-        deletedAt: '2025-06-01T00:00:00.000Z',
-      })]
+      const local = [
+        makeEntry({
+          id: 'x',
+          savedAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-06-01T00:00:00.000Z',
+          deletedAt: '2025-06-01T00:00:00.000Z',
+        }),
+      ]
       const remote = [makeEntry({ id: 'x', savedAt: '2025-01-01T00:00:00.000Z' })]
 
       const result = mergeEntries(local, remote)
@@ -149,18 +159,22 @@ describe('mergeEntries', () => {
     })
 
     it('revives entry when remote is newer than deletion', () => {
-      const local = [makeEntry({
-        id: 'x',
-        savedAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-03-01T00:00:00.000Z',
-        deletedAt: '2025-03-01T00:00:00.000Z',
-      })]
-      const remote = [makeEntry({
-        id: 'x',
-        savedAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-06-01T00:00:00.000Z',
-        label: 'revived',
-      })]
+      const local = [
+        makeEntry({
+          id: 'x',
+          savedAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-03-01T00:00:00.000Z',
+          deletedAt: '2025-03-01T00:00:00.000Z',
+        }),
+      ]
+      const remote = [
+        makeEntry({
+          id: 'x',
+          savedAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-06-01T00:00:00.000Z',
+          label: 'revived',
+        }),
+      ]
 
       const result = mergeEntries(local, remote)
 
@@ -193,12 +207,8 @@ describe('mergeEntries', () => {
     })
 
     it('sorts merged entries newest-first by effective time', () => {
-      const local = [
-        makeEntry({ id: 'old', savedAt: '2025-01-01T00:00:00.000Z' }),
-      ]
-      const remote = [
-        makeEntry({ id: 'new', savedAt: '2025-06-01T00:00:00.000Z' }),
-      ]
+      const local = [makeEntry({ id: 'old', savedAt: '2025-01-01T00:00:00.000Z' })]
+      const remote = [makeEntry({ id: 'new', savedAt: '2025-06-01T00:00:00.000Z' })]
 
       const result = mergeEntries(local, remote)
 
@@ -210,12 +220,14 @@ describe('mergeEntries', () => {
   describe('tombstone file copy optimization', () => {
     it('does not copy files for remote-only tombstoned entries', () => {
       const local: Entry[] = []
-      const remote = [makeEntry({
-        id: 'deleted',
-        savedAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-06-01T00:00:00.000Z',
-        deletedAt: '2025-06-01T00:00:00.000Z',
-      })]
+      const remote = [
+        makeEntry({
+          id: 'deleted',
+          savedAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-06-01T00:00:00.000Z',
+          deletedAt: '2025-06-01T00:00:00.000Z',
+        }),
+      ]
 
       const result = mergeEntries(local, remote)
 
@@ -226,12 +238,14 @@ describe('mergeEntries', () => {
 
     it('does not copy files when remote tombstone wins LWW', () => {
       const local = [makeEntry({ id: 'x', savedAt: '2025-01-01T00:00:00.000Z' })]
-      const remote = [makeEntry({
-        id: 'x',
-        savedAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-06-01T00:00:00.000Z',
-        deletedAt: '2025-06-01T00:00:00.000Z',
-      })]
+      const remote = [
+        makeEntry({
+          id: 'x',
+          savedAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-06-01T00:00:00.000Z',
+          deletedAt: '2025-06-01T00:00:00.000Z',
+        }),
+      ]
 
       const result = mergeEntries(local, remote)
 
@@ -263,10 +277,7 @@ describe('mergeEntries', () => {
     })
 
     it('returns true when local has entries not in remote', () => {
-      const result = mergeEntries(
-        [makeEntry({ id: 'a', savedAt: '2025-01-01T00:00:00.000Z' })],
-        [],
-      )
+      const result = mergeEntries([makeEntry({ id: 'a', savedAt: '2025-01-01T00:00:00.000Z' })], [])
       expect(result.remoteNeedsUpdate).toBe(true)
     })
 
@@ -319,9 +330,7 @@ describe('gcTombstones', () => {
   })
 
   it('keeps non-deleted entries untouched', () => {
-    const entries = [
-      makeEntry({ id: 'alive', savedAt: '2025-01-01T00:00:00.000Z' }),
-    ]
+    const entries = [makeEntry({ id: 'alive', savedAt: '2025-01-01T00:00:00.000Z' })]
 
     const result = gcTombstones(entries)
     expect(result).toHaveLength(1)

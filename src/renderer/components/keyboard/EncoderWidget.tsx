@@ -69,7 +69,12 @@ function EncoderWidgetInner({
   }
 
   return (
-    <g transform={groupTransform} onClick={handleClick} onDoubleClick={handleDoubleClick} style={{ cursor: 'pointer' }}>
+    <g
+      transform={groupTransform}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      style={{ cursor: 'pointer' }}
+    >
       <circle
         cx={cx}
         cy={cy}

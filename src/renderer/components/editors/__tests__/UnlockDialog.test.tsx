@@ -35,13 +35,31 @@ vi.mock('../../../../shared/keycodes/keycodes', () => ({
 
 function makeKey(row: number, col: number): KleKey {
   return {
-    x: col, y: row, width: 1, height: 1,
-    x2: 0, y2: 0, width2: 1, height2: 1,
-    rotation: 0, rotationX: 0, rotationY: 0,
-    color: '', labels: [], textColor: [], textSize: [],
-    row, col, encoderIdx: -1, encoderDir: -1,
-    layoutIndex: -1, layoutOption: -1,
-    decal: false, nub: false, stepped: false, ghost: false,
+    x: col,
+    y: row,
+    width: 1,
+    height: 1,
+    x2: 0,
+    y2: 0,
+    width2: 1,
+    height2: 1,
+    rotation: 0,
+    rotationX: 0,
+    rotationY: 0,
+    color: '',
+    labels: [],
+    textColor: [],
+    textSize: [],
+    row,
+    col,
+    encoderIdx: -1,
+    encoderDir: -1,
+    layoutIndex: -1,
+    layoutOption: -1,
+    decal: false,
+    nub: false,
+    stepped: false,
+    ghost: false,
   }
 }
 
@@ -62,7 +80,10 @@ describe('UnlockDialog', () => {
   })
 
   const keys = [makeKey(0, 0), makeKey(0, 1), makeKey(1, 0)]
-  const unlockKeys: [number, number][] = [[0, 0], [1, 0]]
+  const unlockKeys: [number, number][] = [
+    [0, 0],
+    [1, 0],
+  ]
 
   function renderDialog() {
     return render(
@@ -78,7 +99,9 @@ describe('UnlockDialog', () => {
 
   it('highlights unlock keys with accent color and leaves others default', async () => {
     unlockPoll.mockResolvedValue([0, 0, 50])
-    await act(async () => { renderDialog() })
+    await act(async () => {
+      renderDialog()
+    })
 
     const rects = document.querySelectorAll('rect')
     // Key 0,0 (unlock key) → accent
@@ -92,9 +115,13 @@ describe('UnlockDialog', () => {
   it('progresses from 0 to total as keys are pressed', async () => {
     // First poll: counter=50 (total captured as 50)
     unlockPoll.mockResolvedValueOnce([0, 0, 50])
-    await act(async () => { renderDialog() })
+    await act(async () => {
+      renderDialog()
+    })
     // setInterval fires first poll at t=200ms
-    await act(async () => { vi.advanceTimersByTime(200) })
+    await act(async () => {
+      vi.advanceTimersByTime(200)
+    })
     await act(async () => {})
 
     // After first poll, total=50, counter=50, progress=0
@@ -102,31 +129,39 @@ describe('UnlockDialog', () => {
 
     // Second poll: counter=40 → progress = 50 - 40 = 10
     unlockPoll.mockResolvedValueOnce([0, 0, 40])
-    await act(async () => { vi.advanceTimersByTime(200) })
+    await act(async () => {
+      vi.advanceTimersByTime(200)
+    })
     await act(async () => {})
 
     expect(screen.getByText('10/50')).toBeInTheDocument()
 
     // Third poll: counter=0 → progress = 50 - 0 = 50, but unlocked=0
     unlockPoll.mockResolvedValueOnce([0, 0, 0])
-    await act(async () => { vi.advanceTimersByTime(200) })
+    await act(async () => {
+      vi.advanceTimersByTime(200)
+    })
     await act(async () => {})
 
     expect(screen.getByText('50/50')).toBeInTheDocument()
   })
 
   it('calls onComplete when unlocked=1', async () => {
-    unlockPoll
-      .mockResolvedValueOnce([0, 0, 50])
-      .mockResolvedValueOnce([1, 0, 0])
+    unlockPoll.mockResolvedValueOnce([0, 0, 50]).mockResolvedValueOnce([1, 0, 0])
 
-    await act(async () => { renderDialog() })
+    await act(async () => {
+      renderDialog()
+    })
     // First poll at t=200ms (counter=50)
-    await act(async () => { vi.advanceTimersByTime(200) })
+    await act(async () => {
+      vi.advanceTimersByTime(200)
+    })
     await act(async () => {})
 
     // Second poll at t=400ms (unlocked=1)
-    await act(async () => { vi.advanceTimersByTime(200) })
+    await act(async () => {
+      vi.advanceTimersByTime(200)
+    })
     await act(async () => {})
 
     expect(onComplete).toHaveBeenCalledTimes(1)
@@ -134,14 +169,18 @@ describe('UnlockDialog', () => {
 
   it('does not render a cancel button', async () => {
     unlockPoll.mockResolvedValue([0, 0, 50])
-    await act(async () => { renderDialog() })
+    await act(async () => {
+      renderDialog()
+    })
 
     expect(screen.queryByText('Cancel')).not.toBeInTheDocument()
   })
 
   it('does not show macro warning by default', async () => {
     unlockPoll.mockResolvedValue([0, 0, 50])
-    await act(async () => { renderDialog() })
+    await act(async () => {
+      renderDialog()
+    })
 
     expect(screen.queryByTestId('macro-unlock-warning')).not.toBeInTheDocument()
   })

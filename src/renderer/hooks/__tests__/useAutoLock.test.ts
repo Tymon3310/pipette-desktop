@@ -16,12 +16,14 @@ describe('useAutoLock', () => {
 
   it('does not call onLock when unlocked is false', () => {
     const onLock = vi.fn()
-    renderHook(() => useAutoLock({
-      unlocked: false,
-      autoLockMinutes: 10,
-      activityCounter: 0,
-      onLock,
-    }))
+    renderHook(() =>
+      useAutoLock({
+        unlocked: false,
+        autoLockMinutes: 10,
+        activityCounter: 0,
+        onLock,
+      }),
+    )
 
     vi.advanceTimersByTime(10 * 60_000 + 1000)
     expect(onLock).not.toHaveBeenCalled()
@@ -29,12 +31,14 @@ describe('useAutoLock', () => {
 
   it('calls onLock after autoLockMinutes when unlocked', () => {
     const onLock = vi.fn()
-    renderHook(() => useAutoLock({
-      unlocked: true,
-      autoLockMinutes: 10,
-      activityCounter: 0,
-      onLock,
-    }))
+    renderHook(() =>
+      useAutoLock({
+        unlocked: true,
+        autoLockMinutes: 10,
+        activityCounter: 0,
+        onLock,
+      }),
+    )
 
     vi.advanceTimersByTime(10 * 60_000 - 1)
     expect(onLock).not.toHaveBeenCalled()
@@ -46,12 +50,13 @@ describe('useAutoLock', () => {
   it('resets timer when activityCounter changes', () => {
     const onLock = vi.fn()
     const { rerender } = renderHook(
-      ({ activityCounter }) => useAutoLock({
-        unlocked: true,
-        autoLockMinutes: 10,
-        activityCounter,
-        onLock,
-      }),
+      ({ activityCounter }) =>
+        useAutoLock({
+          unlocked: true,
+          autoLockMinutes: 10,
+          activityCounter,
+          onLock,
+        }),
       { initialProps: { activityCounter: 0 } },
     )
 
@@ -74,12 +79,13 @@ describe('useAutoLock', () => {
   it('clears timer when unlocked becomes false', () => {
     const onLock = vi.fn()
     const { rerender } = renderHook(
-      ({ unlocked }) => useAutoLock({
-        unlocked,
-        autoLockMinutes: 10,
-        activityCounter: 0,
-        onLock,
-      }),
+      ({ unlocked }) =>
+        useAutoLock({
+          unlocked,
+          autoLockMinutes: 10,
+          activityCounter: 0,
+          onLock,
+        }),
       { initialProps: { unlocked: true } },
     )
 
@@ -93,12 +99,13 @@ describe('useAutoLock', () => {
   it('uses updated autoLockMinutes value', () => {
     const onLock = vi.fn()
     const { rerender } = renderHook(
-      ({ minutes }) => useAutoLock({
-        unlocked: true,
-        autoLockMinutes: minutes,
-        activityCounter: 0,
-        onLock,
-      }),
+      ({ minutes }) =>
+        useAutoLock({
+          unlocked: true,
+          autoLockMinutes: minutes,
+          activityCounter: 0,
+          onLock,
+        }),
       { initialProps: { minutes: 10 } },
     )
 
@@ -114,13 +121,15 @@ describe('useAutoLock', () => {
 
   it('does not call onLock while suspended', () => {
     const onLock = vi.fn()
-    renderHook(() => useAutoLock({
-      unlocked: true,
-      autoLockMinutes: 10,
-      activityCounter: 0,
-      suspended: true,
-      onLock,
-    }))
+    renderHook(() =>
+      useAutoLock({
+        unlocked: true,
+        autoLockMinutes: 10,
+        activityCounter: 0,
+        suspended: true,
+        onLock,
+      }),
+    )
 
     vi.advanceTimersByTime(10 * 60_000 + 1000)
     expect(onLock).not.toHaveBeenCalled()
@@ -129,13 +138,14 @@ describe('useAutoLock', () => {
   it('resumes timer when suspended becomes false', () => {
     const onLock = vi.fn()
     const { rerender } = renderHook(
-      ({ suspended }) => useAutoLock({
-        unlocked: true,
-        autoLockMinutes: 10,
-        activityCounter: 0,
-        suspended,
-        onLock,
-      }),
+      ({ suspended }) =>
+        useAutoLock({
+          unlocked: true,
+          autoLockMinutes: 10,
+          activityCounter: 0,
+          suspended,
+          onLock,
+        }),
       { initialProps: { suspended: true } },
     )
 

@@ -58,7 +58,12 @@ describe('KeycodeButton', () => {
 
   it('calls onHoverEnd on mouseleave', () => {
     const onHoverEnd = vi.fn()
-    render(<KeycodeButton keycode={makeKeycode({ qmkId: 'KC_C', label: 'C' })} onHoverEnd={onHoverEnd} />)
+    render(
+      <KeycodeButton
+        keycode={makeKeycode({ qmkId: 'KC_C', label: 'C' })}
+        onHoverEnd={onHoverEnd}
+      />,
+    )
     fireEvent.mouseLeave(screen.getByRole('button'))
     expect(onHoverEnd).toHaveBeenCalled()
   })
@@ -112,7 +117,9 @@ describe('KeycodeButton', () => {
   })
 
   it('selected takes precedence over highlighted', () => {
-    render(<KeycodeButton keycode={makeKeycode({ qmkId: 'KC_L', label: 'L' })} selected highlighted />)
+    render(
+      <KeycodeButton keycode={makeKeycode({ qmkId: 'KC_L', label: 'L' })} selected highlighted />,
+    )
     const btn = screen.getByRole('button')
     expect(btn.className).toContain('bg-accent/20')
     expect(btn.className).toContain('text-accent')

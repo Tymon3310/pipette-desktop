@@ -34,7 +34,12 @@ const mockSerialize = vi.fn(() => MOCK_TAP_DANCE_DATA)
 const mockApply = vi.fn()
 
 function hookOpts(overrides: Record<string, unknown> = {}) {
-  return { favoriteType: 'tapDance' as const, serialize: mockSerialize, apply: mockApply, ...overrides }
+  return {
+    favoriteType: 'tapDance' as const,
+    serialize: mockSerialize,
+    apply: mockApply,
+    ...overrides,
+  }
 }
 
 beforeEach(() => {
@@ -158,7 +163,9 @@ describe('useFavoriteStore – saveFavorite', () => {
   it('manages saving flag', async () => {
     let resolveIpc!: (v: unknown) => void
     mockFavoriteStoreSave.mockReturnValueOnce(
-      new Promise((r) => { resolveIpc = r }),
+      new Promise((r) => {
+        resolveIpc = r
+      }),
     )
     const { result } = renderHook(() => useFavoriteStore(hookOpts()))
 
@@ -191,8 +198,12 @@ describe('useFavoriteStore – saveFavorite', () => {
   })
 
   it('returns false when serialize throws', async () => {
-    const throwingSerialize = vi.fn(() => { throw new Error('serialize error') })
-    const { result } = renderHook(() => useFavoriteStore(hookOpts({ serialize: throwingSerialize })))
+    const throwingSerialize = vi.fn(() => {
+      throw new Error('serialize error')
+    })
+    const { result } = renderHook(() =>
+      useFavoriteStore(hookOpts({ serialize: throwingSerialize })),
+    )
 
     let ok: boolean | undefined
     await act(async () => {
@@ -292,7 +303,9 @@ describe('useFavoriteStore – loadFavorite', () => {
   })
 
   it('returns false and keeps modal open when apply throws', async () => {
-    const throwingApply = vi.fn(() => { throw new Error('apply error') })
+    const throwingApply = vi.fn(() => {
+      throw new Error('apply error')
+    })
     mockFavoriteStoreList.mockResolvedValueOnce({ success: true, entries: [] })
     mockFavoriteStoreLoad.mockResolvedValueOnce({
       success: true,
@@ -318,7 +331,9 @@ describe('useFavoriteStore – loadFavorite', () => {
   it('manages loading flag', async () => {
     let resolveIpc!: (v: unknown) => void
     mockFavoriteStoreLoad.mockReturnValueOnce(
-      new Promise((r) => { resolveIpc = r }),
+      new Promise((r) => {
+        resolveIpc = r
+      }),
     )
     const { result } = renderHook(() => useFavoriteStore(hookOpts()))
 
@@ -331,7 +346,10 @@ describe('useFavoriteStore – loadFavorite', () => {
     expect(result.current.loading).toBe(true)
 
     await act(async () => {
-      resolveIpc({ success: true, data: JSON.stringify({ type: 'tapDance', data: MOCK_TAP_DANCE_DATA }) })
+      resolveIpc({
+        success: true,
+        data: JSON.stringify({ type: 'tapDance', data: MOCK_TAP_DANCE_DATA }),
+      })
       await promise!
     })
     expect(result.current.loading).toBe(false)
@@ -450,7 +468,9 @@ describe('useFavoriteStore – exportFavorites', () => {
   it('manages exporting flag', async () => {
     let resolveIpc!: (v: unknown) => void
     mockFavoriteStoreExport.mockReturnValueOnce(
-      new Promise((r) => { resolveIpc = r }),
+      new Promise((r) => {
+        resolveIpc = r
+      }),
     )
     const { result } = renderHook(() => useFavoriteStore(hookOpts()))
 
@@ -527,7 +547,9 @@ describe('useFavoriteStore – importFavorites', () => {
   it('manages importing flag', async () => {
     let resolveIpc!: (v: unknown) => void
     mockFavoriteStoreImport.mockReturnValueOnce(
-      new Promise((r) => { resolveIpc = r }),
+      new Promise((r) => {
+        resolveIpc = r
+      }),
     )
     const { result } = renderHook(() => useFavoriteStore(hookOpts()))
 

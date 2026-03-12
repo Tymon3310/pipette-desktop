@@ -30,7 +30,11 @@ export type SyncStatus = 'idle' | 'syncing' | 'error' | 'success' | 'partial'
 /** Terminal statuses that indicate sync has finished (successfully, partially, or with error). */
 export type SyncTerminalStatus = 'success' | 'error' | 'partial'
 
-const TERMINAL_STATUSES: ReadonlySet<string> = new Set<SyncTerminalStatus>(['success', 'error', 'partial'])
+const TERMINAL_STATUSES: ReadonlySet<string> = new Set<SyncTerminalStatus>([
+  'success',
+  'error',
+  'partial',
+])
 
 export function isSyncTerminalStatus(status: string): status is SyncTerminalStatus {
   return TERMINAL_STATUSES.has(status)
@@ -99,7 +103,7 @@ export interface StoredKeyboardInfo {
 }
 
 export type SyncScope =
-  | 'all'           // changePassword, listUndecryptable
-  | 'favorites'     // favorites/* only
-  | { keyboard: string }  // keyboards/{uid}/* only
-  | { favorites: true; keyboard: string }  // favorites/* + keyboards/{uid}/*
+  | 'all' // changePassword, listUndecryptable
+  | 'favorites' // favorites/* only
+  | { keyboard: string } // keyboards/{uid}/* only
+  | { favorites: true; keyboard: string } // favorites/* + keyboards/{uid}/*

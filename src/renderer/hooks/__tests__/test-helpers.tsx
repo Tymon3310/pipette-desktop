@@ -17,7 +17,9 @@ export function setupAppConfigMock(overrides: Partial<AppConfig> = {}): {
   mockAppConfigGetAll.mockResolvedValue(config)
   mockAppConfigSet.mockResolvedValue(undefined)
 
-  const existing = (window as Record<string, unknown>).vialAPI as Record<string, unknown> | undefined
+  const existing = (window as Record<string, unknown>).vialAPI as
+    | Record<string, unknown>
+    | undefined
   Object.defineProperty(window, 'vialAPI', {
     value: {
       ...existing,
@@ -33,9 +35,7 @@ export function setupAppConfigMock(overrides: Partial<AppConfig> = {}): {
 
 function createWrapper(extraWrapper?: React.ComponentType<{ children: ReactNode }>) {
   return function Wrapper({ children }: { children: ReactNode }): ReactNode {
-    const inner = extraWrapper
-      ? createElement(extraWrapper, null, children)
-      : children
+    const inner = extraWrapper ? createElement(extraWrapper, null, children) : children
     return createElement(AppConfigProvider, null, inner)
   }
 }

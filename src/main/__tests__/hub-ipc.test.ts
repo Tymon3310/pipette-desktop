@@ -49,8 +49,27 @@ vi.mock('../hub/hub-client', async () => {
 
 import { ipcMain } from 'electron'
 import { getIdToken } from '../sync/google-auth'
-import { HUB_ERROR_DISPLAY_NAME_CONFLICT, HUB_ERROR_ACCOUNT_DEACTIVATED, HUB_ERROR_RATE_LIMITED } from '../../shared/types/hub'
-import { Hub401Error, Hub403Error, Hub409Error, Hub429Error, authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from '../hub/hub-client'
+import {
+  HUB_ERROR_DISPLAY_NAME_CONFLICT,
+  HUB_ERROR_ACCOUNT_DEACTIVATED,
+  HUB_ERROR_RATE_LIMITED,
+} from '../../shared/types/hub'
+import {
+  Hub401Error,
+  Hub403Error,
+  Hub409Error,
+  Hub429Error,
+  authenticateWithHub,
+  uploadPostToHub,
+  updatePostOnHub,
+  patchPostOnHub,
+  deletePostFromHub,
+  fetchMyPosts,
+  fetchMyPostsByKeyboard,
+  fetchAuthMe,
+  patchAuthMe,
+  getHubOrigin,
+} from '../hub/hub-client'
 import { setupHubIpc, clearHubTokenCache } from '../hub/hub-ipc'
 
 describe('hub-ipc', () => {
@@ -126,7 +145,9 @@ describe('hub-ipc', () => {
 
   it('returns error when Hub auth fails', async () => {
     vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
-    vi.mocked(authenticateWithHub).mockRejectedValueOnce(new Error('Hub auth failed: 401 Unauthorized'))
+    vi.mocked(authenticateWithHub).mockRejectedValueOnce(
+      new Error('Hub auth failed: 401 Unauthorized'),
+    )
 
     const handler = getHandler()
     const result = await handler({ sender: {} }, VALID_PARAMS)
@@ -242,7 +263,10 @@ describe('hub-ipc', () => {
     it('also validates file sizes on update', async () => {
       const handler = getHandlerFor('hub:update-post')
       const oversized = Buffer.alloc(2 * MB + 1).toString('base64')
-      const result = await handler({}, { ...VALID_PARAMS, postId: 'post-1', thumbnailBase64: oversized })
+      const result = await handler(
+        {},
+        { ...VALID_PARAMS, postId: 'post-1', thumbnailBase64: oversized },
+      )
 
       expect(result).toEqual({ success: false, error: expect.stringContaining('thumbnail') })
       expect(getIdToken).not.toHaveBeenCalled()
@@ -293,10 +317,7 @@ describe('hub-ipc', () => {
     it('rejects invalid postId', async () => {
       const handler = getUpdateHandler()
       for (const bad of ['', '../escape', 'has/slash', 'a b c']) {
-        const result = await handler(
-          { sender: {} },
-          { ...VALID_PARAMS, postId: bad },
-        )
+        const result = await handler({ sender: {} }, { ...VALID_PARAMS, postId: bad })
         expect(result).toEqual({ success: false, error: 'Invalid post ID' })
       }
       expect(getIdToken).not.toHaveBeenCalled()
@@ -470,9 +491,21 @@ describe('hub-ipc', () => {
     })
 
     it('fetches posts successfully with pagination metadata', async () => {
-      const posts = [{ id: 'post-1', title: 'My Keymap', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        {
+          id: 'post-1',
+          title: 'My Keymap',
+          keyboard_name: 'TestBoard',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+      ]
       mockHubAuth()
-      vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: posts, total: 1, page: 1, per_page: 10 })
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce({
+        items: posts,
+        total: 1,
+        page: 1,
+        per_page: 10,
+      })
 
       const handler = getFetchMyPostsHandler()
       const result = await handler({})
@@ -525,11 +558,19 @@ describe('hub-ipc', () => {
       for (const bad of [NaN, Infinity, -Infinity]) {
         clearHubTokenCache()
         mockHubAuth()
-        vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 0, page: 1, per_page: 10 })
+        vi.mocked(fetchMyPosts).mockResolvedValueOnce({
+          items: [],
+          total: 0,
+          page: 1,
+          per_page: 10,
+        })
 
         await handler({}, { page: bad, per_page: bad })
 
-        expect(fetchMyPosts).toHaveBeenLastCalledWith('hub-jwt', { page: undefined, per_page: undefined })
+        expect(fetchMyPosts).toHaveBeenLastCalledWith('hub-jwt', {
+          page: undefined,
+          per_page: undefined,
+        })
       }
     })
 
@@ -549,7 +590,12 @@ describe('hub-ipc', () => {
 
     it('sanitizes non-finite backend total and per_page', async () => {
       mockHubAuth()
-      vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: NaN, page: 1, per_page: NaN })
+      vi.mocked(fetchMyPosts).mockResolvedValueOnce({
+        items: [],
+        total: NaN,
+        page: 1,
+        per_page: NaN,
+      })
 
       const handler = getFetchMyPostsHandler()
       const result = await handler({})
@@ -665,7 +711,9 @@ describe('hub-ipc', () => {
 
     it('returns DISPLAY_NAME_CONFLICT on Hub409Error', async () => {
       mockHubAuth()
-      vi.mocked(patchAuthMe).mockRejectedValueOnce(new Hub409Error('Hub patch auth me failed', 'Display name already taken'))
+      vi.mocked(patchAuthMe).mockRejectedValueOnce(
+        new Hub409Error('Hub patch auth me failed', 'Display name already taken'),
+      )
 
       const handler = getPatchAuthMeHandler()
       const result = await handler({}, 'TakenName')
@@ -734,11 +782,21 @@ describe('hub-ipc', () => {
     }
 
     it('registers HUB_FETCH_MY_KEYBOARD_POSTS handler', () => {
-      expect(ipcMain.handle).toHaveBeenCalledWith('hub:fetch-my-keyboard-posts', expect.any(Function))
+      expect(ipcMain.handle).toHaveBeenCalledWith(
+        'hub:fetch-my-keyboard-posts',
+        expect.any(Function),
+      )
     })
 
     it('fetches keyboard posts successfully', async () => {
-      const posts = [{ id: 'post-1', title: 'My Keymap', keyboard_name: 'Corne', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        {
+          id: 'post-1',
+          title: 'My Keymap',
+          keyboard_name: 'Corne',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+      ]
       mockHubAuth()
       vi.mocked(fetchMyPostsByKeyboard).mockResolvedValueOnce(posts)
 
@@ -785,7 +843,9 @@ describe('hub-ipc', () => {
 
     it('returns error on failure', async () => {
       mockHubAuth()
-      vi.mocked(fetchMyPostsByKeyboard).mockRejectedValueOnce(new Error('Hub fetch keyboard posts failed: 500'))
+      vi.mocked(fetchMyPostsByKeyboard).mockRejectedValueOnce(
+        new Error('Hub fetch keyboard posts failed: 500'),
+      )
 
       const handler = getFetchKeyboardPostsHandler()
       const result = await handler({}, 'Corne')
@@ -805,7 +865,11 @@ describe('hub-ipc', () => {
         user: { id: 'u1', email: 'test@example.com', display_name: null },
       })
       vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
-      vi.mocked(fetchAuthMe).mockResolvedValue({ id: 'u1', email: 'test@example.com', display_name: null })
+      vi.mocked(fetchAuthMe).mockResolvedValue({
+        id: 'u1',
+        email: 'test@example.com',
+        display_name: null,
+      })
 
       const fetchPostsHandler = getHandlerFor('hub:fetch-my-posts')
       const fetchAuthHandler = getHandlerFor('hub:fetch-auth-me')
@@ -824,7 +888,11 @@ describe('hub-ipc', () => {
       })
       vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
       vi.mocked(fetchMyPostsByKeyboard).mockResolvedValue([])
-      vi.mocked(fetchAuthMe).mockResolvedValue({ id: 'u1', email: 'test@example.com', display_name: null })
+      vi.mocked(fetchAuthMe).mockResolvedValue({
+        id: 'u1',
+        email: 'test@example.com',
+        display_name: null,
+      })
 
       const fetchPostsHandler = getHandlerFor('hub:fetch-my-posts')
       const fetchKeyboardHandler = getHandlerFor('hub:fetch-my-keyboard-posts')
@@ -880,10 +948,16 @@ describe('hub-ipc', () => {
     })
 
     it('does not write cache if cleared during inflight auth', async () => {
-      let resolveAuth!: (value: { token: string; user: { id: string; email: string; display_name: null } }) => void
+      let resolveAuth!: (value: {
+        token: string
+        user: { id: string; email: string; display_name: null }
+      }) => void
       vi.mocked(getIdToken).mockResolvedValue('id-token')
       vi.mocked(authenticateWithHub).mockImplementationOnce(
-        () => new Promise((r) => { resolveAuth = r }),
+        () =>
+          new Promise((r) => {
+            resolveAuth = r
+          }),
       )
       vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
 
@@ -897,7 +971,10 @@ describe('hub-ipc', () => {
       clearHubTokenCache()
 
       // Resolve the inflight auth
-      resolveAuth({ token: 'stale-jwt', user: { id: 'u1', email: 'test@example.com', display_name: null } })
+      resolveAuth({
+        token: 'stale-jwt',
+        user: { id: 'u1', email: 'test@example.com', display_name: null },
+      })
       await pending
 
       // Next call should re-authenticate (stale-jwt was not cached)
@@ -954,8 +1031,9 @@ describe('hub-ipc', () => {
 
     it('does not retry on non-401 errors', async () => {
       mockHubAuthPersistent()
-      vi.mocked(fetchAuthMe)
-        .mockRejectedValueOnce(new Error('Hub fetch auth me failed: 500 Internal Server Error'))
+      vi.mocked(fetchAuthMe).mockRejectedValueOnce(
+        new Error('Hub fetch auth me failed: 500 Internal Server Error'),
+      )
 
       const handler = getHandlerFor('hub:fetch-auth-me')
       const result = await handler()
@@ -989,8 +1067,9 @@ describe('hub-ipc', () => {
           user: { id: 'u1', email: 'test@example.com', display_name: null },
         })
         .mockRejectedValueOnce(new Error('Hub auth failed: 401 Unauthorized'))
-      vi.mocked(fetchAuthMe)
-        .mockRejectedValueOnce(new Hub401Error('Hub fetch auth me failed', 'Unauthorized'))
+      vi.mocked(fetchAuthMe).mockRejectedValueOnce(
+        new Hub401Error('Hub fetch auth me failed', 'Unauthorized'),
+      )
 
       const handler = getHandlerFor('hub:fetch-auth-me')
       const result = await handler()
@@ -1094,7 +1173,9 @@ describe('hub-ipc', () => {
       })
       vi.mocked(fetchAuthMe)
         .mockRejectedValueOnce(new Hub401Error('Hub fetch auth me failed', 'Unauthorized'))
-        .mockRejectedValueOnce(new Hub403Error('Hub fetch auth me failed', 'Account is deactivated'))
+        .mockRejectedValueOnce(
+          new Hub403Error('Hub fetch auth me failed', 'Account is deactivated'),
+        )
 
       const handler = getHandlerFor('hub:fetch-auth-me')
       const result = await handler()

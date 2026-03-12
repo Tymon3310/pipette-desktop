@@ -2,8 +2,14 @@
 
 import { useState, useCallback, useEffect, useRef, useLayoutEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { KeychronAnalogState, AnalogKeyConfig, SOCDPair, OKMCSlotConfig } from '../../../shared/types/keychron'
+import type {
+  KeychronAnalogState,
+  AnalogKeyConfig,
+  SOCDPair,
+  OKMCSlotConfig,
+} from '../../../shared/types/keychron'
 import { KeyboardWidget } from '../keyboard/KeyboardWidget'
+import { KEY_UNIT, KEYBOARD_PADDING } from '../keyboard/constants'
 import type { KleKey } from '../../../shared/kle/types'
 import {
   AKM_MODE_NAMES,
@@ -18,17 +24,19 @@ import {
   OKMC_ACTION_NONE,
   SOCD_TYPE_NAMES,
 } from '../../../shared/constants/keychron'
+import { codeToLabel } from '../../../shared/keycodes/keycodes'
 
 interface Props {
   analog: KeychronAnalogState
   keys: KleKey[]
   rows: number
   cols: number
+  keymap: Map<string, number>
 }
 
 type AnalogTab = 'actuation' | 'socd' | 'gamepad' | 'calibration' | 'dks'
 
-export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
+export function KeychronAnalog({ analog, keys, rows, cols, keymap }: Props) {
   const { t } = useTranslation()
   const api = window.vialAPI
 
@@ -65,7 +73,7 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
 
   const [gcMode, setGcMode] = useState(analog.gameControllerMode)
   const [curve, setCurve] = useState<number[]>(
-    analog.curve && analog.curve.length === 8 ? analog.curve : [0, 0, 85, 85, 170, 170, 255, 255]
+    analog.curve && analog.curve.length === 8 ? analog.curve : [0, 0, 85, 85, 170, 170, 255, 255],
   )
 
   // Calibration
@@ -74,7 +82,9 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
   const calibIntervalRef = useRef<number | null>(null)
 
   // SOCD key-pick mode: { pairIndex, whichKey: 1|2 } or null
-  const [socdPickMode, setSocdPickMode] = useState<{ pairIdx: number; whichKey: 1 | 2 } | null>(null)
+  const [socdPickMode, setSocdPickMode] = useState<{ pairIdx: number; whichKey: 1 | 2 } | null>(
+    null,
+  )
 
   // Dynamic keyboard widget scaling
   const kbContainerRef = useRef<HTMLDivElement>(null)
@@ -87,7 +97,9 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
     zero: number
     full: number
   } | null>(null)
-  const [selectedCalibKey, setSelectedCalibKey] = useState<{ row: number; col: number } | null>(null)
+  const [selectedCalibKey, setSelectedCalibKey] = useState<{ row: number; col: number } | null>(
+    null,
+  )
 
   // Load profile data when profile changes
   useEffect(() => {
@@ -113,21 +125,20 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
     if (!container) return
     const observer = new ResizeObserver(() => {
       const containerWidth = container.clientWidth - 32 // subtract padding
-      const kbWidget = container.querySelector('[data-kb-widget]') as HTMLElement | null
-      if (kbWidget) {
-        // Reset scale to measure natural width
-        kbWidget.style.transform = 'none'
-        const naturalWidth = kbWidget.scrollWidth
-        if (naturalWidth > containerWidth && naturalWidth > 0) {
-          setKbScale(containerWidth / naturalWidth)
-        } else {
-          setKbScale(1)
-        }
+      let maxX = 0
+      for (const k of keys) {
+        if (k.x + k.width > maxX) maxX = k.x + k.width
+      }
+      const naturalWidth = maxX * KEY_UNIT + KEYBOARD_PADDING * 2
+      if (naturalWidth > containerWidth && naturalWidth > 0) {
+        setKbScale(containerWidth / naturalWidth)
+      } else {
+        setKbScale(1)
       }
     })
     observer.observe(container)
     return () => observer.disconnect()
-  }, [activeTab])
+  }, [activeTab, keys])
 
   // Debounced save
   const saveTimerRef = useRef<number | null>(null)
@@ -222,7 +233,17 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
       rowMask,
     )
     if (ok) scheduleSave()
-  }, [api, currentProfile, globalMode, globalActPt, globalSens, globalRlsSens, selectedKeys, rows, scheduleSave])
+  }, [
+    api,
+    currentProfile,
+    globalMode,
+    globalActPt,
+    globalSens,
+    globalRlsSens,
+    selectedKeys,
+    rows,
+    scheduleSave,
+  ])
 
   // Key click for selection
   const handleKeyClick = useCallback(
@@ -354,7 +375,7 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
       // byte1 = (deep_act & 0x0F) | ((deep_deact & 0x0F) << 4)
       const b0 = (shallowAct & 0x0f) | ((shallowDeact & 0x0f) << 4)
       const b1 = (deepAct & 0x0f) | ((deepDeact & 0x0f) << 4)
-      
+
       actions.push(b0, b1)
     }
 
@@ -372,7 +393,7 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
           cfg.deepAct,
           cfg.deepDeact,
           cfg.keycodes,
-          actions
+          actions,
         )
         if (!ok) allOk = false
       }
@@ -482,6 +503,12 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
+      {analog.isDebug && (
+        <div className="rounded border border-warning/50 bg-warning/10 p-3 text-sm text-warning-content">
+          <strong>Debug Mode Active:</strong> Simulating Keychron HE device. Settings saved will not be written to physical EEPROM.
+        </div>
+      )}
+
       {/* Profile selector */}
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-sm font-medium text-content-secondary">
@@ -570,26 +597,29 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
       </div>
 
       {/* Actuation Tab */}
-      {activeTab === 'actuation' && (
-        <div className="flex flex-col gap-4">
-          {/* Keyboard visualization */}
-          <div ref={kbContainerRef} className="rounded-lg border border-edge bg-surface-dim p-4">
-            <div
-              data-kb-widget
-              style={{
-                transform: kbScale < 1 ? `scale(${kbScale})` : undefined,
-                transformOrigin: 'top left',
-                height: kbScale < 1 ? `calc(100% * ${kbScale})` : undefined,
-              }}
-            >
-              <KeyboardWidget
-                keys={keys}
-                keycodes={new Map()}
-                multiSelectedKeys={selectedKeys}
-                onKeyClick={handleKeyClick}
-              />
+      {activeTab === 'actuation' && (() => {
+        const bottomLabels = new Map<string, string>()
+        keys.forEach((key) => {
+          const cfg = analog.profiles[currentProfile]?.keyConfigs.get(`${key.row},${key.col}`)
+          if (cfg) {
+            bottomLabels.set(`${key.row},${key.col}`, `${(cfg.actuationPoint / 10).toFixed(1)}mm`)
+          }
+        })
+        return (
+          <div className="flex flex-col gap-4">
+            {/* Keyboard visualization */}
+            <div ref={kbContainerRef} className="rounded-lg border border-edge bg-surface-dim p-4 flex justify-center overflow-x-hidden">
+              <div data-kb-widget>
+                <KeyboardWidget
+                  keys={keys}
+                  keycodes={new Map()}
+                  multiSelectedKeys={selectedKeys}
+                  onKeyClick={handleKeyClick}
+                  bottomLabels={bottomLabels}
+                  scale={kbScale}
+                />
+              </div>
             </div>
-          </div>
 
           <div className="flex gap-2">
             <button
@@ -709,36 +739,61 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
           </div>
 
           {/* Selected key info */}
-          {selectedKeys.size === 1 && (() => {
-            const profile = analog.profiles[currentProfile]
-            if (!profile) return null
-            const [id] = [...selectedKeys]
-            const cfg = profile.keyConfigs.get(id!) as (AnalogKeyConfig & { advMode?: number; advModeData?: number }) | undefined
-            if (!cfg) return null
-            return (
-              <div className="rounded-lg border border-edge bg-surface p-4">
-                <h4 className="mb-2 text-sm font-medium">{t('keychron.analog.keyInfo', 'Key Info')}: {id}</h4>
-                <div className="grid grid-cols-4 gap-2 text-xs text-content-secondary">
-                  <div>Mode: <span className="text-content">{AKM_MODE_NAMES[cfg.mode] ?? cfg.mode}</span></div>
-                  <div>Act: <span className="text-content">{(cfg.actuationPoint / 10).toFixed(1)}mm</span></div>
-                  <div>Sens: <span className="text-content">{(cfg.sensitivity / 10).toFixed(1)}mm</span></div>
-                  <div>Rls: <span className="text-content">{(cfg.releaseSensitivity / 10).toFixed(1)}mm</span></div>
+          {selectedKeys.size === 1 &&
+            (() => {
+              const profile = analog.profiles[currentProfile]
+              if (!profile) return null
+              const [id] = [...selectedKeys]
+              const cfg = profile.keyConfigs.get(id!) as
+                | (AnalogKeyConfig & { advMode?: number; advModeData?: number })
+                | undefined
+              if (!cfg) return null
+              return (
+                <div className="rounded-lg border border-edge bg-surface p-4">
+                  <h4 className="mb-2 text-sm font-medium">
+                    {t('keychron.analog.keyInfo', 'Key Info')}: {id}
+                  </h4>
+                  <div className="grid grid-cols-4 gap-2 text-xs text-content-secondary">
+                    <div>
+                      Mode:{' '}
+                      <span className="text-content">{AKM_MODE_NAMES[cfg.mode] ?? cfg.mode}</span>
+                    </div>
+                    <div>
+                      Act:{' '}
+                      <span className="text-content">{(cfg.actuationPoint / 10).toFixed(1)}mm</span>
+                    </div>
+                    <div>
+                      Sens:{' '}
+                      <span className="text-content">{(cfg.sensitivity / 10).toFixed(1)}mm</span>
+                    </div>
+                    <div>
+                      Rls:{' '}
+                      <span className="text-content">
+                        {(cfg.releaseSensitivity / 10).toFixed(1)}mm
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )
-          })()}
-        </div>
-      )}
+              )
+            })()}
+          </div>
+        )
+      })()}
 
       {/* DKS Tab */}
       {activeTab === 'dks' && (
         <div className="flex flex-col gap-4">
           <p className="text-sm text-content-secondary">
-            {t('keychron.analog.dksDesc', 'Dynamic Keystroke (DKS) allows mapping up to 4 keycodes to different travel depths (Shallow Actuation, Deep Actuation, Deep Release, Shallow Release). Assign a DKS slot to analog keys.')}
+            {t(
+              'keychron.analog.dksDesc',
+              'Dynamic Keystroke (DKS) allows mapping up to 4 keycodes to different travel depths (Shallow Actuation, Deep Actuation, Deep Release, Shallow Release). Assign a DKS slot to analog keys.',
+            )}
           </p>
 
           <div className="flex items-center gap-3">
-            <label className="text-sm font-medium">{t('keychron.analog.dksSlot', 'DKS Slot')}:</label>
+            <label className="text-sm font-medium">
+              {t('keychron.analog.dksSlot', 'DKS Slot')}:
+            </label>
             <select
               className="rounded border border-edge bg-surface px-2 py-1 text-sm font-mono"
               value={activeDksSlot}
@@ -752,111 +807,117 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
             </select>
           </div>
 
-          {dksConfigsState[activeDksSlot] && (() => {
-            const cfg = dksConfigsState[activeDksSlot]!
-            const updateCfg = (newCfg: Partial<OKMCSlotConfig>) => {
-              handleDksConfigChange(activeDksSlot, { ...cfg, ...newCfg })
-            }
+          {dksConfigsState[activeDksSlot] &&
+            (() => {
+              const cfg = dksConfigsState[activeDksSlot]!
+              const updateCfg = (newCfg: Partial<OKMCSlotConfig>) => {
+                handleDksConfigChange(activeDksSlot, { ...cfg, ...newCfg })
+              }
 
-            return (
-              <div className="flex flex-col gap-4 rounded-lg border border-edge bg-surface p-4">
-                <div className="grid grid-cols-4 gap-4">
-                  {/* Travel thresholds */}
-                  {[
-                    { key: 'shallowAct', label: 'Shallow Press' },
-                    { key: 'deepAct', label: 'Deep Press' },
-                    { key: 'deepDeact', label: 'Deep Release' },
-                    { key: 'shallowDeact', label: 'Shallow Release' },
-                  ].map(({ key, label }) => (
-                    <div key={key} className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-content-secondary">{label}</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={1}
-                          max={40}
-                          className="w-16 rounded border border-edge bg-surface-dim px-2 py-1 text-sm"
-                          value={cfg[key as keyof OKMCSlotConfig] as number}
-                          onChange={(e) => updateCfg({ [key]: Number(e.target.value) })}
-                        />
-                        <span className="text-xs text-content-secondary">
-                          {((cfg[key as keyof OKMCSlotConfig] as number) / 10).toFixed(1)}mm
-                        </span>
+              return (
+                <div className="flex flex-col gap-4 rounded-lg border border-edge bg-surface p-4">
+                  <div className="grid grid-cols-4 gap-4">
+                    {/* Travel thresholds */}
+                    {[
+                      { key: 'shallowAct', label: 'Shallow Press' },
+                      { key: 'deepAct', label: 'Deep Press' },
+                      { key: 'deepDeact', label: 'Deep Release' },
+                      { key: 'shallowDeact', label: 'Shallow Release' },
+                    ].map(({ key, label }) => (
+                      <div key={key} className="flex flex-col gap-1">
+                        <label className="text-xs font-medium text-content-secondary">
+                          {label}
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            max={40}
+                            className="w-16 rounded border border-edge bg-surface-dim px-2 py-1 text-sm"
+                            value={cfg[key as keyof OKMCSlotConfig] as number}
+                            onChange={(e) => updateCfg({ [key]: Number(e.target.value) })}
+                          />
+                          <span className="text-xs text-content-secondary">
+                            {((cfg[key as keyof OKMCSlotConfig] as number) / 10).toFixed(1)}mm
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-edge text-content-secondary">
-                        <th className="pb-2 font-medium">Keycode</th>
-                        <th className="pb-2 font-medium">Shallow Press</th>
-                        <th className="pb-2 font-medium">Deep Press</th>
-                        <th className="pb-2 font-medium">Deep Release</th>
-                        <th className="pb-2 font-medium">Shallow Release</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[0, 1, 2, 3].map((kcIdx) => (
-                        <tr key={kcIdx} className="border-b border-edge/50 last:border-0">
-                          <td className="py-2">
-                            <input
-                              className="w-24 rounded border border-edge bg-surface-dim px-2 py-1 text-sm font-mono"
-                              value={`0x${cfg.keycodes[kcIdx]?.toString(16).padStart(4, '0')}`}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value, 16)
-                                if (!isNaN(val)) {
-                                  const keycodes = [...cfg.keycodes]
-                                  keycodes[kcIdx] = val
-                                  updateCfg({ keycodes })
-                                }
-                              }}
-                              title="Enter hexadecimal keycode (e.g., 0x0004 for A)"
-                            />
-                          </td>
-                          {[
-                            { eventIdx: kcIdx * 2 },          // shallow act
-                            { eventIdx: 8 + kcIdx * 2 },      // deep act
-                            { eventIdx: 8 + kcIdx * 2 + 1 },  // deep deact
-                            { eventIdx: kcIdx * 2 + 1 },      // shallow deact
-                          ].map(({ eventIdx }, colIdx) => (
-                            <td key={colIdx} className="py-2 pr-2">
-                              <select
-                                className="w-full max-w-[140px] rounded border border-edge bg-surface-dim px-1.5 py-1 text-xs"
-                                value={cfg.events[eventIdx] ?? OKMC_ACTION_NONE}
-                                onChange={(e) => {
-                                  const events = [...cfg.events]
-                                  events[eventIdx] = Number(e.target.value)
-                                  updateCfg({ events })
-                                }}
-                              >
-                                {Object.entries(OKMC_ACTION_NAMES).map(([val, name]) => (
-                                  <option key={val} value={val}>
-                                    {name}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                          ))}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-edge text-content-secondary">
+                          <th className="pb-2 font-medium">Keycode</th>
+                          <th className="pb-2 font-medium">Shallow Press</th>
+                          <th className="pb-2 font-medium">Deep Press</th>
+                          <th className="pb-2 font-medium">Deep Release</th>
+                          <th className="pb-2 font-medium">Shallow Release</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {[0, 1, 2, 3].map((kcIdx) => (
+                          <tr key={kcIdx} className="border-b border-edge/50 last:border-0">
+                            <td className="py-2">
+                              <input
+                                className="w-24 rounded border border-edge bg-surface-dim px-2 py-1 text-sm font-mono"
+                                value={`0x${cfg.keycodes[kcIdx]?.toString(16).padStart(4, '0')}`}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value, 16)
+                                  if (!isNaN(val)) {
+                                    const keycodes = [...cfg.keycodes]
+                                    keycodes[kcIdx] = val
+                                    updateCfg({ keycodes })
+                                  }
+                                }}
+                                title="Enter hexadecimal keycode (e.g., 0x0004 for A)"
+                              />
+                            </td>
+                            {[
+                              { eventIdx: kcIdx * 2 }, // shallow act
+                              { eventIdx: 8 + kcIdx * 2 }, // deep act
+                              { eventIdx: 8 + kcIdx * 2 + 1 }, // deep deact
+                              { eventIdx: kcIdx * 2 + 1 }, // shallow deact
+                            ].map(({ eventIdx }, colIdx) => (
+                              <td key={colIdx} className="py-2 pr-2">
+                                <select
+                                  className="w-full max-w-[140px] rounded border border-edge bg-surface-dim px-1.5 py-1 text-xs"
+                                  value={cfg.events[eventIdx] ?? OKMC_ACTION_NONE}
+                                  onChange={(e) => {
+                                    const events = [...cfg.events]
+                                    events[eventIdx] = Number(e.target.value)
+                                    updateCfg({ events })
+                                  }}
+                                >
+                                  {Object.entries(OKMC_ACTION_NAMES).map(([val, name]) => (
+                                    <option key={val} value={val}>
+                                      {name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            )
-          })()}
+              )
+            })()}
 
           <div className="flex flex-col gap-2 pt-2">
-            <div className="overflow-x-auto rounded-lg border border-edge bg-surface-dim p-4">
-              <KeyboardWidget
-                keys={keys}
-                keycodes={new Map()}
-                multiSelectedKeys={selectedKeys}
-                onKeyClick={handleKeyClick}
-              />
+            <div ref={kbContainerRef} className="rounded-lg border border-edge bg-surface-dim p-4 flex justify-center overflow-x-hidden">
+              <div data-kb-widget>
+                <KeyboardWidget
+                  keys={keys}
+                  keycodes={new Map()}
+                  multiSelectedKeys={selectedKeys}
+                  onKeyClick={handleKeyClick}
+                  scale={kbScale}
+                />
+              </div>
             </div>
             <div className="flex gap-2">
               <button
@@ -908,28 +969,40 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
       {activeTab === 'socd' && (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-content-secondary">
-            {t('keychron.analog.socdDesc', 'Configure Simultaneous Opposite Cardinal Direction (SOCD) key pairs. When both keys in a pair are pressed, the selected resolution mode determines which key takes priority.')}
+            {t(
+              'keychron.analog.socdDesc',
+              'Configure Simultaneous Opposite Cardinal Direction (SOCD) key pairs. When both keys in a pair are pressed, the selected resolution mode determines which key takes priority.',
+            )}
           </p>
 
           {/* Show keyboard widget when in pick mode */}
           {socdPickMode && (
-            <div className="rounded-lg border-2 border-accent bg-surface-dim p-4">
-              <p className="mb-2 text-sm font-medium text-accent">
-                Click a key on the keyboard to assign it as Key {socdPickMode.whichKey} for SOCD pair #{socdPickMode.pairIdx + 1}
+            <div ref={kbContainerRef} className="rounded-lg border-2 border-accent bg-surface-dim p-4 flex flex-col items-center overflow-x-hidden">
+              <p className="mb-2 text-sm font-medium text-accent self-start">
+                Click a key on the keyboard to assign it as Key {socdPickMode.whichKey} for SOCD
+                pair #{socdPickMode.pairIdx + 1}
               </p>
-              <div
-                data-kb-widget
-                style={{
-                  transform: kbScale < 1 ? `scale(${kbScale})` : undefined,
-                  transformOrigin: 'top left',
-                  height: kbScale < 1 ? `calc(100% * ${kbScale})` : undefined,
-                }}
-              >
+              <div data-kb-widget>
                 <KeyboardWidget
                   keys={keys}
                   keycodes={new Map()}
                   multiSelectedKeys={new Set()}
                   onKeyClick={(key) => handleSocdKeyPick(key)}
+                  customLabels={(() => {
+                    const labels = new Map<string, string>()
+                    keys.forEach((k) => {
+                      if (k.row !== undefined && k.col !== undefined) {
+                        const posKey = `0,${k.row},${k.col}`
+                        const code = keymap.get(posKey) ?? 0
+                        
+                        if (code) {
+                          labels.set(`${k.row},${k.col}`, codeToLabel(code))
+                        }
+                      }
+                    })
+                    return labels
+                  })()}
+                  scale={kbScale}
                 />
               </div>
               <button
@@ -964,6 +1037,11 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
                       title="Click to assign Key 1"
                     >
                       R{pair.key1Row}C{pair.key1Col}
+                      {keymap.has(`0,${pair.key1Row},${pair.key1Col}`) && (
+                        <span className="ml-1 opacity-70">
+                          ({codeToLabel(keymap.get(`0,${pair.key1Row},${pair.key1Col}`)!)})
+                        </span>
+                      )}
                     </button>
                     <span className="text-content-secondary">↔</span>
                     <button
@@ -976,6 +1054,11 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
                       title="Click to assign Key 2"
                     >
                       R{pair.key2Row}C{pair.key2Col}
+                      {keymap.has(`0,${pair.key2Row},${pair.key2Col}`) && (
+                        <span className="ml-1 opacity-70">
+                          ({codeToLabel(keymap.get(`0,${pair.key2Row},${pair.key2Col}`)!)})
+                        </span>
+                      )}
                     </button>
                   </div>
                   <select
@@ -1000,7 +1083,10 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
       {activeTab === 'gamepad' && (
         <div className="flex flex-col gap-4">
           <p className="text-sm text-content-secondary">
-            {t('keychron.analog.gamepadDesc', 'Configure Game Controller mode. When enabled, analog keys can act as gamepad axes or buttons.')}
+            {t(
+              'keychron.analog.gamepadDesc',
+              'Configure Game Controller mode. When enabled, analog keys can act as gamepad axes or buttons.',
+            )}
           </p>
           <div className="flex flex-col gap-3 rounded-lg border border-edge bg-surface p-4">
             <label className="flex items-center gap-3">
@@ -1014,9 +1100,7 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
                 }
                 className="h-4 w-4 rounded border-edge"
               />
-              <span className="text-sm">
-                {t('keychron.analog.xinput', 'XInput Mode')}
-              </span>
+              <span className="text-sm">{t('keychron.analog.xinput', 'XInput Mode')}</span>
             </label>
             <label className="flex items-center gap-3">
               <input
@@ -1030,17 +1114,24 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
                 className="h-4 w-4 rounded border-edge"
               />
               <span className="text-sm">
-                {t('keychron.analog.keepTyping', 'Keep Typing Mode (send keypresses alongside gamepad)')}
+                {t(
+                  'keychron.analog.keepTyping',
+                  'Keep Typing Mode (send keypresses alongside gamepad)',
+                )}
               </span>
             </label>
           </div>
 
           <div className="mt-4 flex flex-col gap-4 rounded-lg border border-edge bg-surface p-4">
-            <h4 className="text-sm font-medium">{t('keychron.analog.joystickCurve', 'Joystick Response Curve')}</h4>
+            <h4 className="text-sm font-medium">
+              {t('keychron.analog.joystickCurve', 'Joystick Response Curve')}
+            </h4>
             <div className="grid grid-cols-2 gap-4">
               {[0, 1, 2, 3].map((ptIndex) => (
                 <div key={ptIndex} className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-content-secondary">Point {ptIndex + 1}</label>
+                  <label className="text-xs font-medium text-content-secondary">
+                    Point {ptIndex + 1}
+                  </label>
                   <div className="flex items-center gap-2">
                     <span className="text-xs">X:</span>
                     <input
@@ -1058,7 +1149,9 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
                       max={255}
                       className="w-16 rounded border border-edge bg-surface-dim px-2 py-0.5 text-sm"
                       value={curve[ptIndex * 2 + 1] ?? 0}
-                      onChange={(e) => handleCurvePointChange(ptIndex * 2 + 1, Number(e.target.value))}
+                      onChange={(e) =>
+                        handleCurvePointChange(ptIndex * 2 + 1, Number(e.target.value))
+                      }
                     />
                   </div>
                 </div>
@@ -1078,7 +1171,10 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
       {activeTab === 'calibration' && (
         <div className="flex flex-col gap-4">
           <p className="text-sm text-content-secondary">
-            {t('keychron.analog.calibDesc', 'Calibrate the Hall Effect sensors. First calibrate the zero (rest) position, then the full travel position.')}
+            {t(
+              'keychron.analog.calibDesc',
+              'Calibrate the Hall Effect sensors. First calibrate the zero (rest) position, then the full travel position.',
+            )}
           </p>
 
           {!calibrating ? (
@@ -1139,7 +1235,9 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
                 <div className="grid grid-cols-4 gap-2 text-xs">
                   <div className="rounded bg-surface-dim p-2 text-center">
                     <div className="text-content-secondary">Travel</div>
-                    <div className="text-lg font-mono">{(realtimeTravel.travelMm / 10).toFixed(1)}mm</div>
+                    <div className="text-lg font-mono">
+                      {(realtimeTravel.travelMm / 10).toFixed(1)}mm
+                    </div>
                   </div>
                   <div className="rounded bg-surface-dim p-2 text-center">
                     <div className="text-content-secondary">Value</div>
@@ -1187,8 +1285,8 @@ export function KeychronAnalog({ analog, keys, rows, cols }: Props) {
 
       {/* Version info */}
       <div className="mt-2 text-xs text-content-secondary">
-        {t('keychron.analog.version', 'Analog v{{version}}', { version: analog.version })} • {analog.profileCount}{' '}
-        {t('keychron.analog.profiles', 'profiles')} • {analog.okmcCount} DKS •{' '}
+        {t('keychron.analog.version', 'Analog v{{version}}', { version: analog.version })} •{' '}
+        {analog.profileCount} {t('keychron.analog.profiles', 'profiles')} • {analog.okmcCount} DKS •{' '}
         {analog.socdCount} SOCD
       </div>
     </div>

@@ -6,7 +6,7 @@ import type { TypingTestConfig } from './types'
 export function computeRawWpm(totalChars: number, durationMs: number): number {
   if (durationMs <= 0) return 0
   const minutes = durationMs / 60000
-  return Math.round((totalChars / 5) / minutes)
+  return Math.round(totalChars / 5 / minutes)
 }
 
 export function computeConsistency(wpmHistory: number[]): number {

@@ -27,7 +27,9 @@ vi.mock('../MacroRecorder', () => ({
 vi.mock('../MacroTextEditor', () => ({
   MacroTextEditor: ({ onClose }: { onClose: () => void }) => (
     <div data-testid="macro-text-editor">
-      <button onClick={onClose} data-testid="macro-text-editor-cancel">Cancel</button>
+      <button onClick={onClose} data-testid="macro-text-editor-cancel">
+        Cancel
+      </button>
     </div>
   ),
 }))

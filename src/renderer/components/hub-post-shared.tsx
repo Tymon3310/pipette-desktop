@@ -3,13 +3,20 @@
 import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useInlineRename } from '../hooks/useInlineRename'
-import { ACTION_BTN, CONFIRM_DELETE_BTN, DELETE_BTN, formatDate } from './editors/store-modal-shared'
+import {
+  ACTION_BTN,
+  CONFIRM_DELETE_BTN,
+  DELETE_BTN,
+  formatDate,
+} from './editors/store-modal-shared'
 import type { HubMyPost } from '../../shared/types/hub'
 
 export const DEFAULT_PER_PAGE = 10
 
-export const BTN_PRIMARY = 'rounded bg-accent px-3 py-1 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50'
-export const BTN_SECONDARY = 'rounded border border-edge px-3 py-1 text-sm text-content-secondary hover:bg-surface-dim disabled:opacity-50'
+export const BTN_PRIMARY =
+  'rounded bg-accent px-3 py-1 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50'
+export const BTN_SECONDARY =
+  'rounded border border-edge px-3 py-1 text-sm text-content-secondary hover:bg-surface-dim disabled:opacity-50'
 
 interface HubPostRowProps {
   post: HubMyPost
@@ -49,16 +56,27 @@ export function HubPostRow({ post, onRename, onDelete, hubOrigin }: HubPostRowPr
     } finally {
       setBusy(false)
     }
-  }, [post.id, rename.editLabel, rename.originalLabel, rename.cancelRename, rename.scheduleFlash, onRename, t])
+  }, [
+    post.id,
+    rename.editLabel,
+    rename.originalLabel,
+    rename.cancelRename,
+    rename.scheduleFlash,
+    onRename,
+    t,
+  ])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      void handleSubmitRename()
-    } else if (e.key === 'Escape') {
-      e.stopPropagation()
-      rename.cancelRename()
-    }
-  }, [handleSubmitRename, rename.cancelRename])
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        void handleSubmitRename()
+      } else if (e.key === 'Escape') {
+        e.stopPropagation()
+        rename.cancelRename()
+      }
+    },
+    [handleSubmitRename, rename.cancelRename],
+  )
 
   function handleBlurCommit(): void {
     if (busy) return
@@ -97,7 +115,6 @@ export function HubPostRow({ post, onRename, onDelete, hubOrigin }: HubPostRowPr
     <div data-testid={`hub-post-${post.id}`}>
       <div
         className={`flex items-center justify-between rounded-lg border border-edge bg-surface/20 px-3 py-2 ${rename.confirmedId === post.id ? 'confirm-flash' : ''}`}
-
       >
         <div className="flex-1 flex flex-col min-w-0">
           {rename.editingId === post.id ? (
@@ -155,7 +172,9 @@ export function HubPostRow({ post, onRename, onDelete, hubOrigin }: HubPostRowPr
                 <button
                   type="button"
                   className={ACTION_BTN}
-                  onClick={() => window.vialAPI.openExternal(`${hubOrigin}/post/${encodeURIComponent(post.id)}`)}
+                  onClick={() =>
+                    window.vialAPI.openExternal(`${hubOrigin}/post/${encodeURIComponent(post.id)}`)
+                  }
                   disabled={busy}
                   data-testid={`hub-open-${post.id}`}
                 >

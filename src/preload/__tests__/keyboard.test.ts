@@ -146,42 +146,38 @@ function setupReloadMocks(opts?: {
 
   // Keymap buffer mock: returns big-endian u16 keycodes
   // We generate keycodes as (layer * 100 + row * 10 + col) for deterministic testing
-  ;(protocol.getKeymapBuffer as Mock).mockImplementation(
-    (offset: number, size: number) => {
-      const totalCells = layers * rows * cols
-      const result: number[] = []
-      for (let i = 0; i < size; i++) {
-        const byteIndex = offset + i
-        const cellIndex = Math.floor(byteIndex / 2)
-        if (cellIndex < totalCells) {
-          const layer = Math.floor(cellIndex / (rows * cols))
-          const remainder = cellIndex % (rows * cols)
-          const row = Math.floor(remainder / cols)
-          const col = remainder % cols
-          const keycode = layer * 100 + row * 10 + col
-          if (byteIndex % 2 === 0) {
-            // High byte (big-endian)
-            result.push((keycode >> 8) & 0xff)
-          } else {
-            // Low byte (big-endian)
-            result.push(keycode & 0xff)
-          }
+  ;(protocol.getKeymapBuffer as Mock).mockImplementation((offset: number, size: number) => {
+    const totalCells = layers * rows * cols
+    const result: number[] = []
+    for (let i = 0; i < size; i++) {
+      const byteIndex = offset + i
+      const cellIndex = Math.floor(byteIndex / 2)
+      if (cellIndex < totalCells) {
+        const layer = Math.floor(cellIndex / (rows * cols))
+        const remainder = cellIndex % (rows * cols)
+        const row = Math.floor(remainder / cols)
+        const col = remainder % cols
+        const keycode = layer * 100 + row * 10 + col
+        if (byteIndex % 2 === 0) {
+          // High byte (big-endian)
+          result.push((keycode >> 8) & 0xff)
         } else {
-          result.push(0)
+          // Low byte (big-endian)
+          result.push(keycode & 0xff)
         }
+      } else {
+        result.push(0)
       }
-      return Promise.resolve(result)
-    },
-  )
+    }
+    return Promise.resolve(result)
+  })
 
   // Encoder mock: returns [cw, ccw] pair
-  ;(protocol.getEncoder as Mock).mockImplementation(
-    (layer: number, idx: number) => {
-      const cw = layer * 1000 + idx * 10 + 1
-      const ccw = layer * 1000 + idx * 10 + 2
-      return Promise.resolve([cw, ccw])
-    },
-  )
+  ;(protocol.getEncoder as Mock).mockImplementation((layer: number, idx: number) => {
+    const cw = layer * 1000 + idx * 10 + 1
+    const ccw = layer * 1000 + idx * 10 + 2
+    return Promise.resolve([cw, ccw])
+  })
 
   // Macro buffer mock: simple buffer with NUL-separated empty macros
   const macroBuffer = new Array(macroBufferSize).fill(0)
@@ -829,7 +825,11 @@ describe('Keyboard', () => {
       // First tap dance succeeds, second rejects (simulating disconnect)
       ;(protocol.getTapDance as Mock)
         .mockResolvedValueOnce({
-          onTap: 1, onHold: 2, onDoubleTap: 3, onTapHold: 4, tappingTerm: 200,
+          onTap: 1,
+          onHold: 2,
+          onDoubleTap: 3,
+          onTapHold: 4,
+          tappingTerm: 200,
         })
         .mockRejectedValue(new Error('Device disconnected'))
 
@@ -1046,7 +1046,6 @@ describe('Keyboard', () => {
     it('updates state.unlockStatus on subsequent calls', async () => {
       const kb = new Keyboard()
       kb.state.vialProtocol = 5
-
       ;(protocol.getUnlockStatus as Mock).mockResolvedValueOnce({
         unlocked: false,
         inProgress: true,
@@ -1054,7 +1053,6 @@ describe('Keyboard', () => {
       })
       await kb.refreshUnlockStatus()
       expect(kb.state.unlockStatus.unlocked).toBe(false)
-
       ;(protocol.getUnlockStatus as Mock).mockResolvedValueOnce({
         unlocked: true,
         inProgress: false,
@@ -1170,7 +1168,13 @@ describe('Keyboard', () => {
       kb.state.cols = 1
       kb.state.layoutOptions = 0
       kb.state.vialProtocol = 5
-      kb.state.dynamicCounts = { tapDance: 2, combo: 0, keyOverride: 0, altRepeatKey: 0, featureFlags: 0 }
+      kb.state.dynamicCounts = {
+        tapDance: 2,
+        combo: 0,
+        keyOverride: 0,
+        altRepeatKey: 0,
+        featureFlags: 0,
+      }
 
       const tapDance: TapDanceEntry[] = [
         { onTap: 1, onHold: 2, onDoubleTap: 3, onTapHold: 4, tappingTerm: 200 },
@@ -1187,7 +1191,13 @@ describe('Keyboard', () => {
 
     it('restores combo entries', async () => {
       const kb = new Keyboard()
-      kb.state.dynamicCounts = { tapDance: 0, combo: 1, keyOverride: 0, altRepeatKey: 0, featureFlags: 0 }
+      kb.state.dynamicCounts = {
+        tapDance: 0,
+        combo: 1,
+        keyOverride: 0,
+        altRepeatKey: 0,
+        featureFlags: 0,
+      }
 
       const combo: ComboEntry[] = [{ key1: 10, key2: 20, key3: 0, key4: 0, output: 30 }]
       await kb.restoreLayout({ combo })
@@ -1198,7 +1208,13 @@ describe('Keyboard', () => {
 
     it('restores key override entries', async () => {
       const kb = new Keyboard()
-      kb.state.dynamicCounts = { tapDance: 0, combo: 0, keyOverride: 1, altRepeatKey: 0, featureFlags: 0 }
+      kb.state.dynamicCounts = {
+        tapDance: 0,
+        combo: 0,
+        keyOverride: 1,
+        altRepeatKey: 0,
+        featureFlags: 0,
+      }
 
       const keyOverride: KeyOverrideEntry[] = [
         {
@@ -1220,7 +1236,13 @@ describe('Keyboard', () => {
 
     it('restores alt repeat key entries', async () => {
       const kb = new Keyboard()
-      kb.state.dynamicCounts = { tapDance: 0, combo: 0, keyOverride: 0, altRepeatKey: 1, featureFlags: 0 }
+      kb.state.dynamicCounts = {
+        tapDance: 0,
+        combo: 0,
+        keyOverride: 0,
+        altRepeatKey: 1,
+        featureFlags: 0,
+      }
 
       const altRepeatKey: AltRepeatKeyEntry[] = [
         { lastKey: 50, altKey: 60, allowedMods: 0xff, options: 0x01, enabled: true },
@@ -1293,7 +1315,13 @@ describe('Keyboard', () => {
 
     it('clamps dynamic entry restore to current dynamic counts', async () => {
       const kb = new Keyboard()
-      kb.state.dynamicCounts = { tapDance: 1, combo: 0, keyOverride: 0, altRepeatKey: 0, featureFlags: 0 }
+      kb.state.dynamicCounts = {
+        tapDance: 1,
+        combo: 0,
+        keyOverride: 0,
+        altRepeatKey: 0,
+        featureFlags: 0,
+      }
 
       // Saved data has 3 tap dance entries, but state only allows 1
       const tapDance: TapDanceEntry[] = [
@@ -1380,13 +1408,14 @@ describe('Keyboard', () => {
       // This should not throw — Math.min with undefined.length would fail
       // but the code guards with optional chaining on array access
       const malformedLayout = [
-        [[1, 2], [3, 4]], // layer 0: valid
+        [
+          [1, 2],
+          [3, 4],
+        ], // layer 0: valid
         // layer 1: missing entirely — loop simply doesn't iterate
       ]
 
-      await expect(
-        kb.restoreLayout({ layout: malformedLayout }),
-      ).resolves.toBeUndefined()
+      await expect(kb.restoreLayout({ layout: malformedLayout })).resolves.toBeUndefined()
 
       // Only layer 0 keys should be set (4 keys)
       expect(protocol.setKeycode).toHaveBeenCalledTimes(4)

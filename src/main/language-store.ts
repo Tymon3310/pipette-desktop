@@ -2,20 +2,21 @@ import { app, net } from 'electron'
 import { join } from 'node:path'
 import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import { IpcChannels } from '../shared/ipc/channels'
-import type { LanguageManifestEntry, LanguageListEntry, LanguageDownloadStatus } from '../shared/types/language-store'
+import type {
+  LanguageManifestEntry,
+  LanguageListEntry,
+  LanguageDownloadStatus,
+} from '../shared/types/language-store'
 import manifest from '../shared/data/language-manifest.json'
 import { log } from './logger'
 import { secureHandle } from './ipc-guard'
 
 const BUNDLED_LANGUAGES = new Set(['english'])
 
-const MANIFEST_MAP = new Map(
-  (manifest as LanguageManifestEntry[]).map((e) => [e.name, e]),
-)
+const MANIFEST_MAP = new Map((manifest as LanguageManifestEntry[]).map((e) => [e.name, e]))
 
 const LANG_SOURCE_COMMIT = '629c82e112a2db2122c789dc6abe970b82c3f8c5'
-const DOWNLOAD_URL_BASE =
-  `https://github.com/monkeytypegame/monkeytype/raw/${LANG_SOURCE_COMMIT}/frontend/static/languages`
+const DOWNLOAD_URL_BASE = `https://github.com/monkeytypegame/monkeytype/raw/${LANG_SOURCE_COMMIT}/frontend/static/languages`
 
 function getLanguagesDir(): string {
   return join(app.getPath('userData'), 'local', 'downloads', 'languages')
@@ -32,9 +33,7 @@ function getLanguagePath(name: string): string {
 async function getDownloadedSet(): Promise<Set<string>> {
   try {
     const files = await readdir(getLanguagesDir())
-    const names = files
-      .filter((f) => f.endsWith('.json'))
-      .map((f) => f.replace(/\.json$/, ''))
+    const names = files.filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, ''))
     return new Set(names)
   } catch {
     return new Set()
@@ -63,16 +62,13 @@ function validateLanguageData(data: unknown): data is LanguageFileData {
 }
 
 export function setupLanguageStore(): void {
-  secureHandle(
-    IpcChannels.LANG_LIST,
-    async (): Promise<LanguageListEntry[]> => {
-      const downloaded = await getDownloadedSet()
-      return (manifest as LanguageManifestEntry[]).map((entry) => ({
-        ...entry,
-        status: getStatus(entry.name, downloaded),
-      }))
-    },
-  )
+  secureHandle(IpcChannels.LANG_LIST, async (): Promise<LanguageListEntry[]> => {
+    const downloaded = await getDownloadedSet()
+    return (manifest as LanguageManifestEntry[]).map((entry) => ({
+      ...entry,
+      status: getStatus(entry.name, downloaded),
+    }))
+  })
 
   secureHandle(
     IpcChannels.LANG_GET,
@@ -130,7 +126,8 @@ export function setupLanguageStore(): void {
     IpcChannels.LANG_DELETE,
     async (_event, name: string): Promise<{ success: boolean; error?: string }> => {
       if (!isSafeName(name)) return { success: false, error: 'Invalid language name' }
-      if (BUNDLED_LANGUAGES.has(name)) return { success: false, error: 'Cannot delete bundled language' }
+      if (BUNDLED_LANGUAGES.has(name))
+        return { success: false, error: 'Cannot delete bundled language' }
       try {
         await unlink(getLanguagePath(name))
         log('info', `Deleted language: ${name}`)

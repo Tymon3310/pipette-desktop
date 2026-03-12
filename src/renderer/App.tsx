@@ -29,6 +29,7 @@ import { KeychronSettings } from './components/editors/KeychronSettings'
 import { KeychronRGB } from './components/editors/KeychronRGB'
 import { KeychronDfuFlasher } from './components/editors/KeychronDfuFlasher'
 import { KeychronAnalog } from './components/editors/KeychronAnalog'
+import { KeychronSocd } from './components/editors/KeychronSocd'
 import { KeymapEditor, type KeymapEditorHandle } from './components/editors/KeymapEditor'
 import { LayoutStoreContent, type FileStatus, type HubEntryResult } from './components/editors/LayoutStoreModal'
 import { ROW_CLASS } from './components/editors/modal-controls'
@@ -60,6 +61,78 @@ import type { FavHubEntryResult } from './components/editors/FavoriteHubActions'
 import settingsDefs from '../shared/qmk-settings-defs.json'
 
 // Lighting types that require the RGBConfigurator modal
+
+const FAKE_KEYCHRON_JSON = {
+  name: 'Keychron K2 HE ANSI RGB (Mock)',
+  vendorId: '0x3434',
+  productId: '0x0E20',
+  lighting: 'vialrgb',
+  matrix: { rows: 6, cols: 16 },
+  keychron: {
+    hasSnapClick: true,
+    snapClickEntries: [],
+    hasDebounce: true,
+    hasDfuInfo: true,
+    hasRgb: true,
+    hasNkro: true,
+    hasQuickStart: true,
+    hasLanguage: true,
+    hasReportRate: true,
+    hasAnalog: true,
+    rgb: {
+      isDebug: true,
+      protocolVersion: 1,
+      ledCount: 84,
+      perKeyRGBType: 1,
+      perKeyColors: [],
+      osIndicatorConfig: null,
+      ledMatrix: new Map(),
+      mixedRGBLayers: 2,
+      mixedRGBEffectsPerLayer: 5,
+      mixedRGBRegions: [],
+      mixedRGBEffects: [],
+    },
+  },
+  layouts: {
+    keymap: [
+      [
+        { c: '#777777' }, '0,0',
+        { c: '#cccccc' }, '0,1', '0,2', '0,3', '0,4',
+        { c: '#aaaaaa' }, '0,5', '0,6', '0,7', '0,8', '0,9',
+        { c: '#cccccc' }, '0,10', '0,11', '0,12',
+        { c: '#aaaaaa' }, '0,13', '0,14', '0,15'
+      ],
+      [
+        { c: '#aaaaaa' }, '1,0',
+        { c: '#cccccc' }, '1,1', '1,2', '1,3', '1,4', '1,5', '1,6', '1,7', '1,8', '1,9', '1,10', '1,11', '1,12',
+        { w: 2, c: '#aaaaaa' }, '1,13', '1,14'
+      ],
+      [
+        { w: 1.5, c: '#aaaaaa' }, '2,0',
+        { c: '#cccccc' }, '2,1', '2,2', '2,3', '2,4', '2,5', '2,6', '2,7', '2,8', '2,9', '2,10', '2,11', '2,12',
+        { w: 1.5, c: '#aaaaaa' }, '2,13', '2,14'
+      ],
+      [
+        { w: 1.75, c: '#aaaaaa' }, '3,0',
+        { c: '#cccccc' }, '3,1', '3,2', '3,3', '3,4', '3,5', '3,6', '3,7', '3,8', '3,9', '3,10', '3,11',
+        { w: 2.25, c: '#777777' }, '3,12',
+        { c: '#aaaaaa' }, '3,13'
+      ],
+      [
+        { w: 2.25, c: '#aaaaaa' }, '4,0',
+        { c: '#cccccc' }, '4,2', '4,3', '4,4', '4,5', '4,6', '4,7', '4,8', '4,9', '4,10', '4,11',
+        { w: 1.75, c: '#aaaaaa' }, '4,12', '4,13', '4,14'
+      ],
+      [
+        { w: 1.25, c: '#aaaaaa' }, '5,0',
+        { w: 1.25 }, '5,1',
+        { w: 1.25 }, '5,2',
+        { w: 6.25, c: '#cccccc' }, '5,6',
+        { c: '#aaaaaa' }, '5,9', '5,10', '5,11', '5,12', '5,13', '5,14'
+      ]
+    ],
+  },
+}
 const LIGHTING_TYPES = new Set(['qmk_backlight', 'qmk_rgblight', 'qmk_backlight_rgblight', 'vialrgb'])
 
 function formatDeviceId(dev: DeviceInfo): string {
@@ -321,6 +394,7 @@ export function App() {
   const [showKeychronRgbModal, setShowKeychronRgbModal] = useState(false)
   const [showKeychronFlasherModal, setShowKeychronFlasherModal] = useState(false)
   const [showKeychronAnalogModal, setShowKeychronAnalogModal] = useState(false)
+  const [showKeychronSocdModal, setShowKeychronSocdModal] = useState(false)
   const [keychronAnalogData, setKeychronAnalogData] = useState<import('../shared/types/keychron').KeychronAnalogState | null>(
     keyboard.keychron?.analog ?? null
   )
@@ -1084,6 +1158,18 @@ export function App() {
     await keyboard.refreshUnlockStatus()
   }, [keyboard])
 
+  useEffect(() => {
+    async function checkFakeDevice() {
+      const flags = await window.vialAPI.getDebugFlags()
+      if (flags.DEBUG_FAKE_DEVICE) {
+        setDummyError(null)
+        device.connectDummy()
+        keyboard.loadDummy(FAKE_KEYCHRON_JSON)
+      }
+    }
+    checkFakeDevice()
+  }, [])
+
   useAutoLock({
     unlocked: keyboard.unlockStatus.unlocked,
     autoLockMinutes: devicePrefs.autoLockTime,
@@ -1395,6 +1481,7 @@ export function App() {
             onOpenKeychronRgb={(keyboard.keychron?.hasRgb && keyboard.keychron.rgb) ? () => setShowKeychronRgbModal(true) : undefined}
             onOpenKeychronFlasher={keychronSupported ? () => setShowKeychronFlasherModal(true) : undefined}
             onOpenKeychronAnalog={keyboard.keychron?.hasAnalog ? handleOpenKeychronAnalog : undefined}
+            onOpenKeychronSocd={keyboard.keychron?.hasSnapClick ? () => setShowKeychronSocdModal(true) : undefined}
             comboEntries={comboSupported ? keyboard.comboEntries : undefined}
             onOpenCombo={comboSupported ? (index?: number) => { setComboInitialIndex(index); setShowComboModal(true) } : undefined}
             keyOverrideEntries={keyOverrideSupported ? keyboard.keyOverrideEntries : undefined}
@@ -1575,6 +1662,7 @@ export function App() {
           setSuppressDisconnect={device.setSuppressDisconnect}
           originalDevice={device.connectedDevice}
           connectDevice={device.connectDevice}
+          onReload={keyboard.reload}
         />
       )}
 
@@ -1597,10 +1685,21 @@ export function App() {
                 keys={keyboard.layout?.keys ?? []}
                 rows={keyboard.rows}
                 cols={keyboard.cols}
+                keymap={keyboard.keymap}
               />
             </div>
           </div>
         </div>
+      )}
+
+      {showKeychronSocdModal && keyboard.keychron?.hasSnapClick && (
+        <KeychronSocd
+          keychron={keyboard.keychron}
+          keys={keyboard.layout?.keys ?? []}
+          keymap={keyboard.keymap}
+          onSettingChanged={keyboard.refreshKeychron}
+          onClose={() => setShowKeychronSocdModal(false)}
+        />
       )}
 
       {showComboModal && comboSupported && (

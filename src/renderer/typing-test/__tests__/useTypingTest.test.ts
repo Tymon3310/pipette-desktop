@@ -7,7 +7,9 @@ import { useTypingTest } from '../useTypingTest'
 import { deserialize } from '../../../shared/keycodes/keycodes'
 import type { TypingTestConfig } from '../types'
 
-function buildMultiLayerKeymap(layers: Array<{ layer: number; entries: Array<[number, number, string]> }>): Map<string, number> {
+function buildMultiLayerKeymap(
+  layers: Array<{ layer: number; entries: Array<[number, number, string]> }>,
+): Map<string, number> {
   const m = new Map<string, number>()
   for (const { layer, entries } of layers) {
     for (const [row, col, qmkId] of entries) {
@@ -457,7 +459,14 @@ describe('useTypingTest layer tracking with MO/LT', () => {
     const { result } = renderHook(() => useTypingTest())
 
     const multiKeymap = buildMultiLayerKeymap([
-      { layer: 0, entries: [[0, 0, 'KC_A'], [3, 0, 'MO(1)'], [1, 0, 'KC_SPACE']] },
+      {
+        layer: 0,
+        entries: [
+          [0, 0, 'KC_A'],
+          [3, 0, 'MO(1)'],
+          [1, 0, 'KC_SPACE'],
+        ],
+      },
       { layer: 1, entries: [[0, 0, 'KC_B']] },
     ])
 
@@ -469,7 +478,14 @@ describe('useTypingTest layer tracking with MO/LT', () => {
     const { result } = renderHook(() => useTypingTest())
 
     const multiKeymap = buildMultiLayerKeymap([
-      { layer: 0, entries: [[0, 0, 'KC_A'], [3, 0, 'LT(1,KC_SPC)'], [1, 0, 'KC_SPACE']] },
+      {
+        layer: 0,
+        entries: [
+          [0, 0, 'KC_A'],
+          [3, 0, 'LT(1,KC_SPC)'],
+          [1, 0, 'KC_SPACE'],
+        ],
+      },
       { layer: 1, entries: [[0, 0, 'KC_B']] },
     ])
 
@@ -481,7 +497,15 @@ describe('useTypingTest layer tracking with MO/LT', () => {
     const { result } = renderHook(() => useTypingTest())
 
     const multiKeymap = buildMultiLayerKeymap([
-      { layer: 0, entries: [[0, 0, 'KC_A'], [3, 0, 'MO(1)'], [3, 1, 'MO(2)'], [1, 0, 'KC_SPACE']] },
+      {
+        layer: 0,
+        entries: [
+          [0, 0, 'KC_A'],
+          [3, 0, 'MO(1)'],
+          [3, 1, 'MO(2)'],
+          [1, 0, 'KC_SPACE'],
+        ],
+      },
       { layer: 1, entries: [[0, 0, 'KC_B']] },
       { layer: 2, entries: [[0, 0, 'KC_C']] },
     ])
@@ -494,8 +518,21 @@ describe('useTypingTest layer tracking with MO/LT', () => {
     const { result } = renderHook(() => useTypingTest())
 
     const multiKeymap = buildMultiLayerKeymap([
-      { layer: 0, entries: [[0, 0, 'KC_A'], [3, 0, 'LT(1,KC_SPC)'], [1, 0, 'KC_SPACE']] },
-      { layer: 1, entries: [[0, 0, 'KC_B'], [3, 1, 'MO(2)']] },
+      {
+        layer: 0,
+        entries: [
+          [0, 0, 'KC_A'],
+          [3, 0, 'LT(1,KC_SPC)'],
+          [1, 0, 'KC_SPACE'],
+        ],
+      },
+      {
+        layer: 1,
+        entries: [
+          [0, 0, 'KC_B'],
+          [3, 1, 'MO(2)'],
+        ],
+      },
       { layer: 2, entries: [[0, 0, 'KC_C']] },
     ])
 
@@ -509,7 +546,14 @@ describe('useTypingTest layer tracking with MO/LT', () => {
     const { result } = renderHook(() => useTypingTest())
 
     const multiKeymap = buildMultiLayerKeymap([
-      { layer: 0, entries: [[0, 0, 'KC_A'], [3, 0, 'LM(1, MOD_LSFT)'], [1, 0, 'KC_SPACE']] },
+      {
+        layer: 0,
+        entries: [
+          [0, 0, 'KC_A'],
+          [3, 0, 'LM(1, MOD_LSFT)'],
+          [1, 0, 'KC_SPACE'],
+        ],
+      },
       { layer: 1, entries: [[0, 0, 'KC_B']] },
     ])
 
@@ -521,7 +565,15 @@ describe('useTypingTest layer tracking with MO/LT', () => {
     const { result } = renderHook(() => useTypingTest())
 
     const multiKeymap = buildMultiLayerKeymap([
-      { layer: 0, entries: [[0, 0, 'KC_A'], [3, 0, 'MO(1)'], [3, 1, 'MO(2)'], [1, 0, 'KC_SPACE']] },
+      {
+        layer: 0,
+        entries: [
+          [0, 0, 'KC_A'],
+          [3, 0, 'MO(1)'],
+          [3, 1, 'MO(2)'],
+          [1, 0, 'KC_SPACE'],
+        ],
+      },
       { layer: 1, entries: [[3, 1, 'KC_SPACE']] },
       { layer: 2, entries: [[0, 0, 'KC_C']] },
     ])
@@ -549,7 +601,14 @@ describe('useTypingTest effectiveLayer', () => {
     const { result } = renderHook(() => useTypingTest())
 
     const multiKeymap = buildMultiLayerKeymap([
-      { layer: 0, entries: [[0, 0, 'KC_A'], [3, 0, 'MO(1)'], [1, 0, 'KC_SPACE']] },
+      {
+        layer: 0,
+        entries: [
+          [0, 0, 'KC_A'],
+          [3, 0, 'MO(1)'],
+          [1, 0, 'KC_SPACE'],
+        ],
+      },
       { layer: 1, entries: [[0, 0, 'KC_B']] },
     ])
 

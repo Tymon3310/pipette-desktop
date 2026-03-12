@@ -66,7 +66,6 @@ const keycodeFields: FieldDescriptor[] = [
   { key: 'output', labelKey: 'editor.combo.output' },
 ]
 
-
 function isConfigured(entry: ComboEntry): boolean {
   return entry.key1 !== 0 || entry.key2 !== 0
 }
@@ -115,7 +114,10 @@ export function ComboPanelModal({
   const [savedTimeout, setSavedTimeout] = useState<number | null>(null)
   const [editedEntry, setEditedEntry] = useState<ComboEntry | null>(null)
   const [selectedField, setSelectedField] = useState<KeycodeFieldName | null>(null)
-  const [popoverState, setPopoverState] = useState<{ field: KeycodeFieldName; anchorRect: DOMRect } | null>(null)
+  const [popoverState, setPopoverState] = useState<{
+    field: KeycodeFieldName
+    anchorRect: DOMRect
+  } | null>(null)
   const preEditValueRef = useRef<number>(0)
 
   const favStore = useFavoriteStore({
@@ -128,33 +130,41 @@ export function ComboPanelModal({
   useEffect(() => {
     if (!qmkSettingsGet) return
     let cancelled = false
-    qmkSettingsGet(COMBO_TIMEOUT_QSID).then((data) => {
-      if (cancelled) return
-      let value = 0
-      for (let i = 0; i < COMBO_TIMEOUT_WIDTH && i < data.length; i++) {
-        value |= data[i] << (8 * i)
-      }
-      setComboTimeout(value)
-      setSavedTimeout(value)
-    }).catch(() => {
-      // device may not support this setting
-    })
-    return () => { cancelled = true }
+    qmkSettingsGet(COMBO_TIMEOUT_QSID)
+      .then((data) => {
+        if (cancelled) return
+        let value = 0
+        for (let i = 0; i < COMBO_TIMEOUT_WIDTH && i < data.length; i++) {
+          value |= data[i] << (8 * i)
+        }
+        setComboTimeout(value)
+        setSavedTimeout(value)
+      })
+      .catch(() => {
+        // device may not support this setting
+      })
+    return () => {
+      cancelled = true
+    }
   }, [qmkSettingsGet])
 
-  const clearAction = useConfirmAction(useCallback(() => {
-    setEditedEntry((prev) => prev ? { key1: 0, key2: 0, key3: 0, key4: 0, output: 0 } : prev)
-    setSelectedField(null)
-    setPopoverState(null)
-  }, []))
+  const clearAction = useConfirmAction(
+    useCallback(() => {
+      setEditedEntry((prev) => (prev ? { key1: 0, key2: 0, key3: 0, key4: 0, output: 0 } : prev))
+      setSelectedField(null)
+      setPopoverState(null)
+    }, []),
+  )
 
-  const revertAction = useConfirmAction(useCallback(() => {
-    if (selectedIndex === null || !entries[selectedIndex]) return
-    clearPending()
-    setEditedEntry(entries[selectedIndex])
-    setSelectedField(null)
-    setPopoverState(null)
-  }, [selectedIndex, entries, clearPending]))
+  const revertAction = useConfirmAction(
+    useCallback(() => {
+      if (selectedIndex === null || !entries[selectedIndex]) return
+      clearPending()
+      setEditedEntry(entries[selectedIndex])
+      setSelectedField(null)
+      setPopoverState(null)
+    }, [selectedIndex, entries, clearPending]),
+  )
 
   // Sync edited entry when selection changes
   useEffect(() => {
@@ -196,7 +206,13 @@ export function ComboPanelModal({
 
   const handleEntrySave = useCallback(async () => {
     if (selectedIndex === null || !editedEntry) return
-    const codes = [editedEntry.key1, editedEntry.key2, editedEntry.key3, editedEntry.key4, editedEntry.output]
+    const codes = [
+      editedEntry.key1,
+      editedEntry.key2,
+      editedEntry.key3,
+      editedEntry.key4,
+      editedEntry.output,
+    ]
     await guard(codes, async () => {
       await onSetEntry(selectedIndex, editedEntry)
       setSelectedIndex(null)
@@ -204,13 +220,15 @@ export function ComboPanelModal({
   }, [selectedIndex, editedEntry, onSetEntry, guard])
 
   const updateField = useCallback((field: KeycodeFieldName, code: number) => {
-    setEditedEntry((prev) => prev ? { ...prev, [field]: code } : prev)
+    setEditedEntry((prev) => (prev ? { ...prev, [field]: code } : prev))
+    setPopoverState(null)
+    setSelectedField(null)
   }, [])
 
   const maskedSelection = useMaskedKeycodeSelection({
     onUpdate(code: number) {
       if (!selectedField) return false
-      setEditedEntry((prev) => prev ? { ...prev, [selectedField]: code } : prev)
+      setEditedEntry((prev) => (prev ? { ...prev, [selectedField]: code } : prev))
     },
     onCommit() {
       setPopoverState(null)
@@ -221,7 +239,11 @@ export function ComboPanelModal({
     quickSelect,
   })
 
-  const tabContentOverride = useTileContentOverride(tapDanceEntries, deserializedMacros, maskedSelection.handleKeycodeSelect)
+  const tabContentOverride = useTileContentOverride(
+    tapDanceEntries,
+    deserializedMacros,
+    maskedSelection.handleKeycodeSelect,
+  )
 
   const handleFieldDoubleClick = useCallback(
     (field: KeycodeFieldName, rect: DOMRect) => {
@@ -289,13 +311,17 @@ export function ComboPanelModal({
                   className={`relative flex min-h-0 flex-col items-start rounded-md border p-1.5 pl-2 text-[11px] leading-tight transition-colors ${configured ? TILE_STYLE_CONFIGURED : TILE_STYLE_EMPTY}`}
                   onClick={() => setSelectedIndex(i)}
                 >
-                  <span className="absolute top-1 left-1.5 text-[10px] text-content-secondary/60">{i}</span>
+                  <span className="absolute top-1 left-1.5 text-[10px] text-content-secondary/60">
+                    {i}
+                  </span>
                   {configured ? (
                     <span className="mt-3 inline-grid grid-cols-[auto_1fr] gap-x-1 gap-y-0.5 overflow-hidden">
                       {COMBO_FIELDS.map(({ key, prefix }) => (
                         <Fragment key={key}>
                           <span className="text-left text-content-secondary/60">{prefix}</span>
-                          <span className="truncate text-left">{entry[key] !== 0 ? codeToLabel(entry[key]) : ''}</span>
+                          <span className="truncate text-left">
+                            {entry[key] !== 0 ? codeToLabel(entry[key]) : ''}
+                          </span>
                         </Fragment>
                       ))}
                     </span>
@@ -350,12 +376,21 @@ export function ComboPanelModal({
                     if (selectedField && selectedField !== key) return null
                     return (
                       <div key={key} className="flex items-center gap-3">
-                        <label className="min-w-[140px] text-sm text-content">{t(labelKey, labelOpts)}</label>
+                        <label className="min-w-[140px] text-sm text-content">
+                          {t(labelKey, labelOpts)}
+                        </label>
                         <KeycodeField
                           value={editedEntry[key]}
                           selected={selectedField === key}
-                          selectedMaskPart={selectedField === key && maskedSelection.editingPart === 'inner'}
-                          onSelect={() => { if (!selectedField) { preEditValueRef.current = editedEntry[key]; setSelectedField(key) } }}
+                          selectedMaskPart={
+                            selectedField === key && maskedSelection.editingPart === 'inner'
+                          }
+                          onSelect={() => {
+                            if (!selectedField) {
+                              preEditValueRef.current = editedEntry[key]
+                              setSelectedField(key)
+                            }
+                          }}
                           onMaskPartClick={(part) => {
                             if (selectedField === key) {
                               maskedSelection.setEditingPart(part)
@@ -365,7 +400,9 @@ export function ComboPanelModal({
                               setSelectedField(key)
                             }
                           }}
-                          onDoubleClick={selectedField ? (rect) => handleFieldDoubleClick(key, rect) : undefined}
+                          onDoubleClick={
+                            selectedField ? (rect) => handleFieldDoubleClick(key, rect) : undefined
+                          }
                           label={t(labelKey, labelOpts)}
                         />
                         {selectedField === key && !popoverState && !quickSelect && editedEntry[key] !== preEditValueRef.current && (
@@ -389,7 +426,9 @@ export function ComboPanelModal({
                       basicViewType={basicViewType}
                       onClose={() => {
                         if (selectedField) {
-                          setEditedEntry((prev) => prev ? { ...prev, [selectedField]: preEditValueRef.current } : prev)
+                          setEditedEntry((prev) =>
+                            prev ? { ...prev, [selectedField]: preEditValueRef.current } : prev,
+                          )
                         }
                         maskedSelection.clearMask()
                         setSelectedField(null)
@@ -415,14 +454,20 @@ export function ComboPanelModal({
                     <ConfirmButton
                       testId="combo-modal-clear"
                       confirming={clearAction.confirming}
-                      onClick={() => { revertAction.reset(); clearAction.trigger() }}
+                      onClick={() => {
+                        revertAction.reset()
+                        clearAction.trigger()
+                      }}
                       labelKey="common.clear"
                       confirmLabelKey="common.confirmClear"
                     />
                     <ConfirmButton
                       testId="combo-modal-revert"
                       confirming={revertAction.confirming}
-                      onClick={() => { clearAction.reset(); revertAction.trigger() }}
+                      onClick={() => {
+                        clearAction.reset()
+                        revertAction.trigger()
+                      }}
                       labelKey="common.revert"
                       confirmLabelKey="common.confirmRevert"
                     />
@@ -502,7 +547,9 @@ export function ComboPanelModal({
         onClick={(e) => e.stopPropagation()}
       >
         {!selectedField && (
-          <div className={`flex items-center justify-between shrink-0 ${hasEntries ? 'px-6 pt-6 pb-4' : 'mb-4'}`}>
+          <div
+            className={`flex items-center justify-between shrink-0 ${hasEntries ? 'px-6 pt-6 pb-4' : 'mb-4'}`}
+          >
             <h3 className="text-lg font-semibold">{headerTitle}</h3>
             <ModalCloseButton testid="combo-modal-close" onClick={handleClose} />
           </div>

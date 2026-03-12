@@ -131,7 +131,9 @@ function readBE16(buf: Uint8Array, offset: number): number {
 
 /** Read a big-endian u32 from buf at offset. */
 function readBE32(buf: Uint8Array, offset: number): number {
-  return ((buf[offset] << 24) | (buf[offset + 1] << 16) | (buf[offset + 2] << 8) | buf[offset + 3]) >>> 0
+  return (
+    ((buf[offset] << 24) | (buf[offset + 1] << 16) | (buf[offset + 2] << 8) | buf[offset + 3]) >>> 0
+  )
 }
 
 /** Write a big-endian u32 into buf at offset. */
@@ -155,7 +157,9 @@ function writeLE16(buf: Uint8Array, offset: number, value: number): void {
 
 /** Read a little-endian u32 from buf at offset. */
 function readLE32(buf: Uint8Array, offset: number): number {
-  return (buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16) | (buf[offset + 3] << 24)) >>> 0
+  return (
+    (buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16) | (buf[offset + 3] << 24)) >>> 0
+  )
 }
 
 /** Write a little-endian u32 into buf at offset. */
@@ -447,10 +451,7 @@ export async function getDefinitionRaw(size: number): Promise<Uint8Array> {
  * Get encoder keycode pair for a given layer and encoder index.
  * Response: [cw_keycode_BE16, ccw_keycode_BE16]
  */
-export async function getEncoder(
-  layer: number,
-  encoderIndex: number,
-): Promise<[number, number]> {
+export async function getEncoder(layer: number, encoderIndex: number): Promise<[number, number]> {
   const resp = await sendReceive(
     cmd(CMD_VIA_VIAL_PREFIX, CMD_VIAL_GET_ENCODER, layer, encoderIndex),
   )
@@ -486,9 +487,7 @@ export async function setEncoder(
  * Response bytes 2-31: up to 15 (row,col) pairs (0xFF,0xFF = unused)
  */
 export async function getUnlockStatus(): Promise<UnlockStatus> {
-  const resp = await sendReceive(
-    cmd(CMD_VIA_VIAL_PREFIX, CMD_VIAL_GET_UNLOCK_STATUS),
-  )
+  const resp = await sendReceive(cmd(CMD_VIA_VIAL_PREFIX, CMD_VIAL_GET_UNLOCK_STATUS))
   const unlocked = resp[0] === 1
   const inProgress = resp[1] !== 0
   const keys: [number, number][] = []
@@ -533,7 +532,11 @@ export async function lock(): Promise<void> {
  * this may overlap with the altRepeatKey byte — same as the Python reference.
  */
 export async function getDynamicEntryCount(): Promise<DynamicEntryCounts> {
-  const pkt = cmd(CMD_VIA_VIAL_PREFIX, CMD_VIAL_DYNAMIC_ENTRY_OP, DYNAMIC_VIAL_GET_NUMBER_OF_ENTRIES)
+  const pkt = cmd(
+    CMD_VIA_VIAL_PREFIX,
+    CMD_VIAL_DYNAMIC_ENTRY_OP,
+    DYNAMIC_VIAL_GET_NUMBER_OF_ENTRIES,
+  )
   const resp = await sendWithEchoRetry(pkt)
   return {
     tapDance: resp[0],

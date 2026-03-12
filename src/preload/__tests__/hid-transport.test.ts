@@ -104,10 +104,7 @@ describe('sendReceive', () => {
     const input = new Uint8Array([0x01, 0x02, 0x03])
     const result = await sendReceive(input)
 
-    expect(mockInvoke).toHaveBeenCalledWith(
-      'hid:sendReceive',
-      [0x01, 0x02, 0x03],
-    )
+    expect(mockInvoke).toHaveBeenCalledWith('hid:sendReceive', [0x01, 0x02, 0x03])
     expect(result).toBeInstanceOf(Uint8Array)
     expect(result[0]).toBe(0x42)
     expect(result.length).toBe(MSG_LEN)
@@ -116,9 +113,7 @@ describe('sendReceive', () => {
   it('propagates IPC errors', async () => {
     mockInvoke.mockRejectedValue(new Error('No HID device is open'))
 
-    await expect(sendReceive(new Uint8Array([0x01]))).rejects.toThrow(
-      'No HID device is open',
-    )
+    await expect(sendReceive(new Uint8Array([0x01]))).rejects.toThrow('No HID device is open')
   })
 })
 
@@ -134,9 +129,7 @@ describe('send', () => {
   it('propagates IPC errors', async () => {
     mockInvoke.mockRejectedValue(new Error('No HID device is open'))
 
-    await expect(send(new Uint8Array([0x01]))).rejects.toThrow(
-      'No HID device is open',
-    )
+    await expect(send(new Uint8Array([0x01]))).rejects.toThrow('No HID device is open')
   })
 })
 

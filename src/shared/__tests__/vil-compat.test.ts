@@ -123,8 +123,12 @@ describe('isVialGuiFile', () => {
 describe('keymap export (flat Record → 3D array)', () => {
   it('converts keycodes to QMK strings', () => {
     const ctx: VilExportContext = {
-      rows: 2, cols: 2, layers: 1,
-      encoderCount: 0, vialProtocol: 6, viaProtocol: 9,
+      rows: 2,
+      cols: 2,
+      layers: 1,
+      encoderCount: 0,
+      vialProtocol: 6,
+      viaProtocol: 9,
       macroActions: [],
     }
     const vil: VilFile = {
@@ -141,13 +145,22 @@ describe('keymap export (flat Record → 3D array)', () => {
     }
     const json = vilToVialGuiJson(vil, ctx)
     const parsed = JSON.parse(json)
-    expect(parsed.layout).toEqual([[['KC_A', 'KC_B'], ['KC_C', 'KC_D']]])
+    expect(parsed.layout).toEqual([
+      [
+        ['KC_A', 'KC_B'],
+        ['KC_C', 'KC_D'],
+      ],
+    ])
   })
 
   it('fills missing keys with -1', () => {
     const ctx: VilExportContext = {
-      rows: 1, cols: 3, layers: 1,
-      encoderCount: 0, vialProtocol: 6, viaProtocol: 9,
+      rows: 1,
+      cols: 3,
+      layers: 1,
+      encoderCount: 0,
+      vialProtocol: 6,
+      viaProtocol: 9,
       macroActions: [],
     }
     const vil: VilFile = {
@@ -195,8 +208,12 @@ describe('encoder layout round-trip', () => {
   it('converts encoder layout to 3D array and back', () => {
     const encoderLayout = { '0,0,0': 0x81, '0,0,1': 0x80, '1,0,0': 0x01, '1,0,1': 0x01 }
     const ctx: VilExportContext = {
-      rows: 1, cols: 1, layers: 2,
-      encoderCount: 1, vialProtocol: 6, viaProtocol: 9,
+      rows: 1,
+      cols: 1,
+      layers: 2,
+      encoderCount: 1,
+      vialProtocol: 6,
+      viaProtocol: 9,
       macroActions: [],
     }
     const vil: VilFile = {
@@ -232,12 +249,14 @@ describe('encoder layout round-trip', () => {
 
 describe('tap dance conversion', () => {
   it('converts object to tuple and back', () => {
-    const entries = [
-      { onTap: 0x04, onHold: 0x05, onDoubleTap: 0, onTapHold: 0, tappingTerm: 200 },
-    ]
+    const entries = [{ onTap: 0x04, onHold: 0x05, onDoubleTap: 0, onTapHold: 0, tappingTerm: 200 }]
     const ctx: VilExportContext = {
-      rows: 1, cols: 1, layers: 1,
-      encoderCount: 0, vialProtocol: 6, viaProtocol: 9,
+      rows: 1,
+      cols: 1,
+      layers: 1,
+      encoderCount: 0,
+      vialProtocol: 6,
+      viaProtocol: 9,
       macroActions: [],
     }
     const vil: VilFile = {
@@ -270,12 +289,14 @@ describe('tap dance conversion', () => {
 
 describe('combo conversion', () => {
   it('converts object to tuple and back', () => {
-    const entries = [
-      { key1: 0x04, key2: 0x05, key3: 0, key4: 0, output: 0x06 },
-    ]
+    const entries = [{ key1: 0x04, key2: 0x05, key3: 0, key4: 0, output: 0x06 }]
     const ctx: VilExportContext = {
-      rows: 1, cols: 1, layers: 1,
-      encoderCount: 0, vialProtocol: 6, viaProtocol: 9,
+      rows: 1,
+      cols: 1,
+      layers: 1,
+      encoderCount: 0,
+      vialProtocol: 6,
+      viaProtocol: 9,
       macroActions: [],
     }
     const vil: VilFile = {
@@ -306,19 +327,25 @@ describe('combo conversion', () => {
 
 describe('key override conversion', () => {
   it('merges enabled into options bit 7 on export', () => {
-    const entries = [{
-      triggerKey: 0x04,
-      replacementKey: 0x05,
-      layers: 0xffff,
-      triggerMods: 2,
-      negativeMods: 0,
-      suppressedMods: 0,
-      options: 7,
-      enabled: true,
-    }]
+    const entries = [
+      {
+        triggerKey: 0x04,
+        replacementKey: 0x05,
+        layers: 0xffff,
+        triggerMods: 2,
+        negativeMods: 0,
+        suppressedMods: 0,
+        options: 7,
+        enabled: true,
+      },
+    ]
     const ctx: VilExportContext = {
-      rows: 1, cols: 1, layers: 1,
-      encoderCount: 0, vialProtocol: 6, viaProtocol: 9,
+      rows: 1,
+      cols: 1,
+      layers: 1,
+      encoderCount: 0,
+      vialProtocol: 6,
+      viaProtocol: 9,
       macroActions: [],
     }
     const vil: VilFile = {
@@ -347,17 +374,20 @@ describe('key override conversion', () => {
 
   it('extracts enabled from options bit 7 on import', () => {
     const rawJson = JSON.stringify({
-      version: 1, uid: 0,
+      version: 1,
+      uid: 0,
       layout: [[['KC_NO']]],
-      key_override: [{
-        trigger: 'KC_A',
-        replacement: 'KC_B',
-        layers: 0xffff,
-        trigger_mods: 2,
-        negative_mod_mask: 0,
-        suppressed_mods: 0,
-        options: 7 | 0x80,
-      }],
+      key_override: [
+        {
+          trigger: 'KC_A',
+          replacement: 'KC_B',
+          layers: 0xffff,
+          trigger_mods: 2,
+          negative_mod_mask: 0,
+          suppressed_mods: 0,
+          options: 7 | 0x80,
+        },
+      ],
     })
     const data = JSON.parse(rawJson)
     const vil = vialGuiToVil(data, rawJson, [0])
@@ -368,19 +398,25 @@ describe('key override conversion', () => {
   })
 
   it('disabled key override has bit 7 cleared', () => {
-    const entries = [{
-      triggerKey: 0,
-      replacementKey: 0,
-      layers: 0xffff,
-      triggerMods: 0,
-      negativeMods: 0,
-      suppressedMods: 0,
-      options: 7,
-      enabled: false,
-    }]
+    const entries = [
+      {
+        triggerKey: 0,
+        replacementKey: 0,
+        layers: 0xffff,
+        triggerMods: 0,
+        negativeMods: 0,
+        suppressedMods: 0,
+        options: 7,
+        enabled: false,
+      },
+    ]
     const ctx: VilExportContext = {
-      rows: 1, cols: 1, layers: 1,
-      encoderCount: 0, vialProtocol: 6, viaProtocol: 9,
+      rows: 1,
+      cols: 1,
+      layers: 1,
+      encoderCount: 0,
+      vialProtocol: 6,
+      viaProtocol: 9,
       macroActions: [],
     }
     const vil: VilFile = {
@@ -408,16 +444,22 @@ describe('key override conversion', () => {
 
 describe('alt repeat key conversion', () => {
   it('merges enabled into options bit 3 on export', () => {
-    const entries = [{
-      lastKey: 0x04,
-      altKey: 0x05,
-      allowedMods: 0,
-      options: 3,
-      enabled: true,
-    }]
+    const entries = [
+      {
+        lastKey: 0x04,
+        altKey: 0x05,
+        allowedMods: 0,
+        options: 3,
+        enabled: true,
+      },
+    ]
     const ctx: VilExportContext = {
-      rows: 1, cols: 1, layers: 1,
-      encoderCount: 0, vialProtocol: 6, viaProtocol: 9,
+      rows: 1,
+      cols: 1,
+      layers: 1,
+      encoderCount: 0,
+      vialProtocol: 6,
+      viaProtocol: 9,
       macroActions: [],
     }
     const vil: VilFile = {
@@ -442,14 +484,17 @@ describe('alt repeat key conversion', () => {
 
   it('extracts enabled from options bit 3 on import', () => {
     const rawJson = JSON.stringify({
-      version: 1, uid: 0,
+      version: 1,
+      uid: 0,
       layout: [[['KC_NO']]],
-      alt_repeat_key: [{
-        keycode: 'KC_A',
-        alt_keycode: 'KC_B',
-        allowed_mods: 0,
-        options: 3 | 0x08,
-      }],
+      alt_repeat_key: [
+        {
+          keycode: 'KC_A',
+          alt_keycode: 'KC_B',
+          allowed_mods: 0,
+          options: 3 | 0x08,
+        },
+      ],
     })
     const data = JSON.parse(rawJson)
     const vil = vialGuiToVil(data, rawJson, [0])
@@ -459,16 +504,22 @@ describe('alt repeat key conversion', () => {
   })
 
   it('disabled alt repeat key has bit 3 cleared', () => {
-    const entries = [{
-      lastKey: 0,
-      altKey: 0,
-      allowedMods: 0,
-      options: 0,
-      enabled: false,
-    }]
+    const entries = [
+      {
+        lastKey: 0,
+        altKey: 0,
+        allowedMods: 0,
+        options: 0,
+        enabled: false,
+      },
+    ]
     const ctx: VilExportContext = {
-      rows: 1, cols: 1, layers: 1,
-      encoderCount: 0, vialProtocol: 6, viaProtocol: 9,
+      rows: 1,
+      cols: 1,
+      layers: 1,
+      encoderCount: 0,
+      vialProtocol: 6,
+      viaProtocol: 9,
       macroActions: [],
     }
     const vil: VilFile = {
@@ -497,8 +548,12 @@ describe('alt repeat key conversion', () => {
 describe('QMK settings conversion', () => {
   it('converts byte array to integer (single byte)', () => {
     const ctx: VilExportContext = {
-      rows: 1, cols: 1, layers: 1,
-      encoderCount: 0, vialProtocol: 6, viaProtocol: 9,
+      rows: 1,
+      cols: 1,
+      layers: 1,
+      encoderCount: 0,
+      vialProtocol: 6,
+      viaProtocol: 9,
       macroActions: [],
     }
     const vil: VilFile = {
@@ -522,8 +577,12 @@ describe('QMK settings conversion', () => {
 
   it('converts multi-byte LE array to integer', () => {
     const ctx: VilExportContext = {
-      rows: 1, cols: 1, layers: 1,
-      encoderCount: 0, vialProtocol: 6, viaProtocol: 9,
+      rows: 1,
+      cols: 1,
+      layers: 1,
+      encoderCount: 0,
+      vialProtocol: 6,
+      viaProtocol: 9,
       macroActions: [],
     }
     const vil: VilFile = {
@@ -546,7 +605,8 @@ describe('QMK settings conversion', () => {
 
   it('converts integer to byte array on import', () => {
     const rawJson = JSON.stringify({
-      version: 1, uid: 0,
+      version: 1,
+      uid: 0,
       layout: [[['KC_NO']]],
       settings: { '1': 0, '2': 50, '6': 5000 },
     })
@@ -567,33 +627,41 @@ describe('full VilFile → vial-gui → VilFile round-trip', () => {
   const FIXTURE_VIL: VilFile = {
     uid: '0xFBF3B07838D7076A',
     keymap: {
-      '0,0,0': 0x4f, '0,0,1': 0x52, '0,0,2': 0x50,
-      '0,1,0': 0x1e, '0,1,1': 0x1f, '0,1,2': 0x20,
+      '0,0,0': 0x4f,
+      '0,0,1': 0x52,
+      '0,0,2': 0x50,
+      '0,1,0': 0x1e,
+      '0,1,1': 0x1f,
+      '0,1,2': 0x20,
     },
     encoderLayout: { '0,0,0': 0x81, '0,0,1': 0x80 },
     macros: [0],
     layoutOptions: 0,
-    tapDance: [
-      { onTap: 0x04, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: 150 },
-    ],
+    tapDance: [{ onTap: 0x04, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: 150 }],
     combo: [{ key1: 0x04, key2: 0x05, key3: 0, key4: 0, output: 0x06 }],
-    keyOverride: [{
-      triggerKey: 0x04,
-      replacementKey: 0x05,
-      layers: 0xffff,
-      triggerMods: 0,
-      negativeMods: 0,
-      suppressedMods: 0,
-      options: 7,
-      enabled: true,
-    }],
+    keyOverride: [
+      {
+        triggerKey: 0x04,
+        replacementKey: 0x05,
+        layers: 0xffff,
+        triggerMods: 0,
+        negativeMods: 0,
+        suppressedMods: 0,
+        options: 7,
+        enabled: true,
+      },
+    ],
     altRepeatKey: [{ lastKey: 0x04, altKey: 0x05, allowedMods: 0, options: 0, enabled: true }],
     qmkSettings: { '1': [0], '2': [50] },
   }
 
   const CTX: VilExportContext = {
-    rows: 2, cols: 3, layers: 1,
-    encoderCount: 1, vialProtocol: 6, viaProtocol: 9,
+    rows: 2,
+    cols: 3,
+    layers: 1,
+    encoderCount: 1,
+    vialProtocol: 6,
+    viaProtocol: 9,
     macroActions: [[]],
   }
 

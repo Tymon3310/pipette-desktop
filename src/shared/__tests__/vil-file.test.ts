@@ -111,9 +111,7 @@ describe('isVilFile', () => {
     const pythonFormat = {
       version: 1,
       uid: 18147293849398344426,
-      layout: [
-        [['KC_RIGHT', 'KC_UP'], ['KC_MPLY']],
-      ],
+      layout: [[['KC_RIGHT', 'KC_UP'], ['KC_MPLY']]],
       encoder_layout: [[['KC_VOLD', 'KC_VOLU']]],
       layout_options: 0,
       macro: [[]],

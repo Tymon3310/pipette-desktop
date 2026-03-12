@@ -39,23 +39,13 @@ const DEFAULT_PROPS = {
 
 describe('LayoutStoreModal', () => {
   it('shows empty state when no entries', () => {
-    render(
-      <LayoutStoreModal
-        entries={[]}
-        {...DEFAULT_PROPS}
-      />,
-    )
+    render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} />)
 
     expect(screen.getByTestId('layout-store-empty')).toBeInTheDocument()
   })
 
   it('renders entries with labels and dates', () => {
-    render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-      />,
-    )
+    render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} />)
 
     const items = screen.getAllByTestId('layout-store-entry')
     expect(items).toHaveLength(2)
@@ -68,13 +58,7 @@ describe('LayoutStoreModal', () => {
 
   it('calls onLoad when load button clicked', () => {
     const onLoad = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-        onLoad={onLoad}
-      />,
-    )
+    render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onLoad={onLoad} />)
 
     const loadButtons = screen.getAllByTestId('layout-store-load-btn')
     fireEvent.click(loadButtons[0])
@@ -84,13 +68,7 @@ describe('LayoutStoreModal', () => {
 
   it('enters rename mode and submits on Enter', () => {
     const onRename = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-        onRename={onRename}
-      />,
-    )
+    render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onRename={onRename} />)
 
     // Click label for first entry to enter rename mode
     const labels = screen.getAllByTestId('layout-store-entry-label')
@@ -107,13 +85,7 @@ describe('LayoutStoreModal', () => {
 
   it('cancels rename on Escape', () => {
     const onRename = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-        onRename={onRename}
-      />,
-    )
+    render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onRename={onRename} />)
 
     const labels = screen.getAllByTestId('layout-store-entry-label')
     fireEvent.click(labels[0])
@@ -127,13 +99,7 @@ describe('LayoutStoreModal', () => {
 
   it('commits rename on blur (clicking outside)', () => {
     const onRename = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-        onRename={onRename}
-      />,
-    )
+    render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onRename={onRename} />)
 
     const labels = screen.getAllByTestId('layout-store-entry-label')
     fireEvent.click(labels[0])
@@ -154,13 +120,7 @@ describe('LayoutStoreModal', () => {
     it('shows confirm flash on card after Enter rename', () => {
       vi.useFakeTimers()
       const onRename = vi.fn()
-      render(
-        <LayoutStoreModal
-          entries={MOCK_ENTRIES}
-          {...DEFAULT_PROPS}
-          onRename={onRename}
-        />,
-      )
+      render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onRename={onRename} />)
 
       const labels = screen.getAllByTestId('layout-store-entry-label')
       fireEvent.click(labels[0])
@@ -170,14 +130,18 @@ describe('LayoutStoreModal', () => {
       fireEvent.keyDown(input, { key: 'Enter' })
 
       // Flash is deferred via setTimeout(0) so the class is added after the label mounts
-      act(() => { vi.advanceTimersByTime(0) })
+      act(() => {
+        vi.advanceTimersByTime(0)
+      })
 
       // Card should have confirm flash animation
       const cards = screen.getAllByTestId('layout-store-entry')
       expect(cards[0].className).toContain('confirm-flash')
 
       // After 1200ms, animation class should be removed
-      act(() => { vi.advanceTimersByTime(1200) })
+      act(() => {
+        vi.advanceTimersByTime(1200)
+      })
       expect(cards[0].className).not.toContain('confirm-flash')
 
       vi.useRealTimers()
@@ -185,13 +149,7 @@ describe('LayoutStoreModal', () => {
 
     it('does not flash when Enter is pressed without changes', () => {
       const onRename = vi.fn()
-      render(
-        <LayoutStoreModal
-          entries={MOCK_ENTRIES}
-          {...DEFAULT_PROPS}
-          onRename={onRename}
-        />,
-      )
+      render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onRename={onRename} />)
 
       const labels = screen.getAllByTestId('layout-store-entry-label')
       fireEvent.click(labels[0])
@@ -208,13 +166,7 @@ describe('LayoutStoreModal', () => {
 
   it('shows delete confirmation and calls onDelete', () => {
     const onDelete = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-        onDelete={onDelete}
-      />,
-    )
+    render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onDelete={onDelete} />)
 
     // Click delete
     const deleteButtons = screen.getAllByTestId('layout-store-delete-btn')
@@ -229,13 +181,7 @@ describe('LayoutStoreModal', () => {
 
   it('cancels delete confirmation', () => {
     const onDelete = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-        onDelete={onDelete}
-      />,
-    )
+    render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onDelete={onDelete} />)
 
     // Click delete
     const deleteButtons = screen.getAllByTestId('layout-store-delete-btn')
@@ -251,13 +197,7 @@ describe('LayoutStoreModal', () => {
 
   it('calls onClose when close button clicked', () => {
     const onClose = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-        onClose={onClose}
-      />,
-    )
+    render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onClose={onClose} />)
 
     fireEvent.click(screen.getByTestId('layout-store-modal-close'))
 
@@ -266,13 +206,7 @@ describe('LayoutStoreModal', () => {
 
   it('calls onClose when backdrop clicked', () => {
     const onClose = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-        onClose={onClose}
-      />,
-    )
+    render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onClose={onClose} />)
 
     fireEvent.click(screen.getByTestId('layout-store-modal-backdrop'))
 
@@ -281,13 +215,7 @@ describe('LayoutStoreModal', () => {
 
   it('does not close modal on Escape key', () => {
     const onClose = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-        onClose={onClose}
-      />,
-    )
+    render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onClose={onClose} />)
 
     fireEvent.keyDown(document, { key: 'Escape' })
 
@@ -295,13 +223,7 @@ describe('LayoutStoreModal', () => {
   })
 
   it('shows loading state', () => {
-    render(
-      <LayoutStoreModal
-        entries={[]}
-        loading
-        {...DEFAULT_PROPS}
-      />,
-    )
+    render(<LayoutStoreModal entries={[]} loading {...DEFAULT_PROPS} />)
 
     expect(screen.queryByTestId('layout-store-empty')).not.toBeInTheDocument()
     expect(screen.getByText('common.loading')).toBeInTheDocument()
@@ -309,12 +231,7 @@ describe('LayoutStoreModal', () => {
 
   // Save form tests
   it('renders save form with input and button', () => {
-    render(
-      <LayoutStoreModal
-        entries={[]}
-        {...DEFAULT_PROPS}
-      />,
-    )
+    render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} />)
 
     expect(screen.getByTestId('layout-store-save-input')).toBeInTheDocument()
     expect(screen.getByTestId('layout-store-save-submit')).toBeInTheDocument()
@@ -322,13 +239,7 @@ describe('LayoutStoreModal', () => {
 
   it('calls onSave with trimmed label on form submit', () => {
     const onSave = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={[]}
-        {...DEFAULT_PROPS}
-        onSave={onSave}
-      />,
-    )
+    render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} onSave={onSave} />)
 
     const input = screen.getByTestId('layout-store-save-input')
     fireEvent.change(input, { target: { value: '  My Layout  ' } })
@@ -339,13 +250,7 @@ describe('LayoutStoreModal', () => {
 
   it('disables save button when label is empty', () => {
     const onSave = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={[]}
-        {...DEFAULT_PROPS}
-        onSave={onSave}
-      />,
-    )
+    render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} onSave={onSave} />)
 
     const btn = screen.getByTestId('layout-store-save-submit')
     expect(btn).toBeDisabled()
@@ -354,24 +259,13 @@ describe('LayoutStoreModal', () => {
   })
 
   it('disables save button when saving', () => {
-    render(
-      <LayoutStoreModal
-        entries={[]}
-        saving
-        {...DEFAULT_PROPS}
-      />,
-    )
+    render(<LayoutStoreModal entries={[]} saving {...DEFAULT_PROPS} />)
 
     expect(screen.getByTestId('layout-store-save-submit')).toBeDisabled()
   })
 
   it('clears input after save submit', () => {
-    render(
-      <LayoutStoreModal
-        entries={[]}
-        {...DEFAULT_PROPS}
-      />,
-    )
+    render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} />)
 
     const input = screen.getByTestId('layout-store-save-input') as HTMLInputElement
     fireEvent.change(input, { target: { value: 'Test Label' } })
@@ -427,13 +321,7 @@ describe('LayoutStoreModal', () => {
 
   it('cancels overwrite confirmation', () => {
     const onSave = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-        onSave={onSave}
-      />,
-    )
+    render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onSave={onSave} />)
 
     const input = screen.getByTestId('layout-store-save-input')
     fireEvent.change(input, { target: { value: 'First Layout' } })
@@ -448,11 +336,7 @@ describe('LayoutStoreModal', () => {
 
   it('initializes save input from defaultSaveLabel', () => {
     render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-        defaultSaveLabel="My Layout"
-      />,
+      <LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} defaultSaveLabel="My Layout" />,
     )
 
     const input = screen.getByTestId('layout-store-save-input') as HTMLInputElement
@@ -461,14 +345,7 @@ describe('LayoutStoreModal', () => {
 
   it('does not call onSave when saving is true (Enter key guard)', () => {
     const onSave = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={[]}
-        saving
-        {...DEFAULT_PROPS}
-        onSave={onSave}
-      />,
-    )
+    render(<LayoutStoreModal entries={[]} saving {...DEFAULT_PROPS} onSave={onSave} />)
 
     const input = screen.getByTestId('layout-store-save-input')
     fireEvent.change(input, { target: { value: 'Test' } })
@@ -479,13 +356,7 @@ describe('LayoutStoreModal', () => {
 
   it('does not call onRename when Escape is pressed after changing rename text', () => {
     const onRename = vi.fn()
-    render(
-      <LayoutStoreModal
-        entries={MOCK_ENTRIES}
-        {...DEFAULT_PROPS}
-        onRename={onRename}
-      />,
-    )
+    render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onRename={onRename} />)
 
     const labels = screen.getAllByTestId('layout-store-entry-label')
     fireEvent.click(labels[0])
@@ -525,13 +396,7 @@ describe('LayoutStoreModal', () => {
 
     it('calls onImportVil when import button clicked', () => {
       const onImportVil = vi.fn()
-      render(
-        <LayoutStoreModal
-          entries={[]}
-          {...DEFAULT_PROPS}
-          onImportVil={onImportVil}
-        />,
-      )
+      render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} onImportVil={onImportVil} />)
 
       fireEvent.click(screen.getByTestId('layout-store-import-vil'))
       expect(onImportVil).toHaveBeenCalledOnce()
@@ -539,13 +404,7 @@ describe('LayoutStoreModal', () => {
 
     it('calls onSideloadJson when sideload button clicked', () => {
       const onSideloadJson = vi.fn()
-      render(
-        <LayoutStoreModal
-          entries={[]}
-          {...DEFAULT_PROPS}
-          onSideloadJson={onSideloadJson}
-        />,
-      )
+      render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} onSideloadJson={onSideloadJson} />)
 
       fireEvent.click(screen.getByTestId('layout-store-sideload-json'))
       expect(onSideloadJson).toHaveBeenCalledOnce()
@@ -567,12 +426,7 @@ describe('LayoutStoreModal', () => {
     })
 
     it('does not render import section when no import/sideload props', () => {
-      render(
-        <LayoutStoreModal
-          entries={[]}
-          {...DEFAULT_PROPS}
-        />,
-      )
+      render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} />)
 
       expect(screen.queryByTestId('layout-store-import-section')).not.toBeInTheDocument()
     })
@@ -671,12 +525,7 @@ describe('LayoutStoreModal', () => {
     })
 
     it('does not render entry export buttons when no export entry props', () => {
-      render(
-        <LayoutStoreModal
-          entries={MOCK_ENTRIES}
-          {...DEFAULT_PROPS}
-        />,
-      )
+      render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} />)
 
       expect(screen.queryByTestId('layout-store-entry-export-vil')).not.toBeInTheDocument()
       expect(screen.queryByTestId('layout-store-entry-export-keymap-c')).not.toBeInTheDocument()
@@ -704,13 +553,7 @@ describe('LayoutStoreModal', () => {
 
     it('calls onExportVil when current .vil button clicked', () => {
       const onExportVil = vi.fn()
-      render(
-        <LayoutStoreModal
-          entries={[]}
-          {...DEFAULT_PROPS}
-          onExportVil={onExportVil}
-        />,
-      )
+      render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} onExportVil={onExportVil} />)
 
       fireEvent.click(screen.getByTestId('layout-store-current-export-vil'))
       expect(onExportVil).toHaveBeenCalledOnce()
@@ -718,13 +561,7 @@ describe('LayoutStoreModal', () => {
 
     it('calls onExportKeymapC when current .c button clicked', () => {
       const onExportKeymapC = vi.fn()
-      render(
-        <LayoutStoreModal
-          entries={[]}
-          {...DEFAULT_PROPS}
-          onExportKeymapC={onExportKeymapC}
-        />,
-      )
+      render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} onExportKeymapC={onExportKeymapC} />)
 
       fireEvent.click(screen.getByTestId('layout-store-current-export-keymap-c'))
       expect(onExportKeymapC).toHaveBeenCalledOnce()
@@ -732,13 +569,7 @@ describe('LayoutStoreModal', () => {
 
     it('calls onExportPdf when current PDF button clicked', () => {
       const onExportPdf = vi.fn()
-      render(
-        <LayoutStoreModal
-          entries={[]}
-          {...DEFAULT_PROPS}
-          onExportPdf={onExportPdf}
-        />,
-      )
+      render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} onExportPdf={onExportPdf} />)
 
       fireEvent.click(screen.getByTestId('layout-store-current-export-pdf'))
       expect(onExportPdf).toHaveBeenCalledOnce()
@@ -762,12 +593,7 @@ describe('LayoutStoreModal', () => {
     })
 
     it('does not render current section when no export props', () => {
-      render(
-        <LayoutStoreModal
-          entries={[]}
-          {...DEFAULT_PROPS}
-        />,
-      )
+      render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} />)
 
       expect(screen.queryByTestId('layout-store-current-section')).not.toBeInTheDocument()
       expect(screen.queryByTestId('layout-store-current-export-vil')).not.toBeInTheDocument()
@@ -822,19 +648,19 @@ describe('LayoutStoreModal', () => {
     })
 
     it('does not show status element when fileStatus is undefined', () => {
-      render(
-        <LayoutStoreModal
-          entries={[]}
-          {...DEFAULT_PROPS}
-        />,
-      )
+      render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} />)
       expect(screen.queryByTestId('layout-store-file-status')).not.toBeInTheDocument()
     })
   })
 
   describe('Hub actions', () => {
     const HUB_KEYBOARD_POSTS: HubMyPost[] = [
-      { id: 'post-42', title: 'First Layout', keyboard_name: 'KB', created_at: '2026-01-01T00:00:00.000Z' },
+      {
+        id: 'post-42',
+        title: 'First Layout',
+        keyboard_name: 'KB',
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
     ]
     const ENTRIES_WITH_HUB: SnapshotMeta[] = [
       {
@@ -852,13 +678,7 @@ describe('LayoutStoreModal', () => {
     ]
 
     it('shows Hub row when hub props are provided', () => {
-      render(
-        <LayoutStoreModal
-          entries={MOCK_ENTRIES}
-          {...DEFAULT_PROPS}
-          onUploadToHub={vi.fn()}
-        />,
-      )
+      render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onUploadToHub={vi.fn()} />)
 
       const hubRows = screen.getAllByTestId('layout-store-hub-row')
       expect(hubRows).toHaveLength(2)
@@ -866,24 +686,13 @@ describe('LayoutStoreModal', () => {
     })
 
     it('does not show Hub row when no hub props are provided', () => {
-      render(
-        <LayoutStoreModal
-          entries={MOCK_ENTRIES}
-          {...DEFAULT_PROPS}
-        />,
-      )
+      render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} />)
 
       expect(screen.queryByTestId('layout-store-hub-row')).not.toBeInTheDocument()
     })
 
     it('shows Upload button when entry has no hubPostId', () => {
-      render(
-        <LayoutStoreModal
-          entries={MOCK_ENTRIES}
-          {...DEFAULT_PROPS}
-          onUploadToHub={vi.fn()}
-        />,
-      )
+      render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} onUploadToHub={vi.fn()} />)
 
       const uploadBtns = screen.getAllByTestId('layout-store-upload-hub')
       expect(uploadBtns).toHaveLength(2)
@@ -1179,8 +988,18 @@ describe('LayoutStoreModal', () => {
 
   describe('orphaned hub post detection', () => {
     const HUB_MY_POSTS: HubMyPost[] = [
-      { id: 'orphan-post-1', title: 'First Layout', keyboard_name: 'TestKeyboard', created_at: '2026-01-01T00:00:00.000Z' },
-      { id: 'orphan-post-2', title: 'Other Layout', keyboard_name: 'TestKeyboard', created_at: '2026-01-01T00:00:00.000Z' },
+      {
+        id: 'orphan-post-1',
+        title: 'First Layout',
+        keyboard_name: 'TestKeyboard',
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'orphan-post-2',
+        title: 'Other Layout',
+        keyboard_name: 'TestKeyboard',
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
     ]
 
     const ENTRIES_NO_HUB: SnapshotMeta[] = [
@@ -1212,7 +1031,9 @@ describe('LayoutStoreModal', () => {
       expect(screen.getByTestId('layout-store-reupload-hub')).toBeInTheDocument()
       expect(screen.getByTestId('layout-store-reupload-hub').textContent).toBe('hub.uploadQuestion')
       expect(screen.getByTestId('layout-store-delete-orphan-hub')).toBeInTheDocument()
-      expect(screen.getByTestId('layout-store-delete-orphan-hub').textContent).toBe('hub.deleteFromHub')
+      expect(screen.getByTestId('layout-store-delete-orphan-hub').textContent).toBe(
+        'hub.deleteFromHub',
+      )
     })
 
     it('shows normal Upload when no orphan match', () => {
@@ -1268,7 +1089,12 @@ describe('LayoutStoreModal', () => {
 
     it('does not match orphan post from different keyboard', () => {
       const crossKeyboardPosts: HubMyPost[] = [
-        { id: 'other-kb-post', title: 'First Layout', keyboard_name: 'OtherKeyboard', created_at: '2026-01-01T00:00:00.000Z' },
+        {
+          id: 'other-kb-post',
+          title: 'First Layout',
+          keyboard_name: 'OtherKeyboard',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
       ]
       render(
         <LayoutStoreModal
@@ -1289,11 +1115,7 @@ describe('LayoutStoreModal', () => {
 
     it('shows normal Upload when hubMyPosts not provided', () => {
       render(
-        <LayoutStoreModal
-          entries={ENTRIES_NO_HUB}
-          {...DEFAULT_PROPS}
-          onUploadToHub={vi.fn()}
-        />,
+        <LayoutStoreModal entries={ENTRIES_NO_HUB} {...DEFAULT_PROPS} onUploadToHub={vi.fn()} />,
       )
 
       const uploadBtns = screen.getAllByTestId('layout-store-upload-hub')
@@ -1303,7 +1125,12 @@ describe('LayoutStoreModal', () => {
 
   describe('hubNeedsDisplayName hint', () => {
     const HUB_POSTS: HubMyPost[] = [
-      { id: 'post-1', title: 'First Layout', keyboard_name: 'KB', created_at: '2026-01-01T00:00:00.000Z' },
+      {
+        id: 'post-1',
+        title: 'First Layout',
+        keyboard_name: 'KB',
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
     ]
 
     it('shows hint when hubNeedsDisplayName is true and no upload prop', () => {
@@ -1406,26 +1233,14 @@ describe('LayoutStoreModal', () => {
     }
 
     it('hides save form when isDummy is true', () => {
-      render(
-        <LayoutStoreContent
-          entries={[]}
-          isDummy
-          {...CONTENT_PROPS}
-        />,
-      )
+      render(<LayoutStoreContent entries={[]} isDummy {...CONTENT_PROPS} />)
 
       expect(screen.queryByTestId('layout-store-save-input')).not.toBeInTheDocument()
       expect(screen.queryByTestId('layout-store-save-submit')).not.toBeInTheDocument()
     })
 
     it('hides history section when isDummy is true', () => {
-      render(
-        <LayoutStoreContent
-          entries={MOCK_ENTRIES}
-          isDummy
-          {...CONTENT_PROPS}
-        />,
-      )
+      render(<LayoutStoreContent entries={MOCK_ENTRIES} isDummy {...CONTENT_PROPS} />)
 
       expect(screen.queryByTestId('layout-store-list')).not.toBeInTheDocument()
       expect(screen.queryByTestId('layout-store-empty')).not.toBeInTheDocument()
@@ -1471,12 +1286,7 @@ describe('LayoutStoreModal', () => {
     })
 
     it('shows save form and history when isDummy is not set', () => {
-      render(
-        <LayoutStoreContent
-          entries={MOCK_ENTRIES}
-          {...CONTENT_PROPS}
-        />,
-      )
+      render(<LayoutStoreContent entries={MOCK_ENTRIES} {...CONTENT_PROPS} />)
 
       expect(screen.getByTestId('layout-store-save-input')).toBeInTheDocument()
       expect(screen.getByTestId('layout-store-list')).toBeInTheDocument()
@@ -1485,23 +1295,13 @@ describe('LayoutStoreModal', () => {
 
   describe('input maxLength attributes', () => {
     it('save input has maxLength=200', () => {
-      render(
-        <LayoutStoreModal
-          entries={[]}
-          {...DEFAULT_PROPS}
-        />,
-      )
+      render(<LayoutStoreModal entries={[]} {...DEFAULT_PROPS} />)
       const input = screen.getByTestId('layout-store-save-input')
       expect(input).toHaveAttribute('maxLength', '200')
     })
 
     it('rename input has maxLength=200', () => {
-      render(
-        <LayoutStoreModal
-          entries={MOCK_ENTRIES}
-          {...DEFAULT_PROPS}
-        />,
-      )
+      render(<LayoutStoreModal entries={MOCK_ENTRIES} {...DEFAULT_PROPS} />)
       const labels = screen.getAllByTestId('layout-store-entry-label')
       fireEvent.click(labels[0])
       const input = screen.getByTestId('layout-store-rename-input')

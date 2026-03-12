@@ -35,7 +35,12 @@ describe('hub-client feature posts', () => {
         json: async () => ({ ok: true, data: { id: 'feat-1', title: 'My Favorites' } }),
       })
 
-      const result = await uploadFeaturePostToHub('jwt-token', 'My Favorites', 'favorite', testJsonFile)
+      const result = await uploadFeaturePostToHub(
+        'jwt-token',
+        'My Favorites',
+        'favorite',
+        testJsonFile,
+      )
 
       expect(result.id).toBe('feat-1')
       expect(result.title).toBe('My Favorites')
@@ -183,7 +188,13 @@ describe('hub-client feature posts', () => {
         json: async () => ({ ok: true, data: { id: 'feat-1', title: 'Updated' } }),
       })
 
-      const result = await updateFeaturePostOnHub('jwt-token', 'feat-1', 'Updated', 'favorite', testJsonFile)
+      const result = await updateFeaturePostOnHub(
+        'jwt-token',
+        'feat-1',
+        'Updated',
+        'favorite',
+        testJsonFile,
+      )
 
       expect(result.id).toBe('feat-1')
       expect(result.title).toBe('Updated')
@@ -225,7 +236,9 @@ describe('hub-client feature posts', () => {
       await updateFeaturePostOnHub('jwt', 'id with spaces', 'test', 'favorite', testJsonFile)
 
       const [url] = mockFetch.mock.calls[0]
-      expect(url).toBe('https://pipette-hub-worker.keymaps.workers.dev/api/files/id%20with%20spaces')
+      expect(url).toBe(
+        'https://pipette-hub-worker.keymaps.workers.dev/api/files/id%20with%20spaces',
+      )
     })
 
     it('returns HubPostResponse with id from response data', async () => {
@@ -234,7 +247,13 @@ describe('hub-client feature posts', () => {
         json: async () => ({ ok: true, data: { id: 'xyz-789', title: 'Feature Post' } }),
       })
 
-      const result = await updateFeaturePostOnHub('jwt', 'xyz-789', 'Feature Post', 'favorite', testJsonFile)
+      const result = await updateFeaturePostOnHub(
+        'jwt',
+        'xyz-789',
+        'Feature Post',
+        'favorite',
+        testJsonFile,
+      )
 
       expect(result).toEqual({ id: 'xyz-789', title: 'Feature Post' })
     })
@@ -258,9 +277,13 @@ describe('hub-client feature posts', () => {
         text: async () => 'Unauthorized',
       })
 
-      const err = await updateFeaturePostOnHub('bad-jwt', 'post-1', 'title', 'favorite', testJsonFile).catch(
-        (e: unknown) => e,
-      )
+      const err = await updateFeaturePostOnHub(
+        'bad-jwt',
+        'post-1',
+        'title',
+        'favorite',
+        testJsonFile,
+      ).catch((e: unknown) => e)
       expect(err).toBeInstanceOf(Hub401Error)
       expect((err as Error).message).toBe('Hub feature update failed: 401 Unauthorized')
     })
@@ -272,9 +295,13 @@ describe('hub-client feature posts', () => {
         text: async () => 'Forbidden',
       })
 
-      const err = await updateFeaturePostOnHub('jwt', 'post-1', 'title', 'favorite', testJsonFile).catch(
-        (e: unknown) => e,
-      )
+      const err = await updateFeaturePostOnHub(
+        'jwt',
+        'post-1',
+        'title',
+        'favorite',
+        testJsonFile,
+      ).catch((e: unknown) => e)
       expect(err).toBeInstanceOf(Hub403Error)
       expect((err as Error).message).toBe('Hub feature update failed: 403 Forbidden')
     })

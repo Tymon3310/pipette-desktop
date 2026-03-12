@@ -73,11 +73,31 @@ import { KeymapEditor } from '../KeymapEditor'
 import type { KleKey } from '../../../../shared/kle/types'
 
 const KEY_DEFAULTS: KleKey = {
-  x: 0, y: 0, width: 1, height: 1, row: 0, col: 0,
-  encoderIdx: -1, encoderDir: -1, layoutIndex: -1, layoutOption: -1,
-  decal: false, labels: [], x2: 0, y2: 0, width2: 1, height2: 1,
-  rotation: 0, rotationX: 0, rotationY: 0, color: '',
-  textColor: [], textSize: [], nub: false, stepped: false, ghost: false,
+  x: 0,
+  y: 0,
+  width: 1,
+  height: 1,
+  row: 0,
+  col: 0,
+  encoderIdx: -1,
+  encoderDir: -1,
+  layoutIndex: -1,
+  layoutOption: -1,
+  decal: false,
+  labels: [],
+  x2: 0,
+  y2: 0,
+  width2: 1,
+  height2: 1,
+  rotation: 0,
+  rotationX: 0,
+  rotationY: 0,
+  color: '',
+  textColor: [],
+  textSize: [],
+  nub: false,
+  stepped: false,
+  ghost: false,
 }
 
 function makeKey(x: number, col: number): KleKey {
@@ -133,7 +153,12 @@ describe('KeymapEditor — picker paste', () => {
 
   function getOnKeycodeMultiSelect() {
     return capturedTabbedProps.onKeycodeMultiSelect as
-      ((kc: Keycode, event: { ctrlKey: boolean; shiftKey: boolean }, tabKeycodes: Keycode[]) => void) | undefined
+      | ((
+          kc: Keycode,
+          event: { ctrlKey: boolean; shiftKey: boolean },
+          tabKeycodes: Keycode[],
+        ) => void)
+      | undefined
   }
 
   function getOnKeycodeSelect() {
@@ -146,12 +171,22 @@ describe('KeymapEditor — picker paste', () => {
 
   function getActiveOnKeyClick() {
     return capturedWidgetProps.find((p) => p.onKeyClick != null)?.onKeyClick as
-      ((key: KleKey, maskClicked: boolean, event?: { ctrlKey: boolean; shiftKey: boolean }) => void) | undefined
+      | ((
+          key: KleKey,
+          maskClicked: boolean,
+          event?: { ctrlKey: boolean; shiftKey: boolean },
+        ) => void)
+      | undefined
   }
 
   function getLatestOnKeyClick() {
     return capturedWidgetProps.filter((p) => p.onKeyClick != null).pop()?.onKeyClick as
-      ((key: KleKey, maskClicked: boolean, event?: { ctrlKey: boolean; shiftKey: boolean }) => void) | undefined
+      | ((
+          key: KleKey,
+          maskClicked: boolean,
+          event?: { ctrlKey: boolean; shiftKey: boolean },
+        ) => void)
+      | undefined
   }
 
   it('adds keycode to picker selection on Ctrl+click (no key selected)', () => {
@@ -310,7 +345,15 @@ describe('KeymapEditor — picker paste', () => {
   })
 
   it('clears picker selection on pane Ctrl+click (mutual exclusion)', () => {
-    render(<KeymapEditor {...defaultProps} dualMode activePane="primary" primaryLayer={0} secondaryLayer={1} />)
+    render(
+      <KeymapEditor
+        {...defaultProps}
+        dualMode
+        activePane="primary"
+        primaryLayer={0}
+        secondaryLayer={1}
+      />,
+    )
     const multiSelect = getOnKeycodeMultiSelect()!
 
     act(() => {
@@ -328,7 +371,15 @@ describe('KeymapEditor — picker paste', () => {
   })
 
   it('clears pane multi-selection on picker Ctrl+click (mutual exclusion)', () => {
-    render(<KeymapEditor {...defaultProps} dualMode activePane="primary" primaryLayer={0} secondaryLayer={1} />)
+    render(
+      <KeymapEditor
+        {...defaultProps}
+        dualMode
+        activePane="primary"
+        primaryLayer={0}
+        secondaryLayer={1}
+      />,
+    )
 
     // Select key on keymap with Ctrl+click
     const onKeyClick = getActiveOnKeyClick()!
@@ -377,9 +428,7 @@ describe('KeymapEditor — picker paste', () => {
     })
 
     expect(onSetKeysBulk).toHaveBeenCalledTimes(1)
-    expect(onSetKeysBulk).toHaveBeenCalledWith([
-      { layer: 0, row: 0, col: 3, keycode: 10 },
-    ])
+    expect(onSetKeysBulk).toHaveBeenCalledWith([{ layer: 0, row: 0, col: 3, keycode: 10 }])
   })
 
   it('stores picker selection after multi-select', () => {

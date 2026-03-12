@@ -1,7 +1,22 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
-import { Hub401Error, Hub403Error, Hub409Error, Hub429Error, authenticateWithHub, uploadPostToHub, deletePostFromHub, updatePostOnHub, fetchMyPosts, fetchMyPostsByKeyboard, patchPostOnHub, getHubOrigin, patchAuthMe, type HubUploadFiles } from '../hub/hub-client'
+import {
+  Hub401Error,
+  Hub403Error,
+  Hub409Error,
+  Hub429Error,
+  authenticateWithHub,
+  uploadPostToHub,
+  deletePostFromHub,
+  updatePostOnHub,
+  fetchMyPosts,
+  fetchMyPostsByKeyboard,
+  patchPostOnHub,
+  getHubOrigin,
+  patchAuthMe,
+  type HubUploadFiles,
+} from '../hub/hub-client'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
@@ -259,9 +274,9 @@ describe('hub-client', () => {
         text: async () => 'Internal Server Error',
       })
 
-      await expect(
-        uploadPostToHub('jwt-token', 'title', 'board', testFiles),
-      ).rejects.toThrow('Hub upload failed: 500')
+      await expect(uploadPostToHub('jwt-token', 'title', 'board', testFiles)).rejects.toThrow(
+        'Hub upload failed: 500',
+      )
     })
   })
 
@@ -299,7 +314,9 @@ describe('hub-client', () => {
         json: async () => ({ ok: false, error: 'Forbidden' }),
       })
 
-      await expect(deletePostFromHub('jwt', 'post-1')).rejects.toThrow('Hub delete failed: Forbidden')
+      await expect(deletePostFromHub('jwt', 'post-1')).rejects.toThrow(
+        'Hub delete failed: Forbidden',
+      )
     })
   })
 
@@ -335,7 +352,9 @@ describe('hub-client', () => {
       await fetchMyPosts('jwt-token', { page: 2, per_page: 10 })
 
       const [url] = mockFetch.mock.calls[0]
-      expect(url).toBe('https://pipette-hub-worker.keymaps.workers.dev/api/files/me?page=2&per_page=10')
+      expect(url).toBe(
+        'https://pipette-hub-worker.keymaps.workers.dev/api/files/me?page=2&per_page=10',
+      )
     })
 
     it('omits query string when no params are provided', async () => {
@@ -366,7 +385,9 @@ describe('hub-client', () => {
         json: async () => ({ ok: false, error: 'Token expired' }),
       })
 
-      await expect(fetchMyPosts('expired-jwt')).rejects.toThrow('Hub fetch my posts failed: Token expired')
+      await expect(fetchMyPosts('expired-jwt')).rejects.toThrow(
+        'Hub fetch my posts failed: Token expired',
+      )
     })
   })
 
@@ -394,7 +415,9 @@ describe('hub-client', () => {
         text: async () => 'Not Found',
       })
 
-      await expect(patchPostOnHub('jwt', 'bad-id', { title: 'x' })).rejects.toThrow('Hub patch failed: 404')
+      await expect(patchPostOnHub('jwt', 'bad-id', { title: 'x' })).rejects.toThrow(
+        'Hub patch failed: 404',
+      )
     })
 
     it('encodes postId in URL', async () => {
@@ -406,7 +429,9 @@ describe('hub-client', () => {
       await patchPostOnHub('jwt', 'id with spaces', { title: 'test' })
 
       const [url] = mockFetch.mock.calls[0]
-      expect(url).toBe('https://pipette-hub-worker.keymaps.workers.dev/api/files/id%20with%20spaces')
+      expect(url).toBe(
+        'https://pipette-hub-worker.keymaps.workers.dev/api/files/id%20with%20spaces',
+      )
     })
   })
 
@@ -420,7 +445,9 @@ describe('hub-client', () => {
 
       const err = await patchAuthMe('jwt', 'TakenName').catch((e: unknown) => e)
       expect(err).toBeInstanceOf(Hub409Error)
-      expect((err as Error).message).toBe('Hub patch auth me failed: 409 Display name already taken')
+      expect((err as Error).message).toBe(
+        'Hub patch auth me failed: 409 Display name already taken',
+      )
     })
   })
 
@@ -455,17 +482,23 @@ describe('hub-client', () => {
         text: async () => 'Forbidden',
       })
 
-      const err = await updatePostOnHub('jwt', 'post-1', 'title', 'board', testFiles).catch((e: unknown) => e)
+      const err = await updatePostOnHub('jwt', 'post-1', 'title', 'board', testFiles).catch(
+        (e: unknown) => e,
+      )
       expect(err).toBeInstanceOf(Hub403Error)
       expect((err as Error).message).toBe('Hub update failed: 403 Forbidden')
     })
-
   })
 
   describe('fetchMyPostsByKeyboard', () => {
     it('sends keyboard name as query parameter', async () => {
       const posts = [
-        { id: 'post-1', title: 'My Keymap', keyboard_name: 'Corne', created_at: '2025-01-15T10:30:00Z' },
+        {
+          id: 'post-1',
+          title: 'My Keymap',
+          keyboard_name: 'Corne',
+          created_at: '2025-01-15T10:30:00Z',
+        },
       ]
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -493,7 +526,9 @@ describe('hub-client', () => {
       await fetchMyPostsByKeyboard('jwt', 'My Board / v2')
 
       const [url] = mockFetch.mock.calls[0]
-      expect(url).toBe('https://pipette-hub-worker.keymaps.workers.dev/api/files/me/keyboard?name=My%20Board%20%2F%20v2')
+      expect(url).toBe(
+        'https://pipette-hub-worker.keymaps.workers.dev/api/files/me/keyboard?name=My%20Board%20%2F%20v2',
+      )
     })
 
     it('throws on HTTP error', async () => {
@@ -503,7 +538,9 @@ describe('hub-client', () => {
         text: async () => 'Missing name',
       })
 
-      await expect(fetchMyPostsByKeyboard('jwt', '')).rejects.toThrow('Hub fetch keyboard posts failed: 400')
+      await expect(fetchMyPostsByKeyboard('jwt', '')).rejects.toThrow(
+        'Hub fetch keyboard posts failed: 400',
+      )
     })
 
     it('throws on payload-level failure', async () => {
@@ -512,7 +549,9 @@ describe('hub-client', () => {
         json: async () => ({ ok: false, error: 'Invalid name' }),
       })
 
-      await expect(fetchMyPostsByKeyboard('jwt', 'x')).rejects.toThrow('Hub fetch keyboard posts failed: Invalid name')
+      await expect(fetchMyPostsByKeyboard('jwt', 'x')).rejects.toThrow(
+        'Hub fetch keyboard posts failed: Invalid name',
+      )
     })
   })
 
@@ -548,7 +587,7 @@ describe('hub-client', () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 429,
-        headers: { get: (name: string) => name.toLowerCase() === 'retry-after' ? '120' : null },
+        headers: { get: (name: string) => (name.toLowerCase() === 'retry-after' ? '120' : null) },
         text: async () => 'Too Many Requests',
       })
 
@@ -562,7 +601,7 @@ describe('hub-client', () => {
         .mockResolvedValueOnce({
           ok: false,
           status: 429,
-          headers: { get: (name: string) => name.toLowerCase() === 'retry-after' ? '2' : null },
+          headers: { get: (name: string) => (name.toLowerCase() === 'retry-after' ? '2' : null) },
           text: async () => 'Too Many Requests',
         })
         .mockResolvedValueOnce({
@@ -586,7 +625,7 @@ describe('hub-client', () => {
         .mockResolvedValueOnce({
           ok: false,
           status: 429,
-          headers: { get: (name: string) => name.toLowerCase() === 'retry-after' ? '1' : null },
+          headers: { get: (name: string) => (name.toLowerCase() === 'retry-after' ? '1' : null) },
           text: async () => 'Too Many Requests',
         })
         .mockResolvedValueOnce({
@@ -610,7 +649,7 @@ describe('hub-client', () => {
         .mockResolvedValueOnce({
           ok: false,
           status: 429,
-          headers: { get: (name: string) => name.toLowerCase() === 'retry-after' ? '3' : null },
+          headers: { get: (name: string) => (name.toLowerCase() === 'retry-after' ? '3' : null) },
           text: async () => 'Too Many Requests',
         })
         .mockResolvedValueOnce({
@@ -632,7 +671,9 @@ describe('hub-client', () => {
         .mockResolvedValueOnce({
           ok: false,
           status: 429,
-          headers: { get: (name: string) => name.toLowerCase() === 'retry-after' ? futureDate : null },
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'retry-after' ? futureDate : null),
+          },
           text: async () => 'Too Many Requests',
         })
         .mockResolvedValueOnce({

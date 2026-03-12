@@ -13,9 +13,7 @@ function setupMocks(
   fetchResult?: NotificationFetchResult,
 ) {
   const mocks = setupAppConfigMock(configOverrides)
-  mockNotificationFetch.mockResolvedValue(
-    fetchResult ?? { success: true, notifications: [] },
-  )
+  mockNotificationFetch.mockResolvedValue(fetchResult ?? { success: true, notifications: [] })
 
   const existing = (window as Record<string, unknown>).vialAPI as Record<string, unknown>
   Object.defineProperty(window, 'vialAPI', {
@@ -54,10 +52,7 @@ describe('useStartupNotification', () => {
       { title: 'New', body: 'Body', type: 'Info', publishedAt: '2025-01-03T00:00:00Z' },
       { title: 'Old', body: 'Body', type: 'Info', publishedAt: '2025-01-01T00:00:00Z' },
     ]
-    setupMocks(
-      { lastNotificationSeen: '2025-01-02T00:00:00Z' },
-      { success: true, notifications },
-    )
+    setupMocks({ lastNotificationSeen: '2025-01-02T00:00:00Z' }, { success: true, notifications })
 
     const { result } = renderHookWithConfig(() => useStartupNotification())
     await act(async () => {})
@@ -71,10 +66,7 @@ describe('useStartupNotification', () => {
     const notifications = [
       { title: 'Old', body: 'Body', type: 'Info', publishedAt: '2025-01-01T00:00:00Z' },
     ]
-    setupMocks(
-      { lastNotificationSeen: '2025-01-02T00:00:00Z' },
-      { success: true, notifications },
-    )
+    setupMocks({ lastNotificationSeen: '2025-01-02T00:00:00Z' }, { success: true, notifications })
 
     const { result } = renderHookWithConfig(() => useStartupNotification())
     await act(async () => {})
@@ -86,10 +78,7 @@ describe('useStartupNotification', () => {
     const notifications = [
       { title: 'A', body: 'Body', type: 'Info', publishedAt: '2025-01-02T00:00:00Z' },
     ]
-    setupMocks(
-      { lastNotificationSeen: 'not-a-date' },
-      { success: true, notifications },
-    )
+    setupMocks({ lastNotificationSeen: 'not-a-date' }, { success: true, notifications })
 
     const { result } = renderHookWithConfig(() => useStartupNotification())
     await act(async () => {})

@@ -60,7 +60,11 @@ describe('computeConsistency', () => {
 })
 
 describe('isPbForConfig', () => {
-  const makeResult = (wpm: number, mode: 'words' | 'time' | 'quote' = 'words', mode2: number | string = 30): TypingTestResult => ({
+  const makeResult = (
+    wpm: number,
+    mode: 'words' | 'time' | 'quote' = 'words',
+    mode2: number | string = 30,
+  ): TypingTestResult => ({
     date: new Date().toISOString(),
     wpm,
     accuracy: 95,
@@ -139,7 +143,12 @@ describe('trimResults', () => {
 
 describe('buildTypingTestResult', () => {
   it('builds a complete result from inputs', () => {
-    const config: TypingTestConfig = { mode: 'words', wordCount: 30, punctuation: true, numbers: false }
+    const config: TypingTestConfig = {
+      mode: 'words',
+      wordCount: 30,
+      punctuation: true,
+      numbers: false,
+    }
     const result = buildTypingTestResult({
       correctChars: 100,
       incorrectChars: 5,
@@ -170,7 +179,12 @@ describe('buildTypingTestResult', () => {
   })
 
   it('derives mode2 from time config', () => {
-    const config: TypingTestConfig = { mode: 'time', duration: 60, punctuation: false, numbers: false }
+    const config: TypingTestConfig = {
+      mode: 'time',
+      duration: 60,
+      punctuation: false,
+      numbers: false,
+    }
     const result = buildTypingTestResult({
       correctChars: 200,
       incorrectChars: 10,

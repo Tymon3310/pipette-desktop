@@ -62,14 +62,11 @@ export async function uploadFile(
 
   if (existingFileId) {
     // Update existing file
-    const response = await fetch(
-      `${UPLOAD_API}/files/${existingFileId}?uploadType=media`,
-      {
-        method: 'PATCH',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: content,
-      },
-    )
+    const response = await fetch(`${UPLOAD_API}/files/${existingFileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: content,
+    })
     if (!response.ok) {
       const body = await response.text()
       throw new Error(`Drive update failed: ${response.status} ${body}`)

@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import { describe, it, expect } from 'vitest'
-import { resolveCharFromMatrix, isShiftKeycode, extractMOLayer, extractLTLayer, extractLMLayer } from '../keycode-char-map'
+import {
+  resolveCharFromMatrix,
+  isShiftKeycode,
+  extractMOLayer,
+  extractLTLayer,
+  extractLMLayer,
+} from '../keycode-char-map'
 import { deserialize } from '../../../shared/keycodes/keycodes'
 
 function buildKeymap(entries: Array<[number, number, string]>): Map<string, number> {

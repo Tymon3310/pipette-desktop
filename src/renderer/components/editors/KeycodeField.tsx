@@ -52,7 +52,15 @@ const FACE_ORIGIN = KEY_FACE_INSET
 const FACE_SIZE = KEY_UNIT - KEY_SPACING - 2 * KEY_FACE_INSET
 export const KEYCODE_FIELD_SIZE = Math.round(FACE_SIZE)
 
-export function KeycodeField({ value, selected, selectedMaskPart, onSelect, onMaskPartClick, onDoubleClick, label }: Props) {
+export function KeycodeField({
+  value,
+  selected,
+  selectedMaskPart,
+  onSelect,
+  onMaskPartClick,
+  onDoubleClick,
+  label,
+}: Props) {
   const qmkId = serialize(value)
   const tooltip = keycodeTooltip(qmkId)
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)

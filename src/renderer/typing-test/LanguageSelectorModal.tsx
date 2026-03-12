@@ -26,16 +26,24 @@ export function LanguageSelectorModal({ currentLanguage, onSelectLanguage, onClo
 
   useEffect(() => {
     let alive = true
-    window.vialAPI.langList().then((list) => {
-      if (alive) setLanguages(list)
-    }).catch(() => {})
+    window.vialAPI
+      .langList()
+      .then((list) => {
+        if (alive) setLanguages(list)
+      })
+      .catch(() => {})
     searchRef.current?.focus()
-    return () => { alive = false }
+    return () => {
+      alive = false
+    }
   }, [])
 
-  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === backdropRef.current) onClose()
-  }, [onClose])
+  const handleBackdropClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === backdropRef.current) onClose()
+    },
+    [onClose],
+  )
 
   const handleDownload = useCallback(async (name: string) => {
     setDownloading((s) => new Set(s).add(name))
@@ -64,10 +72,13 @@ export function LanguageSelectorModal({ currentLanguage, onSelectLanguage, onClo
     }
   }, [])
 
-  const handleSelect = useCallback((name: string) => {
-    onSelectLanguage(name)
-    onClose()
-  }, [onSelectLanguage, onClose])
+  const handleSelect = useCallback(
+    (name: string) => {
+      onSelectLanguage(name)
+      onClose()
+    },
+    [onSelectLanguage, onClose],
+  )
 
   const filtered = useMemo(() => {
     if (!search) return languages
@@ -75,7 +86,10 @@ export function LanguageSelectorModal({ currentLanguage, onSelectLanguage, onClo
     return languages.filter((l) => formatName(l.name).toLowerCase().includes(q))
   }, [languages, search])
 
-  const downloaded = useMemo(() => filtered.filter((l) => l.status !== 'not-downloaded'), [filtered])
+  const downloaded = useMemo(
+    () => filtered.filter((l) => l.status !== 'not-downloaded'),
+    [filtered],
+  )
   const available = useMemo(() => filtered.filter((l) => l.status === 'not-downloaded'), [filtered])
 
   return (
@@ -87,7 +101,9 @@ export function LanguageSelectorModal({ currentLanguage, onSelectLanguage, onClo
     >
       <div className="flex h-[80vh] w-[480px] flex-col rounded-xl border border-edge bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-edge px-4 py-3">
-          <h2 className="text-lg font-semibold text-content">{t('editor.typingTest.language.title')}</h2>
+          <h2 className="text-lg font-semibold text-content">
+            {t('editor.typingTest.language.title')}
+          </h2>
           <ModalCloseButton testid="language-modal-close" onClick={onClose} />
         </div>
 
@@ -105,7 +121,9 @@ export function LanguageSelectorModal({ currentLanguage, onSelectLanguage, onClo
 
         <div className="flex-1 overflow-y-auto">
           {filtered.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm text-content-muted">{t('editor.typingTest.language.noResults')}</p>
+            <p className="px-4 py-6 text-center text-sm text-content-muted">
+              {t('editor.typingTest.language.noResults')}
+            </p>
           )}
 
           {downloaded.length > 0 && (
@@ -158,7 +176,14 @@ interface LanguageRowProps {
   onDelete?: (name: string) => void
 }
 
-function LanguageRow({ lang, isCurrent, isDownloading, onSelect, onDownload, onDelete }: LanguageRowProps) {
+function LanguageRow({
+  lang,
+  isCurrent,
+  isDownloading,
+  onSelect,
+  onDownload,
+  onDelete,
+}: LanguageRowProps) {
   const { t } = useTranslation()
   const canSelect = lang.status !== 'not-downloaded'
 
@@ -181,7 +206,9 @@ function LanguageRow({ lang, isCurrent, isDownloading, onSelect, onDownload, onD
           {formatName(lang.name)}
         </span>
         {lang.rightToLeft && (
-          <span className="shrink-0 rounded bg-surface-alt px-1 py-0.5 text-[10px] text-content-muted">RTL</span>
+          <span className="shrink-0 rounded bg-surface-alt px-1 py-0.5 text-[10px] text-content-muted">
+            RTL
+          </span>
         )}
       </div>
 

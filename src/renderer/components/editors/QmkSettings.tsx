@@ -91,32 +91,24 @@ export function QmkSettings({
     return false
   }, [values, editedValues])
 
-  const handleBooleanChange = useCallback(
-    (field: QmkSettingsField, checked: boolean) => {
-      setEditedValues((prev) => {
-        const next = new Map(prev)
-        const current = next.get(field.qsid) ?? 0
-        const bit = field.bit ?? 0
-        const newValue = checked
-          ? current | (1 << bit)
-          : current & ~(1 << bit)
-        next.set(field.qsid, newValue)
-        return next
-      })
-    },
-    [],
-  )
+  const handleBooleanChange = useCallback((field: QmkSettingsField, checked: boolean) => {
+    setEditedValues((prev) => {
+      const next = new Map(prev)
+      const current = next.get(field.qsid) ?? 0
+      const bit = field.bit ?? 0
+      const newValue = checked ? current | (1 << bit) : current & ~(1 << bit)
+      next.set(field.qsid, newValue)
+      return next
+    })
+  }, [])
 
-  const handleIntegerChange = useCallback(
-    (field: QmkSettingsField, value: number) => {
-      setEditedValues((prev) => {
-        const next = new Map(prev)
-        next.set(field.qsid, value)
-        return next
-      })
-    },
-    [],
-  )
+  const handleIntegerChange = useCallback((field: QmkSettingsField, value: number) => {
+    setEditedValues((prev) => {
+      const next = new Map(prev)
+      next.set(field.qsid, value)
+      return next
+    })
+  }, [])
 
   const handleSave = useCallback(async () => {
     for (const [qsid, val] of editedValues) {
@@ -173,9 +165,7 @@ export function QmkSettings({
               {field.type === 'boolean' ? (
                 <input
                   type="checkbox"
-                  checked={
-                    (((editedValues.get(field.qsid) ?? 0) >> (field.bit ?? 0)) & 1) !== 0
-                  }
+                  checked={(((editedValues.get(field.qsid) ?? 0) >> (field.bit ?? 0)) & 1) !== 0}
                   onChange={(e) => handleBooleanChange(field, e.target.checked)}
                   className="h-4 w-4"
                 />
@@ -185,9 +175,7 @@ export function QmkSettings({
                   min={field.min ?? 0}
                   max={field.max}
                   value={editedValues.get(field.qsid) ?? 0}
-                  onChange={(e) =>
-                    handleIntegerChange(field, parseInt(e.target.value, 10) || 0)
-                  }
+                  onChange={(e) => handleIntegerChange(field, parseInt(e.target.value, 10) || 0)}
                   className="w-28 rounded border border-edge px-2 py-1 text-sm"
                 />
               )}
@@ -227,10 +215,7 @@ export function QmkSettings({
   )
 }
 
-function findFieldByQsid(
-  tabs: QmkSettingsTab[],
-  qsid: number,
-): QmkSettingsField | undefined {
+function findFieldByQsid(tabs: QmkSettingsTab[], qsid: number): QmkSettingsField | undefined {
   for (const tab of tabs) {
     for (const field of tab.fields) {
       if (field.qsid === qsid) return field

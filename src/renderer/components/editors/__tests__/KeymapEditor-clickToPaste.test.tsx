@@ -65,11 +65,31 @@ import { KeymapEditor } from '../KeymapEditor'
 import type { KleKey } from '../../../../shared/kle/types'
 
 const KEY_DEFAULTS: KleKey = {
-  x: 0, y: 0, width: 1, height: 1, row: 0, col: 0,
-  encoderIdx: -1, encoderDir: -1, layoutIndex: -1, layoutOption: -1,
-  decal: false, labels: [], x2: 0, y2: 0, width2: 1, height2: 1,
-  rotation: 0, rotationX: 0, rotationY: 0, color: '',
-  textColor: [], textSize: [], nub: false, stepped: false, ghost: false,
+  x: 0,
+  y: 0,
+  width: 1,
+  height: 1,
+  row: 0,
+  col: 0,
+  encoderIdx: -1,
+  encoderDir: -1,
+  layoutIndex: -1,
+  layoutOption: -1,
+  decal: false,
+  labels: [],
+  x2: 0,
+  y2: 0,
+  width2: 1,
+  height2: 1,
+  rotation: 0,
+  rotationX: 0,
+  rotationY: 0,
+  color: '',
+  textColor: [],
+  textSize: [],
+  nub: false,
+  stepped: false,
+  ghost: false,
 }
 
 function makeKey(x: number, col: number): KleKey {
@@ -120,11 +140,23 @@ describe('KeymapEditor — click-to-paste', () => {
 
   function getActiveOnKeyClick() {
     const widget = capturedWidgetProps.find((p) => p.onKeyClick != null)
-    return widget?.onKeyClick as ((key: KleKey, maskClicked: boolean, event?: { ctrlKey: boolean; shiftKey: boolean }) => void) | undefined
+    return widget?.onKeyClick as
+      | ((
+          key: KleKey,
+          maskClicked: boolean,
+          event?: { ctrlKey: boolean; shiftKey: boolean },
+        ) => void)
+      | undefined
   }
 
   function getLatestOnKeyClick() {
-    return capturedWidgetProps.filter((p) => p.onKeyClick != null).pop()?.onKeyClick as ((key: KleKey, maskClicked: boolean, event?: { ctrlKey: boolean; shiftKey: boolean }) => void) | undefined
+    return capturedWidgetProps.filter((p) => p.onKeyClick != null).pop()?.onKeyClick as
+      | ((
+          key: KleKey,
+          maskClicked: boolean,
+          event?: { ctrlKey: boolean; shiftKey: boolean },
+        ) => void)
+      | undefined
   }
 
   it('shows selection on source pane after pane switch (not active pane)', () => {
@@ -181,9 +213,7 @@ describe('KeymapEditor — click-to-paste', () => {
     // Source: primary pane layer 0, key [0,1] = code 11
     // Target: secondary pane layer 1, key [0,2]
     expect(onSetKeysBulk).toHaveBeenCalledTimes(1)
-    expect(onSetKeysBulk).toHaveBeenCalledWith([
-      { layer: 1, row: 0, col: 2, keycode: 11 },
-    ])
+    expect(onSetKeysBulk).toHaveBeenCalledWith([{ layer: 1, row: 0, col: 2, keycode: 11 }])
   })
 
   it('pastes in selection (click) order for Ctrl selection', async () => {
@@ -381,9 +411,7 @@ describe('KeymapEditor — click-to-paste', () => {
 
     // Only 1 key should be pasted (truncated to available positions)
     expect(onSetKeysBulk).toHaveBeenCalledTimes(1)
-    expect(onSetKeysBulk).toHaveBeenCalledWith([
-      { layer: 1, row: 0, col: 3, keycode: 10 },
-    ])
+    expect(onSetKeysBulk).toHaveBeenCalledWith([{ layer: 1, row: 0, col: 3, keycode: 10 }])
   })
 
   it('hides Copy Layer and shows paste hint when paste-ready on target pane', () => {

@@ -478,10 +478,12 @@ describe('useSync', () => {
       })
     }
 
-    function mockAuthenticatedState(overrides: {
-      autoSync?: boolean
-      pending?: boolean
-    } = {}): void {
+    function mockAuthenticatedState(
+      overrides: {
+        autoSync?: boolean
+        pending?: boolean
+      } = {},
+    ): void {
       if (overrides.autoSync !== undefined) {
         setupAppConfigMock({ autoSync: overrides.autoSync })
         Object.defineProperty(window, 'vialAPI', {
@@ -500,7 +502,9 @@ describe('useSync', () => {
       }
     }
 
-    async function mountAndWait(): Promise<ReturnType<typeof renderHookWithConfig<ReturnType<typeof useSync>>>> {
+    async function mountAndWait(): Promise<
+      ReturnType<typeof renderHookWithConfig<ReturnType<typeof useSync>>>
+    > {
       const hook = renderHookWithConfig(() => useSync())
       await waitFor(() => {
         expect(hook.result.current.loading).toBe(false)
@@ -518,16 +522,19 @@ describe('useSync', () => {
       { progressStatus: 'success', expected: 'synced' },
       { progressStatus: 'error', expected: 'error' },
       { progressStatus: 'partial', expected: 'partial' },
-    ])('returns $expected from progress $progressStatus even with autoSync off', async ({ progressStatus, expected }) => {
-      captureProgressCallback()
-      const { result } = await mountAndWait()
+    ])(
+      'returns $expected from progress $progressStatus even with autoSync off',
+      async ({ progressStatus, expected }) => {
+        captureProgressCallback()
+        const { result } = await mountAndWait()
 
-      act(() => {
-        progressCallback({ direction: 'download', status: progressStatus })
-      })
+        act(() => {
+          progressCallback({ direction: 'download', status: progressStatus })
+        })
 
-      expect(result.current.syncStatus).toBe(expected)
-    })
+        expect(result.current.syncStatus).toBe(expected)
+      },
+    )
 
     it('returns pending when autoSync on with pending changes', async () => {
       mockAuthenticatedState({ autoSync: true, pending: true })

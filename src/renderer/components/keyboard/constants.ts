@@ -9,8 +9,7 @@ export const KEY_SIZE_RATIO = 3.2
 export const KEY_SPACING_RATIO = 0.2
 export const KEY_ROUNDNESS = 0.08
 export const KEY_UNIT = 54 // pixels per 1u grid cell
-export const KEY_SPACING =
-  KEY_UNIT * KEY_SPACING_RATIO / (KEY_SIZE_RATIO + KEY_SPACING_RATIO)
+export const KEY_SPACING = (KEY_UNIT * KEY_SPACING_RATIO) / (KEY_SIZE_RATIO + KEY_SPACING_RATIO)
 
 // Visual face inset: Python's 3D shadow (SHADOW_SIDE_PADDING=0.1) creates a
 // gap between the visible key face and the grid cell edge.  We apply the same
@@ -18,7 +17,7 @@ export const KEY_SPACING =
 // Pixels = SHADOW_SIDE_PADDING * scale = 0.1 * (KEY_UNIT / 3.4)
 const SHADOW_SIDE_PADDING = 0.1
 export const KEY_FACE_INSET =
-  KEY_UNIT * SHADOW_SIDE_PADDING / (KEY_SIZE_RATIO + KEY_SPACING_RATIO)
+  (KEY_UNIT * SHADOW_SIDE_PADDING) / (KEY_SIZE_RATIO + KEY_SPACING_RATIO)
 
 // Widget padding
 export const KEYBOARD_PADDING = 5

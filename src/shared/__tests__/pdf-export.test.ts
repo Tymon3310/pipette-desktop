@@ -12,23 +12,40 @@ import {
   type PdfMacroAction,
 } from '../pdf-export'
 import type { KleKey } from '../kle/types'
-import type { AltRepeatKeyEntry, ComboEntry, KeyOverrideEntry, TapDanceEntry } from '../types/protocol'
+import type {
+  AltRepeatKeyEntry,
+  ComboEntry,
+  KeyOverrideEntry,
+  TapDanceEntry,
+} from '../types/protocol'
 
 function makeKey(overrides: Partial<KleKey> = {}): KleKey {
   return {
-    x: 0, y: 0,
-    width: 1, height: 1,
-    x2: 0, y2: 0,
-    width2: 1, height2: 1,
-    rotation: 0, rotationX: 0, rotationY: 0,
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    x2: 0,
+    y2: 0,
+    width2: 1,
+    height2: 1,
+    rotation: 0,
+    rotationX: 0,
+    rotationY: 0,
     color: '#cccccc',
     labels: Array(12).fill(null),
     textColor: Array(12).fill(null),
     textSize: Array(12).fill(null),
-    row: 0, col: 0,
-    encoderIdx: -1, encoderDir: -1,
-    layoutIndex: -1, layoutOption: -1,
-    decal: false, nub: false, stepped: false, ghost: false,
+    row: 0,
+    col: 0,
+    encoderIdx: -1,
+    encoderDir: -1,
+    layoutIndex: -1,
+    layoutOption: -1,
+    decal: false,
+    nub: false,
+    stepped: false,
+    ghost: false,
     ...overrides,
   }
 }
@@ -149,8 +166,12 @@ describe('generateKeymapPdf', () => {
 
   it('generates larger PDF for multiple layers', () => {
     const keymap = new Map<string, number>([
-      ['0,0,0', 0x29], ['0,0,1', 0x04], ['0,0,2', 0x05],
-      ['1,0,0', 0x06], ['1,0,1', 0x04], ['1,0,2', 0x05],
+      ['0,0,0', 0x29],
+      ['0,0,1', 0x04],
+      ['0,0,2', 0x05],
+      ['1,0,0', 0x06],
+      ['1,0,1', 0x04],
+      ['1,0,2', 0x05],
     ])
 
     const singleBase64 = generateKeymapPdf(createBasicInput())
@@ -173,12 +194,14 @@ describe('generateKeymapPdf', () => {
       ['0,0,1', 0x80],
     ])
 
-    const base64 = generateKeymapPdf(createBasicInput({
-      keys,
-      keymap,
-      encoderCount: 1,
-      encoderLayout,
-    }))
+    const base64 = generateKeymapPdf(
+      createBasicInput({
+        keys,
+        keymap,
+        encoderCount: 1,
+        encoderLayout,
+      }),
+    )
 
     expect(typeof base64).toBe('string')
     const bytes = decodePdf(base64)
@@ -198,11 +221,13 @@ describe('generateKeymapPdf', () => {
       ['0,0,2', 0x05],
     ])
 
-    const base64 = generateKeymapPdf(createBasicInput({
-      keys,
-      keymap,
-      layoutOptions: new Map([[0, 1]]),
-    }))
+    const base64 = generateKeymapPdf(
+      createBasicInput({
+        keys,
+        keymap,
+        layoutOptions: new Map([[0, 1]]),
+      }),
+    )
     expect(typeof base64).toBe('string')
     const bytes = decodePdf(base64)
     expect(pdfSignature(bytes)).toBe('%PDF-')
@@ -222,10 +247,12 @@ describe('generateKeymapPdf', () => {
   })
 
   it('does not crash with empty keys array', () => {
-    const base64 = generateKeymapPdf(createBasicInput({
-      keys: [],
-      keymap: new Map(),
-    }))
+    const base64 = generateKeymapPdf(
+      createBasicInput({
+        keys: [],
+        keymap: new Map(),
+      }),
+    )
     expect(typeof base64).toBe('string')
     const bytes = decodePdf(base64)
     expect(pdfSignature(bytes)).toBe('%PDF-')
@@ -254,19 +281,21 @@ describe('generateKeymapPdf', () => {
       ['0,0,2', 0x05],
     ])
 
-    const base64 = generateKeymapPdf(createBasicInput({
-      keymap,
-      serializeKeycode: (code: number) => {
-        if (code === 0x04) return 'KC_HENK'
-        if (code === 0x05) return 'KC_LANG1'
-        return mockSerialize(code)
-      },
-      keycodeLabel: (qmkId: string) => {
-        if (qmkId === 'KC_HENK') return '\u5909\u63DB'
-        if (qmkId === 'KC_LANG1') return '\uD55C\uC601\n\u304B\u306A'
-        return mockKeycodeLabel(qmkId)
-      },
-    }))
+    const base64 = generateKeymapPdf(
+      createBasicInput({
+        keymap,
+        serializeKeycode: (code: number) => {
+          if (code === 0x04) return 'KC_HENK'
+          if (code === 0x05) return 'KC_LANG1'
+          return mockSerialize(code)
+        },
+        keycodeLabel: (qmkId: string) => {
+          if (qmkId === 'KC_HENK') return '\u5909\u63DB'
+          if (qmkId === 'KC_LANG1') return '\uD55C\uC601\n\u304B\u306A'
+          return mockKeycodeLabel(qmkId)
+        },
+      }),
+    )
     expect(typeof base64).toBe('string')
     const bytes = decodePdf(base64)
     expect(pdfSignature(bytes)).toBe('%PDF-')
@@ -277,9 +306,16 @@ describe('generateKeymapPdf', () => {
       makeKey({ x: 0, y: 0, row: 0, col: 0 }),
       // ISO Enter: 1.25u wide, 2u tall, secondary rect wider on top
       makeKey({
-        x: 1, y: 0, row: 0, col: 1,
-        width: 1.25, height: 2,
-        x2: -0.25, y2: 0, width2: 1.5, height2: 1,
+        x: 1,
+        y: 0,
+        row: 0,
+        col: 1,
+        width: 1.25,
+        height: 2,
+        x2: -0.25,
+        y2: 0,
+        width2: 1.5,
+        height2: 1,
       }),
       makeKey({ x: 2.5, y: 0, row: 0, col: 2 }),
     ]
@@ -302,10 +338,19 @@ describe('generateKeymapPdf', () => {
       makeKey({ x: 0, y: 0, row: 0, col: 0 }),
       // Reversed ISO: rotated 180° around (0.6, 3.95)
       makeKey({
-        x: 0.6, y: 3.95, row: 0, col: 1,
-        width: 1.25, height: 2,
-        x2: -0.25, y2: 0, width2: 1.5, height2: 1,
-        rotation: 180, rotationX: 0.6, rotationY: 3.95,
+        x: 0.6,
+        y: 3.95,
+        row: 0,
+        col: 1,
+        width: 1.25,
+        height: 2,
+        x2: -0.25,
+        y2: 0,
+        width2: 1.5,
+        height2: 1,
+        rotation: 180,
+        rotationX: 0.6,
+        rotationY: 3.95,
       }),
     ]
 
@@ -328,13 +373,15 @@ describe('generateKeymapPdf', () => {
     ])
 
     // serializeKeycode returns a mask keycode for one key
-    const base64 = generateKeymapPdf(createBasicInput({
-      keymap,
-      serializeKeycode: (code: number) => {
-        if (code === 0x04) return 'LCTL(KC_A)'
-        return mockSerialize(code)
-      },
-    }))
+    const base64 = generateKeymapPdf(
+      createBasicInput({
+        keymap,
+        serializeKeycode: (code: number) => {
+          if (code === 0x04) return 'LCTL(KC_A)'
+          return mockSerialize(code)
+        },
+      }),
+    )
     expect(typeof base64).toBe('string')
     const bytes = decodePdf(base64)
     expect(pdfSignature(bytes)).toBe('%PDF-')
@@ -344,10 +391,12 @@ describe('generateKeymapPdf', () => {
 
   it('backward compat: no combo/tapDance fields produces same page count', () => {
     const withoutFields = generateKeymapPdf(createBasicInput())
-    const withUndefined = generateKeymapPdf(createBasicInput({
-      combo: undefined,
-      tapDance: undefined,
-    }))
+    const withUndefined = generateKeymapPdf(
+      createBasicInput({
+        combo: undefined,
+        tapDance: undefined,
+      }),
+    )
     expect(countPages(withoutFields)).toBe(countPages(withUndefined))
     // Size should be roughly equal (within 5% tolerance for timestamp/ID diffs)
     const sizeA = decodePdf(withoutFields).length
@@ -357,10 +406,12 @@ describe('generateKeymapPdf', () => {
 
   it('empty combo/tapDance arrays produce no extra pages', () => {
     const baseline = generateKeymapPdf(createBasicInput())
-    const withEmpty = generateKeymapPdf(createBasicInput({
-      combo: [],
-      tapDance: [],
-    }))
+    const withEmpty = generateKeymapPdf(
+      createBasicInput({
+        combo: [],
+        tapDance: [],
+      }),
+    )
     expect(countPages(withEmpty)).toBe(countPages(baseline))
   })
 
@@ -385,9 +436,7 @@ describe('generateKeymapPdf', () => {
   })
 
   it('configured combos add extra pages', () => {
-    const combos: ComboEntry[] = [
-      { key1: 0x04, key2: 0x05, key3: 0, key4: 0, output: 0x29 },
-    ]
+    const combos: ComboEntry[] = [{ key1: 0x04, key2: 0x05, key3: 0, key4: 0, output: 0x29 }]
     const baseline = generateKeymapPdf(createBasicInput())
     const withCombos = generateKeymapPdf(createBasicInput({ combo: combos }))
     expect(countPages(withCombos)).toBeGreaterThan(countPages(baseline))
@@ -405,9 +454,7 @@ describe('generateKeymapPdf', () => {
   })
 
   it('both combo + tap dance produce more pages than combo only', () => {
-    const combos: ComboEntry[] = [
-      { key1: 0x04, key2: 0x05, key3: 0, key4: 0, output: 0x29 },
-    ]
+    const combos: ComboEntry[] = [{ key1: 0x04, key2: 0x05, key3: 0, key4: 0, output: 0x29 }]
     const tapDances: TapDanceEntry[] = [
       { onTap: 0x04, onHold: 0x05, onDoubleTap: 0x06, onTapHold: 0x29, tappingTerm: 200 },
     ]
@@ -417,14 +464,14 @@ describe('generateKeymapPdf', () => {
   })
 
   it('empty keys with configured combos still generates combo pages', () => {
-    const combos: ComboEntry[] = [
-      { key1: 0x04, key2: 0x05, key3: 0, key4: 0, output: 0x29 },
-    ]
-    const base64 = generateKeymapPdf(createBasicInput({
-      keys: [],
-      keymap: new Map(),
-      combo: combos,
-    }))
+    const combos: ComboEntry[] = [{ key1: 0x04, key2: 0x05, key3: 0, key4: 0, output: 0x29 }]
+    const base64 = generateKeymapPdf(
+      createBasicInput({
+        keys: [],
+        keymap: new Map(),
+        combo: combos,
+      }),
+    )
     const bytes = decodePdf(base64)
     expect(pdfSignature(bytes)).toBe('%PDF-')
     // Should have at least 2 pages: empty keymap page + combo page
@@ -433,10 +480,18 @@ describe('generateKeymapPdf', () => {
 
   it('many entries cause pagination (40 combos, 30 tap dances)', () => {
     const combos: ComboEntry[] = Array.from({ length: 40 }, (_, i) => ({
-      key1: 0x04, key2: 0x05 + (i % 3), key3: 0, key4: 0, output: 0x29,
+      key1: 0x04,
+      key2: 0x05 + (i % 3),
+      key3: 0,
+      key4: 0,
+      output: 0x29,
     }))
     const tapDances: TapDanceEntry[] = Array.from({ length: 30 }, () => ({
-      onTap: 0x04, onHold: 0x05, onDoubleTap: 0x06, onTapHold: 0x29, tappingTerm: 200,
+      onTap: 0x04,
+      onHold: 0x05,
+      onDoubleTap: 0x06,
+      onTapHold: 0x29,
+      tappingTerm: 200,
     }))
     const base64 = generateKeymapPdf(createBasicInput({ combo: combos, tapDance: tapDances }))
     const bytes = decodePdf(base64)
@@ -464,22 +519,42 @@ describe('isEmptyCombo', () => {
 
 describe('isEmptyTapDance', () => {
   it('returns true for all-zero entry', () => {
-    expect(isEmptyTapDance({ onTap: 0, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: 0 })).toBe(true)
+    expect(
+      isEmptyTapDance({ onTap: 0, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: 0 }),
+    ).toBe(true)
   })
 
   it('returns false when any action is set', () => {
-    expect(isEmptyTapDance({ onTap: 0x04, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: 0 })).toBe(false)
-    expect(isEmptyTapDance({ onTap: 0, onHold: 0x05, onDoubleTap: 0, onTapHold: 0, tappingTerm: 0 })).toBe(false)
-    expect(isEmptyTapDance({ onTap: 0, onHold: 0, onDoubleTap: 0x06, onTapHold: 0, tappingTerm: 0 })).toBe(false)
-    expect(isEmptyTapDance({ onTap: 0, onHold: 0, onDoubleTap: 0, onTapHold: 0x29, tappingTerm: 0 })).toBe(false)
+    expect(
+      isEmptyTapDance({ onTap: 0x04, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: 0 }),
+    ).toBe(false)
+    expect(
+      isEmptyTapDance({ onTap: 0, onHold: 0x05, onDoubleTap: 0, onTapHold: 0, tappingTerm: 0 }),
+    ).toBe(false)
+    expect(
+      isEmptyTapDance({ onTap: 0, onHold: 0, onDoubleTap: 0x06, onTapHold: 0, tappingTerm: 0 }),
+    ).toBe(false)
+    expect(
+      isEmptyTapDance({ onTap: 0, onHold: 0, onDoubleTap: 0, onTapHold: 0x29, tappingTerm: 0 }),
+    ).toBe(false)
   })
 
   it('returns true when only tappingTerm is set (no actions)', () => {
-    expect(isEmptyTapDance({ onTap: 0, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: 200 })).toBe(true)
+    expect(
+      isEmptyTapDance({ onTap: 0, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: 200 }),
+    ).toBe(true)
   })
 
   it('returns false for a fully configured entry', () => {
-    expect(isEmptyTapDance({ onTap: 0x04, onHold: 0x05, onDoubleTap: 0x06, onTapHold: 0x29, tappingTerm: 200 })).toBe(false)
+    expect(
+      isEmptyTapDance({
+        onTap: 0x04,
+        onHold: 0x05,
+        onDoubleTap: 0x06,
+        onTapHold: 0x29,
+        tappingTerm: 200,
+      }),
+    ).toBe(false)
   })
 })
 
@@ -487,15 +562,26 @@ describe('isEmptyTapDance', () => {
 
 function makeKo(overrides?: Partial<KeyOverrideEntry>): KeyOverrideEntry {
   return {
-    triggerKey: 0, replacementKey: 0, layers: 0,
-    triggerMods: 0, negativeMods: 0, suppressedMods: 0,
-    options: 0, enabled: true, ...overrides,
+    triggerKey: 0,
+    replacementKey: 0,
+    layers: 0,
+    triggerMods: 0,
+    negativeMods: 0,
+    suppressedMods: 0,
+    options: 0,
+    enabled: true,
+    ...overrides,
   }
 }
 
 function makeAr(overrides?: Partial<AltRepeatKeyEntry>): AltRepeatKeyEntry {
   return {
-    lastKey: 0, altKey: 0, allowedMods: 0, options: 0, enabled: true, ...overrides,
+    lastKey: 0,
+    altKey: 0,
+    allowedMods: 0,
+    options: 0,
+    enabled: true,
+    ...overrides,
   }
 }
 
@@ -530,26 +616,32 @@ describe('isEmptyAltRepeatKey', () => {
 describe('generateKeymapPdf - Key Override / Alt Repeat Key', () => {
   it('empty keyOverride/altRepeatKey arrays produce no extra pages', () => {
     const baseline = generateKeymapPdf(createBasicInput())
-    const withEmpty = generateKeymapPdf(createBasicInput({
-      keyOverride: [],
-      altRepeatKey: [],
-    }))
+    const withEmpty = generateKeymapPdf(
+      createBasicInput({
+        keyOverride: [],
+        altRepeatKey: [],
+      }),
+    )
     expect(countPages(withEmpty)).toBe(countPages(baseline))
   })
 
   it('all-zero keyOverride entries are skipped', () => {
     const baseline = generateKeymapPdf(createBasicInput())
-    const withZero = generateKeymapPdf(createBasicInput({
-      keyOverride: [makeKo(), makeKo()],
-    }))
+    const withZero = generateKeymapPdf(
+      createBasicInput({
+        keyOverride: [makeKo(), makeKo()],
+      }),
+    )
     expect(countPages(withZero)).toBe(countPages(baseline))
   })
 
   it('all-zero altRepeatKey entries are skipped', () => {
     const baseline = generateKeymapPdf(createBasicInput())
-    const withZero = generateKeymapPdf(createBasicInput({
-      altRepeatKey: [makeAr(), makeAr()],
-    }))
+    const withZero = generateKeymapPdf(
+      createBasicInput({
+        altRepeatKey: [makeAr(), makeAr()],
+      }),
+    )
     expect(countPages(withZero)).toBe(countPages(baseline))
   })
 
@@ -563,9 +655,7 @@ describe('generateKeymapPdf - Key Override / Alt Repeat Key', () => {
   })
 
   it('configured alt repeat keys add extra pages', () => {
-    const entries: AltRepeatKeyEntry[] = [
-      makeAr({ lastKey: 0x04, altKey: 0x05, enabled: true }),
-    ]
+    const entries: AltRepeatKeyEntry[] = [makeAr({ lastKey: 0x04, altKey: 0x05, enabled: true })]
     const baseline = generateKeymapPdf(createBasicInput())
     const withAr = generateKeymapPdf(createBasicInput({ altRepeatKey: entries }))
     expect(countPages(withAr)).toBeGreaterThan(countPages(baseline))
@@ -582,15 +672,21 @@ describe('generateKeymapPdf - Key Override / Alt Repeat Key', () => {
 
   it('all four feature types together produce more pages than any alone', () => {
     const combos: ComboEntry[] = [{ key1: 0x04, key2: 0x05, key3: 0, key4: 0, output: 0x29 }]
-    const tapDances: TapDanceEntry[] = [{ onTap: 0x04, onHold: 0x05, onDoubleTap: 0x06, onTapHold: 0x29, tappingTerm: 200 }]
+    const tapDances: TapDanceEntry[] = [
+      { onTap: 0x04, onHold: 0x05, onDoubleTap: 0x06, onTapHold: 0x29, tappingTerm: 200 },
+    ]
     const keyOverrides: KeyOverrideEntry[] = [makeKo({ triggerKey: 0x04, replacementKey: 0x05 })]
     const altRepeatKeys: AltRepeatKeyEntry[] = [makeAr({ lastKey: 0x04, altKey: 0x05 })]
 
     const comboOnly = generateKeymapPdf(createBasicInput({ combo: combos }))
-    const all = generateKeymapPdf(createBasicInput({
-      combo: combos, tapDance: tapDances,
-      keyOverride: keyOverrides, altRepeatKey: altRepeatKeys,
-    }))
+    const all = generateKeymapPdf(
+      createBasicInput({
+        combo: combos,
+        tapDance: tapDances,
+        keyOverride: keyOverrides,
+        altRepeatKey: altRepeatKeys,
+      }),
+    )
     expect(countPages(all)).toBeGreaterThan(countPages(comboOnly))
   })
 
@@ -640,7 +736,10 @@ describe('generateKeymapPdf - Macros', () => {
 
   it('configured macros add extra pages', () => {
     const macros: PdfMacroAction[][] = [
-      [{ type: 'text', text: 'Hello' }, { type: 'tap', keycodes: [0x04, 0x05] }],
+      [
+        { type: 'text', text: 'Hello' },
+        { type: 'tap', keycodes: [0x04, 0x05] },
+      ],
     ]
     const baseline = generateKeymapPdf(createBasicInput())
     const withMacros = generateKeymapPdf(createBasicInput({ macros }))
@@ -665,20 +764,30 @@ describe('generateKeymapPdf - Macros', () => {
 
   it('all five feature types together produce more pages than four', () => {
     const combos: ComboEntry[] = [{ key1: 0x04, key2: 0x05, key3: 0, key4: 0, output: 0x29 }]
-    const tapDances: TapDanceEntry[] = [{ onTap: 0x04, onHold: 0x05, onDoubleTap: 0x06, onTapHold: 0x29, tappingTerm: 200 }]
+    const tapDances: TapDanceEntry[] = [
+      { onTap: 0x04, onHold: 0x05, onDoubleTap: 0x06, onTapHold: 0x29, tappingTerm: 200 },
+    ]
     const keyOverrides: KeyOverrideEntry[] = [makeKo({ triggerKey: 0x04, replacementKey: 0x05 })]
     const altRepeatKeys: AltRepeatKeyEntry[] = [makeAr({ lastKey: 0x04, altKey: 0x05 })]
     const macros: PdfMacroAction[][] = [[{ type: 'text', text: 'Hello' }]]
 
-    const fourTypes = generateKeymapPdf(createBasicInput({
-      combo: combos, tapDance: tapDances,
-      keyOverride: keyOverrides, altRepeatKey: altRepeatKeys,
-    }))
-    const fiveTypes = generateKeymapPdf(createBasicInput({
-      combo: combos, tapDance: tapDances,
-      keyOverride: keyOverrides, altRepeatKey: altRepeatKeys,
-      macros,
-    }))
+    const fourTypes = generateKeymapPdf(
+      createBasicInput({
+        combo: combos,
+        tapDance: tapDances,
+        keyOverride: keyOverrides,
+        altRepeatKey: altRepeatKeys,
+      }),
+    )
+    const fiveTypes = generateKeymapPdf(
+      createBasicInput({
+        combo: combos,
+        tapDance: tapDances,
+        keyOverride: keyOverrides,
+        altRepeatKey: altRepeatKeys,
+        macros,
+      }),
+    )
     expect(countPages(fiveTypes)).toBeGreaterThan(countPages(fourTypes))
   })
 
@@ -694,14 +803,14 @@ describe('generateKeymapPdf - Macros', () => {
   })
 
   it('empty keys with configured macros still generates macro pages', () => {
-    const macros: PdfMacroAction[][] = [
-      [{ type: 'text', text: 'Hello' }],
-    ]
-    const base64 = generateKeymapPdf(createBasicInput({
-      keys: [],
-      keymap: new Map(),
-      macros,
-    }))
+    const macros: PdfMacroAction[][] = [[{ type: 'text', text: 'Hello' }]]
+    const base64 = generateKeymapPdf(
+      createBasicInput({
+        keys: [],
+        keymap: new Map(),
+        macros,
+      }),
+    )
     expect(pdfSignature(decodePdf(base64))).toBe('%PDF-')
     expect(countPages(base64)).toBeGreaterThanOrEqual(2)
   })

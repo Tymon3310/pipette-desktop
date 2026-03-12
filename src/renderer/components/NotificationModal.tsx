@@ -27,7 +27,10 @@ export function NotificationModal({ notifications, onClose }: NotificationModalP
         </div>
         <div className="space-y-4">
           {notifications.map((notification, index) => (
-            <div key={`${notification.publishedAt}-${index}`} className="rounded-md border border-surface-dim p-4">
+            <div
+              key={`${notification.publishedAt}-${index}`}
+              className="rounded-md border border-surface-dim p-4"
+            >
               <div className="mb-2 flex items-center gap-2">
                 <span className="font-medium">{notification.title}</span>
                 <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent">

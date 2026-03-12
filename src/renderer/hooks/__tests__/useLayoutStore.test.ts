@@ -4,10 +4,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useLayoutStore, type UseLayoutStoreOptions } from '../useLayoutStore'
-import {
-  VALID_VIL,
-  VALID_VIL_JSON,
-} from './fixtures/valid-vil'
+import { VALID_VIL, VALID_VIL_JSON } from './fixtures/valid-vil'
 import type { SnapshotMeta } from '../../../shared/types/snapshot-store'
 
 vi.mock('react-i18next', () => ({
@@ -127,7 +124,9 @@ describe('useLayoutStore – saveLayout', () => {
   it('manages saving flag', async () => {
     let resolveIpc!: (v: unknown) => void
     mockSnapshotStoreSave.mockReturnValueOnce(
-      new Promise((r) => { resolveIpc = r }),
+      new Promise((r) => {
+        resolveIpc = r
+      }),
     )
     const opts = createHookOptions()
     const { result } = renderHook(() => useLayoutStore(opts))
@@ -205,7 +204,9 @@ describe('useLayoutStore – loadLayout', () => {
   it('manages loading flag', async () => {
     let resolveIpc!: (v: unknown) => void
     mockSnapshotStoreLoad.mockReturnValueOnce(
-      new Promise((r) => { resolveIpc = r }),
+      new Promise((r) => {
+        resolveIpc = r
+      }),
     )
     const opts = createHookOptions()
     const { result } = renderHook(() => useLayoutStore(opts))

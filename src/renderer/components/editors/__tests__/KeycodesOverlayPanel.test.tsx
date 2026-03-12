@@ -119,7 +119,9 @@ describe('KeycodesOverlayPanel', () => {
 
   it('calls onKeyboardLayoutChange when layout is changed', () => {
     const onKeyboardLayoutChange = vi.fn()
-    render(<KeycodesOverlayPanel {...DEFAULT_PROPS} onKeyboardLayoutChange={onKeyboardLayoutChange} />)
+    render(
+      <KeycodesOverlayPanel {...DEFAULT_PROPS} onKeyboardLayoutChange={onKeyboardLayoutChange} />,
+    )
 
     fireEvent.change(screen.getByTestId('overlay-layout-selector'), { target: { value: 'dvorak' } })
     expect(onKeyboardLayoutChange).toHaveBeenCalledWith('dvorak')

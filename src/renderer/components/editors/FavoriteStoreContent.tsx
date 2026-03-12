@@ -3,15 +3,25 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useInlineRename } from '../../hooks/useInlineRename'
-import { ACTION_BTN, CONFIRM_DELETE_BTN, DELETE_BTN, SectionHeader, formatDate } from './store-modal-shared'
+import {
+  ACTION_BTN,
+  CONFIRM_DELETE_BTN,
+  DELETE_BTN,
+  SectionHeader,
+  formatDate,
+} from './store-modal-shared'
 import { FavoriteHubActions } from './FavoriteHubActions'
 import type { FavHubEntryResult } from './FavoriteHubActions'
 import type { FavoriteType, SavedFavoriteMeta } from '../../../shared/types/favorite-store'
 import type { FavoriteImportResultState } from '../../hooks/useFavoriteStore'
 
-export function formatImportMessage(t: (key: string, opts?: Record<string, unknown>) => string, result: FavoriteImportResultState): string {
+export function formatImportMessage(
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  result: FavoriteImportResultState,
+): string {
   if (result.imported === 0) return t('favoriteStore.importEmpty')
-  if (result.skipped > 0) return t('favoriteStore.importPartial', { imported: result.imported, skipped: result.skipped })
+  if (result.skipped > 0)
+    return t('favoriteStore.importPartial', { imported: result.imported, skipped: result.skipped })
   return t('favoriteStore.importSuccess', { imported: result.imported })
 }
 
@@ -151,11 +161,16 @@ export function FavoriteStoreContent({
       {/* Scrollable Synced Data list */}
       <div className="flex-1 min-h-0 overflow-y-auto border-l border-edge px-5 pb-5">
         {loading && (
-          <div className="py-4 text-center text-[13px] text-content-muted">{t('common.loading')}</div>
+          <div className="py-4 text-center text-[13px] text-content-muted">
+            {t('common.loading')}
+          </div>
         )}
 
         {!loading && entries.length === 0 && (
-          <div className="py-4 text-center text-[13px] text-content-muted" data-testid="favorite-store-empty">
+          <div
+            className="py-4 text-center text-[13px] text-content-muted"
+            data-testid="favorite-store-empty"
+          >
             {t('favoriteStore.noSaved')}
           </div>
         )}
@@ -199,7 +214,10 @@ export function FavoriteStoreContent({
                         <button
                           type="button"
                           className={CONFIRM_DELETE_BTN}
-                          onClick={() => { onDelete(entry.id); setConfirmDeleteId(null) }}
+                          onClick={() => {
+                            onDelete(entry.id)
+                            setConfirmDeleteId(null)
+                          }}
                           data-testid="favorite-store-delete-confirm"
                         >
                           {t('favoriteStore.confirmDelete')}
@@ -272,10 +290,7 @@ export function FavoriteStoreContent({
         <div className="absolute left-0 top-0 h-1/2 border-l border-edge" />
         <div className="flex items-center gap-2">
           {importResult && (
-            <span
-              className="text-sm text-accent"
-              data-testid="favorite-store-import-result"
-            >
+            <span className="text-sm text-accent" data-testid="favorite-store-import-result">
               {formatImportMessage(t, importResult)}
             </span>
           )}

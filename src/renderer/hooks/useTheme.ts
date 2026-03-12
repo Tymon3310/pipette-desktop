@@ -64,10 +64,13 @@ export function useTheme(): UseThemeReturn {
     return () => mql.removeEventListener('change', handler)
   }, [config.theme])
 
-  const setTheme = useCallback((mode: ThemeMode) => {
-    set('theme', mode)
-    setEffectiveTheme(resolveEffectiveTheme(mode))
-  }, [set])
+  const setTheme = useCallback(
+    (mode: ThemeMode) => {
+      set('theme', mode)
+      setEffectiveTheme(resolveEffectiveTheme(mode))
+    },
+    [set],
+  )
 
   return { theme: config.theme, effectiveTheme, setTheme }
 }

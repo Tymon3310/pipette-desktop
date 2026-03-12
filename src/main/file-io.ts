@@ -19,11 +19,13 @@ interface SaveDialogOptions {
 }
 
 function sanitizeFilename(name: string): string {
-  return name
-    .replace(/[/\\:*?"<>|]/g, '_')
-    .replace(/[\x00-\x1f]/g, '')
-    .replace(/\.+$/, '')
-    .trim() || 'keyboard'
+  return (
+    name
+      .replace(/[/\\:*?"<>|]/g, '_')
+      .replace(/[\x00-\x1f]/g, '')
+      .replace(/\.+$/, '')
+      .trim() || 'keyboard'
+  )
 }
 
 async function saveFileWithDialog(
@@ -52,53 +54,67 @@ async function saveFileWithDialog(
 }
 
 export function setupFileIO(): void {
-  secureHandle(IpcChannels.FILE_SAVE_LAYOUT, async (event, jsonData: string, deviceName?: string) => {
-    const filename = deviceName ? `${sanitizeFilename(deviceName)}.vil` : 'keyboard.vil'
-    return saveFileWithDialog(event, jsonData, {
-      title: 'Export Layout',
-      defaultPath: filename,
-      filters: [
-        { name: 'Vial Layout', extensions: ['vil'] },
-        { name: 'All Files', extensions: ['*'] },
-      ],
-    })
-  })
+  secureHandle(
+    IpcChannels.FILE_SAVE_LAYOUT,
+    async (event, jsonData: string, deviceName?: string) => {
+      const filename = deviceName ? `${sanitizeFilename(deviceName)}.vil` : 'keyboard.vil'
+      return saveFileWithDialog(event, jsonData, {
+        title: 'Export Layout',
+        defaultPath: filename,
+        filters: [
+          { name: 'Vial Layout', extensions: ['vil'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      })
+    },
+  )
 
-  secureHandle(IpcChannels.FILE_EXPORT_KEYMAP_C, async (event, content: string, deviceName?: string) => {
-    const filename = deviceName ? `${sanitizeFilename(deviceName)}_keymap.c` : 'keymap.c'
-    return saveFileWithDialog(event, content, {
-      title: 'Export keymap.c',
-      defaultPath: filename,
-      filters: [
-        { name: 'C Source', extensions: ['c'] },
-        { name: 'All Files', extensions: ['*'] },
-      ],
-    })
-  })
+  secureHandle(
+    IpcChannels.FILE_EXPORT_KEYMAP_C,
+    async (event, content: string, deviceName?: string) => {
+      const filename = deviceName ? `${sanitizeFilename(deviceName)}_keymap.c` : 'keymap.c'
+      return saveFileWithDialog(event, content, {
+        title: 'Export keymap.c',
+        defaultPath: filename,
+        filters: [
+          { name: 'C Source', extensions: ['c'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      })
+    },
+  )
 
-  secureHandle(IpcChannels.FILE_EXPORT_PDF, async (event, base64Data: string, deviceName?: string) => {
-    const filename = deviceName ? `${sanitizeFilename(deviceName)}.pdf` : 'keymap.pdf'
-    return saveFileWithDialog(event, Buffer.from(base64Data, 'base64'), {
-      title: 'Export Keymap PDF',
-      defaultPath: filename,
-      filters: [
-        { name: 'PDF Document', extensions: ['pdf'] },
-        { name: 'All Files', extensions: ['*'] },
-      ],
-    })
-  })
+  secureHandle(
+    IpcChannels.FILE_EXPORT_PDF,
+    async (event, base64Data: string, deviceName?: string) => {
+      const filename = deviceName ? `${sanitizeFilename(deviceName)}.pdf` : 'keymap.pdf'
+      return saveFileWithDialog(event, Buffer.from(base64Data, 'base64'), {
+        title: 'Export Keymap PDF',
+        defaultPath: filename,
+        filters: [
+          { name: 'PDF Document', extensions: ['pdf'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      })
+    },
+  )
 
-  secureHandle(IpcChannels.FILE_EXPORT_CSV, async (event, content: string, defaultName?: string) => {
-    const filename = defaultName ? `${sanitizeFilename(defaultName)}.csv` : 'typing-test-history.csv'
-    return saveFileWithDialog(event, content, {
-      title: 'Export CSV',
-      defaultPath: filename,
-      filters: [
-        { name: 'CSV', extensions: ['csv'] },
-        { name: 'All Files', extensions: ['*'] },
-      ],
-    })
-  })
+  secureHandle(
+    IpcChannels.FILE_EXPORT_CSV,
+    async (event, content: string, defaultName?: string) => {
+      const filename = defaultName
+        ? `${sanitizeFilename(defaultName)}.csv`
+        : 'typing-test-history.csv'
+      return saveFileWithDialog(event, content, {
+        title: 'Export CSV',
+        defaultPath: filename,
+        filters: [
+          { name: 'CSV', extensions: ['csv'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      })
+    },
+  )
 
   secureHandle(IpcChannels.FILE_LOAD_LAYOUT, async (event, title?: unknown) => {
     const win = BrowserWindow.fromWebContents(event.sender)

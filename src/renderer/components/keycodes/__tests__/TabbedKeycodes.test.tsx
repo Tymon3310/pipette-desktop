@@ -10,9 +10,7 @@ const mockBasicKeycodes = [
   { qmkId: 'KC_TILD', label: '~', hidden: false },
 ]
 
-const mockQuantumKeycodes = [
-  { qmkId: 'QK_BOOT', label: 'Boot', hidden: false },
-]
+const mockQuantumKeycodes = [{ qmkId: 'QK_BOOT', label: 'Boot', hidden: false }]
 
 const mockMediaKeycodes = [
   { qmkId: 'KC_MUTE', label: 'Mute', hidden: false },

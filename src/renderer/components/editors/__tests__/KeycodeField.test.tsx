@@ -33,16 +33,12 @@ describe('KeycodeField', () => {
   })
 
   it('sets aria-label when provided', () => {
-    render(
-      <KeycodeField value={0} selected={false} onSelect={() => {}} label="Trigger Key" />,
-    )
+    render(<KeycodeField value={0} selected={false} onSelect={() => {}} label="Trigger Key" />)
     expect(screen.getByTestId('keycode-field')).toHaveAttribute('aria-label', 'Trigger Key')
   })
 
   it('sets aria-pressed based on selected state', () => {
-    const { rerender } = render(
-      <KeycodeField value={0} selected={false} onSelect={() => {}} />,
-    )
+    const { rerender } = render(<KeycodeField value={0} selected={false} onSelect={() => {}} />)
     expect(screen.getByTestId('keycode-field')).toHaveAttribute('aria-pressed', 'false')
     rerender(<KeycodeField value={0} selected={true} onSelect={() => {}} />)
     expect(screen.getByTestId('keycode-field')).toHaveAttribute('aria-pressed', 'true')

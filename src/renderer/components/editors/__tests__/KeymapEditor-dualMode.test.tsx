@@ -110,7 +110,15 @@ describe('KeymapEditor — dual mode', () => {
   })
 
   it('calls onDualModeChange(false) when dualMode is already on', () => {
-    render(<KeymapEditor {...defaultProps} dualMode={true} activePane="primary" primaryLayer={0} secondaryLayer={0} />)
+    render(
+      <KeymapEditor
+        {...defaultProps}
+        dualMode={true}
+        activePane="primary"
+        primaryLayer={0}
+        secondaryLayer={0}
+      />,
+    )
     fireEvent.click(screen.getByTestId('dual-mode-button'))
     expect(onDualModeChange).toHaveBeenCalledWith(false)
   })
@@ -122,13 +130,29 @@ describe('KeymapEditor — dual mode', () => {
   })
 
   it('renders two keyboard widgets when dualMode is on', () => {
-    render(<KeymapEditor {...defaultProps} dualMode={true} activePane="primary" primaryLayer={0} secondaryLayer={0} />)
+    render(
+      <KeymapEditor
+        {...defaultProps}
+        dualMode={true}
+        activePane="primary"
+        primaryLayer={0}
+        secondaryLayer={0}
+      />,
+    )
     expect(screen.getByTestId('secondary-pane')).toBeInTheDocument()
     expect(screen.getAllByTestId('keyboard-widget')).toHaveLength(2)
   })
 
   it('applies border-accent to the active primary pane', () => {
-    render(<KeymapEditor {...defaultProps} dualMode={true} activePane="primary" primaryLayer={0} secondaryLayer={0} />)
+    render(
+      <KeymapEditor
+        {...defaultProps}
+        dualMode={true}
+        activePane="primary"
+        primaryLayer={0}
+        secondaryLayer={0}
+      />,
+    )
     const primaryPane = screen.getByTestId('primary-pane')
     expect(primaryPane.className).toContain('border-accent')
     const secondaryPane = screen.getByTestId('secondary-pane')
@@ -137,7 +161,15 @@ describe('KeymapEditor — dual mode', () => {
   })
 
   it('applies border-accent to the active secondary pane', () => {
-    render(<KeymapEditor {...defaultProps} dualMode={true} activePane="secondary" primaryLayer={0} secondaryLayer={0} />)
+    render(
+      <KeymapEditor
+        {...defaultProps}
+        dualMode={true}
+        activePane="secondary"
+        primaryLayer={0}
+        secondaryLayer={0}
+      />,
+    )
     const secondaryPane = screen.getByTestId('secondary-pane')
     expect(secondaryPane.className).toContain('border-accent')
     const primaryPane = screen.getByTestId('primary-pane')
@@ -145,19 +177,43 @@ describe('KeymapEditor — dual mode', () => {
   })
 
   it('calls onActivePaneChange when clicking the inactive pane', () => {
-    render(<KeymapEditor {...defaultProps} dualMode={true} activePane="primary" primaryLayer={0} secondaryLayer={0} />)
+    render(
+      <KeymapEditor
+        {...defaultProps}
+        dualMode={true}
+        activePane="primary"
+        primaryLayer={0}
+        secondaryLayer={0}
+      />,
+    )
     fireEvent.click(screen.getByTestId('secondary-pane'))
     expect(onActivePaneChange).toHaveBeenCalledWith('secondary')
   })
 
   it('calls onActivePaneChange("primary") when clicking primary pane while secondary is active', () => {
-    render(<KeymapEditor {...defaultProps} dualMode={true} activePane="secondary" primaryLayer={0} secondaryLayer={0} />)
+    render(
+      <KeymapEditor
+        {...defaultProps}
+        dualMode={true}
+        activePane="secondary"
+        primaryLayer={0}
+        secondaryLayer={0}
+      />,
+    )
     fireEvent.click(screen.getByTestId('primary-pane'))
     expect(onActivePaneChange).toHaveBeenCalledWith('primary')
   })
 
   it('shows correct layer labels for each pane', () => {
-    render(<KeymapEditor {...defaultProps} dualMode={true} activePane="primary" primaryLayer={0} secondaryLayer={1} />)
+    render(
+      <KeymapEditor
+        {...defaultProps}
+        dualMode={true}
+        activePane="primary"
+        primaryLayer={0}
+        secondaryLayer={1}
+      />,
+    )
     expect(screen.getByTestId('layer-label')).toHaveTextContent('Layer 0')
     expect(screen.getByTestId('secondary-layer-label')).toHaveTextContent('Layer 1')
   })
@@ -277,7 +333,15 @@ describe('KeymapEditor — dual mode', () => {
   })
 
   it('does not call onActivePaneChange when clicking the active pane', () => {
-    render(<KeymapEditor {...defaultProps} dualMode={true} activePane="primary" primaryLayer={0} secondaryLayer={0} />)
+    render(
+      <KeymapEditor
+        {...defaultProps}
+        dualMode={true}
+        activePane="primary"
+        primaryLayer={0}
+        secondaryLayer={0}
+      />,
+    )
     fireEvent.click(screen.getByTestId('primary-pane'))
     expect(onActivePaneChange).not.toHaveBeenCalled()
   })
@@ -301,7 +365,11 @@ describe('KeymapEditor — dual mode', () => {
     )
     // Simulate key click on active pane
     const firstRenderPrimary = capturedWidgetProps[0]
-    const onKeyClick = firstRenderPrimary.onKeyClick as (key: KleKey, maskClicked: boolean, event?: { ctrlKey: boolean; shiftKey: boolean }) => void
+    const onKeyClick = firstRenderPrimary.onKeyClick as (
+      key: KleKey,
+      maskClicked: boolean,
+      event?: { ctrlKey: boolean; shiftKey: boolean },
+    ) => void
     onKeyClick({ row: 0, col: 0 } as KleKey, false)
 
     // Rerender with switched active pane
@@ -318,9 +386,7 @@ describe('KeymapEditor — dual mode', () => {
 
     // The useEffect clears selection after render, triggering a re-render.
     // Check the final captured props (last secondary pane entry).
-    const lastSecondary = capturedWidgetProps.filter(
-      (_p, i) => i % 2 === 1,
-    ).pop()
+    const lastSecondary = capturedWidgetProps.filter((_p, i) => i % 2 === 1).pop()
     expect(lastSecondary?.selectedKey).toBeNull()
   })
 })

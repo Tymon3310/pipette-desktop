@@ -56,9 +56,7 @@ describe('computeStats', () => {
   })
 
   it('last10Avg uses only last 10 entries', () => {
-    const results = Array.from({ length: 15 }, (_, i) =>
-      makeResult({ wpm: i < 10 ? 100 : 50 }),
-    )
+    const results = Array.from({ length: 15 }, (_, i) => makeResult({ wpm: i < 10 ? 100 : 50 }))
     const stats = computeStats(results)
     // First 10 results have wpm=100, remaining 5 have wpm=50
     expect(stats.last10Avg).toBe(100)

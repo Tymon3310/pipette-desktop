@@ -34,20 +34,14 @@ describe('TypingTestHistory', () => {
   })
 
   it('shows stats summary with results', () => {
-    const results = [
-      makeResult({ wpm: 80 }),
-      makeResult({ wpm: 60 }),
-    ]
+    const results = [makeResult({ wpm: 80 }), makeResult({ wpm: 60 })]
     renderWithI18n(<TypingTestHistory results={results} />)
     // Best WPM should be 80 (appears in stats and possibly in table)
     expect(screen.getAllByText('80').length).toBeGreaterThan(0)
   })
 
   it('shows results table', () => {
-    const results = [
-      makeResult({ wpm: 80, isPb: true }),
-      makeResult({ wpm: 60 }),
-    ]
+    const results = [makeResult({ wpm: 80, isPb: true }), makeResult({ wpm: 60 })]
     renderWithI18n(<TypingTestHistory results={results} />)
     const history = screen.getByTestId('typing-test-history')
     expect(history.querySelector('table')).toBeTruthy()
@@ -135,10 +129,7 @@ describe('TypingTestHistory', () => {
   })
 
   it('computes stats from filtered data', () => {
-    const results = [
-      makeResult({ wpm: 100, mode: 'words' }),
-      makeResult({ wpm: 50, mode: 'time' }),
-    ]
+    const results = [makeResult({ wpm: 100, mode: 'words' }), makeResult({ wpm: 50, mode: 'time' })]
     renderWithI18n(<TypingTestHistory results={results} />)
 
     // Filter to words only

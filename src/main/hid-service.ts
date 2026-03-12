@@ -119,9 +119,8 @@ export async function listDevices(): Promise<DeviceInfo[]> {
         if (!alreadyListed) {
           // Find the product name from the bridge slot's VID/PID
           const productName =
-            devices.find(
-              (d) => d.vendorId === connInfo.vid && d.productId === connInfo.pid,
-            )?.product ?? `Keychron (wireless via ${state.firmwareVersion || 'bridge'})`
+            devices.find((d) => d.vendorId === connInfo.vid && d.productId === connInfo.pid)
+              ?.product ?? `Keychron (wireless via ${state.firmwareVersion || 'bridge'})`
           result.push({
             vendorId: connInfo.vid,
             productId: connInfo.pid,
@@ -145,11 +144,7 @@ function delay(ms: number): Promise<void> {
 
 function isTransientError(err: Error): boolean {
   const msg = err.message.toLowerCase()
-  return (
-    msg.includes('timeout') ||
-    msg.includes('could not read') ||
-    msg.includes('cannot write')
-  )
+  return msg.includes('timeout') || msg.includes('could not read') || msg.includes('cannot write')
 }
 
 /**
@@ -158,7 +153,11 @@ function isTransientError(err: Error): boolean {
  * Uses device path for precise matching.
  * Retries with a delay to work around transient open failures on all platforms.
  */
-export async function openHidDevice(vendorId: number, productId: number, serialNumber?: string): Promise<boolean> {
+export async function openHidDevice(
+  vendorId: number,
+  productId: number,
+  serialNumber?: string,
+): Promise<boolean> {
   if (openDevice || usingBridge) {
     await closeHidDevice()
   }

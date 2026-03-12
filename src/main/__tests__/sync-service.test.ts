@@ -92,7 +92,12 @@ vi.mock('../app-config', () => ({
 
 vi.stubGlobal('fetch', vi.fn())
 
-import { decrypt as mockDecryptFn, encrypt as mockEncryptFn, storePassword as mockStorePasswordFn, clearPassword as mockClearPasswordFn } from '../sync/sync-crypto'
+import {
+  decrypt as mockDecryptFn,
+  encrypt as mockEncryptFn,
+  storePassword as mockStorePasswordFn,
+  clearPassword as mockClearPasswordFn,
+} from '../sync/sync-crypto'
 import type { SyncProgress } from '../../shared/types/sync'
 import {
   executeSync,
@@ -127,7 +132,13 @@ async function flushIO(): Promise<void> {
 
 function makeRemoteEnvelope(
   updatedAt: string,
-  entries?: Array<{ id: string; label: string; filename: string; savedAt: string; updatedAt?: string }>,
+  entries?: Array<{
+    id: string
+    label: string
+    filename: string
+    savedAt: string
+    updatedAt?: string
+  }>,
 ): Record<string, unknown> {
   const entryList = entries ?? []
   const files: Record<string, string> = {}
@@ -150,10 +161,7 @@ function makeRemoteEnvelope(
   }
 }
 
-function makeSettingsEnvelope(
-  uid: string,
-  updatedAt: string | undefined,
-): Record<string, unknown> {
+function makeSettingsEnvelope(uid: string, updatedAt: string | undefined): Record<string, unknown> {
   const settings: Record<string, unknown> = { theme: 'dark' }
   if (updatedAt !== undefined) settings._updatedAt = updatedAt
   return {
@@ -175,7 +183,10 @@ function makeDriveFile(modifiedTime: string): { id: string; name: string; modifi
   return { id: 'file-1', name: 'favorites_tapDance.enc', modifiedTime }
 }
 
-function makeSettingsDriveFile(uid: string, modifiedTime: string): { id: string; name: string; modifiedTime: string } {
+function makeSettingsDriveFile(
+  uid: string,
+  modifiedTime: string,
+): { id: string; name: string; modifiedTime: string } {
   return { id: `settings-${uid}`, name: `keyboards_${uid}_settings.enc`, modifiedTime }
 }
 
@@ -211,11 +222,7 @@ async function setupLocalFavorite(
     savedAt,
   }
   if (opts?.updatedAt) entry.updatedAt = opts.updatedAt
-  await writeFile(
-    join(favDir, 'index.json'),
-    JSON.stringify({ type, entries: [entry] }),
-    'utf-8',
-  )
+  await writeFile(join(favDir, 'index.json'), JSON.stringify({ type, entries: [entry] }), 'utf-8')
   if (dataFile) {
     await writeFile(join(favDir, dataFile.name), dataFile.content, 'utf-8')
   }
@@ -323,11 +330,7 @@ describe('sync-service', () => {
       }
 
       await writeFile(join(favDir, 'index.json'), JSON.stringify(index), 'utf-8')
-      await writeFile(
-        join(favDir, 'tapDance_2024-01-01.json'),
-        '{"onTap":4}',
-        'utf-8',
-      )
+      await writeFile(join(favDir, 'tapDance_2024-01-01.json'), '{"onTap":4}', 'utf-8')
 
       notifyChange('favorites/tapDance')
     })
@@ -359,9 +362,7 @@ describe('sync-service', () => {
     })
 
     it('releases lock after executeSync errors', async () => {
-      mockListFiles
-        .mockRejectedValueOnce(new Error('network error'))
-        .mockResolvedValueOnce([])
+      mockListFiles.mockRejectedValueOnce(new Error('network error')).mockResolvedValueOnce([])
 
       await expect(executeSync('download')).rejects.toThrow('network error')
       await executeSync('download')
@@ -374,11 +375,21 @@ describe('sync-service', () => {
     it('merges when remote exists and uploads if local has unique entries', async () => {
       // Remote has entry 'r1', local has entry '1' — merge should combine both
       mockListFiles.mockResolvedValue([makeDriveFile('2025-06-01T00:00:00.000Z')])
-      mockDownloadFile.mockResolvedValue(makeRemoteEnvelope('2025-06-01T00:00:00.000Z', [
-        { id: 'r1', label: 'remote', filename: 'remote.json', savedAt: '2025-06-01T00:00:00.000Z' },
-      ]))
+      mockDownloadFile.mockResolvedValue(
+        makeRemoteEnvelope('2025-06-01T00:00:00.000Z', [
+          {
+            id: 'r1',
+            label: 'remote',
+            filename: 'remote.json',
+            savedAt: '2025-06-01T00:00:00.000Z',
+          },
+        ]),
+      )
 
-      await setupLocalFavorite('2024-01-01T00:00:00.000Z', { name: 'data.json', content: '{"local":1}' })
+      await setupLocalFavorite('2024-01-01T00:00:00.000Z', {
+        name: 'data.json',
+        content: '{"local":1}',
+      })
 
       await executeSync('upload')
 
@@ -391,7 +402,10 @@ describe('sync-service', () => {
       mockListFiles.mockResolvedValue([makeDriveFile('2020-01-01T00:00:00.000Z')])
       mockDownloadFile.mockResolvedValue(makeRemoteEnvelope('2020-01-01T00:00:00.000Z'))
 
-      await setupLocalFavorite('2026-01-01T00:00:00.000Z', { name: 'new.json', content: '{"data":1}' })
+      await setupLocalFavorite('2026-01-01T00:00:00.000Z', {
+        name: 'new.json',
+        content: '{"data":1}',
+      })
 
       await executeSync('upload')
 
@@ -401,12 +415,23 @@ describe('sync-service', () => {
     it('does not upload when remote and local have same entries', async () => {
       mockAutoSync = true
       const sharedEntry = {
-        id: '1', label: 'entry', filename: 'data.json', savedAt: '2025-01-01T00:00:00.000Z',
+        id: '1',
+        label: 'entry',
+        filename: 'data.json',
+        savedAt: '2025-01-01T00:00:00.000Z',
       }
-      mockListFiles.mockResolvedValue([makeDriveFile('2025-01-01T00:00:00.000Z'), PASSWORD_CHECK_DRIVE_FILE])
-      mockDownloadFile.mockResolvedValue(makeRemoteEnvelope('2025-01-01T00:00:00.000Z', [sharedEntry]))
+      mockListFiles.mockResolvedValue([
+        makeDriveFile('2025-01-01T00:00:00.000Z'),
+        PASSWORD_CHECK_DRIVE_FILE,
+      ])
+      mockDownloadFile.mockResolvedValue(
+        makeRemoteEnvelope('2025-01-01T00:00:00.000Z', [sharedEntry]),
+      )
 
-      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{"data":1}' })
+      await setupLocalFavorite('2025-01-01T00:00:00.000Z', {
+        name: 'data.json',
+        content: '{"data":1}',
+      })
 
       notifyChange('favorites/tapDance')
       await vi.advanceTimersByTimeAsync(10_000)
@@ -539,12 +564,22 @@ describe('sync-service', () => {
   describe('merge-based sync', () => {
     it('merges local and remote entries during download sync', async () => {
       // Local has entry '1', remote has entry 'r1'
-      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{"local":true}' })
+      await setupLocalFavorite('2025-01-01T00:00:00.000Z', {
+        name: 'data.json',
+        content: '{"local":true}',
+      })
 
       mockListFiles.mockResolvedValue([makeDriveFile('2025-06-01T00:00:00.000Z')])
-      mockDownloadFile.mockResolvedValue(makeRemoteEnvelope('2025-06-01T00:00:00.000Z', [
-        { id: 'r1', label: 'remote-entry', filename: 'remote.json', savedAt: '2025-06-01T00:00:00.000Z' },
-      ]))
+      mockDownloadFile.mockResolvedValue(
+        makeRemoteEnvelope('2025-06-01T00:00:00.000Z', [
+          {
+            id: 'r1',
+            label: 'remote-entry',
+            filename: 'remote.json',
+            savedAt: '2025-06-01T00:00:00.000Z',
+          },
+        ]),
+      )
 
       await executeSync('download')
 
@@ -563,12 +598,24 @@ describe('sync-service', () => {
     it('does not upload when merge shows no local-only changes', async () => {
       // Both local and remote have the same entry
       const sharedEntry = {
-        id: 'shared', label: 'same', filename: 'shared.json', savedAt: '2025-01-01T00:00:00.000Z',
+        id: 'shared',
+        label: 'same',
+        filename: 'shared.json',
+        savedAt: '2025-01-01T00:00:00.000Z',
       }
-      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'shared.json', content: '{}' }, { id: 'shared' })
+      await setupLocalFavorite(
+        '2025-01-01T00:00:00.000Z',
+        { name: 'shared.json', content: '{}' },
+        { id: 'shared' },
+      )
 
-      mockListFiles.mockResolvedValue([makeDriveFile('2025-01-01T00:00:00.000Z'), PASSWORD_CHECK_DRIVE_FILE])
-      mockDownloadFile.mockResolvedValue(makeRemoteEnvelope('2025-01-01T00:00:00.000Z', [sharedEntry]))
+      mockListFiles.mockResolvedValue([
+        makeDriveFile('2025-01-01T00:00:00.000Z'),
+        PASSWORD_CHECK_DRIVE_FILE,
+      ])
+      mockDownloadFile.mockResolvedValue(
+        makeRemoteEnvelope('2025-01-01T00:00:00.000Z', [sharedEntry]),
+      )
 
       await executeSync('download')
 
@@ -641,7 +688,11 @@ describe('sync-service', () => {
 
       // Set up two local favorites so collectAllSyncUnits finds them
       await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{}' })
-      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'macro.json', content: '{}' }, { id: '2', favoriteType: 'macro' })
+      await setupLocalFavorite(
+        '2025-01-01T00:00:00.000Z',
+        { name: 'macro.json', content: '{}' },
+        { id: '2', favoriteType: 'macro' },
+      )
 
       mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
       mockDownloadFile.mockResolvedValueOnce(makePasswordCheckEnvelope())
@@ -662,7 +713,11 @@ describe('sync-service', () => {
     it('re-adds failed units to pending after partial upload', async () => {
       // Set up two local favorites
       await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{}' })
-      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'macro.json', content: '{}' }, { id: '2', favoriteType: 'macro' })
+      await setupLocalFavorite(
+        '2025-01-01T00:00:00.000Z',
+        { name: 'macro.json', content: '{}' },
+        { id: '2', favoriteType: 'macro' },
+      )
 
       // Mark both as pending before sync
       notifyChange('favorites/tapDance')
@@ -686,7 +741,11 @@ describe('sync-service', () => {
     it('calls listFiles only twice during upload sync (no N+1)', async () => {
       // Set up multiple local favorites to simulate N sync units
       await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{}' })
-      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'macro.json', content: '{}' }, { id: '2', favoriteType: 'macro' })
+      await setupLocalFavorite(
+        '2025-01-01T00:00:00.000Z',
+        { name: 'macro.json', content: '{}' },
+        { id: '2', favoriteType: 'macro' },
+      )
 
       mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
       mockDownloadFile.mockResolvedValueOnce(makePasswordCheckEnvelope())
@@ -826,9 +885,15 @@ describe('sync-service', () => {
 
     it('includes syncUnit from fileName for keyboard files', async () => {
       mockListFiles.mockResolvedValue([
-        { id: 'f1', name: 'keyboards_uid1_snapshots.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+        {
+          id: 'f1',
+          name: 'keyboards_uid1_snapshots.enc',
+          modifiedTime: '2025-01-01T00:00:00.000Z',
+        },
       ])
-      mockDownloadFile.mockResolvedValueOnce(makeSettingsEnvelope('uid1', '2025-01-01T00:00:00.000Z'))
+      mockDownloadFile.mockResolvedValueOnce(
+        makeSettingsEnvelope('uid1', '2025-01-01T00:00:00.000Z'),
+      )
       mockDecrypt.mockRejectedValueOnce(new Error('bad password'))
 
       const result = await listUndecryptableFiles()
@@ -886,7 +951,11 @@ describe('sync-service', () => {
     it('categorizes keyboards, favorites, and undecryptable files', async () => {
       mockListFiles.mockResolvedValue([
         { id: 'f1', name: 'keyboards_uid1_settings.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
-        { id: 'f2', name: 'keyboards_uid1_snapshots.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+        {
+          id: 'f2',
+          name: 'keyboards_uid1_snapshots.enc',
+          modifiedTime: '2025-01-01T00:00:00.000Z',
+        },
         { id: 'f3', name: 'keyboards_uid2_settings.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
         { id: 'f4', name: 'favorites_tapDance.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
         { id: 'f5', name: 'favorites_macro.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
@@ -924,7 +993,11 @@ describe('sync-service', () => {
     it('deduplicates keyboard UIDs', async () => {
       mockListFiles.mockResolvedValue([
         { id: 'f1', name: 'keyboards_uid1_settings.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
-        { id: 'f2', name: 'keyboards_uid1_snapshots.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+        {
+          id: 'f2',
+          name: 'keyboards_uid1_snapshots.enc',
+          modifiedTime: '2025-01-01T00:00:00.000Z',
+        },
       ])
       mockDownloadFile
         .mockResolvedValueOnce(makeSettingsEnvelope('uid1', '2025-01-01T00:00:00.000Z'))
@@ -967,12 +1040,20 @@ describe('sync-service', () => {
       mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE, dataFile])
       mockDownloadFile
         .mockResolvedValueOnce(makePasswordCheckEnvelope()) // validatePasswordCheck
-        .mockResolvedValueOnce({ version: 1, syncUnit: 'favorites/tapDance', ciphertext: '{"data":"test"}' })
+        .mockResolvedValueOnce({
+          version: 1,
+          syncUnit: 'favorites/tapDance',
+          ciphertext: '{"data":"test"}',
+        })
 
       await changePassword('new-password')
 
       // Should upload the data file with the new password
-      expect(mockEncrypt).toHaveBeenCalledWith('{"data":"test"}', 'new-password', 'favorites/tapDance')
+      expect(mockEncrypt).toHaveBeenCalledWith(
+        '{"data":"test"}',
+        'new-password',
+        'favorites/tapDance',
+      )
       expect(mockUploadFile).toHaveBeenCalledWith(
         'favorites_tapDance.enc',
         expect.objectContaining({ syncUnit: 'favorites/tapDance' }),
@@ -1001,7 +1082,9 @@ describe('sync-service', () => {
         .mockResolvedValueOnce('ok') // validatePasswordCheck succeeds
         .mockRejectedValueOnce(new Error('Decryption failed')) // data file fails
 
-      await expect(changePassword('new-password')).rejects.toThrow('sync.changePasswordUndecryptable')
+      await expect(changePassword('new-password')).rejects.toThrow(
+        'sync.changePasswordUndecryptable',
+      )
       expect(mockUploadFile).not.toHaveBeenCalled()
     })
 
@@ -1066,7 +1149,11 @@ describe('sync-service', () => {
       mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE, dataFile])
       mockDownloadFile
         .mockResolvedValueOnce(makePasswordCheckEnvelope()) // validatePasswordCheck
-        .mockResolvedValueOnce({ version: 1, syncUnit: 'favorites/tapDance', ciphertext: '{"data":"test"}' })
+        .mockResolvedValueOnce({
+          version: 1,
+          syncUnit: 'favorites/tapDance',
+          ciphertext: '{"data":"test"}',
+        })
 
       await changePassword('new-password')
 
@@ -1185,7 +1272,11 @@ describe('sync-service', () => {
         mockListFiles.mockResolvedValue([
           { id: 'f1', name: 'favorites_tapDance.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
           { id: 'f2', name: 'favorites_macro.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
-          { id: 'f3', name: 'keyboards_0x1234_settings.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+          {
+            id: 'f3',
+            name: 'keyboards_0x1234_settings.enc',
+            modifiedTime: '2025-01-01T00:00:00.000Z',
+          },
           PASSWORD_CHECK_DRIVE_FILE,
         ])
         mockDownloadFile
@@ -1198,17 +1289,29 @@ describe('sync-service', () => {
         // Should download password-check + 2 favorites, NOT the keyboard file
         const downloadedIds = mockDownloadFile.mock.calls.map((call) => call[0])
         expect(downloadedIds).toContain('pc-1') // password check
-        expect(downloadedIds).toContain('f1')   // favorites/tapDance
-        expect(downloadedIds).toContain('f2')   // favorites/macro
+        expect(downloadedIds).toContain('f1') // favorites/tapDance
+        expect(downloadedIds).toContain('f2') // favorites/macro
         expect(downloadedIds).not.toContain('f3') // keyboards/0x1234/settings excluded
       })
 
       it('downloads only target keyboard files when scope is { keyboard: uid }', async () => {
         mockListFiles.mockResolvedValue([
           { id: 'f1', name: 'favorites_tapDance.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
-          { id: 'f2', name: 'keyboards_0x1234_settings.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
-          { id: 'f3', name: 'keyboards_0x1234_snapshots.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
-          { id: 'f4', name: 'keyboards_0x5678_settings.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+          {
+            id: 'f2',
+            name: 'keyboards_0x1234_settings.enc',
+            modifiedTime: '2025-01-01T00:00:00.000Z',
+          },
+          {
+            id: 'f3',
+            name: 'keyboards_0x1234_snapshots.enc',
+            modifiedTime: '2025-01-01T00:00:00.000Z',
+          },
+          {
+            id: 'f4',
+            name: 'keyboards_0x5678_settings.enc',
+            modifiedTime: '2025-01-01T00:00:00.000Z',
+          },
           PASSWORD_CHECK_DRIVE_FILE,
         ])
         mockDownloadFile
@@ -1220,8 +1323,8 @@ describe('sync-service', () => {
 
         const downloadedIds = mockDownloadFile.mock.calls.map((call) => call[0])
         expect(downloadedIds).toContain('pc-1') // password check
-        expect(downloadedIds).toContain('f2')   // keyboards/0x1234/settings
-        expect(downloadedIds).toContain('f3')   // keyboards/0x1234/snapshots
+        expect(downloadedIds).toContain('f2') // keyboards/0x1234/settings
+        expect(downloadedIds).toContain('f3') // keyboards/0x1234/snapshots
         expect(downloadedIds).not.toContain('f1') // favorites excluded
         expect(downloadedIds).not.toContain('f4') // other keyboard excluded
       })
@@ -1229,7 +1332,11 @@ describe('sync-service', () => {
       it('downloads all files when scope is omitted (backward compat)', async () => {
         mockListFiles.mockResolvedValue([
           { id: 'f1', name: 'favorites_tapDance.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
-          { id: 'f2', name: 'keyboards_0x1234_settings.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+          {
+            id: 'f2',
+            name: 'keyboards_0x1234_settings.enc',
+            modifiedTime: '2025-01-01T00:00:00.000Z',
+          },
           PASSWORD_CHECK_DRIVE_FILE,
         ])
         mockDownloadFile
@@ -1247,7 +1354,11 @@ describe('sync-service', () => {
       it('updates remote state for all files even with scoped download', async () => {
         const allFiles = [
           { id: 'f1', name: 'favorites_tapDance.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
-          { id: 'f2', name: 'keyboards_0x1234_settings.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+          {
+            id: 'f2',
+            name: 'keyboards_0x1234_settings.enc',
+            modifiedTime: '2025-01-01T00:00:00.000Z',
+          },
           PASSWORD_CHECK_DRIVE_FILE,
         ]
         mockListFiles.mockResolvedValue(allFiles)
@@ -1261,11 +1372,17 @@ describe('sync-service', () => {
         // because updateRemoteState was called with all files
         const updatedFiles = [
           { id: 'f1', name: 'favorites_tapDance.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
-          { id: 'f2', name: 'keyboards_0x1234_settings.enc', modifiedTime: '2025-01-02T00:00:00.000Z' },
+          {
+            id: 'f2',
+            name: 'keyboards_0x1234_settings.enc',
+            modifiedTime: '2025-01-02T00:00:00.000Z',
+          },
           PASSWORD_CHECK_DRIVE_FILE,
         ]
         mockListFiles.mockResolvedValue(updatedFiles)
-        mockDownloadFile.mockResolvedValue(makeSettingsEnvelope('0x1234', '2025-01-02T00:00:00.000Z'))
+        mockDownloadFile.mockResolvedValue(
+          makeSettingsEnvelope('0x1234', '2025-01-02T00:00:00.000Z'),
+        )
 
         startPolling()
         await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
@@ -1322,7 +1439,11 @@ describe('sync-service', () => {
         await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{}' })
         const kbDir = join(mockUserDataPath, 'sync', 'keyboards', '0x1234')
         await mkdir(kbDir, { recursive: true })
-        await writeFile(join(kbDir, 'pipette_settings.json'), JSON.stringify({ theme: 'dark' }), 'utf-8')
+        await writeFile(
+          join(kbDir, 'pipette_settings.json'),
+          JSON.stringify({ theme: 'dark' }),
+          'utf-8',
+        )
 
         // First validate password
         mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
@@ -1551,7 +1672,9 @@ describe('sync-service', () => {
       mockDownloadFile.mockResolvedValue(makePasswordCheckEnvelope())
       mockDecrypt.mockRejectedValueOnce(new Error('Decryption failed'))
 
-      await expect(setPasswordAndValidate('wrong-password')).rejects.toThrow('sync.passwordMismatch')
+      await expect(setPasswordAndValidate('wrong-password')).rejects.toThrow(
+        'sync.passwordMismatch',
+      )
     })
 
     it('clears stored password on validation failure', async () => {

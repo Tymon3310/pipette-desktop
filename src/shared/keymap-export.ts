@@ -74,15 +74,8 @@ function generateEncoderLayer(
 }
 
 export function generateKeymapC(input: KeymapExportInput): string {
-  const {
-    layers,
-    keys,
-    keymap,
-    encoderLayout,
-    encoderCount,
-    layoutOptions,
-    serializeKeycode,
-  } = input
+  const { layers, keys, keymap, encoderLayout, encoderCount, layoutOptions, serializeKeycode } =
+    input
 
   const visibleKeys = filterVisibleKeys(keys, layoutOptions)
   const normalKeys = visibleKeys.filter((k) => k.encoderIdx === -1)

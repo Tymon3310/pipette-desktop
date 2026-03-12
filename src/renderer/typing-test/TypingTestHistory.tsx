@@ -27,7 +27,6 @@ function modeFilterButtonClass(active: boolean): string {
 
 const MAX_SPARKLINE_RESULTS = 50
 
-
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
@@ -36,7 +35,23 @@ function formatDuration(seconds: number): string {
 
 const MODE_FILTERS: ModeFilter[] = ['all', 'words', 'time', 'quote']
 
-const CSV_HEADERS = ['date', 'wpm', 'accuracy', 'wordCount', 'correctChars', 'incorrectChars', 'durationSeconds', 'rawWpm', 'mode', 'mode2', 'language', 'punctuation', 'numbers', 'consistency', 'isPb'] as const
+const CSV_HEADERS = [
+  'date',
+  'wpm',
+  'accuracy',
+  'wordCount',
+  'correctChars',
+  'incorrectChars',
+  'durationSeconds',
+  'rawWpm',
+  'mode',
+  'mode2',
+  'language',
+  'punctuation',
+  'numbers',
+  'consistency',
+  'isPb',
+] as const
 
 function escapeCsvField(value: unknown): string {
   let str = value == null ? '' : String(value)
@@ -53,9 +68,7 @@ function escapeCsvField(value: unknown): string {
 
 function buildCsv(results: TypingTestResult[]): string {
   const header = CSV_HEADERS.join(',')
-  const rows = results.map((r) =>
-    CSV_HEADERS.map((key) => escapeCsvField(r[key])).join(','),
-  )
+  const rows = results.map((r) => CSV_HEADERS.map((key) => escapeCsvField(r[key])).join(','))
   return [header, ...rows].join('\n')
 }
 
@@ -65,10 +78,13 @@ export function TypingTestHistory({ results, onExportCsv }: Props) {
   const [sortColumn, setSortColumn] = useState<SortColumn>('date')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
-  const handleSort = useCallback((column: SortColumn) => {
-    setSortDirection((prev) => (sortColumn === column && prev === 'desc') ? 'asc' : 'desc')
-    setSortColumn(column)
-  }, [sortColumn])
+  const handleSort = useCallback(
+    (column: SortColumn) => {
+      setSortDirection((prev) => (sortColumn === column && prev === 'desc' ? 'asc' : 'desc'))
+      setSortColumn(column)
+    },
+    [sortColumn],
+  )
 
   const handleExport = useCallback(() => {
     onExportCsv?.(buildCsv(results))
@@ -86,30 +102,32 @@ export function TypingTestHistory({ results, onExportCsv }: Props) {
   )
 
   const sorted = useMemo(() => {
-    return [...filtered].sort((a, b) => {
-      let cmp = 0
-      switch (sortColumn) {
-        case 'date':
-          cmp = new Date(a.date).getTime() - new Date(b.date).getTime()
-          break
-        case 'wpm':
-          cmp = a.wpm - b.wpm
-          break
-        case 'accuracy':
-          cmp = a.accuracy - b.accuracy
-          break
-        case 'mode': {
-          const modeA = `${a.mode ?? ''}${a.mode2 ?? ''}`
-          const modeB = `${b.mode ?? ''}${b.mode2 ?? ''}`
-          cmp = modeA.localeCompare(modeB)
-          break
+    return [...filtered]
+      .sort((a, b) => {
+        let cmp = 0
+        switch (sortColumn) {
+          case 'date':
+            cmp = new Date(a.date).getTime() - new Date(b.date).getTime()
+            break
+          case 'wpm':
+            cmp = a.wpm - b.wpm
+            break
+          case 'accuracy':
+            cmp = a.accuracy - b.accuracy
+            break
+          case 'mode': {
+            const modeA = `${a.mode ?? ''}${a.mode2 ?? ''}`
+            const modeB = `${b.mode ?? ''}${b.mode2 ?? ''}`
+            cmp = modeA.localeCompare(modeB)
+            break
+          }
+          case 'duration':
+            cmp = a.durationSeconds - b.durationSeconds
+            break
         }
-        case 'duration':
-          cmp = a.durationSeconds - b.durationSeconds
-          break
-      }
-      return sortDirection === 'asc' ? cmp : -cmp
-    }).slice(0, MAX_TABLE_ROWS)
+        return sortDirection === 'asc' ? cmp : -cmp
+      })
+      .slice(0, MAX_TABLE_ROWS)
   }, [filtered, sortColumn, sortDirection])
 
   return (
@@ -150,7 +168,10 @@ export function TypingTestHistory({ results, onExportCsv }: Props) {
         <StatItem label={t('editor.typingTest.history.avgWpm')} value={stats.avgWpm} />
         <StatItem label={t('editor.typingTest.history.last10Avg')} value={stats.last10Avg} />
         <StatItem label={t('editor.typingTest.history.totalTests')} value={stats.totalTests} />
-        <StatItem label={t('editor.typingTest.history.avgAccuracy')} value={`${stats.avgAccuracy}%`} />
+        <StatItem
+          label={t('editor.typingTest.history.avgAccuracy')}
+          value={`${stats.avgAccuracy}%`}
+        />
       </div>
 
       {/* Sparkline */}
@@ -166,11 +187,41 @@ export function TypingTestHistory({ results, onExportCsv }: Props) {
           <table className="w-full text-left text-xs">
             <thead className="sticky top-0 bg-surface-alt text-content-muted">
               <tr>
-                <SortableHeader column="date" label={t('editor.typingTest.history.date')} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} />
-                <SortableHeader column="wpm" label={t('editor.typingTest.wpm')} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} />
-                <SortableHeader column="accuracy" label={t('editor.typingTest.accuracy')} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} />
-                <SortableHeader column="mode" label={t('editor.typingTest.history.mode')} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} />
-                <SortableHeader column="duration" label={t('editor.typingTest.time')} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} />
+                <SortableHeader
+                  column="date"
+                  label={t('editor.typingTest.history.date')}
+                  sortColumn={sortColumn}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableHeader
+                  column="wpm"
+                  label={t('editor.typingTest.wpm')}
+                  sortColumn={sortColumn}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableHeader
+                  column="accuracy"
+                  label={t('editor.typingTest.accuracy')}
+                  sortColumn={sortColumn}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableHeader
+                  column="mode"
+                  label={t('editor.typingTest.history.mode')}
+                  sortColumn={sortColumn}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableHeader
+                  column="duration"
+                  label={t('editor.typingTest.time')}
+                  sortColumn={sortColumn}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
                 <th className="px-3 py-1.5">{t('editor.typingTest.history.pb')}</th>
               </tr>
             </thead>
@@ -184,13 +235,20 @@ export function TypingTestHistory({ results, onExportCsv }: Props) {
                   <td className="px-3 py-1.5 font-mono font-semibold text-accent">{r.wpm}</td>
                   <td className="px-3 py-1.5 font-mono">{r.accuracy}%</td>
                   <td className="px-3 py-1.5 text-content-muted">
-                    {t(`editor.typingTest.mode.${r.mode ?? 'words'}`)}{r.mode2 != null ? ` ${r.mode2}` : ''}
+                    {t(`editor.typingTest.mode.${r.mode ?? 'words'}`)}
+                    {r.mode2 != null ? ` ${r.mode2}` : ''}
                   </td>
                   <td className="px-3 py-1.5 font-mono text-content-muted">
                     {formatDuration(r.durationSeconds)}
                   </td>
                   <td className="px-3 py-1.5">
-                    {r.isPb && <Trophy role="img" className="inline-block size-3.5 text-warning" aria-label={t('editor.typingTest.history.pb')} />}
+                    {r.isPb && (
+                      <Trophy
+                        role="img"
+                        className="inline-block size-3.5 text-warning"
+                        aria-label={t('editor.typingTest.history.pb')}
+                      />
+                    )}
                   </td>
                 </tr>
               ))}
@@ -218,17 +276,9 @@ interface SortableHeaderProps {
   onSort: (column: SortColumn) => void
 }
 
-function SortableHeader({
-  column,
-  label,
-  sortColumn,
-  sortDirection,
-  onSort,
-}: SortableHeaderProps) {
+function SortableHeader({ column, label, sortColumn, sortDirection, onSort }: SortableHeaderProps) {
   const isActive = column === sortColumn
-  const ariaSort = isActive
-    ? (sortDirection === 'asc' ? 'ascending' : 'descending')
-    : 'none'
+  const ariaSort = isActive ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'
 
   return (
     <th className="px-3 py-1.5" aria-sort={ariaSort}>
@@ -237,7 +287,8 @@ function SortableHeader({
         className="cursor-pointer select-none bg-transparent text-inherit"
         onClick={() => onSort(column)}
       >
-        {label}{isActive ? sortIndicator(sortDirection) : ''}
+        {label}
+        {isActive ? sortIndicator(sortDirection) : ''}
       </button>
     </th>
   )

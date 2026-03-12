@@ -311,9 +311,7 @@ export const GC_AXIS_NAMES: Record<number, string> = {
   [GC_RZ_AXIS_N]: 'RZ-',
   [GC_RZ_AXIS_P]: 'RZ+',
   // Buttons 0-31 (indices GC_AXIS_MAX+1 .. GC_AXIS_MAX+32)
-  ...Object.fromEntries(
-    Array.from({ length: 32 }, (_, i) => [GC_AXIS_MAX + 1 + i, `Button ${i}`]),
-  ),
+  ...Object.fromEntries(Array.from({ length: 32 }, (_, i) => [GC_AXIS_MAX + 1 + i, `Button ${i}`])),
 }
 
 export const GC_MASK_XINPUT = 0x01

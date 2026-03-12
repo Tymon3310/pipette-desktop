@@ -58,9 +58,7 @@ vi.mock('../MacroModal', () => ({ MacroModal: () => null }))
 import { KeymapEditor } from '../KeymapEditor'
 
 const makeLayout = () => ({
-  keys: [
-    { x: 0, y: 0, w: 1, h: 1, row: 0, col: 0, encoderIdx: -1, decal: false, labels: [] },
-  ],
+  keys: [{ x: 0, y: 0, w: 1, h: 1, row: 0, col: 0, encoderIdx: -1, decal: false, labels: [] }],
 })
 
 describe('KeymapEditor — layer name label', () => {
@@ -72,7 +70,10 @@ describe('KeymapEditor — layer name label', () => {
     layers: 2,
     currentLayer: 0,
     onLayerChange: vi.fn(),
-    keymap: new Map([['0,0,0', 4], ['1,0,0', 5]]),
+    keymap: new Map([
+      ['0,0,0', 4],
+      ['1,0,0', 5],
+    ]),
     encoderLayout: new Map<string, number>(),
     encoderCount: 0,
     layoutOptions: new Map<number, number>(),

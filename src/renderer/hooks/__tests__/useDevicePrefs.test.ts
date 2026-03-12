@@ -7,8 +7,24 @@ import { useDevicePrefs } from '../useDevicePrefs'
 import { setupAppConfigMock, renderHookWithConfig } from './test-helpers'
 
 // Mock vialAPI for IPC calls
-const mockPipetteSettingsGet = vi.fn<(uid: string) => Promise<{ _rev: 1; keyboardLayout: string; autoAdvance: boolean; layerNames: string[] } | null>>()
-const mockPipetteSettingsSet = vi.fn<(uid: string, prefs: { _rev: 1; keyboardLayout: string; autoAdvance: boolean; layerNames: string[] }) => Promise<{ success: boolean }>>()
+const mockPipetteSettingsGet =
+  vi.fn<
+    (
+      uid: string,
+    ) => Promise<{
+      _rev: 1
+      keyboardLayout: string
+      autoAdvance: boolean
+      layerNames: string[]
+    } | null>
+  >()
+const mockPipetteSettingsSet =
+  vi.fn<
+    (
+      uid: string,
+      prefs: { _rev: 1; keyboardLayout: string; autoAdvance: boolean; layerNames: string[] },
+    ) => Promise<{ success: boolean }>
+  >()
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -94,15 +110,18 @@ describe('useDevicePrefs', () => {
       expect(result.current.layerNames).toEqual([])
 
       expect(mockPipetteSettingsGet).toHaveBeenCalledWith('0xAABB')
-      expect(mockPipetteSettingsSet).toHaveBeenCalledWith('0xAABB', expect.objectContaining({
-        _rev: 1,
-        keyboardLayout: 'dvorak',
-        autoAdvance: false,
-        layerPanelOpen: true,
-        basicViewType: 'ansi',
-        layerNames: [],
-        typingTestResults: [],
-      }))
+      expect(mockPipetteSettingsSet).toHaveBeenCalledWith(
+        '0xAABB',
+        expect.objectContaining({
+          _rev: 1,
+          keyboardLayout: 'dvorak',
+          autoAdvance: false,
+          layerPanelOpen: true,
+          basicViewType: 'ansi',
+          layerNames: [],
+          typingTestResults: [],
+        }),
+      )
     })
 
     it('restores existing per-device prefs from IPC', async () => {
@@ -159,10 +178,13 @@ describe('useDevicePrefs', () => {
       })
 
       expect(result.current.layout).toBe('french')
-      expect(mockPipetteSettingsSet).toHaveBeenCalledWith('0xAABB', expect.objectContaining({
-        _rev: 1,
-        keyboardLayout: 'french',
-      }))
+      expect(mockPipetteSettingsSet).toHaveBeenCalledWith(
+        '0xAABB',
+        expect.objectContaining({
+          _rev: 1,
+          keyboardLayout: 'french',
+        }),
+      )
     })
 
     it('setAutoAdvance saves per-device prefs via IPC after applyDevicePrefs', async () => {
@@ -178,10 +200,13 @@ describe('useDevicePrefs', () => {
       })
 
       expect(result.current.autoAdvance).toBe(false)
-      expect(mockPipetteSettingsSet).toHaveBeenCalledWith('0xAABB', expect.objectContaining({
-        _rev: 1,
-        autoAdvance: false,
-      }))
+      expect(mockPipetteSettingsSet).toHaveBeenCalledWith(
+        '0xAABB',
+        expect.objectContaining({
+          _rev: 1,
+          autoAdvance: false,
+        }),
+      )
     })
 
     it('setLayerNames saves via IPC and updates state', async () => {
@@ -197,10 +222,13 @@ describe('useDevicePrefs', () => {
       })
 
       expect(result.current.layerNames).toEqual(['Base', 'Nav', 'Sym'])
-      expect(mockPipetteSettingsSet).toHaveBeenCalledWith('0xAABB', expect.objectContaining({
-        _rev: 1,
-        layerNames: ['Base', 'Nav', 'Sym'],
-      }))
+      expect(mockPipetteSettingsSet).toHaveBeenCalledWith(
+        '0xAABB',
+        expect.objectContaining({
+          _rev: 1,
+          layerNames: ['Base', 'Nav', 'Sym'],
+        }),
+      )
     })
 
     it('setLayout does not overwrite layerNames', async () => {
@@ -280,12 +308,28 @@ describe('useDevicePrefs', () => {
         autoAdvance: true,
         layerNames: [],
         typingTestResults: [
-          { date: '2024-01-01', wpm: 60, accuracy: 95, wordCount: 30, correctChars: 100, incorrectChars: 5, durationSeconds: 30 },
+          {
+            date: '2024-01-01',
+            wpm: 60,
+            accuracy: 95,
+            wordCount: 30,
+            correctChars: 100,
+            incorrectChars: 5,
+            durationSeconds: 30,
+          },
           null,
           { wpm: 50 },
           'not-an-object',
           42,
-          { date: '2024-01-02', wpm: 80, accuracy: 97, wordCount: 30, correctChars: 120, incorrectChars: 3, durationSeconds: 25 },
+          {
+            date: '2024-01-02',
+            wpm: 80,
+            accuracy: 97,
+            wordCount: 30,
+            correctChars: 120,
+            incorrectChars: 3,
+            durationSeconds: 25,
+          },
         ],
       } as never)
 
@@ -318,13 +362,30 @@ describe('useDevicePrefs', () => {
   describe('race guard', () => {
     it('discards stale applyDevicePrefs result when UID changes', async () => {
       setupMocks()
-      let resolveFirst: (value: { _rev: 1; keyboardLayout: string; autoAdvance: boolean; layerNames: string[] } | null) => void
-      const firstPromise = new Promise<{ _rev: 1; keyboardLayout: string; autoAdvance: boolean; layerNames: string[] } | null>((resolve) => {
+      let resolveFirst: (
+        value: {
+          _rev: 1
+          keyboardLayout: string
+          autoAdvance: boolean
+          layerNames: string[]
+        } | null,
+      ) => void
+      const firstPromise = new Promise<{
+        _rev: 1
+        keyboardLayout: string
+        autoAdvance: boolean
+        layerNames: string[]
+      } | null>((resolve) => {
         resolveFirst = resolve
       })
       mockPipetteSettingsGet
         .mockReturnValueOnce(firstPromise)
-        .mockResolvedValueOnce({ _rev: 1, keyboardLayout: 'colemak', autoAdvance: true, layerNames: [] })
+        .mockResolvedValueOnce({
+          _rev: 1,
+          keyboardLayout: 'colemak',
+          autoAdvance: true,
+          layerNames: [],
+        })
 
       const { result } = renderHookWithConfig(() => useDevicePrefs())
       await act(async () => {})
@@ -332,7 +393,9 @@ describe('useDevicePrefs', () => {
       // Start first apply (will be pending)
       let firstDone = false
       act(() => {
-        result.current.applyDevicePrefs('uid-1').then(() => { firstDone = true })
+        result.current.applyDevicePrefs('uid-1').then(() => {
+          firstDone = true
+        })
       })
 
       // Start second apply immediately (uid changes)
@@ -408,7 +471,12 @@ describe('useDevicePrefs', () => {
       mockPipetteSettingsSet.mockClear()
 
       act(() => {
-        result.current.setTypingTestConfig({ mode: 'words', wordCount: 60, punctuation: true, numbers: false })
+        result.current.setTypingTestConfig({
+          mode: 'words',
+          wordCount: 60,
+          punctuation: true,
+          numbers: false,
+        })
       })
 
       expect(result.current.typingTestConfig).toEqual({
@@ -417,9 +485,12 @@ describe('useDevicePrefs', () => {
         punctuation: true,
         numbers: false,
       })
-      expect(mockPipetteSettingsSet).toHaveBeenCalledWith('0xAABB', expect.objectContaining({
-        typingTestConfig: { mode: 'words', wordCount: 60, punctuation: true, numbers: false },
-      }))
+      expect(mockPipetteSettingsSet).toHaveBeenCalledWith(
+        '0xAABB',
+        expect.objectContaining({
+          typingTestConfig: { mode: 'words', wordCount: 60, punctuation: true, numbers: false },
+        }),
+      )
     })
 
     it('setTypingTestLanguage saves via IPC', async () => {
@@ -436,9 +507,12 @@ describe('useDevicePrefs', () => {
       })
 
       expect(result.current.typingTestLanguage).toBe('english_5k')
-      expect(mockPipetteSettingsSet).toHaveBeenCalledWith('0xAABB', expect.objectContaining({
-        typingTestLanguage: 'english_5k',
-      }))
+      expect(mockPipetteSettingsSet).toHaveBeenCalledWith(
+        '0xAABB',
+        expect.objectContaining({
+          typingTestLanguage: 'english_5k',
+        }),
+      )
     })
 
     it('returns undefined for typingTestConfig/typingTestLanguage when not stored', async () => {
@@ -562,7 +636,12 @@ describe('useDevicePrefs', () => {
         keyboardLayout: 'qwerty',
         autoAdvance: true,
         layerNames: [],
-        typingTestConfig: { mode: 'words', wordCount: Infinity, punctuation: false, numbers: false },
+        typingTestConfig: {
+          mode: 'words',
+          wordCount: Infinity,
+          punctuation: false,
+          numbers: false,
+        },
       } as never)
 
       const { result } = renderHookWithConfig(() => useDevicePrefs())
@@ -656,9 +735,12 @@ describe('useDevicePrefs', () => {
       })
 
       expect(result.current.splitKeyMode).toBe('flat')
-      expect(mockPipetteSettingsSet).toHaveBeenCalledWith('0xAABB', expect.objectContaining({
-        splitKeyMode: 'flat',
-      }))
+      expect(mockPipetteSettingsSet).toHaveBeenCalledWith(
+        '0xAABB',
+        expect.objectContaining({
+          splitKeyMode: 'flat',
+        }),
+      )
     })
 
     it('setDefaultSplitKeyMode persists via IPC', async () => {

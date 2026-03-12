@@ -32,13 +32,7 @@ describe('WpmSparkline', () => {
   })
 
   it('uses custom width and height', () => {
-    render(
-      <WpmSparkline
-        results={[makeResult(50), makeResult(90)]}
-        width={200}
-        height={40}
-      />,
-    )
+    render(<WpmSparkline results={[makeResult(50), makeResult(90)]} width={200} height={40} />)
     const svg = screen.getByTestId('wpm-sparkline')
     expect(svg.getAttribute('width')).toBe('200')
     expect(svg.getAttribute('height')).toBe('40')

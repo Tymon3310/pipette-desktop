@@ -93,7 +93,11 @@ describe('AltRepeatKeyPanelModal', () => {
 
   it('renders grid tiles for each entry', () => {
     render(
-      <AltRepeatKeyPanelModal entries={[makeEntry(), makeEntry()]} onSetEntry={onSetEntry} onClose={onClose} />,
+      <AltRepeatKeyPanelModal
+        entries={[makeEntry(), makeEntry()]}
+        onSetEntry={onSetEntry}
+        onClose={onClose}
+      />,
     )
     expect(screen.getByTestId('ar-tile-0')).toHaveTextContent('0')
     expect(screen.getByTestId('ar-tile-0')).toHaveTextContent('N/C')
@@ -127,7 +131,9 @@ describe('AltRepeatKeyPanelModal', () => {
   })
 
   it('renders unconfigured tile with empty style', () => {
-    render(<AltRepeatKeyPanelModal entries={[makeEntry()]} onSetEntry={onSetEntry} onClose={onClose} />)
+    render(
+      <AltRepeatKeyPanelModal entries={[makeEntry()]} onSetEntry={onSetEntry} onClose={onClose} />,
+    )
     const tile = screen.getByTestId('ar-tile-0')
     expect(tile.className).toContain('border-accent/30')
     expect(tile.className).toContain('bg-accent/5')
@@ -174,7 +180,11 @@ describe('AltRepeatKeyPanelModal', () => {
 
   it('shows enabled checkbox enabled when lastKey is nonzero', () => {
     render(
-      <AltRepeatKeyPanelModal entries={[makeEntry({ lastKey: 4 })]} onSetEntry={onSetEntry} onClose={onClose} />,
+      <AltRepeatKeyPanelModal
+        entries={[makeEntry({ lastKey: 4 })]}
+        onSetEntry={onSetEntry}
+        onClose={onClose}
+      />,
     )
     fireEvent.click(screen.getByTestId('ar-tile-0'))
     expect(screen.getByTestId('ar-enabled')).not.toBeDisabled()
@@ -187,7 +197,9 @@ describe('AltRepeatKeyPanelModal', () => {
     fireEvent.click(screen.getByTestId('ar-tile-0'))
     expect(screen.queryByTestId('tabbed-keycodes')).not.toBeInTheDocument()
     fireEvent.click(screen.getAllByTestId('keycode-field')[0])
-    act(() => { vi.advanceTimersByTime(300) })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
     expect(screen.getByTestId('tabbed-keycodes')).toBeInTheDocument()
   })
 
@@ -198,7 +210,9 @@ describe('AltRepeatKeyPanelModal', () => {
     fireEvent.click(screen.getByTestId('ar-tile-0'))
     expect(screen.getByTestId('ar-advanced-fields')).toBeInTheDocument()
     fireEvent.click(screen.getAllByTestId('keycode-field')[0])
-    act(() => { vi.advanceTimersByTime(300) })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
     expect(screen.queryByTestId('ar-advanced-fields')).not.toBeInTheDocument()
   })
 
@@ -216,7 +230,9 @@ describe('AltRepeatKeyPanelModal', () => {
     )
     fireEvent.click(screen.getByTestId('ar-tile-0'))
     fireEvent.click(screen.getAllByTestId('keycode-field')[0])
-    act(() => { vi.advanceTimersByTime(300) })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
     fireEvent.click(screen.getByTestId('pick-kc-a'))
     fireEvent.click(screen.getByTestId('confirm-picker'))
     expect(screen.getByTestId('ar-modal-save')).toBeEnabled()
@@ -228,7 +244,9 @@ describe('AltRepeatKeyPanelModal', () => {
     )
     fireEvent.click(screen.getByTestId('ar-tile-0'))
     fireEvent.click(screen.getAllByTestId('keycode-field')[0])
-    act(() => { vi.advanceTimersByTime(300) })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
     fireEvent.click(screen.getByTestId('pick-kc-a'))
     fireEvent.click(screen.getByTestId('confirm-picker'))
     fireEvent.click(screen.getByTestId('ar-modal-save'))
@@ -267,12 +285,18 @@ describe('AltRepeatKeyPanelModal', () => {
 
   it('returns to tile screen when entries shrink and selected index is out of bounds', () => {
     const { rerender } = render(
-      <AltRepeatKeyPanelModal entries={[makeEntry(), makeEntry()]} onSetEntry={onSetEntry} onClose={onClose} />,
+      <AltRepeatKeyPanelModal
+        entries={[makeEntry(), makeEntry()]}
+        onSetEntry={onSetEntry}
+        onClose={onClose}
+      />,
     )
     fireEvent.click(screen.getByTestId('ar-tile-1'))
     expect(screen.getByText('Alt Repeat Key - 1')).toBeInTheDocument()
     // Rerender with fewer entries — selected index 1 no longer exists
-    rerender(<AltRepeatKeyPanelModal entries={[makeEntry()]} onSetEntry={onSetEntry} onClose={onClose} />)
+    rerender(
+      <AltRepeatKeyPanelModal entries={[makeEntry()]} onSetEntry={onSetEntry} onClose={onClose} />,
+    )
     expect(screen.queryByText('Alt Repeat Key - 1')).not.toBeInTheDocument()
     expect(screen.getByTestId('ar-tile-0')).toBeInTheDocument()
   })
@@ -294,7 +318,9 @@ describe('AltRepeatKeyPanelModal', () => {
     fireEvent.click(screen.getByTestId('ar-tile-0'))
     expect(screen.getByTestId('ar-favorites-panel').className).not.toContain('hidden')
     fireEvent.click(screen.getAllByTestId('keycode-field')[0])
-    act(() => { vi.advanceTimersByTime(300) })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
     expect(screen.getByTestId('ar-favorites-panel').className).toContain('hidden')
   })
 })

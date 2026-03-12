@@ -7,7 +7,10 @@ import type {
   KeyOverrideEntry,
   AltRepeatKeyEntry,
 } from './types/protocol'
-import { serialize as serializeKeycode, deserialize as deserializeKeycode } from './keycodes/keycodes'
+import {
+  serialize as serializeKeycode,
+  deserialize as deserializeKeycode,
+} from './keycodes/keycodes'
 
 // --- Helpers ---
 
@@ -78,9 +81,7 @@ function keymapToLayout(
   return layout
 }
 
-function layoutToKeymap(
-  layout: (string | number)[][][],
-): Record<string, number> {
+function layoutToKeymap(layout: (string | number)[][][]): Record<string, number> {
   const keymap: Record<string, number> = {}
   for (let l = 0; l < layout.length; l++) {
     for (let r = 0; r < layout[l].length; r++) {
@@ -117,9 +118,7 @@ function encoderToVialGui(
   return result
 }
 
-function vialGuiToEncoder(
-  encoderLayout: (string | number)[][][],
-): Record<string, number> {
+function vialGuiToEncoder(encoderLayout: (string | number)[][][]): Record<string, number> {
   const result: Record<string, number> = {}
   for (let l = 0; l < encoderLayout.length; l++) {
     for (let e = 0; e < encoderLayout[l].length; e++) {
@@ -181,9 +180,7 @@ function vialGuiToCombo(entries: (string | number)[][]): ComboEntry[] {
 
 const KEY_OVERRIDE_ENABLED_BIT = 0x80
 
-function keyOverrideToVialGui(
-  entries: KeyOverrideEntry[],
-): Record<string, unknown>[] {
+function keyOverrideToVialGui(entries: KeyOverrideEntry[]): Record<string, unknown>[] {
   return entries.map((e) => ({
     trigger: serializeKeycode(e.triggerKey),
     replacement: serializeKeycode(e.replacementKey),
@@ -191,13 +188,13 @@ function keyOverrideToVialGui(
     trigger_mods: e.triggerMods,
     negative_mod_mask: e.negativeMods,
     suppressed_mods: e.suppressedMods,
-    options: e.enabled ? (e.options | KEY_OVERRIDE_ENABLED_BIT) : (e.options & ~KEY_OVERRIDE_ENABLED_BIT),
+    options: e.enabled
+      ? e.options | KEY_OVERRIDE_ENABLED_BIT
+      : e.options & ~KEY_OVERRIDE_ENABLED_BIT,
   }))
 }
 
-function vialGuiToKeyOverride(
-  entries: Record<string, unknown>[],
-): KeyOverrideEntry[] {
+function vialGuiToKeyOverride(entries: Record<string, unknown>[]): KeyOverrideEntry[] {
   return entries.map((e) => {
     const rawOptions = (e.options as number) ?? 0
     return {
@@ -217,20 +214,18 @@ function vialGuiToKeyOverride(
 
 const ALT_REPEAT_KEY_ENABLED_BIT = 0x08
 
-function altRepeatKeyToVialGui(
-  entries: AltRepeatKeyEntry[],
-): Record<string, unknown>[] {
+function altRepeatKeyToVialGui(entries: AltRepeatKeyEntry[]): Record<string, unknown>[] {
   return entries.map((e) => ({
     keycode: serializeKeycode(e.lastKey),
     alt_keycode: serializeKeycode(e.altKey),
     allowed_mods: e.allowedMods,
-    options: e.enabled ? (e.options | ALT_REPEAT_KEY_ENABLED_BIT) : (e.options & ~ALT_REPEAT_KEY_ENABLED_BIT),
+    options: e.enabled
+      ? e.options | ALT_REPEAT_KEY_ENABLED_BIT
+      : e.options & ~ALT_REPEAT_KEY_ENABLED_BIT,
   }))
 }
 
-function vialGuiToAltRepeatKey(
-  entries: Record<string, unknown>[],
-): AltRepeatKeyEntry[] {
+function vialGuiToAltRepeatKey(entries: Record<string, unknown>[]): AltRepeatKeyEntry[] {
   return entries.map((e) => {
     const rawOptions = (e.options as number) ?? 0
     return {

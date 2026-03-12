@@ -26,7 +26,12 @@ export interface Bounds {
 
 type PdfMatrix = { toString(): string }
 type PdfMatrixCtor = new (
-  sx: number, shy: number, shx: number, sy: number, tx: number, ty: number,
+  sx: number,
+  shy: number,
+  shx: number,
+  sy: number,
+  tx: number,
+  ty: number,
 ) => PdfMatrix
 
 // ── Utility functions ────────────────────────────────────────────────
@@ -78,9 +83,7 @@ export function keyCorners(key: KleKey): [number, number][] {
     )
   }
   if (key.rotation === 0) return corners
-  return corners.map(([x, y]) =>
-    rotatePoint(x, y, key.rotation, key.rotationX, key.rotationY),
-  )
+  return corners.map(([x, y]) => rotatePoint(x, y, key.rotation, key.rotationX, key.rotationY))
 }
 
 export function computeBounds(keys: KleKey[]): Bounds {
@@ -203,7 +206,17 @@ export function drawRoundedPolygon(
     const maxR = Math.min(len1, len2) / 2
     const actualR = isConvex ? Math.min(cornerRadius, maxR) : 0
     if (actualR <= 0) {
-      return { sx: curr[0], sy: curr[1], ex: curr[0], ey: curr[1], r: 0, tdx1: 0, tdy1: 0, tdx2: 0, tdy2: 0 }
+      return {
+        sx: curr[0],
+        sy: curr[1],
+        ex: curr[0],
+        ey: curr[1],
+        r: 0,
+        tdx1: 0,
+        tdy1: 0,
+        tdx2: 0,
+        tdy2: 0,
+      }
     }
     return {
       sx: curr[0] - (dx1 / len1) * actualR,
@@ -211,8 +224,10 @@ export function drawRoundedPolygon(
       ex: curr[0] + (dx2 / len2) * actualR,
       ey: curr[1] + (dy2 / len2) * actualR,
       r: actualR,
-      tdx1: dx1 / len1, tdy1: dy1 / len1, // incoming edge unit direction
-      tdx2: dx2 / len2, tdy2: dy2 / len2, // outgoing edge unit direction
+      tdx1: dx1 / len1,
+      tdy1: dy1 / len1, // incoming edge unit direction
+      tdx2: dx2 / len2,
+      tdy2: dy2 / len2, // outgoing edge unit direction
     }
   })
 
@@ -317,7 +332,7 @@ export function drawEncoderOutline(
   const spacing = scale * SPACING_FRACTION
   const cx = offsetX + key.x * scale + (key.width * scale - spacing) / 2
   const cy = offsetY + key.y * scale + (key.height * scale - spacing) / 2
-  const r = Math.min(key.width, key.height) * scale / 2 - spacing / 2
+  const r = (Math.min(key.width, key.height) * scale) / 2 - spacing / 2
 
   doc.setDrawColor(0)
   doc.setFillColor(255, 255, 255)

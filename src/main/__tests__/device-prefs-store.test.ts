@@ -70,17 +70,22 @@ describe('pipette-settings-store', () => {
   describe('set and get', () => {
     it('round-trips saved prefs', async () => {
       const setter = getHandler(IpcChannels.PIPETTE_SETTINGS_SET)
-      const result = await setter(fakeEvent, 'uid-1', {
+      const result = (await setter(fakeEvent, 'uid-1', {
         _rev: 1,
         keyboardLayout: 'dvorak',
         autoAdvance: false,
         layerNames: ['Base', 'Fn'],
-      }) as { success: boolean }
+      })) as { success: boolean }
       expect(result.success).toBe(true)
 
       const getter = getHandler(IpcChannels.PIPETTE_SETTINGS_GET)
       const prefs = await getter(fakeEvent, 'uid-1')
-      expect(prefs).toEqual({ _rev: 1, keyboardLayout: 'dvorak', autoAdvance: false, layerNames: ['Base', 'Fn'] })
+      expect(prefs).toEqual({
+        _rev: 1,
+        keyboardLayout: 'dvorak',
+        autoAdvance: false,
+        layerNames: ['Base', 'Fn'],
+      })
     })
 
     it('round-trips layerNames field', async () => {
@@ -93,7 +98,7 @@ describe('pipette-settings-store', () => {
       })
 
       const getter = getHandler(IpcChannels.PIPETTE_SETTINGS_GET)
-      const prefs = await getter(fakeEvent, 'uid-1') as { layerNames: string[] }
+      const prefs = (await getter(fakeEvent, 'uid-1')) as { layerNames: string[] }
       expect(prefs.layerNames).toEqual(['Default', 'Lower', 'Raise', 'Adjust'])
     })
 
@@ -108,7 +113,7 @@ describe('pipette-settings-store', () => {
       })
 
       const getter = getHandler(IpcChannels.PIPETTE_SETTINGS_GET)
-      const prefs = await getter(fakeEvent, 'uid-1') as { layerPanelOpen: boolean }
+      const prefs = (await getter(fakeEvent, 'uid-1')) as { layerPanelOpen: boolean }
       expect(prefs.layerPanelOpen).toBe(false)
     })
 
@@ -120,7 +125,7 @@ describe('pipette-settings-store', () => {
       })
 
       const getter = getHandler(IpcChannels.PIPETTE_SETTINGS_GET)
-      const prefs = await getter(fakeEvent, 'uid-1') as { _rev: number; layerNames: string[] }
+      const prefs = (await getter(fakeEvent, 'uid-1')) as { _rev: number; layerNames: string[] }
       expect(prefs._rev).toBe(1)
       expect(prefs.layerNames).toEqual([])
     })
@@ -135,7 +140,7 @@ describe('pipette-settings-store', () => {
       })
 
       const getter = getHandler(IpcChannels.PIPETTE_SETTINGS_GET)
-      const prefs = await getter(fakeEvent, 'uid-1') as { _rev: number }
+      const prefs = (await getter(fakeEvent, 'uid-1')) as { _rev: number }
       expect(prefs._rev).toBe(1)
     })
 
@@ -156,7 +161,12 @@ describe('pipette-settings-store', () => {
 
       const getter = getHandler(IpcChannels.PIPETTE_SETTINGS_GET)
       const prefs = await getter(fakeEvent, 'uid-1')
-      expect(prefs).toEqual({ _rev: 1, keyboardLayout: 'colemak', autoAdvance: true, layerNames: ['A'] })
+      expect(prefs).toEqual({
+        _rev: 1,
+        keyboardLayout: 'colemak',
+        autoAdvance: true,
+        layerNames: ['A'],
+      })
     })
 
     it('stores prefs per uid independently', async () => {
@@ -193,36 +203,36 @@ describe('pipette-settings-store', () => {
   describe('uid validation', () => {
     it('rejects uid with path traversal', async () => {
       const handler = getHandler(IpcChannels.PIPETTE_SETTINGS_SET)
-      const result = await handler(fakeEvent, '../..', {
+      const result = (await handler(fakeEvent, '../..', {
         _rev: 1,
         keyboardLayout: 'qwerty',
         autoAdvance: true,
         layerNames: [],
-      }) as { success: boolean; error: string }
+      })) as { success: boolean; error: string }
       expect(result.success).toBe(false)
       expect(result.error).toContain('Invalid uid')
     })
 
     it('rejects empty uid', async () => {
       const handler = getHandler(IpcChannels.PIPETTE_SETTINGS_SET)
-      const result = await handler(fakeEvent, '', {
+      const result = (await handler(fakeEvent, '', {
         _rev: 1,
         keyboardLayout: 'qwerty',
         autoAdvance: true,
         layerNames: [],
-      }) as { success: boolean; error: string }
+      })) as { success: boolean; error: string }
       expect(result.success).toBe(false)
       expect(result.error).toContain('Invalid uid')
     })
 
     it('rejects uid with slashes', async () => {
       const handler = getHandler(IpcChannels.PIPETTE_SETTINGS_SET)
-      const result = await handler(fakeEvent, 'foo/bar', {
+      const result = (await handler(fakeEvent, 'foo/bar', {
         _rev: 1,
         keyboardLayout: 'qwerty',
         autoAdvance: true,
         layerNames: [],
-      }) as { success: boolean; error: string }
+      })) as { success: boolean; error: string }
       expect(result.success).toBe(false)
       expect(result.error).toContain('Invalid uid')
     })
@@ -237,7 +247,7 @@ describe('pipette-settings-store', () => {
   describe('prefs validation', () => {
     it('rejects non-object prefs', async () => {
       const handler = getHandler(IpcChannels.PIPETTE_SETTINGS_SET)
-      const result = await handler(fakeEvent, 'uid-1', 'not-an-object') as {
+      const result = (await handler(fakeEvent, 'uid-1', 'not-an-object')) as {
         success: boolean
         error: string
       }
@@ -247,60 +257,60 @@ describe('pipette-settings-store', () => {
 
     it('rejects prefs with non-string keyboardLayout', async () => {
       const handler = getHandler(IpcChannels.PIPETTE_SETTINGS_SET)
-      const result = await handler(fakeEvent, 'uid-1', {
+      const result = (await handler(fakeEvent, 'uid-1', {
         _rev: 1,
         keyboardLayout: 123,
         autoAdvance: true,
         layerNames: [],
-      }) as { success: boolean; error: string }
+      })) as { success: boolean; error: string }
       expect(result.success).toBe(false)
       expect(result.error).toContain('Invalid prefs')
     })
 
     it('rejects prefs with non-boolean autoAdvance', async () => {
       const handler = getHandler(IpcChannels.PIPETTE_SETTINGS_SET)
-      const result = await handler(fakeEvent, 'uid-1', {
+      const result = (await handler(fakeEvent, 'uid-1', {
         _rev: 1,
         keyboardLayout: 'qwerty',
         autoAdvance: 'yes',
         layerNames: [],
-      }) as { success: boolean; error: string }
+      })) as { success: boolean; error: string }
       expect(result.success).toBe(false)
       expect(result.error).toContain('Invalid prefs')
     })
 
     it('rejects prefs with unsupported _rev', async () => {
       const handler = getHandler(IpcChannels.PIPETTE_SETTINGS_SET)
-      const result = await handler(fakeEvent, 'uid-1', {
+      const result = (await handler(fakeEvent, 'uid-1', {
         _rev: 99,
         keyboardLayout: 'qwerty',
         autoAdvance: true,
         layerNames: [],
-      }) as { success: boolean; error: string }
+      })) as { success: boolean; error: string }
       expect(result.success).toBe(false)
       expect(result.error).toContain('Invalid prefs')
     })
 
     it('rejects prefs with non-array layerNames', async () => {
       const handler = getHandler(IpcChannels.PIPETTE_SETTINGS_SET)
-      const result = await handler(fakeEvent, 'uid-1', {
+      const result = (await handler(fakeEvent, 'uid-1', {
         _rev: 1,
         keyboardLayout: 'qwerty',
         autoAdvance: true,
         layerNames: 'not-array',
-      }) as { success: boolean; error: string }
+      })) as { success: boolean; error: string }
       expect(result.success).toBe(false)
       expect(result.error).toContain('Invalid prefs')
     })
 
     it('rejects prefs with non-string layerNames entries', async () => {
       const handler = getHandler(IpcChannels.PIPETTE_SETTINGS_SET)
-      const result = await handler(fakeEvent, 'uid-1', {
+      const result = (await handler(fakeEvent, 'uid-1', {
         _rev: 1,
         keyboardLayout: 'qwerty',
         autoAdvance: true,
         layerNames: [123, 456],
-      }) as { success: boolean; error: string }
+      })) as { success: boolean; error: string }
       expect(result.success).toBe(false)
       expect(result.error).toContain('Invalid prefs')
     })

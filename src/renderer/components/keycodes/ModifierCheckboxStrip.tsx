@@ -32,7 +32,11 @@ export function ModifierCheckboxStrip({ modMask, onChange }: Props) {
     const disabled = hasAnyMod && right !== isRight
 
     return (
-      <div className="flex items-center gap-1" role="group" aria-label={right ? 'Right modifiers' : 'Left modifiers'}>
+      <div
+        className="flex items-center gap-1"
+        role="group"
+        aria-label={right ? 'Right modifiers' : 'Left modifiers'}
+      >
         {MODS.map(({ key, bit }) => {
           const active = right === isRight && (modMask & (1 << bit)) !== 0
           const label = `${prefix}${key}`

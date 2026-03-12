@@ -127,11 +127,7 @@ describe('FavoriteStoreContent', () => {
     it('does not call onRenameOnHub when onRenameOnHub is not provided', async () => {
       const onRename = vi.fn().mockResolvedValue(true)
       render(
-        <FavoriteStoreContent
-          {...DEFAULT_PROPS}
-          entries={ENTRIES_WITH_HUB}
-          onRename={onRename}
-        />,
+        <FavoriteStoreContent {...DEFAULT_PROPS} entries={ENTRIES_WITH_HUB} onRename={onRename} />,
       )
 
       const label = screen.getByTestId('favorite-store-entry-label')

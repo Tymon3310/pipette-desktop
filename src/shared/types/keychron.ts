@@ -30,6 +30,7 @@ export interface MixedRGBEffect {
 
 /** Per-key RGB state. */
 export interface KeychronRGBState {
+  isDebug?: boolean
   protocolVersion: number
   ledCount: number
   perKeyRGBType: number
@@ -81,6 +82,7 @@ export interface AnalogProfile {
 
 /** Complete Analog Matrix state. */
 export interface KeychronAnalogState {
+  isDebug?: boolean
   version: number
   profileCount: number
   currentProfile: number
@@ -94,6 +96,7 @@ export interface KeychronAnalogState {
 
 /** Complete Keychron keyboard state - returned by reloadKeychron(). */
 export interface KeychronState {
+  isDebug?: boolean
   // Protocol info
   protocolVersion: number
   firmwareVersion: string

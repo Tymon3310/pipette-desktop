@@ -28,11 +28,7 @@ import type {
   UnlockStatus,
 } from '../shared/types/protocol'
 import type { KeychronState, SnapClickEntry } from '../shared/types/keychron'
-import {
-  BUFFER_FETCH_CHUNK,
-  VIAL_PROTOCOL_DYNAMIC,
-  EMPTY_UID,
-} from '../shared/constants/protocol'
+import { BUFFER_FETCH_CHUNK, VIAL_PROTOCOL_DYNAMIC, EMPTY_UID } from '../shared/constants/protocol'
 
 export interface KeyboardState {
   // Protocol
@@ -157,7 +153,11 @@ export class Keyboard {
     // Phase 7: Macro buffer
     if (this.state.macroBufferSize > 0 && this.state.macroCount > 0) {
       const buffer = await protocol.getMacroBuffer(this.state.macroBufferSize)
-      this.state.macros = deserializeAllMacros(buffer, this.state.vialProtocol, this.state.macroCount)
+      this.state.macros = deserializeAllMacros(
+        buffer,
+        this.state.vialProtocol,
+        this.state.macroCount,
+      )
     }
 
     // Phase 8: Dynamic entries
@@ -498,7 +498,11 @@ export class Keyboard {
 
     const altRepeatKey = data.alt_repeat_key as AltRepeatKeyEntry[] | undefined
     if (altRepeatKey) {
-      for (let i = 0; i < Math.min(altRepeatKey.length, this.state.dynamicCounts.altRepeatKey); i++) {
+      for (
+        let i = 0;
+        i < Math.min(altRepeatKey.length, this.state.dynamicCounts.altRepeatKey);
+        i++
+      ) {
         await protocol.setAltRepeatKey(i, altRepeatKey[i])
         this.state.altRepeatKeyEntries[i] = altRepeatKey[i]
       }

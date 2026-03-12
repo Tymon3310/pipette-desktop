@@ -6,10 +6,7 @@ import { rm, readFile, readdir, writeFile, mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { IpcChannels } from '../../shared/ipc/channels'
 import { loadAppConfig, getAppConfigStore, onAppConfigChange } from '../app-config'
-import {
-  hasStoredPassword,
-  checkPasswordStrength,
-} from './sync-crypto'
+import { hasStoredPassword, checkPasswordStrength } from './sync-crypto'
 import { startOAuthFlow, getAuthStatus, signOut } from './google-auth'
 import { clearHubTokenCache } from '../hub/hub-ipc'
 import { deleteFilesByPrefix, deleteFile } from './google-drive'
@@ -33,7 +30,15 @@ import {
   checkPasswordCheckExists,
   setPasswordAndValidate,
 } from './sync-service'
-import type { SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, SyncScope, StoredKeyboardInfo, SyncDataScanResult } from '../../shared/types/sync'
+import type {
+  SyncProgress,
+  PasswordStrength,
+  SyncResetTargets,
+  LocalResetTargets,
+  SyncScope,
+  StoredKeyboardInfo,
+  SyncDataScanResult,
+} from '../../shared/types/sync'
 import { secureHandle, secureOn } from '../ipc-guard'
 import type { FavoriteIndex, SavedFavoriteMeta } from '../../shared/types/favorite-store'
 import type { SnapshotIndex, SnapshotMeta } from '../../shared/types/snapshot-store'
@@ -95,11 +100,14 @@ function isSafeKey(key: string): boolean {
 async function mergeImportEntries<T extends EntryMeta>(
   basePath: string,
   bundle: ImportBundle<T>,
-  buildIndex: (localIndex: FavoriteIndex | SnapshotIndex | null, entries: T[]) => FavoriteIndex | SnapshotIndex,
+  buildIndex: (
+    localIndex: FavoriteIndex | SnapshotIndex | null,
+    entries: T[],
+  ) => FavoriteIndex | SnapshotIndex,
 ): Promise<boolean> {
   await mkdir(basePath, { recursive: true })
 
-  const localIndex = await readIndexFile(basePath) as FavoriteIndex | SnapshotIndex | null
+  const localIndex = (await readIndexFile(basePath)) as FavoriteIndex | SnapshotIndex | null
   const localEntries = (localIndex?.entries ?? []) as T[]
   const localMap = new Map(localEntries.map((e) => [e.id, e]))
   let changed = false
@@ -133,9 +141,7 @@ async function mergeImportEntries<T extends EntryMeta>(
 
 export function setupSyncIpc(): void {
   // --- Auth ---
-  secureHandle(IpcChannels.SYNC_AUTH_START, () =>
-    wrapIpc('Auth failed', () => startOAuthFlow()),
-  )
+  secureHandle(IpcChannels.SYNC_AUTH_START, () => wrapIpc('Auth failed', () => startOAuthFlow()))
 
   secureHandle(IpcChannels.SYNC_AUTH_STATUS, () => getAuthStatus())
 
@@ -149,26 +155,24 @@ export function setupSyncIpc(): void {
   )
 
   // --- Password ---
-  secureHandle(
-    IpcChannels.SYNC_SET_PASSWORD,
-    (_event, password: string) =>
-      wrapIpc('Set password failed', async () => {
-        await setPasswordAndValidate(password)
-      }),
+  secureHandle(IpcChannels.SYNC_SET_PASSWORD, (_event, password: string) =>
+    wrapIpc('Set password failed', async () => {
+      await setPasswordAndValidate(password)
+    }),
   )
 
-  secureHandle(
-    IpcChannels.SYNC_CHANGE_PASSWORD,
-    (_event, newPassword: string) =>
-      wrapIpc('Change password failed', async () => {
-        await changePassword(newPassword)
-      }),
+  secureHandle(IpcChannels.SYNC_CHANGE_PASSWORD, (_event, newPassword: string) =>
+    wrapIpc('Change password failed', async () => {
+      await changePassword(newPassword)
+    }),
   )
 
   secureHandle(IpcChannels.SYNC_RESET_TARGETS, (_event, targets: SyncResetTargets) =>
     wrapIpc('Reset sync targets failed', async () => {
       if (typeof targets !== 'object' || targets === null) throw new Error('Invalid targets')
-      const hasKeyboards = targets.keyboards === true || (Array.isArray(targets.keyboards) && targets.keyboards.length > 0)
+      const hasKeyboards =
+        targets.keyboards === true ||
+        (Array.isArray(targets.keyboards) && targets.keyboards.length > 0)
       if (typeof targets.keyboards !== 'boolean' && !Array.isArray(targets.keyboards)) {
         throw new Error('Invalid targets: keyboards must be boolean or string[]')
       }
@@ -242,10 +246,14 @@ export function setupSyncIpc(): void {
             const match = active.filename.match(/^(.+?)_\d{4}-\d{2}-/)
             if (match) name = match[1]
           }
-        } catch { /* no snapshots */ }
+        } catch {
+          /* no snapshots */
+        }
         results.push({ uid, name })
       }
-    } catch { /* dir doesn't exist */ }
+    } catch {
+      /* dir doesn't exist */
+    }
     return results
   })
 
@@ -268,10 +276,15 @@ export function setupSyncIpc(): void {
   secureHandle(IpcChannels.RESET_LOCAL_TARGETS, (_event, targets: LocalResetTargets) =>
     wrapIpc('Reset local targets failed', async () => {
       if (typeof targets !== 'object' || targets === null) throw new Error('Invalid targets')
-      if (typeof targets.keyboards !== 'boolean' || typeof targets.favorites !== 'boolean' || typeof targets.appSettings !== 'boolean') {
+      if (
+        typeof targets.keyboards !== 'boolean' ||
+        typeof targets.favorites !== 'boolean' ||
+        typeof targets.appSettings !== 'boolean'
+      ) {
         throw new Error('Invalid targets: expected boolean fields')
       }
-      if (!targets.keyboards && !targets.favorites && !targets.appSettings) throw new Error('No targets selected')
+      if (!targets.keyboards && !targets.favorites && !targets.appSettings)
+        throw new Error('No targets selected')
       if (isSyncInProgress()) throw new Error('Cannot reset while sync is in progress')
       const userData = app.getPath('userData')
       const allSelected = targets.keyboards && targets.favorites && targets.appSettings
@@ -293,7 +306,10 @@ export function setupSyncIpc(): void {
       if (targets.appSettings) {
         getAppConfigStore().clear()
         await rm(join(userData, 'local', 'auth'), { recursive: true, force: true })
-        await rm(join(userData, 'local', 'downloads', 'languages'), { recursive: true, force: true })
+        await rm(join(userData, 'local', 'downloads', 'languages'), {
+          recursive: true,
+          force: true,
+        })
         await rm(join(userData, 'local', 'logs'), { recursive: true, force: true })
       }
     }),
@@ -309,7 +325,10 @@ export function setupSyncIpc(): void {
         layout: 'snapshots',
         settings: 'settings',
       }
-      const categories: Record<string, Record<string, { index: FavoriteIndex | SnapshotIndex; files: Record<string, string> }>> = {
+      const categories: Record<
+        string,
+        Record<string, { index: FavoriteIndex | SnapshotIndex; files: Record<string, string> }>
+      > = {
         snapshots: {},
         favorites: {},
         settings: {},
@@ -376,9 +395,10 @@ export function setupSyncIpc(): void {
           const changed = await mergeImportEntries(
             join(userData, 'sync', 'keyboards', uid, 'snapshots'),
             bundle,
-            (local, merged) => local
-              ? { ...local, entries: merged } as SnapshotIndex
-              : { uid, entries: merged } as SnapshotIndex,
+            (local, merged) =>
+              local
+                ? ({ ...local, entries: merged } as SnapshotIndex)
+                : ({ uid, entries: merged } as SnapshotIndex),
           )
           if (changed) changedUnits.push(`keyboards/${uid}/snapshots`)
         }
@@ -401,10 +421,16 @@ export function setupSyncIpc(): void {
             const localRaw = await readFile(filePath, 'utf-8')
             const localSettings = JSON.parse(localRaw) as { _updatedAt?: string }
             const remoteSettings = JSON.parse(remoteContent) as { _updatedAt?: string }
-            const localTime = localSettings._updatedAt ? new Date(localSettings._updatedAt).getTime() : 0
-            const remoteTime = remoteSettings._updatedAt ? new Date(remoteSettings._updatedAt).getTime() : 0
+            const localTime = localSettings._updatedAt
+              ? new Date(localSettings._updatedAt).getTime()
+              : 0
+            const remoteTime = remoteSettings._updatedAt
+              ? new Date(remoteSettings._updatedAt).getTime()
+              : 0
             shouldWrite = remoteTime > localTime
-          } catch { /* no local — write */ }
+          } catch {
+            /* no local — write */
+          }
 
           if (shouldWrite) {
             await writeFile(filePath, remoteContent, 'utf-8')
@@ -421,9 +447,10 @@ export function setupSyncIpc(): void {
           const changed = await mergeImportEntries(
             join(userData, 'sync', 'favorites', type),
             bundle,
-            (local, merged) => local
-              ? { ...local, entries: merged } as FavoriteIndex
-              : { type: type as FavoriteIndex['type'], entries: merged } as FavoriteIndex,
+            (local, merged) =>
+              local
+                ? ({ ...local, entries: merged } as FavoriteIndex)
+                : ({ type: type as FavoriteIndex['type'], entries: merged } as FavoriteIndex),
           )
           if (changed) changedUnits.push(`favorites/${type}`)
         }

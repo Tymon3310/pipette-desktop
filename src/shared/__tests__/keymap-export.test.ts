@@ -6,19 +6,31 @@ import type { KleKey } from '../kle/types'
 
 function makeKey(overrides: Partial<KleKey> = {}): KleKey {
   return {
-    x: 0, y: 0,
-    width: 1, height: 1,
-    x2: 0, y2: 0,
-    width2: 1, height2: 1,
-    rotation: 0, rotationX: 0, rotationY: 0,
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    x2: 0,
+    y2: 0,
+    width2: 1,
+    height2: 1,
+    rotation: 0,
+    rotationX: 0,
+    rotationY: 0,
     color: '#cccccc',
     labels: Array(12).fill(null),
     textColor: Array(12).fill(null),
     textSize: Array(12).fill(null),
-    row: 0, col: 0,
-    encoderIdx: -1, encoderDir: -1,
-    layoutIndex: -1, layoutOption: -1,
-    decal: false, nub: false, stepped: false, ghost: false,
+    row: 0,
+    col: 0,
+    encoderIdx: -1,
+    encoderDir: -1,
+    layoutIndex: -1,
+    layoutOption: -1,
+    decal: false,
+    nub: false,
+    stepped: false,
+    ghost: false,
     ...overrides,
   }
 }
@@ -34,9 +46,9 @@ function mockSerialize(code: number): string {
     0x08: 'KC_E',
     0x09: 'KC_F',
     0x29: 'KC_ESC',
-    0x2B: 'KC_TAB',
-    0x1E: 'KC_1',
-    0x1F: 'KC_2',
+    0x2b: 'KC_TAB',
+    0x1e: 'KC_1',
+    0x1f: 'KC_2',
     0x35: 'KC_GRV',
     0x80: 'KC_VOLD',
     0x81: 'KC_VOLU',
@@ -56,8 +68,12 @@ function createBasicInput(overrides: Partial<KeymapExportInput> = {}): KeymapExp
   ]
 
   const keymap = new Map<string, number>([
-    ['0,0,0', 0x29], ['0,0,1', 0x04], ['0,0,2', 0x05],
-    ['0,1,0', 0x2B], ['0,1,1', 0x06], ['0,1,2', 0x07],
+    ['0,0,0', 0x29],
+    ['0,0,1', 0x04],
+    ['0,0,2', 0x05],
+    ['0,1,0', 0x2b],
+    ['0,1,1', 0x06],
+    ['0,1,2', 0x07],
   ])
 
   return {
@@ -93,10 +109,18 @@ describe('generateKeymapC', () => {
 
   it('generates multiple layers with correct indices', () => {
     const keymap = new Map<string, number>([
-      ['0,0,0', 0x29], ['0,0,1', 0x04], ['0,0,2', 0x05],
-      ['0,1,0', 0x2B], ['0,1,1', 0x06], ['0,1,2', 0x07],
-      ['1,0,0', 0x35], ['1,0,1', 0x1E], ['1,0,2', 0x1F],
-      ['1,1,0', 0x01], ['1,1,1', 0x08], ['1,1,2', 0x09],
+      ['0,0,0', 0x29],
+      ['0,0,1', 0x04],
+      ['0,0,2', 0x05],
+      ['0,1,0', 0x2b],
+      ['0,1,1', 0x06],
+      ['0,1,2', 0x07],
+      ['1,0,0', 0x35],
+      ['1,0,1', 0x1e],
+      ['1,0,2', 0x1f],
+      ['1,1,0', 0x01],
+      ['1,1,1', 0x08],
+      ['1,1,2', 0x09],
     ])
 
     const result = generateKeymapC(createBasicInput({ layers: 2, keymap }))
@@ -156,10 +180,12 @@ describe('generateKeymapC', () => {
       ['0,0,1', 0x80], // CCW = KC_VOLD
     ])
 
-    const result = generateKeymapC(createBasicInput({
-      encoderCount: 1,
-      encoderLayout,
-    }))
+    const result = generateKeymapC(
+      createBasicInput({
+        encoderCount: 1,
+        encoderLayout,
+      }),
+    )
 
     expect(result).toContain('encoder_map')
     // ENCODER_CCW_CW takes CCW first, then CW
@@ -178,23 +204,35 @@ describe('generateKeymapC', () => {
   it('generates encoder_map for multiple layers', () => {
     // dir 0=CW, dir 1=CCW
     const encoderLayout = new Map<string, number>([
-      ['0,0,0', 0x81], ['0,0,1', 0x80], // L0: CW=VOLU, CCW=VOLD
-      ['1,0,0', 0x01], ['1,0,1', 0x01], // L1: CW=TRNS, CCW=TRNS
+      ['0,0,0', 0x81],
+      ['0,0,1', 0x80], // L0: CW=VOLU, CCW=VOLD
+      ['1,0,0', 0x01],
+      ['1,0,1', 0x01], // L1: CW=TRNS, CCW=TRNS
     ])
 
     const keymap = new Map<string, number>([
-      ['0,0,0', 0x29], ['0,0,1', 0x04], ['0,0,2', 0x05],
-      ['0,1,0', 0x2B], ['0,1,1', 0x06], ['0,1,2', 0x07],
-      ['1,0,0', 0x35], ['1,0,1', 0x1E], ['1,0,2', 0x1F],
-      ['1,1,0', 0x01], ['1,1,1', 0x08], ['1,1,2', 0x09],
+      ['0,0,0', 0x29],
+      ['0,0,1', 0x04],
+      ['0,0,2', 0x05],
+      ['0,1,0', 0x2b],
+      ['0,1,1', 0x06],
+      ['0,1,2', 0x07],
+      ['1,0,0', 0x35],
+      ['1,0,1', 0x1e],
+      ['1,0,2', 0x1f],
+      ['1,1,0', 0x01],
+      ['1,1,1', 0x08],
+      ['1,1,2', 0x09],
     ])
 
-    const result = generateKeymapC(createBasicInput({
-      layers: 2,
-      keymap,
-      encoderCount: 1,
-      encoderLayout,
-    }))
+    const result = generateKeymapC(
+      createBasicInput({
+        layers: 2,
+        keymap,
+        encoderCount: 1,
+        encoderLayout,
+      }),
+    )
 
     expect(result).toContain('[0] = { ENCODER_CCW_CW(KC_VOLD, KC_VOLU) }')
     expect(result).toContain('[1] = { ENCODER_CCW_CW(KC_TRNS, KC_TRNS) }')
@@ -205,7 +243,7 @@ describe('generateKeymapC', () => {
     const keys: KleKey[] = [
       makeKey({ x: 0, y: 0, row: 0, col: 0 }),
       makeKey({ x: 1, y: 0.1, row: 0, col: 1 }), // close y => same row
-      makeKey({ x: 0, y: 1.5, row: 1, col: 0 }),   // far y => new row
+      makeKey({ x: 0, y: 1.5, row: 1, col: 0 }), // far y => new row
     ]
 
     const keymap = new Map<string, number>([
@@ -219,9 +257,9 @@ describe('generateKeymapC', () => {
     // Row 1: ESC, A (same visual row)
     // Row 2: B (new visual row)
     const lines = result.split('\n')
-    const layoutLine1 = lines.find(l => l.includes('KC_ESC'))!
+    const layoutLine1 = lines.find((l) => l.includes('KC_ESC'))!
     expect(layoutLine1).toContain('KC_A')
-    const layoutLine2 = lines.find(l => l.includes('KC_B') && !l.includes('KC_ESC'))!
+    const layoutLine2 = lines.find((l) => l.includes('KC_B') && !l.includes('KC_ESC'))!
     expect(layoutLine2).toBeDefined()
   })
 
@@ -250,14 +288,14 @@ describe('generateKeymapC', () => {
   })
 
   it('defaults keycode to 0 (KC_NO) for missing keys', () => {
-    const keys: KleKey[] = [
-      makeKey({ x: 0, y: 0, row: 0, col: 0 }),
-    ]
+    const keys: KleKey[] = [makeKey({ x: 0, y: 0, row: 0, col: 0 })]
 
-    const result = generateKeymapC(createBasicInput({
-      keys,
-      keymap: new Map(), // empty keymap
-    }))
+    const result = generateKeymapC(
+      createBasicInput({
+        keys,
+        keymap: new Map(), // empty keymap
+      }),
+    )
 
     expect(result).toContain('KC_NO')
   })
@@ -299,7 +337,7 @@ describe('generateKeymapC', () => {
 
     // First two keys in same row, third in new row
     const lines = result.split('\n')
-    const escLine = lines.find(l => l.includes('KC_ESC'))!
+    const escLine = lines.find((l) => l.includes('KC_ESC'))!
     expect(escLine).toContain('KC_A')
     expect(escLine).not.toContain('KC_B')
   })

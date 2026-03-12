@@ -11,7 +11,8 @@ vi.mock('react-i18next', () => ({
         'common.loading': 'Loading...',
         'editor.keymap.layerN': 'Layer',
         'editor.keymap.layerLabel': 'Layer',
-        'editor.typingTest.layerNote': 'Only MO / LT / LM layer switches are tracked. Other layer keys and advanced features may not be reflected.',
+        'editor.typingTest.layerNote':
+          'Only MO / LT / LM layer switches are tracked. Other layer keys and advanced features may not be reflected.',
       }
       return map[key] ?? key
     },
@@ -59,9 +60,7 @@ vi.mock('../MacroModal', () => ({ MacroModal: () => null }))
 import { KeymapEditor } from '../KeymapEditor'
 
 const makeLayout = () => ({
-  keys: [
-    { x: 0, y: 0, w: 1, h: 1, row: 0, col: 0, encoderIdx: -1, decal: false, labels: [] },
-  ],
+  keys: [{ x: 0, y: 0, w: 1, h: 1, row: 0, col: 0, encoderIdx: -1, decal: false, labels: [] }],
 })
 
 describe('KeymapEditor — typing test layer note', () => {
@@ -70,7 +69,10 @@ describe('KeymapEditor — typing test layer note', () => {
     layers: 2,
     currentLayer: 0,
     onLayerChange: vi.fn(),
-    keymap: new Map([['0,0,0', 4], ['1,0,0', 5]]),
+    keymap: new Map([
+      ['0,0,0', 4],
+      ['1,0,0', 5],
+    ]),
     encoderLayout: new Map<string, number>(),
     encoderCount: 0,
     layoutOptions: new Map<number, number>(),
@@ -86,7 +88,9 @@ describe('KeymapEditor — typing test layer note', () => {
   it('shows layer note when typing test mode is active', () => {
     render(<KeymapEditor {...defaultProps} typingTestMode />)
     expect(screen.getByTestId('typing-test-layer-note')).toBeInTheDocument()
-    expect(screen.getByTestId('typing-test-layer-note')).toHaveTextContent('Only MO / LT / LM layer switches are tracked. Other layer keys and advanced features may not be reflected.')
+    expect(screen.getByTestId('typing-test-layer-note')).toHaveTextContent(
+      'Only MO / LT / LM layer switches are tracked. Other layer keys and advanced features may not be reflected.',
+    )
   })
 
   it('does not show layer note when typing test mode is inactive', () => {

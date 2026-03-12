@@ -12,13 +12,13 @@ import { ROW_CLASS, toggleTrackClass, toggleKnobClass } from './modal-controls'
 type OverlayTab = 'layout' | 'tools' | 'data'
 
 const TAB_BASE = 'flex-1 py-1.5 text-[11px] font-medium transition-colors border-b-2'
-const FOOTER_BTN = 'rounded border border-edge px-2.5 py-1 text-[11px] text-content-secondary hover:text-content hover:bg-surface-dim transition-colors'
+const FOOTER_BTN =
+  'rounded border border-edge px-2.5 py-1 text-[11px] text-content-secondary hover:text-content hover:bg-surface-dim transition-colors'
 
 function tabClass(active: boolean): string {
   if (active) return `${TAB_BASE} border-b-accent text-content`
   return `${TAB_BASE} border-b-transparent text-content-muted hover:text-content`
 }
-
 
 interface Props {
   // Layout options
@@ -80,7 +80,9 @@ export function KeycodesOverlayPanel({
 }: Props) {
   const { t } = useTranslation()
   const hasData = dataPanel != null
-  const [activeTab, setActiveTab] = useState<OverlayTab>(hasLayoutOptions ? 'layout' : hasData ? 'data' : 'tools')
+  const [activeTab, setActiveTab] = useState<OverlayTab>(
+    hasLayoutOptions ? 'layout' : hasData ? 'data' : 'tools',
+  )
 
   // Reset to next leftmost tab if current tab disappears at runtime
   useEffect(() => {
@@ -103,7 +105,11 @@ export function KeycodesOverlayPanel({
     <div className="flex h-full flex-col" data-testid="keycodes-overlay-panel">
       {/* Top tab bar */}
       {showTabs && (
-        <div role="tablist" className="flex border-b border-edge shrink-0" data-testid="overlay-tabs">
+        <div
+          role="tablist"
+          className="flex border-b border-edge shrink-0"
+          data-testid="overlay-tabs"
+        >
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -137,7 +143,10 @@ export function KeycodesOverlayPanel({
               />
             </div>
             {(onExportLayoutPdfAll || onExportLayoutPdfCurrent) && (
-              <div className="shrink-0 border-t border-edge px-4 py-2 flex items-center gap-2" data-testid="layout-pdf-footer">
+              <div
+                className="shrink-0 border-t border-edge px-4 py-2 flex items-center gap-2"
+                data-testid="layout-pdf-footer"
+              >
                 <span className="text-[11px] text-content-muted">{t('layout.pdfFooterLabel')}</span>
                 {onExportLayoutPdfAll && (
                   <button
@@ -172,7 +181,10 @@ export function KeycodesOverlayPanel({
             {/* Basic tab view type */}
             {basicViewType != null && onBasicViewTypeChange && (
               <div className={ROW_CLASS} data-testid="overlay-basic-view-type-row">
-                <label htmlFor="overlay-basic-view-type-selector" className="text-[13px] font-medium text-content">
+                <label
+                  htmlFor="overlay-basic-view-type-selector"
+                  className="text-[13px] font-medium text-content"
+                >
                   {t('editorSettings.basicViewType')}
                 </label>
                 <select
@@ -192,7 +204,10 @@ export function KeycodesOverlayPanel({
 
             {/* Keyboard layout selector */}
             <div className={ROW_CLASS} data-testid="overlay-layout-row">
-              <label htmlFor="overlay-layout-selector" className="text-[13px] font-medium text-content">
+              <label
+                htmlFor="overlay-layout-selector"
+                className="text-[13px] font-medium text-content"
+              >
                 {t('layout.keyboardLayout')}
               </label>
               <select

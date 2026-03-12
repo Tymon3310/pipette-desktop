@@ -59,11 +59,12 @@ export function useFileIO({
   }
 
   const saveLayout = useCallback(
-    () => runExport(
-      () => serializeVialGui ? serializeVialGui() : JSON.stringify(serialize(), null, 2),
-      window.vialAPI.saveLayout,
-      'error.saveFailed',
-    ),
+    () =>
+      runExport(
+        () => (serializeVialGui ? serializeVialGui() : JSON.stringify(serialize(), null, 2)),
+        window.vialAPI.saveLayout,
+        'error.saveFailed',
+      ),
     [serialize, serializeVialGui, deviceName, t],
   )
 

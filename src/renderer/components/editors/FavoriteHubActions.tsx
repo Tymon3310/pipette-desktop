@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SavedFavoriteMeta } from '../../../shared/types/favorite-store'
 
-const HUB_BTN_BASE = 'text-[11px] font-medium text-accent bg-accent/10 border border-accent/30 px-2 py-0.5 rounded hover:bg-accent/20 hover:border-accent/50'
+const HUB_BTN_BASE =
+  'text-[11px] font-medium text-accent bg-accent/10 border border-accent/30 px-2 py-0.5 rounded hover:bg-accent/20 hover:border-accent/50'
 const HUB_BTN = `${HUB_BTN_BASE} disabled:opacity-50`
 
 export interface FavHubEntryResult {
@@ -45,7 +46,8 @@ export function FavoriteHubActions({
   const result = hubUploadResult?.entryId === entry.id ? hubUploadResult : null
 
   const hasHubPost = !!entry.hubPostId
-  const hubPostUrl = hasHubPost && hubOrigin ? `${hubOrigin}/post/${encodeURIComponent(entry.hubPostId!)}` : null
+  const hubPostUrl =
+    hasHubPost && hubOrigin ? `${hubOrigin}/post/${encodeURIComponent(entry.hubPostId!)}` : null
 
   return (
     <div className="mt-1.5 border-t border-edge pt-1.5" data-testid="fav-hub-actions">
@@ -59,7 +61,10 @@ export function FavoriteHubActions({
                   <button
                     type="button"
                     className={HUB_BTN}
-                    onClick={() => { onRemoveFromHub?.(entry.id); setConfirmRemoveId(null) }}
+                    onClick={() => {
+                      onRemoveFromHub?.(entry.id)
+                      setConfirmRemoveId(null)
+                    }}
                     disabled={disabled}
                     data-testid="fav-hub-remove-confirm"
                   >

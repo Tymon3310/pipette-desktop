@@ -202,10 +202,8 @@ export function RGBConfigurator({
     )
   }
 
-  const hasBacklight =
-    lightingType === 'qmk_backlight' || lightingType === 'qmk_backlight_rgblight'
-  const hasRGBlight =
-    lightingType === 'qmk_rgblight' || lightingType === 'qmk_backlight_rgblight'
+  const hasBacklight = lightingType === 'qmk_backlight' || lightingType === 'qmk_backlight_rgblight'
+  const hasRGBlight = lightingType === 'qmk_rgblight' || lightingType === 'qmk_backlight_rgblight'
   const hasVialRGB = lightingType === 'vialrgb' && vialRGBVersion === 1
   const sectionCount = Number(hasBacklight) + Number(hasRGBlight) + Number(hasVialRGB)
 
@@ -345,9 +343,7 @@ export function RGBConfigurator({
               </div>
 
               <div className="flex items-center gap-3">
-                <label className="min-w-[100px] text-sm">
-                  {t('editor.lighting.brightness')}
-                </label>
+                <label className="min-w-[100px] text-sm">{t('editor.lighting.brightness')}</label>
                 <input
                   type="range"
                   min={0}
@@ -432,9 +428,7 @@ export function RGBConfigurator({
           </div>
 
           <div className="flex items-center gap-3">
-            <label className="min-w-[100px] text-sm">
-              {t('editor.lighting.brightness')}
-            </label>
+            <label className="min-w-[100px] text-sm">{t('editor.lighting.brightness')}</label>
             <input
               type="range"
               min={0}

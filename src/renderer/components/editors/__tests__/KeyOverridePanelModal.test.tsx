@@ -67,7 +67,7 @@ vi.mock('../FavoriteStoreContent', () => ({
 const makeEntry = (overrides?: Partial<KeyOverrideEntry>): KeyOverrideEntry => ({
   triggerKey: 0,
   replacementKey: 0,
-  layers: 0xFFFF,
+  layers: 0xffff,
   triggerMods: 0,
   negativeMods: 0,
   suppressedMods: 0,
@@ -100,7 +100,11 @@ describe('KeyOverridePanelModal', () => {
 
   it('renders grid tiles for each entry', () => {
     render(
-      <KeyOverridePanelModal entries={[makeEntry(), makeEntry()]} onSetEntry={onSetEntry} onClose={onClose} />,
+      <KeyOverridePanelModal
+        entries={[makeEntry(), makeEntry()]}
+        onSetEntry={onSetEntry}
+        onClose={onClose}
+      />,
     )
     expect(screen.getByTestId('ko-tile-0')).toHaveTextContent('0')
     expect(screen.getByTestId('ko-tile-0')).toHaveTextContent('N/C')
@@ -134,7 +138,9 @@ describe('KeyOverridePanelModal', () => {
   })
 
   it('renders unconfigured tile with empty style', () => {
-    render(<KeyOverridePanelModal entries={[makeEntry()]} onSetEntry={onSetEntry} onClose={onClose} />)
+    render(
+      <KeyOverridePanelModal entries={[makeEntry()]} onSetEntry={onSetEntry} onClose={onClose} />,
+    )
     const tile = screen.getByTestId('ko-tile-0')
     expect(tile.className).toContain('border-accent/30')
     expect(tile.className).toContain('bg-accent/5')
@@ -181,7 +187,11 @@ describe('KeyOverridePanelModal', () => {
 
   it('shows enabled checkbox enabled when triggerKey is nonzero', () => {
     render(
-      <KeyOverridePanelModal entries={[makeEntry({ triggerKey: 4 })]} onSetEntry={onSetEntry} onClose={onClose} />,
+      <KeyOverridePanelModal
+        entries={[makeEntry({ triggerKey: 4 })]}
+        onSetEntry={onSetEntry}
+        onClose={onClose}
+      />,
     )
     fireEvent.click(screen.getByTestId('ko-tile-0'))
     expect(screen.getByTestId('ko-enabled')).not.toBeDisabled()
@@ -194,7 +204,9 @@ describe('KeyOverridePanelModal', () => {
     fireEvent.click(screen.getByTestId('ko-tile-0'))
     expect(screen.queryByTestId('tabbed-keycodes')).not.toBeInTheDocument()
     fireEvent.click(screen.getAllByTestId('keycode-field')[0])
-    act(() => { vi.advanceTimersByTime(300) })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
     expect(screen.getByTestId('tabbed-keycodes')).toBeInTheDocument()
   })
 
@@ -205,7 +217,9 @@ describe('KeyOverridePanelModal', () => {
     fireEvent.click(screen.getByTestId('ko-tile-0'))
     expect(screen.getByTestId('ko-advanced-fields')).toBeInTheDocument()
     fireEvent.click(screen.getAllByTestId('keycode-field')[0])
-    act(() => { vi.advanceTimersByTime(300) })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
     expect(screen.queryByTestId('ko-advanced-fields')).not.toBeInTheDocument()
   })
 
@@ -223,7 +237,9 @@ describe('KeyOverridePanelModal', () => {
     )
     fireEvent.click(screen.getByTestId('ko-tile-0'))
     fireEvent.click(screen.getAllByTestId('keycode-field')[0])
-    act(() => { vi.advanceTimersByTime(300) })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
     fireEvent.click(screen.getByTestId('pick-kc-a'))
     fireEvent.click(screen.getByTestId('confirm-picker'))
     expect(screen.getByTestId('ko-modal-save')).toBeEnabled()
@@ -235,7 +251,9 @@ describe('KeyOverridePanelModal', () => {
     )
     fireEvent.click(screen.getByTestId('ko-tile-0'))
     fireEvent.click(screen.getAllByTestId('keycode-field')[0])
-    act(() => { vi.advanceTimersByTime(300) })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
     fireEvent.click(screen.getByTestId('pick-kc-a'))
     fireEvent.click(screen.getByTestId('confirm-picker'))
     fireEvent.click(screen.getByTestId('ko-modal-save'))
@@ -291,18 +309,26 @@ describe('KeyOverridePanelModal', () => {
     fireEvent.click(screen.getByTestId('ko-tile-0'))
     expect(screen.getByTestId('ko-favorites-panel').className).not.toContain('hidden')
     fireEvent.click(screen.getAllByTestId('keycode-field')[0])
-    act(() => { vi.advanceTimersByTime(300) })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
     expect(screen.getByTestId('ko-favorites-panel').className).toContain('hidden')
   })
 
   it('returns to tile screen when entries shrink and selected index is out of bounds', () => {
     const { rerender } = render(
-      <KeyOverridePanelModal entries={[makeEntry(), makeEntry()]} onSetEntry={onSetEntry} onClose={onClose} />,
+      <KeyOverridePanelModal
+        entries={[makeEntry(), makeEntry()]}
+        onSetEntry={onSetEntry}
+        onClose={onClose}
+      />,
     )
     fireEvent.click(screen.getByTestId('ko-tile-1'))
     expect(screen.getByText('Key Override - 1')).toBeInTheDocument()
     // Rerender with fewer entries — selected index 1 no longer exists
-    rerender(<KeyOverridePanelModal entries={[makeEntry()]} onSetEntry={onSetEntry} onClose={onClose} />)
+    rerender(
+      <KeyOverridePanelModal entries={[makeEntry()]} onSetEntry={onSetEntry} onClose={onClose} />,
+    )
     expect(screen.queryByText('Key Override - 1')).not.toBeInTheDocument()
     expect(screen.getByTestId('ko-tile-0')).toBeInTheDocument()
   })

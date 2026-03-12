@@ -62,11 +62,15 @@ describe('google-drive', () => {
     })
 
     it('parses keyboard settings drive filename to sync unit', () => {
-      expect(syncUnitFromFileName('keyboards_0x1234_settings.enc')).toBe('keyboards/0x1234/settings')
+      expect(syncUnitFromFileName('keyboards_0x1234_settings.enc')).toBe(
+        'keyboards/0x1234/settings',
+      )
     })
 
     it('parses keyboard snapshots drive filename to sync unit', () => {
-      expect(syncUnitFromFileName('keyboards_0x1234_snapshots.enc')).toBe('keyboards/0x1234/snapshots')
+      expect(syncUnitFromFileName('keyboards_0x1234_snapshots.enc')).toBe(
+        'keyboards/0x1234/snapshots',
+      )
     })
 
     it('returns null for invalid filenames', () => {

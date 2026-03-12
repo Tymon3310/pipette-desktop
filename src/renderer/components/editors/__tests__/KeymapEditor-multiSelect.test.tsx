@@ -15,6 +15,8 @@ vi.mock('react-i18next', () => ({
         'editor.keymap.dualMode': 'Dual View',
         'editor.keymap.copyLayer': 'Copy Layer',
         'editor.keymap.copyLayerConfirm': 'Confirm Copy Layer?',
+        'editor.keymap.copyAll': 'Copy All',
+        'editor.keymap.copyAllConfirm': 'Confirm Copy All?',
         'editor.keymap.clickToPaste': 'Click a key to paste',
         'editorSettings.title': 'Settings',
       }
@@ -65,11 +67,31 @@ import { KeymapEditor } from '../KeymapEditor'
 import type { KleKey } from '../../../../shared/kle/types'
 
 const KEY_DEFAULTS: KleKey = {
-  x: 0, y: 0, width: 1, height: 1, row: 0, col: 0,
-  encoderIdx: -1, encoderDir: -1, layoutIndex: -1, layoutOption: -1,
-  decal: false, labels: [], x2: 0, y2: 0, width2: 1, height2: 1,
-  rotation: 0, rotationX: 0, rotationY: 0, color: '',
-  textColor: [], textSize: [], nub: false, stepped: false, ghost: false,
+  x: 0,
+  y: 0,
+  width: 1,
+  height: 1,
+  row: 0,
+  col: 0,
+  encoderIdx: -1,
+  encoderDir: -1,
+  layoutIndex: -1,
+  layoutOption: -1,
+  decal: false,
+  labels: [],
+  x2: 0,
+  y2: 0,
+  width2: 1,
+  height2: 1,
+  rotation: 0,
+  rotationX: 0,
+  rotationY: 0,
+  color: '',
+  textColor: [],
+  textSize: [],
+  nub: false,
+  stepped: false,
+  ghost: false,
 }
 
 function makeKey(x: number, col: number): KleKey {
@@ -123,7 +145,13 @@ describe('KeymapEditor — multi-select & copy', () => {
     // Get the onKeyClick from the active pane's KeyboardWidget
     // In primary-active dual mode, the first widget gets the click handler
     const widget = capturedWidgetProps.find((p) => p.onKeyClick != null)
-    return widget?.onKeyClick as ((key: KleKey, maskClicked: boolean, event?: { ctrlKey: boolean; shiftKey: boolean }) => void) | undefined
+    return widget?.onKeyClick as
+      | ((
+          key: KleKey,
+          maskClicked: boolean,
+          event?: { ctrlKey: boolean; shiftKey: boolean },
+        ) => void)
+      | undefined
   }
 
   it('adds key to multiSelectedKeys on Ctrl+click in dual mode', () => {
@@ -151,9 +179,7 @@ describe('KeymapEditor — multi-select & copy', () => {
     })
 
     // Get the updated onKeyClick (may have changed due to rerender)
-    const updatedWidget = capturedWidgetProps.find(
-      (p, i) => i >= 2 && p.onKeyClick != null,
-    )
+    const updatedWidget = capturedWidgetProps.find((p, i) => i >= 2 && p.onKeyClick != null)
     const updatedClick = (updatedWidget?.onKeyClick ?? onKeyClick) as typeof onKeyClick
 
     // Second Ctrl+click: remove
@@ -308,16 +334,18 @@ describe('KeymapEditor — multi-select & copy', () => {
 
     expect(onSetKeysBulk).toHaveBeenCalledTimes(1)
     const entries = onSetKeysBulk.mock.calls[0][0]
-    expect(entries).toEqual(expect.arrayContaining([
-      { layer: 1, row: 0, col: 0, keycode: 10 },
-      { layer: 1, row: 0, col: 1, keycode: 11 },
-      { layer: 1, row: 0, col: 2, keycode: 12 },
-      { layer: 1, row: 0, col: 3, keycode: 13 },
-    ]))
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        { layer: 1, row: 0, col: 0, keycode: 10 },
+        { layer: 1, row: 0, col: 1, keycode: 11 },
+        { layer: 1, row: 0, col: 2, keycode: 12 },
+        { layer: 1, row: 0, col: 3, keycode: 13 },
+      ]),
+    )
     expect(entries.length).toBe(4)
   })
 
-  it('Copy Layer copies encoder keys along with regular keys', async () => {
+  it('Copy All copies encoder keys along with regular keys', async () => {
     const onSetEncoder = vi.fn().mockResolvedValue(undefined)
     const encoderLayout = new Map<string, number>([
       ['0,0,0', 100], // Layer 0, encoder 0, CW
@@ -333,16 +361,20 @@ describe('KeymapEditor — multi-select & copy', () => {
         onSetEncoder={onSetEncoder}
       />,
     )
-    const btn = screen.getByTestId('copy-layer-button')
-    await act(async () => { fireEvent.click(btn) })
-    await act(async () => { fireEvent.click(btn) })
+    const btn = screen.getByTestId('copy-all-button')
+    await act(async () => {
+      fireEvent.click(btn)
+    })
+    await act(async () => {
+      fireEvent.click(btn)
+    })
 
     expect(onSetEncoder).toHaveBeenCalledTimes(2)
     expect(onSetEncoder).toHaveBeenCalledWith(1, 0, 0, 100)
     expect(onSetEncoder).toHaveBeenCalledWith(1, 0, 1, 101)
   })
 
-  it('Copy Layer writes 0 for missing encoder entries on source layer', async () => {
+  it('Copy All writes 0 for missing encoder entries on source layer', async () => {
     const onSetEncoder = vi.fn().mockResolvedValue(undefined)
     const encoderLayout = new Map<string, number>([
       ['1,0,0', 200], // Only target layer has entries
@@ -356,9 +388,13 @@ describe('KeymapEditor — multi-select & copy', () => {
         onSetEncoder={onSetEncoder}
       />,
     )
-    const btn = screen.getByTestId('copy-layer-button')
-    await act(async () => { fireEvent.click(btn) })
-    await act(async () => { fireEvent.click(btn) })
+    const btn = screen.getByTestId('copy-all-button')
+    await act(async () => {
+      fireEvent.click(btn)
+    })
+    await act(async () => {
+      fireEvent.click(btn)
+    })
 
     expect(onSetEncoder).toHaveBeenCalledTimes(2)
     expect(onSetEncoder).toHaveBeenCalledWith(1, 0, 0, 0)
@@ -370,12 +406,16 @@ describe('KeymapEditor — multi-select & copy', () => {
     const btn = screen.getByTestId('copy-layer-button')
 
     // First click: pending confirmation
-    await act(async () => { fireEvent.click(btn) })
+    await act(async () => {
+      fireEvent.click(btn)
+    })
     expect(btn).toHaveTextContent('Confirm Copy Layer?')
 
     // Click pane background to deselect
     const pane = screen.getByTestId('primary-pane')
-    await act(async () => { fireEvent.click(pane) })
+    await act(async () => {
+      fireEvent.click(pane)
+    })
 
     // Confirmation should be reset
     const btn2 = screen.getByTestId('copy-layer-button')
@@ -396,30 +436,32 @@ describe('KeymapEditor — multi-select & copy', () => {
 
     const btn = screen.getByTestId('copy-layer-button')
     // Two clicks: first to confirm, second to execute
-    await act(async () => { fireEvent.click(btn) })
-    await act(async () => { fireEvent.click(btn) })
+    await act(async () => {
+      fireEvent.click(btn)
+    })
+    await act(async () => {
+      fireEvent.click(btn)
+    })
 
     // Source is currentLayer=1, target is inactivePaneLayer=primaryLayer=0
     expect(onSetKeysBulk).toHaveBeenCalledTimes(1)
     const entries = onSetKeysBulk.mock.calls[0][0]
-    expect(entries).toEqual(expect.arrayContaining([
-      { layer: 0, row: 0, col: 0, keycode: 20 },
-      { layer: 0, row: 0, col: 1, keycode: 21 },
-      { layer: 0, row: 0, col: 2, keycode: 22 },
-      { layer: 0, row: 0, col: 3, keycode: 23 },
-    ]))
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        { layer: 0, row: 0, col: 0, keycode: 20 },
+        { layer: 0, row: 0, col: 1, keycode: 21 },
+        { layer: 0, row: 0, col: 2, keycode: 22 },
+        { layer: 0, row: 0, col: 3, keycode: 23 },
+      ]),
+    )
   })
 
   it('hides copy buttons when both panes show the same layer', () => {
     render(
-      <KeymapEditor
-        {...defaultProps}
-        primaryLayer={0}
-        secondaryLayer={0}
-        currentLayer={0}
-      />,
+      <KeymapEditor {...defaultProps} primaryLayer={0} secondaryLayer={0} currentLayer={0} />,
     )
     expect(screen.queryByTestId('copy-layer-button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('copy-all-button')).not.toBeInTheDocument()
   })
 
   it('does not clear multiSelectedKeys when Ctrl is held on pane background click', () => {

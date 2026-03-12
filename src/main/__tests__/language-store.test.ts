@@ -40,7 +40,10 @@ beforeEach(async () => {
   mockApp.getPath.mockReturnValue(testDir)
 
   handlers = new Map()
-  mockIpcMain.handle.mockImplementation(((channel: string, handler: (...args: unknown[]) => Promise<unknown>) => {
+  mockIpcMain.handle.mockImplementation(((
+    channel: string,
+    handler: (...args: unknown[]) => Promise<unknown>,
+  ) => {
     handlers.set(channel, handler)
   }) as unknown as typeof ipcMain.handle)
 
@@ -60,7 +63,7 @@ function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
 
 describe('language-store list', () => {
   it('returns manifest entries with status', async () => {
-    const result = await invoke('lang:list') as Array<{ name: string; status: string }>
+    const result = (await invoke('lang:list')) as Array<{ name: string; status: string }>
 
     expect(result.length).toBeGreaterThan(0)
     const english = result.find((e) => e.name === 'english')
@@ -75,9 +78,12 @@ describe('language-store list', () => {
   it('detects downloaded languages', async () => {
     const langDir = join(testDir, 'local', 'downloads', 'languages')
     await mkdir(langDir, { recursive: true })
-    await writeFile(join(langDir, 'german.json'), JSON.stringify({ name: 'german', words: ['hallo'] }))
+    await writeFile(
+      join(langDir, 'german.json'),
+      JSON.stringify({ name: 'german', words: ['hallo'] }),
+    )
 
-    const result = await invoke('lang:list') as Array<{ name: string; status: string }>
+    const result = (await invoke('lang:list')) as Array<{ name: string; status: string }>
     const german = result.find((e) => e.name === 'german')
     expect(german).toBeDefined()
     expect(german!.status).toBe('downloaded')
@@ -101,7 +107,7 @@ describe('language-store get', () => {
     const data = { name: 'test_lang', words: ['hello', 'world'], rightToLeft: false }
     await writeFile(join(langDir, 'test_lang.json'), JSON.stringify(data))
 
-    const result = await invoke('lang:get', 'test_lang') as { name: string; words: string[] }
+    const result = (await invoke('lang:get', 'test_lang')) as { name: string; words: string[] }
     expect(result).not.toBeNull()
     expect(result.name).toBe('test_lang')
     expect(result.words).toEqual(['hello', 'world'])
@@ -157,12 +163,12 @@ function manifestFileSize(name: string): number {
 
 describe('language-store download', () => {
   it('rejects download of bundled language', async () => {
-    const result = await invoke('lang:download', 'english') as { success: boolean }
+    const result = (await invoke('lang:download', 'english')) as { success: boolean }
     expect(result.success).toBe(false)
   })
 
   it('rejects invalid names', async () => {
-    const result = await invoke('lang:download', '../etc/passwd') as { success: boolean }
+    const result = (await invoke('lang:download', '../etc/passwd')) as { success: boolean }
     expect(result.success).toBe(false)
   })
 
@@ -174,7 +180,7 @@ describe('language-store download', () => {
       text: () => Promise.resolve(langData),
     } as unknown as Response)
 
-    const result = await invoke('lang:download', 'german') as { success: boolean }
+    const result = (await invoke('lang:download', 'german')) as { success: boolean }
     expect(result.success).toBe(true)
 
     const files = await readdir(join(testDir, 'local', 'downloads', 'languages'))
@@ -204,21 +210,25 @@ describe('language-store download', () => {
       text: () => Promise.resolve(langData),
     } as unknown as Response)
 
-    const result = await invoke('lang:download', 'german') as { success: boolean; error?: string }
+    const result = (await invoke('lang:download', 'german')) as { success: boolean; error?: string }
     expect(result.success).toBe(false)
     expect(result.error).toContain('size mismatch')
 
     // Verify no file was written
     const langDir = join(testDir, 'local', 'downloads', 'languages')
     let files: string[] = []
-    try { files = await readdir(langDir) } catch { /* dir may not exist */ }
+    try {
+      files = await readdir(langDir)
+    } catch {
+      /* dir may not exist */
+    }
     expect(files).not.toContain('german.json')
   })
 
   it('fails on HTTP error', async () => {
     mockNet.fetch.mockResolvedValue({ ok: false, status: 404 } as unknown as Response)
 
-    const result = await invoke('lang:download', 'german') as { success: boolean; error?: string }
+    const result = (await invoke('lang:download', 'german')) as { success: boolean; error?: string }
     expect(result.success).toBe(false)
     expect(result.error).toContain('404')
   })
@@ -231,12 +241,15 @@ describe('language-store download', () => {
       text: () => Promise.resolve(padded),
     } as unknown as Response)
 
-    const result = await invoke('lang:download', 'german') as { success: boolean }
+    const result = (await invoke('lang:download', 'german')) as { success: boolean }
     expect(result.success).toBe(false)
   })
 
   it('rejects unknown language not in manifest without network call', async () => {
-    const result = await invoke('lang:download', 'not_in_manifest') as { success: boolean; error?: string }
+    const result = (await invoke('lang:download', 'not_in_manifest')) as {
+      success: boolean
+      error?: string
+    }
     expect(result.success).toBe(false)
     expect(result.error).toBe('Unknown language')
     expect(mockNet.fetch).not.toHaveBeenCalled()
@@ -245,7 +258,7 @@ describe('language-store download', () => {
 
 describe('language-store delete', () => {
   it('rejects deletion of bundled language', async () => {
-    const result = await invoke('lang:delete', 'english') as { success: boolean }
+    const result = (await invoke('lang:delete', 'english')) as { success: boolean }
     expect(result.success).toBe(false)
   })
 
@@ -254,7 +267,7 @@ describe('language-store delete', () => {
     await mkdir(langDir, { recursive: true })
     await writeFile(join(langDir, 'test.json'), '{}')
 
-    const result = await invoke('lang:delete', 'test') as { success: boolean }
+    const result = (await invoke('lang:delete', 'test')) as { success: boolean }
     expect(result.success).toBe(true)
 
     const files = await readdir(langDir)
@@ -262,7 +275,7 @@ describe('language-store delete', () => {
   })
 
   it('fails for non-existent file', async () => {
-    const result = await invoke('lang:delete', 'nonexistent') as { success: boolean }
+    const result = (await invoke('lang:delete', 'nonexistent')) as { success: boolean }
     expect(result.success).toBe(false)
   })
 })

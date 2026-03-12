@@ -11,20 +11,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { KeychronState, SnapClickEntry } from '../../../shared/types/keychron'
+import type { KeychronState } from '../../../shared/types/keychron'
 import {
   DEBOUNCE_TYPE_NAMES,
   REPORT_RATE_NAMES,
   REPORT_RATE_8000HZ,
   REPORT_RATE_125HZ,
-  SNAP_CLICK_TYPE_NAMES,
-  SNAP_CLICK_TYPE_TOOLTIPS,
 } from '../../../shared/constants/keychron'
-import { KeycodeField } from './KeycodeField'
-import { KeyPopover } from '../keycodes/KeyPopover'
 import { FactoryResetDialog } from './FactoryResetDialog'
-import type { Keycode } from '../../../shared/keycodes/keycodes'
-import { deserialize } from '../../../shared/keycodes/keycodes'
 
 interface Props {
   keychron: KeychronState
@@ -46,14 +40,6 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
   const [pollRate24g, setPollRate24g] = useState(keychron.pollRate24g)
   const [backlitTime, setBacklitTime] = useState(keychron.wirelessBacklitTime)
   const [idleTime, setIdleTime] = useState(keychron.wirelessIdleTime)
-  const [snapEntries, setSnapEntries] = useState<SnapClickEntry[]>(
-    keychron.snapClickEntries,
-  )
-  const [popoverState, setPopoverState] = useState<{
-    index: number
-    keyField: 'key1' | 'key2'
-    anchorRect: DOMRect
-  } | null>(null)
   const [showFactoryReset, setShowFactoryReset] = useState(false)
 
   // Sync local state when keychron prop changes
@@ -67,7 +53,7 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
     setPollRate24g(keychron.pollRate24g)
     setBacklitTime(keychron.wirelessBacklitTime)
     setIdleTime(keychron.wirelessIdleTime)
-    setSnapEntries(keychron.snapClickEntries)
+    setIdleTime(keychron.wirelessIdleTime)
     updating.current = false
   }, [keychron])
 
@@ -159,46 +145,7 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
     [api, backlitTime, onSettingChanged],
   )
 
-  // --- Snap Click ---
-  const handleSnapType = useCallback(
-    async (index: number, e: React.ChangeEvent<HTMLSelectElement>) => {
-      if (updating.current) return
-      const type = parseInt(e.target.value, 10)
-      const entry = snapEntries[index]
-      const newEntries = [...snapEntries]
-      newEntries[index] = { ...entry, type }
-      setSnapEntries(newEntries)
-      await api.keychronSetSnapClick(index, type, entry.key1, entry.key2)
-      await api.keychronSaveSnapClick()
-      onSettingChanged?.()
-    },
-    [api, snapEntries, onSettingChanged],
-  )
 
-  const handleRawKeycodeSelect = useCallback(
-    (code: number) => {
-      if (!popoverState) return
-      const entry = snapEntries[popoverState.index]
-      const newEntries = [...snapEntries]
-      const newEntry = { ...entry, [popoverState.keyField]: code }
-      newEntries[popoverState.index] = newEntry
-      setSnapEntries(newEntries)
-      api
-        .keychronSetSnapClick(popoverState.index, newEntry.type, newEntry.key1, newEntry.key2)
-        .then(() => {
-          api.keychronSaveSnapClick().then(() => onSettingChanged?.())
-        })
-      setPopoverState(null)
-    },
-    [popoverState, snapEntries, api, onSettingChanged],
-  )
-
-  const handleKeycodeSelect = useCallback(
-    (kc: Keycode) => {
-      handleRawKeycodeSelect(deserialize(kc.qmkId))
-    },
-    [handleRawKeycodeSelect],
-  )
 
   // Build supported rate options from bitmask
   function rateOptions(mask: number) {
@@ -272,9 +219,7 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
               className="h-4 w-4"
               data-testid="keychron-nkro"
             />
-            <span className="text-sm">
-              {t('keychron.enableNkro', 'Enable NKRO')}
-            </span>
+            <span className="text-sm">{t('keychron.enableNkro', 'Enable NKRO')}</span>
             <span className="text-xs text-content-muted">
               {keychron.nkroAdaptive
                 ? t('keychron.nkroAdaptive', '(Adaptive — controlled by firmware)')
@@ -376,68 +321,7 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
         </section>
       )}
 
-      {/* Snap Click (SOCD) */}
-      {keychron.hasSnapClick && keychron.snapClickCount > 0 && (
-        <section>
-          <h4 className="mb-2 text-sm font-semibold text-content-muted">
-            {t('keychron.snapClick', 'Snap Click (SOCD)')}
-          </h4>
-          <div className="space-y-2">
-            {snapEntries.map((entry, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <span className="w-16 text-xs text-content-muted">
-                  {t('keychron.snapPair', 'Pair {{n}}', { n: i + 1 })}
-                </span>
-                <select
-                  value={entry.type}
-                  onChange={(e) => handleSnapType(i, e)}
-                  className="flex-1 rounded border border-edge bg-surface px-2 py-1 text-sm"
-                  title={SNAP_CLICK_TYPE_TOOLTIPS[entry.type] ?? ''}
-                  data-testid={`keychron-snap-${i}`}
-                >
-                  {Object.entries(SNAP_CLICK_TYPE_NAMES).map(([id, name]) => (
-                    <option key={id} value={id}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-xs text-content-muted tabular-nums">
-                  {t('keychron.keys', 'Keys')}:
-                </span>
-                <div 
-                  className="cursor-pointer" 
-                  onClick={(e) => setPopoverState({ index: i, keyField: 'key1', anchorRect: e.currentTarget.getBoundingClientRect() })}
-                >
-                  <KeycodeField
-                    value={entry.key1}
-                    selected={popoverState?.index === i && popoverState?.keyField === 'key1'}
-                    onSelect={() => {}}
-                  />
-                </div>
-                <div 
-                  className="cursor-pointer" 
-                  onClick={(e) => setPopoverState({ index: i, keyField: 'key2', anchorRect: e.currentTarget.getBoundingClientRect() })}
-                >
-                  <KeycodeField
-                    value={entry.key2}
-                    selected={popoverState?.index === i && popoverState?.keyField === 'key2'}
-                    onSelect={() => {}}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-          {popoverState && (
-            <KeyPopover
-              anchorRect={popoverState.anchorRect}
-              currentKeycode={snapEntries[popoverState.index][popoverState.keyField]}
-              onKeycodeSelect={handleKeycodeSelect}
-              onRawKeycodeSelect={handleRawKeycodeSelect}
-              onClose={() => setPopoverState(null)}
-            />
-          )}
-        </section>
-      )}
+
 
       {/* Factory Reset */}
       <section className="border-t border-edge pt-3">
@@ -457,32 +341,8 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
         >
           {t('keychron.howToFactoryReset', 'How to Factory Reset...')}
         </button>
-        {showFactoryReset && (
-          <FactoryResetDialog onClose={() => setShowFactoryReset(false)} />
-        )}
+        {showFactoryReset && <FactoryResetDialog onClose={() => setShowFactoryReset(false)} />}
       </section>
-
-      {/* FW Flasher placeholder */}
-      {keychron.hasDfu && (
-        <section>
-          <h4 className="mb-2 text-sm font-semibold text-content-muted">
-            {t('keychron.firmwareUpdate', 'Firmware Update')}
-          </h4>
-          {keychron.mcuInfo && (
-            <p className="mb-2 text-xs text-content-muted">
-              {t('keychron.mcuDetected', 'MCU')}: {keychron.mcuInfo}
-            </p>
-          )}
-          <button
-            className="rounded-md border border-edge bg-surface px-3 py-1.5 text-sm opacity-50 cursor-not-allowed"
-            disabled
-            title={t('keychron.fwFlasherComingSoon', 'Firmware flashing is coming soon')}
-            data-testid="keychron-fw-flash-btn"
-          >
-            {t('keychron.flashFirmware', 'Flash Firmware...')}
-          </button>
-        </section>
-      )}
 
       {/* Firmware info */}
       <section className="border-t border-edge pt-3">
@@ -498,8 +358,7 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
         )}
         <div className="text-xs text-content-muted">
           {t('keychron.protocol', 'Protocol')}: v{keychron.protocolVersion}
-          {keychron.miscProtocolVersion > 0 &&
-            ` / misc v${keychron.miscProtocolVersion}`}
+          {keychron.miscProtocolVersion > 0 && ` / misc v${keychron.miscProtocolVersion}`}
         </div>
       </section>
     </div>

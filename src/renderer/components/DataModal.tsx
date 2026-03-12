@@ -6,7 +6,12 @@ import { useFavoriteManage } from '../hooks/useFavoriteManage'
 import { useInlineRename } from '../hooks/useInlineRename'
 import { ModalCloseButton } from './editors/ModalCloseButton'
 import { ModalTabBar, ModalTabPanel } from './editors/modal-tabs'
-import { ACTION_BTN, CONFIRM_DELETE_BTN, DELETE_BTN, formatDate } from './editors/store-modal-shared'
+import {
+  ACTION_BTN,
+  CONFIRM_DELETE_BTN,
+  DELETE_BTN,
+  formatDate,
+} from './editors/store-modal-shared'
 import { FavoriteHubActions } from './editors/FavoriteHubActions'
 import type { FavHubEntryResult } from './editors/FavoriteHubActions'
 import { HubPostRow, HubRefreshButton, DEFAULT_PER_PAGE, BTN_SECONDARY } from './hub-post-shared'
@@ -45,9 +50,13 @@ const FAV_TABS: TabDef<DataModalTabId>[] = [
 
 const HUB_TAB: TabDef<DataModalTabId> = { id: 'hubPost', labelKey: 'hub.hubPosts' }
 
-function formatImportMessage(t: (key: string, opts?: Record<string, unknown>) => string, result: FavoriteImportResultState): string {
+function formatImportMessage(
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  result: FavoriteImportResultState,
+): string {
   if (result.imported === 0) return t('favoriteStore.importEmpty')
-  if (result.skipped > 0) return t('favoriteStore.importPartial', { imported: result.imported, skipped: result.skipped })
+  if (result.skipped > 0)
+    return t('favoriteStore.importPartial', { imported: result.imported, skipped: result.skipped })
   return t('favoriteStore.importSuccess', { imported: result.imported })
 }
 
@@ -118,7 +127,10 @@ function FavoriteTabContent({
       {/* Entry list */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {manage.entries.length === 0 ? (
-          <div className="py-4 text-center text-[13px] text-content-muted" data-testid="data-modal-fav-empty">
+          <div
+            className="py-4 text-center text-[13px] text-content-muted"
+            data-testid="data-modal-fav-empty"
+          >
             {t('favoriteStore.noSaved')}
           </div>
         ) : (
@@ -159,7 +171,10 @@ function FavoriteTabContent({
                         <button
                           type="button"
                           className={CONFIRM_DELETE_BTN}
-                          onClick={() => { void manage.deleteEntry(entry.id); setConfirmDeleteId(null) }}
+                          onClick={() => {
+                            void manage.deleteEntry(entry.id)
+                            setConfirmDeleteId(null)
+                          }}
                           data-testid="data-modal-fav-delete-confirm"
                         >
                           {t('favoriteStore.confirmDelete')}
@@ -220,10 +235,7 @@ function FavoriteTabContent({
       <div className="mt-4 border-t border-edge pt-3">
         <div className="flex items-center gap-2">
           {manage.importResult && (
-            <span
-              className="text-sm text-accent"
-              data-testid="data-modal-fav-import-result"
-            >
+            <span className="text-sm text-accent" data-testid="data-modal-fav-import-result">
               {formatImportMessage(t, manage.importResult)}
             </span>
           )}
@@ -288,31 +300,42 @@ export function DataModal({
     }
   }, [showHubTab, activeTab])
 
-  const refreshHubPage = useCallback(async (page: number) => {
-    await onHubRefresh?.({ page, per_page: DEFAULT_PER_PAGE })
-  }, [onHubRefresh])
+  const refreshHubPage = useCallback(
+    async (page: number) => {
+      await onHubRefresh?.({ page, per_page: DEFAULT_PER_PAGE })
+    },
+    [onHubRefresh],
+  )
 
-  const handleHubPageChange = useCallback((newPage: number) => {
-    setHubPage(newPage)
-    void refreshHubPage(newPage)
-  }, [refreshHubPage])
+  const handleHubPageChange = useCallback(
+    (newPage: number) => {
+      setHubPage(newPage)
+      void refreshHubPage(newPage)
+    },
+    [refreshHubPage],
+  )
 
-  const handleHubRenameWithPageRefresh = useCallback(async (postId: string, newTitle: string) => {
-    await onHubRename(postId, newTitle)
-    void refreshHubPage(hubPage)
-  }, [onHubRename, hubPage, refreshHubPage])
-
-  const handleHubDeleteWithPageAdjust = useCallback(async (postId: string) => {
-    await onHubDelete(postId)
-    if (hubPosts.length <= 1 && hubPage > 1) {
-      handleHubPageChange(hubPage - 1)
-    } else {
+  const handleHubRenameWithPageRefresh = useCallback(
+    async (postId: string, newTitle: string) => {
+      await onHubRename(postId, newTitle)
       void refreshHubPage(hubPage)
-    }
-  }, [onHubDelete, hubPosts.length, hubPage, handleHubPageChange, refreshHubPage])
+    },
+    [onHubRename, hubPage, refreshHubPage],
+  )
 
-  const isFavTab = (id: DataModalTabId): id is FavoriteType =>
-    id !== 'hubPost'
+  const handleHubDeleteWithPageAdjust = useCallback(
+    async (postId: string) => {
+      await onHubDelete(postId)
+      if (hubPosts.length <= 1 && hubPage > 1) {
+        handleHubPageChange(hubPage - 1)
+      } else {
+        void refreshHubPage(hubPage)
+      }
+    },
+    [onHubDelete, hubPosts.length, hubPage, handleHubPageChange, refreshHubPage],
+  )
+
+  const isFavTab = (id: DataModalTabId): id is FavoriteType => id !== 'hubPost'
 
   function renderHubPostList(): React.ReactNode {
     const totalPages = hubPostsPagination?.total_pages ?? 1
@@ -332,7 +355,13 @@ export function DataModal({
         {hasPosts ? (
           <div className="space-y-1">
             {hubPosts.map((post) => (
-              <HubPostRow key={post.id} post={post} onRename={handleHubRenameWithPageRefresh} onDelete={handleHubDeleteWithPageAdjust} hubOrigin={hubOrigin} />
+              <HubPostRow
+                key={post.id}
+                post={post}
+                onRename={handleHubRenameWithPageRefresh}
+                onDelete={handleHubDeleteWithPageAdjust}
+                hubOrigin={hubOrigin}
+              />
             ))}
           </div>
         ) : (
@@ -385,7 +414,9 @@ export function DataModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-4 pb-0 shrink-0">
-          <h2 id="data-modal-title" className="text-lg font-bold text-content">{t('dataModal.title')}</h2>
+          <h2 id="data-modal-title" className="text-lg font-bold text-content">
+            {t('dataModal.title')}
+          </h2>
           <ModalCloseButton testid="data-modal-close" onClick={onClose} />
         </div>
 
@@ -407,9 +438,15 @@ export function DataModal({
               hubNeedsDisplayName={hubNeedsDisplayName}
               hubUploading={hubFavUploading}
               hubUploadResult={hubFavUploadResult}
-              onUploadToHub={onFavUploadToHub ? (entryId) => onFavUploadToHub(activeTab, entryId) : undefined}
-              onUpdateOnHub={onFavUpdateOnHub ? (entryId) => onFavUpdateOnHub(activeTab, entryId) : undefined}
-              onRemoveFromHub={onFavRemoveFromHub ? (entryId) => onFavRemoveFromHub(activeTab, entryId) : undefined}
+              onUploadToHub={
+                onFavUploadToHub ? (entryId) => onFavUploadToHub(activeTab, entryId) : undefined
+              }
+              onUpdateOnHub={
+                onFavUpdateOnHub ? (entryId) => onFavUpdateOnHub(activeTab, entryId) : undefined
+              }
+              onRemoveFromHub={
+                onFavRemoveFromHub ? (entryId) => onFavRemoveFromHub(activeTab, entryId) : undefined
+              }
               onRenameOnHub={onFavRenameOnHub}
             />
           )}

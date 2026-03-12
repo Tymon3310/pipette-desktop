@@ -63,7 +63,12 @@ describe('fetchNotifications', () => {
   it('returns notifications on successful fetch', async () => {
     const notifications = [
       { title: 'Update', body: 'New version', type: 'Info', publishedAt: '2025-01-01T00:00:00Z' },
-      { title: 'Maintenance', body: 'Scheduled', type: 'Warning', publishedAt: '2025-01-02T00:00:00Z' },
+      {
+        title: 'Maintenance',
+        body: 'Scheduled',
+        type: 'Warning',
+        publishedAt: '2025-01-02T00:00:00Z',
+      },
     ]
     mockFetch.mockResolvedValue({
       ok: true,
@@ -77,7 +82,12 @@ describe('fetchNotifications', () => {
 
   it('converts Firestore Timestamp to ISO string', async () => {
     const notifications = [
-      { title: 'TS', body: 'Body', type: 'Info', publishedAt: { _seconds: 1735689600, _nanoseconds: 0 } },
+      {
+        title: 'TS',
+        body: 'Body',
+        type: 'Info',
+        publishedAt: { _seconds: 1735689600, _nanoseconds: 0 },
+      },
     ]
     mockFetch.mockResolvedValue({
       ok: true,
@@ -152,7 +162,12 @@ describe('fetchNotifications', () => {
 
   it('accepts Firestore Timestamp in validation', async () => {
     const data = [
-      { title: 'TS', body: 'Body', type: 'Info', publishedAt: { _seconds: 1700000000, _nanoseconds: 500 } },
+      {
+        title: 'TS',
+        body: 'Body',
+        type: 'Info',
+        publishedAt: { _seconds: 1700000000, _nanoseconds: 500 },
+      },
       { title: 'Str', body: 'Body', type: 'Info', publishedAt: '2025-01-01T00:00:00Z' },
       { title: 'Bad', body: 'Body', type: 'Info', publishedAt: 12345 },
     ]

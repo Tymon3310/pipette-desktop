@@ -50,7 +50,13 @@ describe('StatusBar', () => {
 
   it('calls onTypingTestModeChange when typing mode button clicked', () => {
     const onTypingTestModeChange = vi.fn()
-    render(<StatusBar {...defaultProps} hasMatrixTester={true} onTypingTestModeChange={onTypingTestModeChange} />)
+    render(
+      <StatusBar
+        {...defaultProps}
+        hasMatrixTester={true}
+        onTypingTestModeChange={onTypingTestModeChange}
+      />,
+    )
     fireEvent.click(screen.getByTestId('typing-test-button'))
     expect(onTypingTestModeChange).toHaveBeenCalledOnce()
   })
@@ -153,9 +159,9 @@ describe('StatusBar', () => {
       render(<StatusBar {...defaultProps} matrixMode={true} syncStatus="synced" />)
       const leftSection = screen.getByTestId('status-bar').firstElementChild!
       const items = Array.from(leftSection.children)
-      const matrixIdx = items.findIndex(el => el.getAttribute('data-testid') === 'matrix-status')
-      const lockIdx = items.findIndex(el => el.getAttribute('data-testid') === 'lock-status')
-      const syncIdx = items.findIndex(el => el.getAttribute('data-testid') === 'sync-status')
+      const matrixIdx = items.findIndex((el) => el.getAttribute('data-testid') === 'matrix-status')
+      const lockIdx = items.findIndex((el) => el.getAttribute('data-testid') === 'lock-status')
+      const syncIdx = items.findIndex((el) => el.getAttribute('data-testid') === 'sync-status')
       expect(matrixIdx).toBeLessThan(lockIdx)
       expect(lockIdx).toBeLessThan(syncIdx)
     })
@@ -177,5 +183,4 @@ describe('StatusBar', () => {
       expect(screen.queryByTestId('loaded-label')).not.toBeInTheDocument()
     })
   })
-
 })

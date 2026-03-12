@@ -112,9 +112,7 @@ describe('listDevices', () => {
   })
 
   it('filters out devices with wrong usage page', async () => {
-    mockDevicesAsync.mockResolvedValue([
-      createMockDeviceInfo({ usagePage: 0x0001, usage: 0x06 }),
-    ])
+    mockDevicesAsync.mockResolvedValue([createMockDeviceInfo({ usagePage: 0x0001, usage: 0x06 })])
 
     const result = await listDevices()
 
@@ -130,9 +128,7 @@ describe('listDevices', () => {
   })
 
   it('defaults to vial type when serial is empty', async () => {
-    mockDevicesAsync.mockResolvedValue([
-      createMockDeviceInfo({ serialNumber: '' }),
-    ])
+    mockDevicesAsync.mockResolvedValue([createMockDeviceInfo({ serialNumber: '' })])
 
     const result = await listDevices()
 
@@ -170,9 +166,7 @@ describe('openHidDevice / closeHidDevice', () => {
   })
 
   it('returns false when no matching device is found', async () => {
-    mockDevicesAsync.mockResolvedValue([
-      createMockDeviceInfo({ vendorId: 0x9999 }),
-    ])
+    mockDevicesAsync.mockResolvedValue([createMockDeviceInfo({ vendorId: 0x9999 })])
 
     const result = await openHidDevice(0x1234, 0x5678)
 
@@ -181,9 +175,7 @@ describe('openHidDevice / closeHidDevice', () => {
   })
 
   it('returns false when device has no path', async () => {
-    mockDevicesAsync.mockResolvedValue([
-      createMockDeviceInfo({ path: undefined }),
-    ])
+    mockDevicesAsync.mockResolvedValue([createMockDeviceInfo({ path: undefined })])
 
     const result = await openHidDevice(0x1234, 0x5678)
 
@@ -226,7 +218,9 @@ describe('openHidDevice / closeHidDevice', () => {
   it('openHidDevice throws after exhausting retries', async () => {
     vi.useFakeTimers()
     mockDevicesAsync.mockResolvedValue([createMockDeviceInfo()])
-    mockHIDAsyncOpen.mockImplementation(() => { throw new Error('cannot open device') })
+    mockHIDAsyncOpen.mockImplementation(() => {
+      throw new Error('cannot open device')
+    })
 
     const promise = openHidDevice(0x1234, 0x5678)
     const assertion = expect(promise).rejects.toThrow('cannot open device')
@@ -334,7 +328,9 @@ describe('sendReceive', () => {
   it('retries on write errors', async () => {
     vi.useFakeTimers()
     mockWrite
-      .mockImplementationOnce(() => { throw new Error('Cannot write to hid device') })
+      .mockImplementationOnce(() => {
+        throw new Error('Cannot write to hid device')
+      })
       .mockReturnValue(MSG_LEN + 1)
     mockRead.mockResolvedValue(Buffer.alloc(MSG_LEN))
 
@@ -376,7 +372,9 @@ describe('sendReceive', () => {
 
   it('throws after exhausting retries', async () => {
     vi.useFakeTimers()
-    mockRead.mockImplementation(() => { throw new Error('HID read timeout') })
+    mockRead.mockImplementation(() => {
+      throw new Error('HID read timeout')
+    })
 
     const promise = sendReceive([0x01])
     const assertion = expect(promise).rejects.toThrow('timeout')

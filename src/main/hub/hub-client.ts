@@ -32,17 +32,23 @@ class HubHttpError extends Error {
 
 export class Hub401Error extends HubHttpError {
   override name = 'Hub401Error'
-  constructor(label: string, body: string) { super(label, 401, body) }
+  constructor(label: string, body: string) {
+    super(label, 401, body)
+  }
 }
 
 export class Hub403Error extends HubHttpError {
   override name = 'Hub403Error'
-  constructor(label: string, body: string) { super(label, 403, body) }
+  constructor(label: string, body: string) {
+    super(label, 403, body)
+  }
 }
 
 export class Hub409Error extends HubHttpError {
   override name = 'Hub409Error'
-  constructor(label: string, body: string) { super(label, 409, body) }
+  constructor(label: string, body: string) {
+    super(label, 409, body)
+  }
 }
 
 export class Hub429Error extends HubHttpError {
@@ -113,11 +119,15 @@ export async function authenticateWithHub(
 ): Promise<HubAuthResult> {
   const payload: Record<string, string> = { id_token: idToken }
   if (displayName) payload.display_name = displayName
-  return hubFetch<HubAuthResult>(`${HUB_API_BASE}/api/auth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  }, 'Hub auth failed')
+  return hubFetch<HubAuthResult>(
+    `${HUB_API_BASE}/api/auth/token`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+    'Hub auth failed',
+  )
 }
 
 function sanitizeFieldValue(value: string): string {
@@ -129,15 +139,19 @@ class MultipartBuilder {
   private readonly parts: Buffer[] = []
 
   appendField(name: string, value: string): void {
-    this.parts.push(Buffer.from(
-      `--${this.boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${sanitizeFieldValue(value)}\r\n`,
-    ))
+    this.parts.push(
+      Buffer.from(
+        `--${this.boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${sanitizeFieldValue(value)}\r\n`,
+      ),
+    )
   }
 
   appendFile(fieldName: string, filename: string, data: Buffer, contentType: string): void {
-    this.parts.push(Buffer.from(
-      `--${this.boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`,
-    ))
+    this.parts.push(
+      Buffer.from(
+        `--${this.boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`,
+      ),
+    )
     this.parts.push(data)
     this.parts.push(Buffer.from('\r\n'))
   }
@@ -164,21 +178,29 @@ function buildMultipartBody(
 }
 
 export async function fetchAuthMe(jwt: string): Promise<HubUser> {
-  return hubFetch<HubUser>(`${HUB_API_BASE}/api/auth/me`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${jwt}` },
-  }, 'Hub fetch auth me failed')
+  return hubFetch<HubUser>(
+    `${HUB_API_BASE}/api/auth/me`,
+    {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${jwt}` },
+    },
+    'Hub fetch auth me failed',
+  )
 }
 
 export async function patchAuthMe(jwt: string, displayName: string): Promise<HubUser> {
-  return hubFetch<HubUser>(`${HUB_API_BASE}/api/auth/me`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${jwt}`,
-      'Content-Type': 'application/json',
+  return hubFetch<HubUser>(
+    `${HUB_API_BASE}/api/auth/me`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ display_name: displayName }),
     },
-    body: JSON.stringify({ display_name: displayName }),
-  }, 'Hub patch auth me failed')
+    'Hub patch auth me failed',
+  )
 }
 
 export interface HubMyPostsPage {
@@ -197,13 +219,20 @@ export async function fetchMyPosts(
   if (params?.per_page != null) qs.set('per_page', String(params.per_page))
   const query = qs.toString()
   const url = `${HUB_API_BASE}/api/files/me${query ? `?${query}` : ''}`
-  return hubFetch<HubMyPostsPage>(url, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${jwt}` },
-  }, 'Hub fetch my posts failed')
+  return hubFetch<HubMyPostsPage>(
+    url,
+    {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${jwt}` },
+    },
+    'Hub fetch my posts failed',
+  )
 }
 
-export async function fetchMyPostsByKeyboard(jwt: string, keyboardName: string): Promise<HubMyPost[]> {
+export async function fetchMyPostsByKeyboard(
+  jwt: string,
+  keyboardName: string,
+): Promise<HubMyPost[]> {
   return hubFetch<HubMyPost[]>(
     `${HUB_API_BASE}/api/files/me/keyboard?name=${encodeURIComponent(keyboardName)}`,
     {
@@ -214,22 +243,34 @@ export async function fetchMyPostsByKeyboard(jwt: string, keyboardName: string):
   )
 }
 
-export async function patchPostOnHub(jwt: string, postId: string, fields: { title?: string }): Promise<void> {
-  await hubFetch<unknown>(`${HUB_API_BASE}/api/files/${encodeURIComponent(postId)}`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${jwt}`,
-      'Content-Type': 'application/json',
+export async function patchPostOnHub(
+  jwt: string,
+  postId: string,
+  fields: { title?: string },
+): Promise<void> {
+  await hubFetch<unknown>(
+    `${HUB_API_BASE}/api/files/${encodeURIComponent(postId)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(fields),
     },
-    body: JSON.stringify(fields),
-  }, 'Hub patch failed')
+    'Hub patch failed',
+  )
 }
 
 export async function deletePostFromHub(jwt: string, postId: string): Promise<void> {
-  await hubFetch<unknown>(`${HUB_API_BASE}/api/files/${encodeURIComponent(postId)}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${jwt}` },
-  }, 'Hub delete failed')
+  await hubFetch<unknown>(
+    `${HUB_API_BASE}/api/files/${encodeURIComponent(postId)}`,
+    {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${jwt}` },
+    },
+    'Hub delete failed',
+  )
 }
 
 async function submitPost(
@@ -242,14 +283,18 @@ async function submitPost(
   label: string,
 ): Promise<HubPostResponse> {
   const { body, boundary } = buildMultipartBody(title, keyboardName, files)
-  return hubFetch<HubPostResponse>(`${HUB_API_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${jwt}`,
-      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+  return hubFetch<HubPostResponse>(
+    `${HUB_API_BASE}${path}`,
+    {
+      method,
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      },
+      body,
     },
-    body,
-  }, label)
+    label,
+  )
 }
 
 export function uploadPostToHub(
@@ -268,7 +313,15 @@ export function updatePostOnHub(
   keyboardName: string,
   files: HubUploadFiles,
 ): Promise<HubPostResponse> {
-  return submitPost(jwt, 'PUT', `/api/files/${encodeURIComponent(postId)}`, title, keyboardName, files, 'Hub update failed')
+  return submitPost(
+    jwt,
+    'PUT',
+    `/api/files/${encodeURIComponent(postId)}`,
+    title,
+    keyboardName,
+    files,
+    'Hub update failed',
+  )
 }
 
 // --- Feature (favorite) post support ---
@@ -300,14 +353,18 @@ async function submitFeaturePost(
   label: string,
 ): Promise<HubPostResponse> {
   const { body, boundary } = buildFeatureMultipartBody(title, postType, jsonFile)
-  return hubFetch<HubPostResponse>(`${HUB_API_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${jwt}`,
-      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+  return hubFetch<HubPostResponse>(
+    `${HUB_API_BASE}${path}`,
+    {
+      method,
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      },
+      body,
     },
-    body,
-  }, label)
+    label,
+  )
 }
 
 export function uploadFeaturePostToHub(
@@ -316,7 +373,15 @@ export function uploadFeaturePostToHub(
   postType: string,
   jsonFile: HubFeatureUploadFile,
 ): Promise<HubPostResponse> {
-  return submitFeaturePost(jwt, 'POST', '/api/files', title, postType, jsonFile, 'Hub feature upload failed')
+  return submitFeaturePost(
+    jwt,
+    'POST',
+    '/api/files',
+    title,
+    postType,
+    jsonFile,
+    'Hub feature upload failed',
+  )
 }
 
 export function updateFeaturePostOnHub(
@@ -326,7 +391,15 @@ export function updateFeaturePostOnHub(
   postType: string,
   jsonFile: HubFeatureUploadFile,
 ): Promise<HubPostResponse> {
-  return submitFeaturePost(jwt, 'PUT', `/api/files/${encodeURIComponent(postId)}`, title, postType, jsonFile, 'Hub feature update failed')
+  return submitFeaturePost(
+    jwt,
+    'PUT',
+    `/api/files/${encodeURIComponent(postId)}`,
+    title,
+    postType,
+    jsonFile,
+    'Hub feature update failed',
+  )
 }
 
 export function getHubOrigin(): string {

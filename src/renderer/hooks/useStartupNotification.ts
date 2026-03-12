@@ -19,25 +19,30 @@ export function useStartupNotification(): StartupNotificationState {
     fetchedRef.current = true
 
     let cancelled = false
-    window.vialAPI.notificationFetch().then((result) => {
-      if (cancelled) return
-      if (!result.success || !result.notifications || result.notifications.length === 0) return
+    window.vialAPI
+      .notificationFetch()
+      .then((result) => {
+        if (cancelled) return
+        if (!result.success || !result.notifications || result.notifications.length === 0) return
 
-      const parsed = appConfig.config.lastNotificationSeen
-        ? new Date(appConfig.config.lastNotificationSeen).getTime()
-        : 0
-      const lastSeenTs = Number.isNaN(parsed) ? 0 : parsed
-      const filtered = result.notifications
-        .filter((n) => new Date(n.publishedAt).getTime() > lastSeenTs)
-        .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
-      if (filtered.length === 0) return
+        const parsed = appConfig.config.lastNotificationSeen
+          ? new Date(appConfig.config.lastNotificationSeen).getTime()
+          : 0
+        const lastSeenTs = Number.isNaN(parsed) ? 0 : parsed
+        const filtered = result.notifications
+          .filter((n) => new Date(n.publishedAt).getTime() > lastSeenTs)
+          .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+        if (filtered.length === 0) return
 
-      setNotifications(filtered)
-      setVisible(true)
-    }).catch(() => {
-      // Network errors are non-critical
-    })
-    return () => { cancelled = true }
+        setNotifications(filtered)
+        setVisible(true)
+      })
+      .catch(() => {
+        // Network errors are non-critical
+      })
+    return () => {
+      cancelled = true
+    }
   }, [appConfig.loading, appConfig.config.lastNotificationSeen])
 
   const dismiss = useCallback(() => {

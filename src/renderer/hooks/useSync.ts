@@ -19,7 +19,8 @@ import type {
 } from '../../shared/types/sync'
 
 /** Maps a SyncProgress status or LastSyncResult status to the UI SyncStatusType. */
-const SYNC_STATUS_MAP: Record<SyncStatus, SyncStatusType> & Record<SyncTerminalStatus, SyncStatusType> = {
+const SYNC_STATUS_MAP: Record<SyncStatus, SyncStatusType> &
+  Record<SyncTerminalStatus, SyncStatusType> = {
   idle: 'none',
   syncing: 'syncing',
   error: 'error',
@@ -178,14 +179,20 @@ export function useSync(): UseSyncReturn {
     await refreshStatus()
   }, [refreshStatus])
 
-  const setConfig = useCallback((patch: Partial<AppConfig>) => {
-    for (const [key, value] of Object.entries(patch)) {
-      set(key as keyof AppConfig, value as AppConfig[keyof AppConfig])
-    }
-  }, [set])
+  const setConfig = useCallback(
+    (patch: Partial<AppConfig>) => {
+      for (const [key, value] of Object.entries(patch)) {
+        set(key as keyof AppConfig, value as AppConfig[keyof AppConfig])
+      }
+    },
+    [set],
+  )
 
   const callPasswordApi = useCallback(
-    async (apiFn: (pw: string) => Promise<{ success: boolean; error?: string }>, password: string) => {
+    async (
+      apiFn: (pw: string) => Promise<{ success: boolean; error?: string }>,
+      password: string,
+    ) => {
       const result = await apiFn(password)
       if (result.success) {
         setHasPassword(true)
@@ -219,15 +226,9 @@ export function useSync(): UseSyncReturn {
     await window.vialAPI.syncExecute(direction, scope)
   }, [])
 
-  const listUndecryptable = useCallback(
-    () => window.vialAPI.syncListUndecryptable(),
-    [],
-  )
+  const listUndecryptable = useCallback(() => window.vialAPI.syncListUndecryptable(), [])
 
-  const scanRemote = useCallback(
-    () => window.vialAPI.syncScanRemote(),
-    [],
-  )
+  const scanRemote = useCallback(() => window.vialAPI.syncScanRemote(), [])
 
   const deleteFiles = useCallback(
     (fileIds: string[]) => window.vialAPI.syncDeleteFiles(fileIds),
@@ -242,7 +243,14 @@ export function useSync(): UseSyncReturn {
     if (config.autoSync && hasPendingChangesState) return 'pending'
     if (lastSyncResult) return SYNC_STATUS_MAP[lastSyncResult.status]
     return 'none'
-  }, [progress, authStatus.authenticated, hasPassword, config.autoSync, hasPendingChangesState, lastSyncResult])
+  }, [
+    progress,
+    authStatus.authenticated,
+    hasPassword,
+    config.autoSync,
+    hasPendingChangesState,
+    lastSyncResult,
+  ])
 
   return {
     config,

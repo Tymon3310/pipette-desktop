@@ -38,11 +38,17 @@ interface Props {
   highlighted?: boolean
   everPressed?: boolean
   remapped?: boolean
-  onClick?: (key: KleKey, maskClicked: boolean, event?: { ctrlKey: boolean; shiftKey: boolean }) => void
+  onClick?: (
+    key: KleKey,
+    maskClicked: boolean,
+    event?: { ctrlKey: boolean; shiftKey: boolean },
+  ) => void
   onDoubleClick?: (key: KleKey, rect: DOMRect, maskClicked: boolean) => void
   hoverMaskParts?: boolean
   selectedFill?: boolean
   customFill?: string
+  customLabel?: string
+  bottomLabel?: string
   scale?: number
 }
 
@@ -62,6 +68,8 @@ function KeyWidgetInner({
   hoverMaskParts,
   selectedFill = true,
   customFill,
+  customLabel,
+  bottomLabel,
   scale = 1,
 }: Props) {
   const [hoveredPart, setHoveredPart] = useState<'outer' | 'inner' | null>(null)
@@ -90,20 +98,24 @@ function KeyWidgetInner({
   let fillColor = customFill ?? KEY_BG_COLOR
   let invertText = false
   if (pressed) fillColor = KEY_PRESSED_COLOR
-  else if (selected && !innerSelected && selectedFill) { fillColor = KEY_SELECTED_COLOR; invertText = true }
-  else if (multiSelected) fillColor = KEY_MULTI_SELECTED_COLOR
-  else if (highlighted) { fillColor = KEY_HIGHLIGHT_COLOR; invertText = true }
-  else if (everPressed) fillColor = KEY_EVER_PRESSED_COLOR
+  else if (selected && !innerSelected && selectedFill) {
+    fillColor = KEY_SELECTED_COLOR
+    invertText = true
+  } else if (multiSelected) fillColor = KEY_MULTI_SELECTED_COLOR
+  else if (highlighted) {
+    fillColor = KEY_HIGHLIGHT_COLOR
+    invertText = true
+  } else if (everPressed) fillColor = KEY_EVER_PRESSED_COLOR
   else if (hoverMaskParts && masked && hoveredPart === 'outer') fillColor = KEY_HOVER_COLOR
 
-  // Label text color: inverted when key is selected/highlighted, remap color
-  // for remapped keys in non-mask mode, default otherwise
+  // labelColor = inverted when key is selected/highlighted, remap color for remapped keys in non-mask mode, default otherwise
   let labelColor = KEY_TEXT_COLOR
   if (invertText) labelColor = 'var(--content-inverse)'
   else if (remapped) labelColor = KEY_REMAP_COLOR
+  const btmLabelColor = invertText ? 'var(--content-inverse-muted)' : 'var(--content-muted)'
 
   // Label
-  const outerLabel = keycodeLabel(keycode)
+  const outerLabel = customLabel ?? keycodeLabel(keycode)
   const innerLabel = maskKeycode
     ? keycodeLabel(maskKeycode)
     : masked
@@ -202,12 +214,7 @@ function KeyWidgetInner({
     >
       {/* Key shape: unified path for ISO/stepped keys, simple rect for normal */}
       {unionPath ? (
-        <path
-          d={unionPath}
-          fill={fillColor}
-          stroke={outerStroke}
-          strokeWidth={outerStrokeWidth}
-        />
+        <path d={unionPath} fill={fillColor} stroke={outerStroke} strokeWidth={outerStrokeWidth} />
       ) : (
         <rect
           x={x}
@@ -287,6 +294,22 @@ function KeyWidgetInner({
             {line}
           </text>
         ))
+      )}
+      
+      {/* Bottom Label (e.g. Actuation Point) */}
+      {bottomLabel && (
+        <text
+          x={x + w / 2}
+          y={y + h - (fontSize * 0.8)}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fill={btmLabelColor}
+          fontSize={fontSize * 0.7}
+          fontFamily="sans-serif"
+          style={{ pointerEvents: 'none' }}
+        >
+          {bottomLabel}
+        </text>
       )}
     </g>
   )

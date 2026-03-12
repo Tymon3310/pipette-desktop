@@ -156,20 +156,56 @@ export interface KeychronRestoreAPI {
   keychronSetReportRate(rate: number): Promise<boolean>
   keychronSetPollRateV2(usbRate: number, frRate: number): Promise<boolean>
   keychronSetWirelessLpm(backlitTime: number, idleTime: number): Promise<boolean>
-  keychronSetSnapClick(index: number, snapType: number, key1: number, key2: number): Promise<boolean>
+  keychronSetSnapClick(
+    index: number,
+    snapType: number,
+    key1: number,
+    key2: number,
+  ): Promise<boolean>
   keychronSaveSnapClick(): Promise<boolean>
   keychronSetPerKeyRGBType(effectType: number): Promise<void>
   keychronSetPerKeyColor(ledIndex: number, h: number, s: number, v: number): Promise<void>
   keychronSetIndicators(disableMask: number, hue: number, sat: number, val: number): Promise<void>
   keychronSetMixedRGBRegions(startIndex: number, regions: number[]): Promise<void>
-  keychronSetMixedRGBEffects(regionIndex: number, startIndex: number, effects: import('./types/keychron').MixedRGBEffect[]): Promise<void>
+  keychronSetMixedRGBEffects(
+    regionIndex: number,
+    startIndex: number,
+    effects: import('./types/keychron').MixedRGBEffect[],
+  ): Promise<void>
   keychronSaveRGB(): Promise<void>
   setVialRGBMode(mode: number, speed: number, h: number, s: number, v: number): Promise<void>
   keychronAnalogSetProfileName(profile: number, name: string): Promise<boolean>
-  keychronAnalogSetTravel(profile: number, mode: number, actPt: number, sens: number, rlsSens: number, entire: boolean, rowMask?: number[]): Promise<boolean>
+  keychronAnalogSetTravel(
+    profile: number,
+    mode: number,
+    actPt: number,
+    sens: number,
+    rlsSens: number,
+    entire: boolean,
+    rowMask?: number[],
+  ): Promise<boolean>
   keychronAnalogSetAdvanceModeToggle(profile: number, row: number, col: number): Promise<boolean>
-  keychronAnalogSetAdvanceModeDks(profile: number, row: number, col: number, okmcIndex: number, shallowAct: number, shallowDeact: number, deepAct: number, deepDeact: number, keycodes: number[], actions: number[]): Promise<boolean>
-  keychronAnalogSetSocd(profile: number, row1: number, col1: number, row2: number, col2: number, index: number, socdType: number): Promise<boolean>
+  keychronAnalogSetAdvanceModeDks(
+    profile: number,
+    row: number,
+    col: number,
+    okmcIndex: number,
+    shallowAct: number,
+    shallowDeact: number,
+    deepAct: number,
+    deepDeact: number,
+    keycodes: number[],
+    actions: number[],
+  ): Promise<boolean>
+  keychronAnalogSetSocd(
+    profile: number,
+    row1: number,
+    col1: number,
+    row2: number,
+    col2: number,
+    index: number,
+    socdType: number,
+  ): Promise<boolean>
   keychronAnalogSaveProfile(profile: number): Promise<boolean>
   keychronAnalogSetCurve(curvePoints: number[]): Promise<boolean>
   keychronAnalogSetGameControllerMode(mode: number): Promise<boolean>
@@ -204,10 +240,7 @@ export async function restoreKeychronSettings(
   if (data.debounce && state.hasDebounce) {
     const d = data.debounce as Record<string, number>
     console.log('[KC-Restore] Restoring debounce:', d)
-    await api.keychronSetDebounce(
-      d.type ?? state.debounceType,
-      d.time ?? state.debounceTime,
-    )
+    await api.keychronSetDebounce(d.type ?? state.debounceType, d.time ?? state.debounceTime)
   }
 
   // --- NKRO ---
@@ -223,10 +256,7 @@ export async function restoreKeychronSettings(
   if (data.report_rate_v2 && state.hasReportRate) {
     const rv2 = data.report_rate_v2 as Record<string, number>
     if (state.pollRateVersion === 2) {
-      await api.keychronSetPollRateV2(
-        rv2.usb ?? state.pollRateUsb,
-        rv2.fr ?? state.pollRate24g,
-      )
+      await api.keychronSetPollRateV2(rv2.usb ?? state.pollRateUsb, rv2.fr ?? state.pollRate24g)
     } else {
       // Fallback: apply USB rate as single rate
       await api.keychronSetReportRate(rv2.usb ?? state.reportRate)
@@ -295,7 +325,11 @@ export async function restoreKeychronSettings(
     // Mixed RGB effects
     if (rgb.mixed_rgb_effects && state.rgb && state.rgb.mixedRGBLayers > 0) {
       const layerEffects = rgb.mixed_rgb_effects as number[][][]
-      for (let region = 0; region < layerEffects.length && region < state.rgb.mixedRGBLayers; region++) {
+      for (
+        let region = 0;
+        region < layerEffects.length && region < state.rgb.mixedRGBLayers;
+        region++
+      ) {
         const effects = layerEffects[region].map((e: number[]) => ({
           effect: e[0] ?? 0,
           hue: e[1] ?? 0,
@@ -350,7 +384,7 @@ export async function restoreKeychronSettings(
         if (parsed.length > 0) {
           // Find most common travel combo to set globally
           const travelKey = (cfg: Record<string, number>): string => {
-            const mode = cfg.mode ?? pick(cfg, 'mode', 'mode') as number ?? 1
+            const mode = cfg.mode ?? (pick(cfg, 'mode', 'mode') as number) ?? 1
             const act = (pick(cfg, 'actuation_point', 'actuationPoint') as number) ?? 20
             const sens = cfg.sensitivity ?? 3
             const rls = (pick(cfg, 'release_sensitivity', 'releaseSensitivity') as number) ?? 3
@@ -398,7 +432,10 @@ export async function restoreKeychronSettings(
               if (advData < okmcList.length) {
                 const slot = okmcList[advData]
                 await api.keychronAnalogSetAdvanceModeDks(
-                  p, r, c, advData,
+                  p,
+                  r,
+                  c,
+                  advData,
                   (pick(slot, 'shallow_act', 'shallowAct') as number) ?? 0,
                   (pick(slot, 'shallow_deact', 'shallowDeact') as number) ?? 0,
                   (pick(slot, 'deep_act', 'deepAct') as number) ?? 0,

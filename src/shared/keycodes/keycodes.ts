@@ -39,9 +39,7 @@ export class Keycode {
     if (opts.recorderAlias) {
       for (const a of opts.recorderAlias) {
         if (recorderAliasToKeycode.has(a)) {
-          throw new Error(
-            `Misconfigured: two keycodes claim the same alias ${a}`,
-          )
+          throw new Error(`Misconfigured: two keycodes claim the same alias ${a}`)
         }
         recorderAliasToKeycode.set(a, this)
       }
@@ -355,12 +353,9 @@ export const KEYCODES_BOOT: Keycode[] = [
     alias: ['RESET'],
   }),
   K('QK_REBOOT', 'Reboot', 'Reboots the keyboard. Does not load the bootloader'),
-  K(
-    'QK_CLEAR_EEPROM',
-    'Clear\nEEPROM',
-    "Reinitializes the keyboard's EEPROM (persistent memory)",
-    { alias: ['EE_CLR'] },
-  ),
+  K('QK_CLEAR_EEPROM', 'Clear\nEEPROM', "Reinitializes the keyboard's EEPROM (persistent memory)", {
+    alias: ['EE_CLR'],
+  }),
 ]
 
 const KEYCODES_MOD_OSM_LEFT: Keycode[] = [
@@ -390,11 +385,7 @@ const KEYCODES_MOD_OSM_LEFT: Keycode[] = [
     'OSM\nLSAG',
     'Enable Left Shift, Alt, and GUI for one keypress',
   ),
-  K(
-    'OSM(MOD_HYPR)',
-    'OSM\nHyper',
-    'Enable Left Control, Shift, Alt, and GUI for one keypress',
-  ),
+  K('OSM(MOD_HYPR)', 'OSM\nHyper', 'Enable Left Control, Shift, Alt, and GUI for one keypress'),
 ]
 
 const KEYCODES_MOD_OSM_RIGHT: Keycode[] = [
@@ -402,11 +393,7 @@ const KEYCODES_MOD_OSM_RIGHT: Keycode[] = [
   K('OSM(MOD_RCTL)', 'OSM\nRCtl', 'Enable Right Control for one keypress'),
   K('OSM(MOD_RALT)', 'OSM\nRAlt', 'Enable Right Alt for one keypress'),
   K('OSM(MOD_RGUI)', 'OSM\nRGUI', 'Enable Right GUI for one keypress'),
-  K(
-    'OSM(MOD_RCTL|MOD_RSFT)',
-    'OSM\nRCS',
-    'Enable Right Control and Shift for one keypress',
-  ),
+  K('OSM(MOD_RCTL|MOD_RSFT)', 'OSM\nRCS', 'Enable Right Control and Shift for one keypress'),
   K('OSM(MOD_RCTL|MOD_RALT)', 'OSM\nRCA', 'Enable Right Control and Alt for one keypress'),
   K('OSM(MOD_RCTL|MOD_RGUI)', 'OSM\nRCG', 'Enable Right Control and GUI for one keypress'),
   K('OSM(MOD_RSFT|MOD_RALT)', 'OSM\nRSA', 'Enable Right Shift and Alt for one keypress'),
@@ -439,10 +426,7 @@ const KEYCODES_MOD_OSM_RIGHT: Keycode[] = [
   ),
 ]
 
-export const KEYCODES_MOD_OSM: Keycode[] = [
-  ...KEYCODES_MOD_OSM_LEFT,
-  ...KEYCODES_MOD_OSM_RIGHT,
-]
+export const KEYCODES_MOD_OSM: Keycode[] = [...KEYCODES_MOD_OSM_LEFT, ...KEYCODES_MOD_OSM_RIGHT]
 
 const KEYCODES_MOD_MASK_LEFT: Keycode[] = [
   K('LSFT(kc)', 'LSft\n(kc)', { masked: true }),
@@ -480,10 +464,7 @@ const KEYCODES_MOD_MASK_RIGHT: Keycode[] = [
   K('RHYPR(kc)', 'RHyper\n(kc)', 'RCTL + RSFT + RALT + RGUI', { masked: true }),
 ]
 
-export const KEYCODES_MOD_MASK: Keycode[] = [
-  ...KEYCODES_MOD_MASK_LEFT,
-  ...KEYCODES_MOD_MASK_RIGHT,
-]
+export const KEYCODES_MOD_MASK: Keycode[] = [...KEYCODES_MOD_MASK_LEFT, ...KEYCODES_MOD_MASK_RIGHT]
 
 const KEYCODES_MOD_TAP_LEFT: Keycode[] = [
   K('LSFT_T(kc)', 'LSft_T\n(kc)', 'Left Shift when held, kc when tapped', { masked: true }),
@@ -552,10 +533,7 @@ const KEYCODES_MOD_TAP_RIGHT: Keycode[] = [
   }),
 ]
 
-export const KEYCODES_MOD_TAP: Keycode[] = [
-  ...KEYCODES_MOD_TAP_LEFT,
-  ...KEYCODES_MOD_TAP_RIGHT,
-]
+export const KEYCODES_MOD_TAP: Keycode[] = [...KEYCODES_MOD_TAP_LEFT, ...KEYCODES_MOD_TAP_RIGHT]
 
 export const KEYCODES_MOD_SPECIAL: Keycode[] = [
   K('KC_GESC', '~\nEsc', 'Esc normally, but ~ when Shift or GUI is pressed'),
@@ -616,21 +594,15 @@ export const KEYCODES_QUANTUM_MAGIC: Keycode[] = [
   K('MAGIC_SWAP_CONTROL_CAPSLOCK', 'Swap\nCtrl\nCaps', 'Swap Caps Lock and Left Control', {
     alias: ['CL_SWAP'],
   }),
-  K(
-    'MAGIC_UNSWAP_CONTROL_CAPSLOCK',
-    'Unswap\nCtrl\nCaps',
-    'Unswap Caps Lock and Left Control',
-    { alias: ['CL_NORM'] },
-  ),
+  K('MAGIC_UNSWAP_CONTROL_CAPSLOCK', 'Unswap\nCtrl\nCaps', 'Unswap Caps Lock and Left Control', {
+    alias: ['CL_NORM'],
+  }),
   K('MAGIC_CAPSLOCK_TO_CONTROL', 'Caps\nto\nCtrl', 'Treat Caps Lock as Control', {
     alias: ['CL_CTRL'],
   }),
-  K(
-    'MAGIC_UNCAPSLOCK_TO_CONTROL',
-    'Caps\nnot to\nCtrl',
-    'Stop treating Caps Lock as Control',
-    { alias: ['CL_CAPS'] },
-  ),
+  K('MAGIC_UNCAPSLOCK_TO_CONTROL', 'Caps\nnot to\nCtrl', 'Stop treating Caps Lock as Control', {
+    alias: ['CL_CAPS'],
+  }),
   K('MAGIC_SWAP_LCTL_LGUI', 'Swap\nLCtl\nLGui', 'Swap Left Control and GUI', {
     alias: ['LCG_SWP'],
   }),
@@ -649,12 +621,9 @@ export const KEYCODES_QUANTUM_MAGIC: Keycode[] = [
   K('MAGIC_UNSWAP_CTL_GUI', 'Unswap\nCtl\nGui', 'Unswap Control and GUI on both sides', {
     alias: ['CG_NORM'],
   }),
-  K(
-    'MAGIC_TOGGLE_CTL_GUI',
-    'Toggle\nCtl\nGui',
-    'Toggle Control and GUI swap on both sides',
-    { alias: ['CG_TOGG'] },
-  ),
+  K('MAGIC_TOGGLE_CTL_GUI', 'Toggle\nCtl\nGui', 'Toggle Control and GUI swap on both sides', {
+    alias: ['CG_TOGG'],
+  }),
   K('MAGIC_SWAP_LALT_LGUI', 'Swap\nLAlt\nLGui', 'Swap Left Alt and GUI', {
     alias: ['LAG_SWP'],
   }),
@@ -732,11 +701,7 @@ export const KEYCODES_QUANTUM_HAPTIC: Keycode[] = [
   K('HPT_OFF', 'Haptic\nOff', 'Turn haptic feedback off'),
   K('HPT_TOG', 'Haptic\nToggle', 'Toggle haptic feedback on/off'),
   K('HPT_RST', 'Haptic\nReset', 'Reset haptic feedback config to default'),
-  K(
-    'HPT_FBK',
-    'Haptic\nFeed\nback',
-    'Toggle feedback to occur on keypress, release or both',
-  ),
+  K('HPT_FBK', 'Haptic\nFeed\nback', 'Toggle feedback to occur on keypress, release or both'),
   K('HPT_BUZ', 'Haptic\nBuzz', 'Toggle solenoid buzz on/off'),
   K('HPT_MODI', 'Haptic\nNext', 'Go to next DRV2605L waveform'),
   K('HPT_MODD', 'Haptic\nPrev', 'Go to previous DRV2605L waveform'),
@@ -1212,13 +1177,30 @@ export function serialize(code: number): string {
 // Outer mask qmkIds not defined in vial-gui/vial-qmk
 const PIPETTE_ONLY_OUTER_MASKS = new Set([
   // Modifier Masks (12)
-  'LCSG(kc)', 'LSAG(kc)',
-  'RCS(kc)', 'RCA(kc)', 'RSA(kc)', 'RMEH(kc)', 'RSG(kc)',
-  'RCSG(kc)', 'RAG(kc)', 'RCAG(kc)', 'RSAG(kc)', 'RHYPR(kc)',
+  'LCSG(kc)',
+  'LSAG(kc)',
+  'RCS(kc)',
+  'RCA(kc)',
+  'RSA(kc)',
+  'RMEH(kc)',
+  'RSG(kc)',
+  'RCSG(kc)',
+  'RAG(kc)',
+  'RCAG(kc)',
+  'RSAG(kc)',
+  'RHYPR(kc)',
   // Mod-Tap (11)
-  'LCSG_T(kc)', 'LSAG_T(kc)',
-  'RCS_T(kc)', 'RCA_T(kc)', 'RSA_T(kc)', 'RAG_T(kc)', 'RSG_T(kc)',
-  'RCSG_T(kc)', 'RSAG_T(kc)', 'RMEH_T(kc)', 'RALL_T(kc)',
+  'LCSG_T(kc)',
+  'LSAG_T(kc)',
+  'RCS_T(kc)',
+  'RCA_T(kc)',
+  'RSA_T(kc)',
+  'RAG_T(kc)',
+  'RSG_T(kc)',
+  'RCSG_T(kc)',
+  'RSAG_T(kc)',
+  'RMEH_T(kc)',
+  'RALL_T(kc)',
   // Swap Hands Tap (1)
   'SH_T(kc)',
 ])
@@ -1510,10 +1492,7 @@ function buildAnyKeycodeFunctions(): Map<string, AnyFn1 | AnyFn2> {
 
   // Combined modifier wrappers (1-arg)
   fns.set('C_S', (kc: number) => r('QK_LCTL') | r('QK_LSFT') | kc)
-  fns.set(
-    'HYPR',
-    (kc: number) => r('QK_LCTL') | r('QK_LSFT') | r('QK_LALT') | r('QK_LGUI') | kc,
-  )
+  fns.set('HYPR', (kc: number) => r('QK_LCTL') | r('QK_LSFT') | r('QK_LALT') | r('QK_LGUI') | kc)
   fns.set('MEH', (kc: number) => r('QK_LCTL') | r('QK_LSFT') | r('QK_LALT') | kc)
   fns.set('LCAG', (kc: number) => r('QK_LCTL') | r('QK_LALT') | r('QK_LGUI') | kc)
   fns.set('SGUI', (kc: number) => r('QK_LGUI') | r('QK_LSFT') | kc)
@@ -1537,10 +1516,7 @@ function buildAnyKeycodeFunctions(): Map<string, AnyFn1 | AnyFn2> {
   fns.set('RCSG', (kc: number) => r('QK_RCTL') | r('QK_RSFT') | r('QK_RGUI') | kc)
   fns.set('RCAG', (kc: number) => r('QK_RCTL') | r('QK_RALT') | r('QK_RGUI') | kc)
   fns.set('RSAG', (kc: number) => r('QK_RSFT') | r('QK_RALT') | r('QK_RGUI') | kc)
-  fns.set(
-    'RHYPR',
-    (kc: number) => r('QK_RCTL') | r('QK_RSFT') | r('QK_RALT') | r('QK_RGUI') | kc,
-  )
+  fns.set('RHYPR', (kc: number) => r('QK_RCTL') | r('QK_RSFT') | r('QK_RALT') | r('QK_RGUI') | kc)
 
   // Layer functions (1 or 2 arg)
   fns.set(
@@ -1566,17 +1542,14 @@ function buildAnyKeycodeFunctions(): Map<string, AnyFn1 | AnyFn2> {
     fns.set(
       `LM${x}`,
       (mod: number) =>
-        r('QK_LAYER_MOD') |
-        ((layer & 0x0f) << r('QMK_LM_SHIFT')) |
-        (mod & r('QMK_LM_MASK')),
+        r('QK_LAYER_MOD') | ((layer & 0x0f) << r('QMK_LM_SHIFT')) | (mod & r('QMK_LM_MASK')),
     )
   }
   fns.set('OSM', (mod: number) => r('QK_ONE_SHOT_MOD') | (mod & 0xff))
   fns.set('TT', (layer: number) => r('QK_LAYER_TAP_TOGGLE') | (layer & 0xff))
   fns.set(
     'MT',
-    ((mod: number, kc: number) =>
-      r('QK_MOD_TAP') | ((mod & 0x1f) << 8) | (kc & 0xff)) as AnyFn2,
+    ((mod: number, kc: number) => r('QK_MOD_TAP') | ((mod & 0x1f) << 8) | (kc & 0xff)) as AnyFn2,
   )
   fns.set('TD', (n: number) => r('QK_TAP_DANCE') | (n & 0xff))
   fns.set('SH_T', (kc: number) => r('SH_T(kc)') | (kc & 0xff))
@@ -1606,22 +1579,11 @@ function buildAnyKeycodeFunctions(): Map<string, AnyFn1 | AnyFn2> {
   fns.set('CMD_T', fns.get('LGUI_T')!)
   fns.set('WIN_T', fns.get('LGUI_T')!)
   fns.set('C_S_T', (kc: number) => MT_fn(r('MOD_LCTL') | r('MOD_LSFT'), kc))
-  fns.set(
-    'MEH_T',
-    (kc: number) => MT_fn(r('MOD_LCTL') | r('MOD_LSFT') | r('MOD_LALT'), kc),
-  )
-  fns.set(
-    'LCAG_T',
-    (kc: number) => MT_fn(r('MOD_LCTL') | r('MOD_LALT') | r('MOD_LGUI'), kc),
-  )
-  fns.set(
-    'RCAG_T',
-    (kc: number) => MT_fn(r('MOD_RCTL') | r('MOD_RALT') | r('MOD_RGUI'), kc),
-  )
-  fns.set(
-    'HYPR_T',
-    (kc: number) =>
-      MT_fn(r('MOD_LCTL') | r('MOD_LSFT') | r('MOD_LALT') | r('MOD_LGUI'), kc),
+  fns.set('MEH_T', (kc: number) => MT_fn(r('MOD_LCTL') | r('MOD_LSFT') | r('MOD_LALT'), kc))
+  fns.set('LCAG_T', (kc: number) => MT_fn(r('MOD_LCTL') | r('MOD_LALT') | r('MOD_LGUI'), kc))
+  fns.set('RCAG_T', (kc: number) => MT_fn(r('MOD_RCTL') | r('MOD_RALT') | r('MOD_RGUI'), kc))
+  fns.set('HYPR_T', (kc: number) =>
+    MT_fn(r('MOD_LCTL') | r('MOD_LSFT') | r('MOD_LALT') | r('MOD_LGUI'), kc),
   )
   fns.set('ALL_T', fns.get('HYPR_T')!)
   fns.set('SGUI_T', (kc: number) => MT_fn(r('MOD_LGUI') | r('MOD_LSFT'), kc))
@@ -1635,43 +1597,23 @@ function buildAnyKeycodeFunctions(): Map<string, AnyFn1 | AnyFn2> {
   fns.set('RCS_T', (kc: number) => MT_fn(r('MOD_RCTL') | r('MOD_RSFT'), kc))
   fns.set('SAGR_T', fns.get('RSA_T')!)
   fns.set('LCG_T', (kc: number) => MT_fn(r('MOD_LCTL') | r('MOD_LGUI'), kc))
-  fns.set(
-    'LCSG_T',
-    (kc: number) => MT_fn(r('MOD_LCTL') | r('MOD_LSFT') | r('MOD_LGUI'), kc),
-  )
-  fns.set(
-    'LSAG_T',
-    (kc: number) => MT_fn(r('MOD_LSFT') | r('MOD_LALT') | r('MOD_LGUI'), kc),
-  )
+  fns.set('LCSG_T', (kc: number) => MT_fn(r('MOD_LCTL') | r('MOD_LSFT') | r('MOD_LGUI'), kc))
+  fns.set('LSAG_T', (kc: number) => MT_fn(r('MOD_LSFT') | r('MOD_LALT') | r('MOD_LGUI'), kc))
   fns.set('RCA_T', (kc: number) => MT_fn(r('MOD_RCTL') | r('MOD_RALT'), kc))
   fns.set('RCG_T', (kc: number) => MT_fn(r('MOD_RCTL') | r('MOD_RGUI'), kc))
   fns.set('RSG_T', (kc: number) => MT_fn(r('MOD_RSFT') | r('MOD_RGUI'), kc))
   fns.set('RAG_T', (kc: number) => MT_fn(r('MOD_RALT') | r('MOD_RGUI'), kc))
-  fns.set(
-    'RCSG_T',
-    (kc: number) => MT_fn(r('MOD_RCTL') | r('MOD_RSFT') | r('MOD_RGUI'), kc),
-  )
-  fns.set(
-    'RSAG_T',
-    (kc: number) => MT_fn(r('MOD_RSFT') | r('MOD_RALT') | r('MOD_RGUI'), kc),
-  )
-  fns.set(
-    'RMEH_T',
-    (kc: number) => MT_fn(r('MOD_RCTL') | r('MOD_RSFT') | r('MOD_RALT'), kc),
-  )
-  fns.set(
-    'RALL_T',
-    (kc: number) =>
-      MT_fn(r('MOD_RCTL') | r('MOD_RSFT') | r('MOD_RALT') | r('MOD_RGUI'), kc),
+  fns.set('RCSG_T', (kc: number) => MT_fn(r('MOD_RCTL') | r('MOD_RSFT') | r('MOD_RGUI'), kc))
+  fns.set('RSAG_T', (kc: number) => MT_fn(r('MOD_RSFT') | r('MOD_RALT') | r('MOD_RGUI'), kc))
+  fns.set('RMEH_T', (kc: number) => MT_fn(r('MOD_RCTL') | r('MOD_RSFT') | r('MOD_RALT'), kc))
+  fns.set('RALL_T', (kc: number) =>
+    MT_fn(r('MOD_RCTL') | r('MOD_RSFT') | r('MOD_RALT') | r('MOD_RGUI'), kc),
   )
 
   // LT0-LT15 shortcuts
   for (let x = 0; x < 16; x++) {
     const layer = x
-    fns.set(
-      `LT${x}`,
-      (kc: number) => r('QK_LAYER_TAP') | ((layer & 0x0f) << 8) | (kc & 0xff),
-    )
+    fns.set(`LT${x}`, (kc: number) => r('QK_LAYER_TAP') | ((layer & 0x0f) << 8) | (kc & 0xff))
   }
 
   return fns
@@ -1957,9 +1899,7 @@ export interface CustomKeycodeDefinition {
   shortName?: string
 }
 
-export function createCustomUserKeycodes(
-  customKeycodes: CustomKeycodeDefinition[],
-): void {
+export function createCustomUserKeycodes(customKeycodes: CustomKeycodeDefinition[]): void {
   KEYCODES_USER = []
   for (let x = 0; x < customKeycodes.length; x++) {
     const c = customKeycodes[x]
@@ -2025,13 +1965,30 @@ export function recreateKeyboardKeycodes(keyboard: KeyboardKeycodeContext): void
   KEYCODES_LAYERS_TO = []
 
   const layerKeycodeTypes: [string, string, Keycode[], string?][] = [
-    ['MO', 'Momentarily turn on layer when pressed (requires KC_TRNS on destination layer)', KEYCODES_LAYERS_MO],
+    [
+      'MO',
+      'Momentarily turn on layer when pressed (requires KC_TRNS on destination layer)',
+      KEYCODES_LAYERS_MO,
+    ],
     ['DF', 'Set the base (default) layer', KEYCODES_LAYERS_DF],
-    ['PDF', 'Persistently set the base (default) layer', KEYCODES_LAYERS_PDF, 'persistent_default_layer'],
+    [
+      'PDF',
+      'Persistently set the base (default) layer',
+      KEYCODES_LAYERS_PDF,
+      'persistent_default_layer',
+    ],
     ['TG', 'Toggle layer on or off', KEYCODES_LAYERS_TG],
-    ['TT', 'Normally acts like MO unless it\'s tapped multiple times, which toggles layer on', KEYCODES_LAYERS_TT],
+    [
+      'TT',
+      "Normally acts like MO unless it's tapped multiple times, which toggles layer on",
+      KEYCODES_LAYERS_TT,
+    ],
     ['OSL', 'Momentarily activates layer until a key is pressed', KEYCODES_LAYERS_OSL],
-    ['TO', 'Turns on layer and turns off all other layers, except the default layer', KEYCODES_LAYERS_TO],
+    [
+      'TO',
+      'Turns on layer and turns off all other layers, except the default layer',
+      KEYCODES_LAYERS_TO,
+    ],
   ]
   for (const [label, description, target, feature] of layerKeycodeTypes) {
     for (let layer = 0; layer < layers; layer++) {
@@ -2094,9 +2051,7 @@ export function recreateKeyboardKeycodes(keyboard: KeyboardKeycodeContext): void
   KEYCODES_TAP_DANCE = []
   for (let x = 0; x < keyboard.tapDanceCount; x++) {
     const lbl = `TD(${x})`
-    KEYCODES_TAP_DANCE.push(
-      new Keycode({ qmkId: lbl, label: lbl, tooltip: 'Tap dance keycode' }),
-    )
+    KEYCODES_TAP_DANCE.push(new Keycode({ qmkId: lbl, label: lbl, tooltip: 'Tap dance keycode' }))
   }
 
   if (keyboard.customKeycodes && keyboard.customKeycodes.length > 0) {

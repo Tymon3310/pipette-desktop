@@ -20,9 +20,7 @@ export const POLL_TIMEOUT_MS = 5000
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Poll timeout')), ms),
-    ),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Poll timeout')), ms)),
   ])
 }
 
@@ -174,19 +172,15 @@ export function useDeviceConnection() {
       if (connectedDeviceRef.current) {
         // Skip health check for dummy keyboards and when disconnect is suppressed (DFU flashing)
         if (!isDummyRef.current && !suppressDisconnectRef.current) {
-          const open = await withTimeout(
-            window.vialAPI.isDeviceOpen(),
-            POLL_TIMEOUT_MS,
-          ).catch(() => false)
+          const open = await withTimeout(window.vialAPI.isDeviceOpen(), POLL_TIMEOUT_MS).catch(
+            () => false,
+          )
           if (!open) await handleDisconnect()
         }
       } else {
         // Refresh device list for auto-detection
         try {
-          const devices = await withTimeout(
-            window.vialAPI.listDevices(),
-            POLL_TIMEOUT_MS,
-          )
+          const devices = await withTimeout(window.vialAPI.listDevices(), POLL_TIMEOUT_MS)
           if (mountedRef.current) {
             setState((s) => ({ ...s, devices, error: null }))
           }

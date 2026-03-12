@@ -6,23 +6,39 @@ import { join } from 'path'
 import type { KleKey } from '../kle/types'
 import { parseLayoutLabels } from '../layout-options'
 import { parseKle } from '../kle/kle-parser'
-import { generateAllLayoutOptionsPdf, generateCurrentLayoutPdf, type LayoutPdfInput } from '../pdf-layout-export'
+import {
+  generateAllLayoutOptionsPdf,
+  generateCurrentLayoutPdf,
+  type LayoutPdfInput,
+} from '../pdf-layout-export'
 
 function makeKey(overrides: Partial<KleKey> = {}): KleKey {
   return {
-    x: 0, y: 0,
-    width: 1, height: 1,
-    x2: 0, y2: 0,
-    width2: 1, height2: 1,
-    rotation: 0, rotationX: 0, rotationY: 0,
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    x2: 0,
+    y2: 0,
+    width2: 1,
+    height2: 1,
+    rotation: 0,
+    rotationX: 0,
+    rotationY: 0,
     color: '#cccccc',
     labels: Array(12).fill(null),
     textColor: Array(12).fill(null),
     textSize: Array(12).fill(null),
-    row: 0, col: 0,
-    encoderIdx: -1, encoderDir: -1,
-    layoutIndex: -1, layoutOption: -1,
-    decal: false, nub: false, stepped: false, ghost: false,
+    row: 0,
+    col: 0,
+    encoderIdx: -1,
+    encoderDir: -1,
+    layoutIndex: -1,
+    layoutOption: -1,
+    decal: false,
+    nub: false,
+    stepped: false,
+    ghost: false,
     ...overrides,
   }
 }
@@ -86,10 +102,12 @@ describe('generateCurrentLayoutPdf', () => {
       makeKey({ x: 1, y: 0, row: 0, col: 2, layoutIndex: 0, layoutOption: 1 }),
     ]
 
-    const result = generateCurrentLayoutPdf(createBasicInput({
-      keys,
-      currentValues: new Map([[0, 1]]),
-    }))
+    const result = generateCurrentLayoutPdf(
+      createBasicInput({
+        keys,
+        currentValues: new Map([[0, 1]]),
+      }),
+    )
     const bytes = decodePdf(result)
     expect(pdfSignature(bytes)).toBe('%PDF-')
     expect(bytes.length).toBeGreaterThan(1000)
@@ -111,11 +129,13 @@ describe('generateAllLayoutOptionsPdf', () => {
 
     const layoutOptions = parseLayoutLabels(['Split Backspace'])
 
-    const result = generateAllLayoutOptionsPdf(createBasicInput({
-      keys,
-      layoutOptions,
-      currentValues: new Map([[0, 0]]),
-    }))
+    const result = generateAllLayoutOptionsPdf(
+      createBasicInput({
+        keys,
+        layoutOptions,
+        currentValues: new Map([[0, 0]]),
+      }),
+    )
     const bytes = decodePdf(result)
     expect(pdfSignature(bytes)).toBe('%PDF-')
     // Boolean with 2 variants on a realistic keyboard fits on 1 page
@@ -130,11 +150,13 @@ describe('generateAllLayoutOptionsPdf', () => {
 
     const layoutOptions = parseLayoutLabels([['Bottom Row', '6.25U', '7U', 'Split']])
 
-    const result = generateAllLayoutOptionsPdf(createBasicInput({
-      keys,
-      layoutOptions,
-      currentValues: new Map([[0, 0]]),
-    }))
+    const result = generateAllLayoutOptionsPdf(
+      createBasicInput({
+        keys,
+        layoutOptions,
+        currentValues: new Map([[0, 0]]),
+      }),
+    )
     const bytes = decodePdf(result)
     expect(pdfSignature(bytes)).toBe('%PDF-')
     expect(bytes.length).toBeGreaterThan(1000)
@@ -153,11 +175,16 @@ describe('generateAllLayoutOptionsPdf', () => {
       ['Bottom Row', '6.25U', '7U', 'Split'],
     ])
 
-    const result = generateAllLayoutOptionsPdf(createBasicInput({
-      keys,
-      layoutOptions,
-      currentValues: new Map([[0, 0], [1, 0]]),
-    }))
+    const result = generateAllLayoutOptionsPdf(
+      createBasicInput({
+        keys,
+        layoutOptions,
+        currentValues: new Map([
+          [0, 0],
+          [1, 0],
+        ]),
+      }),
+    )
     const bytes = decodePdf(result)
     expect(pdfSignature(bytes)).toBe('%PDF-')
     // 2 layout options: boolean (2 variants → 1 page) + select (3 variants → 1-2 pages)
@@ -172,15 +199,15 @@ describe('generateAllLayoutOptionsPdf', () => {
     )
     keys.push(...choiceKeys)
 
-    const layoutOptions = parseLayoutLabels([
-      ['Gesture', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
-    ])
+    const layoutOptions = parseLayoutLabels([['Gesture', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']])
 
-    const result = generateAllLayoutOptionsPdf(createBasicInput({
-      keys,
-      layoutOptions,
-      currentValues: new Map([[0, 0]]),
-    }))
+    const result = generateAllLayoutOptionsPdf(
+      createBasicInput({
+        keys,
+        layoutOptions,
+        currentValues: new Map([[0, 0]]),
+      }),
+    )
     const bytes = decodePdf(result)
     expect(pdfSignature(bytes)).toBe('%PDF-')
     // 8 choices on a realistic keyboard should split across multiple pages
@@ -232,7 +259,7 @@ describe('generateAllLayoutOptionsPdf with e2e fixture', () => {
     expect(text).toContain('Bottom Section')
     expect(text).toContain('Top Row')
     // Boolean options (val=0 = OFF) should NOT appear in header
-    expect(text).not.toMatch(/\(Macro Pad\)/)  // Macro Pad is boolean, should be excluded
+    expect(text).not.toMatch(/\(Macro Pad\)/) // Macro Pad is boolean, should be excluded
   })
 })
 
@@ -253,7 +280,10 @@ describe('generateCurrentLayoutPdf header text', () => {
     ])
 
     // Simulate dummy keyboard: all values = 0 (boolean OFF, first select choice)
-    const currentValues = new Map<number, number>([[0, 0], [1, 0]])
+    const currentValues = new Map<number, number>([
+      [0, 0],
+      [1, 0],
+    ])
     const result = generateCurrentLayoutPdf({
       deviceName: 'Dummy Keyboard',
       keys,
@@ -282,7 +312,10 @@ describe('generateCurrentLayoutPdf header text', () => {
     ])
 
     // Boolean ON (val=1), select second choice (val=1 → "7U")
-    const currentValues = new Map<number, number>([[0, 1], [1, 1]])
+    const currentValues = new Map<number, number>([
+      [0, 1],
+      [1, 1],
+    ])
     const result = generateCurrentLayoutPdf({
       deviceName: 'Test Keyboard',
       keys,

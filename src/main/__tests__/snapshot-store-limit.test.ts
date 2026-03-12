@@ -73,7 +73,14 @@ describe('snapshot-store 30-entry limit', () => {
 
   it('rejects save when 30 active entries exist', async () => {
     const index = makeIndex(30)
-    const indexPath = join('/mock-user-data', 'sync', 'keyboards', 'test-uid', 'snapshots', 'index.json')
+    const indexPath = join(
+      '/mock-user-data',
+      'sync',
+      'keyboards',
+      'test-uid',
+      'snapshots',
+      'index.json',
+    )
     mockReadFile.mockImplementation((path: string) => {
       if (path === indexPath) return Promise.resolve(JSON.stringify(index))
       return Promise.reject(new Error('ENOENT'))
@@ -88,28 +95,46 @@ describe('snapshot-store 30-entry limit', () => {
 
   it('allows save when active entries are below limit', async () => {
     const index = makeIndex(29)
-    const indexPath = join('/mock-user-data', 'sync', 'keyboards', 'test-uid', 'snapshots', 'index.json')
+    const indexPath = join(
+      '/mock-user-data',
+      'sync',
+      'keyboards',
+      'test-uid',
+      'snapshots',
+      'index.json',
+    )
     mockReadFile.mockImplementation((path: string) => {
       if (path === indexPath) return Promise.resolve(JSON.stringify(index))
       return Promise.reject(new Error('ENOENT'))
     })
 
     const handler = getSaveHandler()
-    const result = await handler({}, 'test-uid', '{"keymap":{}}', 'keyboard', 'Entry 30') as { success: boolean }
+    const result = (await handler({}, 'test-uid', '{"keymap":{}}', 'keyboard', 'Entry 30')) as {
+      success: boolean
+    }
 
     expect(result.success).toBe(true)
   })
 
   it('ignores deleted entries when counting', async () => {
     const index = makeIndex(25, 10)
-    const indexPath = join('/mock-user-data', 'sync', 'keyboards', 'test-uid', 'snapshots', 'index.json')
+    const indexPath = join(
+      '/mock-user-data',
+      'sync',
+      'keyboards',
+      'test-uid',
+      'snapshots',
+      'index.json',
+    )
     mockReadFile.mockImplementation((path: string) => {
       if (path === indexPath) return Promise.resolve(JSON.stringify(index))
       return Promise.reject(new Error('ENOENT'))
     })
 
     const handler = getSaveHandler()
-    const result = await handler({}, 'test-uid', '{"keymap":{}}', 'keyboard', 'New Entry') as { success: boolean }
+    const result = (await handler({}, 'test-uid', '{"keymap":{}}', 'keyboard', 'New Entry')) as {
+      success: boolean
+    }
 
     expect(result.success).toBe(true)
   })

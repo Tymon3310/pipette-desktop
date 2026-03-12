@@ -67,10 +67,7 @@ describe('useFileIO – saveLayout', () => {
 
     expect(ok).toBe(true)
     expect(opts.serialize).toHaveBeenCalledOnce()
-    expect(mockSaveLayout).toHaveBeenCalledWith(
-      JSON.stringify(VALID_VIL, null, 2),
-      'Test Keyboard',
-    )
+    expect(mockSaveLayout).toHaveBeenCalledWith(JSON.stringify(VALID_VIL, null, 2), 'Test Keyboard')
   })
 
   it('uses serializeVialGui when provided', async () => {
@@ -342,10 +339,7 @@ describe('useFileIO – loadLayout', () => {
   })
 
   it('loads vial-gui format .vil files and converts to Pipette format', async () => {
-    const vialGuiVil = readFileSync(
-      join(__dirname, 'fixtures', 'bento-max.vil'),
-      'utf-8',
-    )
+    const vialGuiVil = readFileSync(join(__dirname, 'fixtures', 'bento-max.vil'), 'utf-8')
 
     // Verify it's valid JSON and recognized as vial-gui format
     const parsed = JSON.parse(vialGuiVil)

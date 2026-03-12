@@ -64,7 +64,11 @@ vi.mock('../../shared/keycodes/keycodes', () => ({
 
 import { ipcMain } from 'electron'
 import { getIdToken } from '../sync/google-auth'
-import { authenticateWithHub, uploadFeaturePostToHub, updateFeaturePostOnHub } from '../hub/hub-client'
+import {
+  authenticateWithHub,
+  uploadFeaturePostToHub,
+  updateFeaturePostOnHub,
+} from '../hub/hub-client'
 import { setupHubIpc, clearHubTokenCache } from '../hub/hub-ipc'
 import { readFile } from 'node:fs/promises'
 import type { FavoriteIndex } from '../../shared/types/favorite-store'
@@ -151,10 +155,7 @@ describe('hub-ipc favorite handlers', () => {
     }
 
     it('registers the handler', () => {
-      expect(ipcMain.handle).toHaveBeenCalledWith(
-        'hub:upload-favorite-post',
-        expect.any(Function),
-      )
+      expect(ipcMain.handle).toHaveBeenCalledWith('hub:upload-favorite-post', expect.any(Function))
     })
 
     it('uploads successfully with valid params', async () => {
@@ -166,11 +167,14 @@ describe('hub-ipc favorite handlers', () => {
       })
 
       const handler = getHandler()
-      const result = await handler({}, {
-        type: 'tapDance',
-        entryId: 'entry-1',
-        title: 'My Tap Dance',
-      })
+      const result = await handler(
+        {},
+        {
+          type: 'tapDance',
+          entryId: 'entry-1',
+          title: 'My Tap Dance',
+        },
+      )
 
       expect(result).toEqual({ success: true, postId: 'fav-post-1' })
       expect(uploadFeaturePostToHub).toHaveBeenCalledWith(
@@ -186,11 +190,14 @@ describe('hub-ipc favorite handlers', () => {
 
     it('returns error for invalid favorite type', async () => {
       const handler = getHandler()
-      const result = await handler({}, {
-        type: 'invalidType',
-        entryId: 'entry-1',
-        title: 'Test',
-      })
+      const result = await handler(
+        {},
+        {
+          type: 'invalidType',
+          entryId: 'entry-1',
+          title: 'Test',
+        },
+      )
 
       expect(result).toEqual({ success: false, error: 'Invalid favorite type' })
       expect(getIdToken).not.toHaveBeenCalled()
@@ -200,24 +207,28 @@ describe('hub-ipc favorite handlers', () => {
       const handler = getHandler()
 
       for (const title of ['', '   ', undefined, null, 123]) {
-        const result = await handler({}, {
-          type: 'tapDance',
-          entryId: 'entry-1',
-          title,
-        })
-        expect(result).toEqual(
-          expect.objectContaining({ success: false }),
+        const result = await handler(
+          {},
+          {
+            type: 'tapDance',
+            entryId: 'entry-1',
+            title,
+          },
         )
+        expect(result).toEqual(expect.objectContaining({ success: false }))
       }
     })
 
     it('returns error for title too long', async () => {
       const handler = getHandler()
-      const result = await handler({}, {
-        type: 'tapDance',
-        entryId: 'entry-1',
-        title: 'a'.repeat(201),
-      })
+      const result = await handler(
+        {},
+        {
+          type: 'tapDance',
+          entryId: 'entry-1',
+          title: 'a'.repeat(201),
+        },
+      )
 
       expect(result).toEqual({ success: false, error: 'Title too long' })
     })
@@ -229,11 +240,14 @@ describe('hub-ipc favorite handlers', () => {
       mockFavoriteFs('tapDance', emptyIndex)
 
       const handler = getHandler()
-      const result = await handler({}, {
-        type: 'tapDance',
-        entryId: 'nonexistent',
-        title: 'Test',
-      })
+      const result = await handler(
+        {},
+        {
+          type: 'tapDance',
+          entryId: 'nonexistent',
+          title: 'Test',
+        },
+      )
 
       expect(result).toEqual({ success: false, error: 'Entry not found' })
     })
@@ -243,11 +257,14 @@ describe('hub-ipc favorite handlers', () => {
       mockFavoriteFs()
 
       const handler = getHandler()
-      const result = await handler({}, {
-        type: 'tapDance',
-        entryId: 'deleted-entry',
-        title: 'Test',
-      })
+      const result = await handler(
+        {},
+        {
+          type: 'tapDance',
+          entryId: 'deleted-entry',
+          title: 'Test',
+        },
+      )
 
       expect(result).toEqual({ success: false, error: 'Entry not found' })
     })
@@ -261,11 +278,14 @@ describe('hub-ipc favorite handlers', () => {
       })
 
       const handler = getHandler()
-      await handler({}, {
-        type: 'tapDance',
-        entryId: 'entry-1',
-        title: 'My Tap Dance',
-      })
+      await handler(
+        {},
+        {
+          type: 'tapDance',
+          entryId: 'entry-1',
+          title: 'My Tap Dance',
+        },
+      )
 
       // Verify the JSON sent contains serialized keycodes
       const call = vi.mocked(uploadFeaturePostToHub).mock.calls[0]
@@ -296,10 +316,7 @@ describe('hub-ipc favorite handlers', () => {
     }
 
     it('registers the handler', () => {
-      expect(ipcMain.handle).toHaveBeenCalledWith(
-        'hub:update-favorite-post',
-        expect.any(Function),
-      )
+      expect(ipcMain.handle).toHaveBeenCalledWith('hub:update-favorite-post', expect.any(Function))
     })
 
     it('updates successfully with valid params', async () => {
@@ -311,12 +328,15 @@ describe('hub-ipc favorite handlers', () => {
       })
 
       const handler = getHandler()
-      const result = await handler({}, {
-        type: 'tapDance',
-        entryId: 'entry-1',
-        title: 'Updated Tap Dance',
-        postId: 'fav-post-1',
-      })
+      const result = await handler(
+        {},
+        {
+          type: 'tapDance',
+          entryId: 'entry-1',
+          title: 'Updated Tap Dance',
+          postId: 'fav-post-1',
+        },
+      )
 
       expect(result).toEqual({ success: true, postId: 'fav-post-1' })
       expect(updateFeaturePostOnHub).toHaveBeenCalledWith(
@@ -333,12 +353,15 @@ describe('hub-ipc favorite handlers', () => {
 
     it('returns error for invalid favorite type', async () => {
       const handler = getHandler()
-      const result = await handler({}, {
-        type: 'badType',
-        entryId: 'entry-1',
-        title: 'Test',
-        postId: 'fav-post-1',
-      })
+      const result = await handler(
+        {},
+        {
+          type: 'badType',
+          entryId: 'entry-1',
+          title: 'Test',
+          postId: 'fav-post-1',
+        },
+      )
 
       expect(result).toEqual({ success: false, error: 'Invalid favorite type' })
     })
@@ -347,12 +370,15 @@ describe('hub-ipc favorite handlers', () => {
       const handler = getHandler()
 
       for (const postId of ['', 'has spaces', 'has!special', undefined, null]) {
-        const result = await handler({}, {
-          type: 'tapDance',
-          entryId: 'entry-1',
-          title: 'Test',
-          postId,
-        })
+        const result = await handler(
+          {},
+          {
+            type: 'tapDance',
+            entryId: 'entry-1',
+            title: 'Test',
+            postId,
+          },
+        )
         expect(result).toEqual(
           expect.objectContaining({ success: false, error: 'Invalid post ID' }),
         )
@@ -361,12 +387,15 @@ describe('hub-ipc favorite handlers', () => {
 
     it('returns error for missing title', async () => {
       const handler = getHandler()
-      const result = await handler({}, {
-        type: 'tapDance',
-        entryId: 'entry-1',
-        title: '',
-        postId: 'fav-post-1',
-      })
+      const result = await handler(
+        {},
+        {
+          type: 'tapDance',
+          entryId: 'entry-1',
+          title: '',
+          postId: 'fav-post-1',
+        },
+      )
 
       expect(result).toEqual({ success: false, error: 'Title must not be empty' })
     })
@@ -376,12 +405,15 @@ describe('hub-ipc favorite handlers', () => {
       mockFavoriteFs('tapDance', { type: 'tapDance', entries: [] })
 
       const handler = getHandler()
-      const result = await handler({}, {
-        type: 'tapDance',
-        entryId: 'nonexistent',
-        title: 'Test',
-        postId: 'fav-post-1',
-      })
+      const result = await handler(
+        {},
+        {
+          type: 'tapDance',
+          entryId: 'nonexistent',
+          title: 'Test',
+          postId: 'fav-post-1',
+        },
+      )
 
       expect(result).toEqual({ success: false, error: 'Entry not found' })
     })
@@ -395,21 +427,26 @@ describe('hub-ipc favorite handlers', () => {
       mockHubAuth()
       const maliciousIndex: FavoriteIndex = {
         type: 'tapDance',
-        entries: [{
-          id: 'evil-entry',
-          label: 'Evil',
-          savedAt: '2025-01-01T00:00:00.000Z',
-          filename: '../../etc/passwd',
-        }],
+        entries: [
+          {
+            id: 'evil-entry',
+            label: 'Evil',
+            savedAt: '2025-01-01T00:00:00.000Z',
+            filename: '../../etc/passwd',
+          },
+        ],
       }
       mockFavoriteFs('tapDance', maliciousIndex)
 
       const handler = getHandlerFor('hub:upload-favorite-post')
-      const result = await handler({}, {
-        type: 'tapDance',
-        entryId: 'evil-entry',
-        title: 'Test',
-      })
+      const result = await handler(
+        {},
+        {
+          type: 'tapDance',
+          entryId: 'evil-entry',
+          title: 'Test',
+        },
+      )
 
       expect(result).toEqual({ success: false, error: 'Invalid filename' })
       expect(uploadFeaturePostToHub).not.toHaveBeenCalled()
@@ -419,23 +456,28 @@ describe('hub-ipc favorite handlers', () => {
       mockHubAuth()
       const index: FavoriteIndex = {
         type: 'tapDance',
-        entries: [{
-          id: 'entry-1',
-          label: 'Test',
-          savedAt: '2025-01-01T00:00:00.000Z',
-          filename: 'entry-1.json',
-        }],
+        entries: [
+          {
+            id: 'entry-1',
+            label: 'Test',
+            savedAt: '2025-01-01T00:00:00.000Z',
+            filename: 'entry-1.json',
+          },
+        ],
       }
       // Data file claims to be a different type
       const mismatchedData = { type: 'macro', data: [['tap', 4]] }
       mockFavoriteFs('tapDance', index, mismatchedData)
 
       const handler = getHandlerFor('hub:upload-favorite-post')
-      const result = await handler({}, {
-        type: 'tapDance',
-        entryId: 'entry-1',
-        title: 'Test',
-      })
+      const result = await handler(
+        {},
+        {
+          type: 'tapDance',
+          entryId: 'entry-1',
+          title: 'Test',
+        },
+      )
 
       expect(result).toEqual({ success: false, error: 'Entry type mismatch' })
       expect(uploadFeaturePostToHub).not.toHaveBeenCalled()
@@ -454,51 +496,71 @@ describe('hub-ipc favorite handlers', () => {
       ['altRepeatKey', 'ark'],
     ]
 
-    it.each(TYPE_MAP)(
-      'maps %s to post_type %s',
-      async (favType, expectedPostType) => {
-        mockHubAuth()
+    it.each(TYPE_MAP)('maps %s to post_type %s', async (favType, expectedPostType) => {
+      mockHubAuth()
 
-        // Build type-specific index and data
-        const index: FavoriteIndex = {
-          type: favType as FavoriteIndex['type'],
-          entries: [{
+      // Build type-specific index and data
+      const index: FavoriteIndex = {
+        type: favType as FavoriteIndex['type'],
+        entries: [
+          {
             id: 'e1',
             label: 'Test',
             savedAt: '2025-01-01T00:00:00.000Z',
             filename: 'e1.json',
-          }],
-        }
+          },
+        ],
+      }
 
-        const dataByType: Record<string, unknown> = {
-          tapDance: { type: 'tapDance', data: { onTap: 1, onHold: 2, onDoubleTap: 3, onTapHold: 4, tappingTerm: 200 } },
-          macro: { type: 'macro', data: [['tap', 4]] },
-          combo: { type: 'combo', data: { key1: 1, key2: 2, key3: 0, key4: 0, output: 10 } },
-          keyOverride: { type: 'keyOverride', data: { triggerKey: 1, replacementKey: 2, layers: 0, triggerMods: 0, negativeMods: 0, suppressedMods: 0, options: 0, enabled: true } },
-          altRepeatKey: { type: 'altRepeatKey', data: { lastKey: 1, altKey: 2, allowedMods: 0, options: 0, enabled: true } },
-        }
+      const dataByType: Record<string, unknown> = {
+        tapDance: {
+          type: 'tapDance',
+          data: { onTap: 1, onHold: 2, onDoubleTap: 3, onTapHold: 4, tappingTerm: 200 },
+        },
+        macro: { type: 'macro', data: [['tap', 4]] },
+        combo: { type: 'combo', data: { key1: 1, key2: 2, key3: 0, key4: 0, output: 10 } },
+        keyOverride: {
+          type: 'keyOverride',
+          data: {
+            triggerKey: 1,
+            replacementKey: 2,
+            layers: 0,
+            triggerMods: 0,
+            negativeMods: 0,
+            suppressedMods: 0,
+            options: 0,
+            enabled: true,
+          },
+        },
+        altRepeatKey: {
+          type: 'altRepeatKey',
+          data: { lastKey: 1, altKey: 2, allowedMods: 0, options: 0, enabled: true },
+        },
+      }
 
-        mockFavoriteFs(favType, index, dataByType[favType])
-        vi.mocked(uploadFeaturePostToHub).mockResolvedValueOnce({
-          id: 'post-ok',
-          title: 'Test',
-        })
+      mockFavoriteFs(favType, index, dataByType[favType])
+      vi.mocked(uploadFeaturePostToHub).mockResolvedValueOnce({
+        id: 'post-ok',
+        title: 'Test',
+      })
 
-        const handler = getHandlerFor('hub:upload-favorite-post')
-        const result = await handler({}, {
+      const handler = getHandlerFor('hub:upload-favorite-post')
+      const result = await handler(
+        {},
+        {
           type: favType,
           entryId: 'e1',
           title: 'Test',
-        })
+        },
+      )
 
-        expect(result).toEqual({ success: true, postId: 'post-ok' })
-        expect(uploadFeaturePostToHub).toHaveBeenCalledWith(
-          'hub-jwt',
-          'Test',
-          expectedPostType,
-          expect.objectContaining({ name: `${expectedPostType}.json` }),
-        )
-      },
-    )
+      expect(result).toEqual({ success: true, postId: 'post-ok' })
+      expect(uploadFeaturePostToHub).toHaveBeenCalledWith(
+        'hub-jwt',
+        'Test',
+        expectedPostType,
+        expect.objectContaining({ name: `${expectedPostType}.json` }),
+      )
+    })
   })
 })

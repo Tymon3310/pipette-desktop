@@ -23,9 +23,9 @@ import {
 
 export interface LayoutPdfInput {
   deviceName: string
-  keys: KleKey[]                    // All keys (unfiltered)
-  layoutOptions: LayoutOption[]     // Parsed option definitions
-  currentValues: Map<number, number>  // Current selected values
+  keys: KleKey[] // All keys (unfiltered)
+  layoutOptions: LayoutOption[] // Parsed option definitions
+  currentValues: Map<number, number> // Current selected values
 }
 
 interface RenderedVariant {
@@ -38,11 +38,11 @@ interface RenderedVariant {
 // Layout constants for variant stacking
 const VARIANT_HEADER_HEIGHT = 5
 const VARIANT_GAP = 3
-const HEADER_LINE_HEIGHT = 5       // mm per line at 12pt bold
-const HEADER_BASELINE_OFFSET = 4   // baseline offset for 12pt bold text
-const HEADER_BOTTOM_GAP = 3        // gap below header before content
-const HEADER_MAX_CHARS = 80        // conservative limit for 12pt bold in USABLE_WIDTH
-const MAX_PAGE_HEIGHT = PAGE_WIDTH  // Cap at square — matches keymap PDF
+const HEADER_LINE_HEIGHT = 5 // mm per line at 12pt bold
+const HEADER_BASELINE_OFFSET = 4 // baseline offset for 12pt bold text
+const HEADER_BOTTOM_GAP = 3 // gap below header before content
+const HEADER_MAX_CHARS = 80 // conservative limit for 12pt bold in USABLE_WIDTH
+const MAX_PAGE_HEIGHT = PAGE_WIDTH // Cap at square — matches keymap PDF
 
 /**
  * Pick PDF orientation so jsPDF does not swap format dimensions.
@@ -204,7 +204,8 @@ function computePageData(
 
   // Ensure at least 1 variant fits per page — shrink scale only if necessary
   const maxContentH = MAX_PAGE_HEIGHT - baseOverhead
-  const scaleForOne = (maxContentH - VARIANT_HEADER_HEIGHT - BORDER_PAD * 2 - VARIANT_GAP) / maxBoundsHeight
+  const scaleForOne =
+    (maxContentH - VARIANT_HEADER_HEIGHT - BORDER_PAD * 2 - VARIANT_GAP) / maxBoundsHeight
   const scale = Math.min(scaleByWidth, scaleForOne)
 
   // Height of one variant block at the computed scale
@@ -338,10 +339,7 @@ export function generateCurrentLayoutPdf(input: LayoutPdfInput): string {
   const hdrH = headerHeight(hdrLines.length)
 
   const maxContentHeight = MAX_PAGE_HEIGHT - MARGIN * 2 - hdrH - FOOTER_HEIGHT - BORDER_PAD * 2
-  const scale = Math.min(
-    USABLE_WIDTH / bounds.width,
-    maxContentHeight / bounds.height,
-  )
+  const scale = Math.min(USABLE_WIDTH / bounds.width, maxContentHeight / bounds.height)
 
   const spacing = scale * SPACING_FRACTION
   const visualW = bounds.width * scale - spacing

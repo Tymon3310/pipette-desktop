@@ -220,12 +220,20 @@ export async function getIdToken(): Promise<string | null> {
   if (!tokens) return null
 
   // If id_token is missing, expired, or too old for Hub, refresh it
-  if (!tokens.idToken || isJwtExpired(tokens.idToken) || isJwtStale(tokens.idToken, ID_TOKEN_MAX_AGE)) {
+  if (
+    !tokens.idToken ||
+    isJwtExpired(tokens.idToken) ||
+    isJwtStale(tokens.idToken, ID_TOKEN_MAX_AGE)
+  ) {
     if (!tokens.refreshToken) return null
     try {
       await refreshAccessToken(tokens.refreshToken)
       const refreshed = await loadTokens()
-      if (refreshed?.idToken && !isJwtExpired(refreshed.idToken) && !isJwtStale(refreshed.idToken, ID_TOKEN_MAX_AGE)) {
+      if (
+        refreshed?.idToken &&
+        !isJwtExpired(refreshed.idToken) &&
+        !isJwtStale(refreshed.idToken, ID_TOKEN_MAX_AGE)
+      ) {
         return refreshed.idToken
       }
     } catch {
@@ -274,7 +282,9 @@ export async function startOAuthFlow(): Promise<void> {
 
       if (error) {
         res.writeHead(200, { 'Content-Type': 'text/html' })
-        res.end('<html><body><h1>Authorization failed</h1><p>You can close this window.</p></body></html>')
+        res.end(
+          '<html><body><h1>Authorization failed</h1><p>You can close this window.</p></body></html>',
+        )
         teardown()
         reject(new Error(`OAuth error: ${error}`))
         return
@@ -287,7 +297,9 @@ export async function startOAuthFlow(): Promise<void> {
       }
 
       res.writeHead(200, { 'Content-Type': 'text/html' })
-      res.end('<html><body><h1>Authorization successful</h1><p>You can close this window.</p></body></html>')
+      res.end(
+        '<html><body><h1>Authorization successful</h1><p>You can close this window.</p></body></html>',
+      )
 
       const port = (server.address() as { port: number }).port
       exchangeCodeForTokens(code, codeVerifier, port)
@@ -317,11 +329,14 @@ export async function startOAuthFlow(): Promise<void> {
     })
 
     // Timeout after 5 minutes
-    timeoutId = setTimeout(() => {
-      if (finished) return
-      timeoutId = null
-      teardown()
-      reject(new Error('OAuth flow timed out'))
-    }, 5 * 60 * 1000)
+    timeoutId = setTimeout(
+      () => {
+        if (finished) return
+        timeoutId = null
+        teardown()
+        reject(new Error('OAuth flow timed out'))
+      },
+      5 * 60 * 1000,
+    )
   })
 }

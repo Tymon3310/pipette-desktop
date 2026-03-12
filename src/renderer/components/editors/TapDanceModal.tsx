@@ -58,8 +58,21 @@ const keycodeFields: { key: KeycodeFieldName; labelKey: string }[] = [
 ]
 
 export function TapDanceModal({
-  index, entry, onSave, onClose, isDummy, tapDanceEntries, deserializedMacros,
-  hubOrigin, hubNeedsDisplayName, hubUploading, hubUploadResult, onUploadToHub, onUpdateOnHub, onRemoveFromHub, onRenameOnHub,
+  index,
+  entry,
+  onSave,
+  onClose,
+  isDummy,
+  tapDanceEntries,
+  deserializedMacros,
+  hubOrigin,
+  hubNeedsDisplayName,
+  hubUploading,
+  hubUploadResult,
+  onUploadToHub,
+  onUpdateOnHub,
+  onRemoveFromHub,
+  onRenameOnHub,
   quickSelect,
   splitKeyMode,
   basicViewType,
@@ -67,7 +80,10 @@ export function TapDanceModal({
   const { t } = useTranslation()
   const [editedEntry, setEditedEntry] = useState<TapDanceEntry>(entry)
   const [selectedField, setSelectedField] = useState<KeycodeFieldName | null>(null)
-  const [popoverState, setPopoverState] = useState<{ field: KeycodeFieldName; anchorRect: DOMRect } | null>(null)
+  const [popoverState, setPopoverState] = useState<{
+    field: KeycodeFieldName
+    anchorRect: DOMRect
+  } | null>(null)
   const preEditValueRef = useRef<number>(0)
   const favStore = useFavoriteStore({
     favoriteType: 'tapDance',
@@ -76,17 +92,21 @@ export function TapDanceModal({
     enabled: !isDummy,
   })
 
-  const clearAction = useConfirmAction(useCallback(() => {
-    setEditedEntry({ onTap: 0, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: 0 })
-    setSelectedField(null)
-    setPopoverState(null)
-  }, []))
+  const clearAction = useConfirmAction(
+    useCallback(() => {
+      setEditedEntry({ onTap: 0, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: 0 })
+      setSelectedField(null)
+      setPopoverState(null)
+    }, []),
+  )
 
-  const revertAction = useConfirmAction(useCallback(() => {
-    setEditedEntry(entry)
-    setSelectedField(null)
-    setPopoverState(null)
-  }, [entry]))
+  const revertAction = useConfirmAction(
+    useCallback(() => {
+      setEditedEntry(entry)
+      setSelectedField(null)
+      setPopoverState(null)
+    }, [entry]),
+  )
 
   useEffect(() => {
     setEditedEntry(entry)
@@ -160,7 +180,11 @@ export function TapDanceModal({
     [popoverField, updateField],
   )
 
-  const tabContentOverride = useTileContentOverride(tapDanceEntries, deserializedMacros, maskedSelection.handleKeycodeSelect)
+  const tabContentOverride = useTileContentOverride(
+    tapDanceEntries,
+    deserializedMacros,
+    maskedSelection.handleKeycodeSelect,
+  )
 
   const modalWidth = isDummy ? 'w-[900px]' : 'w-[1050px]'
 
@@ -178,9 +202,7 @@ export function TapDanceModal({
         {/* Header */}
         {!selectedField && (
           <div className="px-6 pt-6 pb-4 flex items-center justify-between shrink-0">
-            <h3 className="text-lg font-semibold">
-              {t('editor.tapDance.editTitle', { index })}
-            </h3>
+            <h3 className="text-lg font-semibold">{t('editor.tapDance.editTitle', { index })}</h3>
             <ModalCloseButton testid="td-modal-close" onClick={onClose} />
           </div>
         )}
@@ -189,9 +211,7 @@ export function TapDanceModal({
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Left panel: editor */}
           <div className="flex-1 overflow-y-auto px-6 pt-1 pb-6">
-            {selectedField && (
-              <div className="pt-5" />
-            )}
+            {selectedField && <div className="pt-5" />}
 
             <div className="space-y-2">
               {keycodeFields.map(({ key, labelKey }) => {
@@ -202,8 +222,15 @@ export function TapDanceModal({
                     <KeycodeField
                       value={editedEntry[key]}
                       selected={selectedField === key}
-                      selectedMaskPart={selectedField === key && maskedSelection.editingPart === 'inner'}
-                      onSelect={() => { if (!selectedField) { preEditValueRef.current = editedEntry[key]; setSelectedField(key) } }}
+                      selectedMaskPart={
+                        selectedField === key && maskedSelection.editingPart === 'inner'
+                      }
+                      onSelect={() => {
+                        if (!selectedField) {
+                          preEditValueRef.current = editedEntry[key]
+                          setSelectedField(key)
+                        }
+                      }}
                       onMaskPartClick={(part) => {
                         if (selectedField === key) {
                           maskedSelection.setEditingPart(part)
@@ -213,7 +240,9 @@ export function TapDanceModal({
                           setSelectedField(key)
                         }
                       }}
-                      onDoubleClick={selectedField ? (rect) => handleFieldDoubleClick(key, rect) : undefined}
+                      onDoubleClick={
+                        selectedField ? (rect) => handleFieldDoubleClick(key, rect) : undefined
+                      }
                       label={t(labelKey)}
                     />
                     {selectedField === key && !popoverState && !quickSelect && editedEntry[key] !== preEditValueRef.current && (
@@ -252,7 +281,10 @@ export function TapDanceModal({
                   basicViewType={basicViewType}
                   onClose={() => {
                     if (selectedField) {
-                      setEditedEntry((prev) => ({ ...prev, [selectedField]: preEditValueRef.current }))
+                      setEditedEntry((prev) => ({
+                        ...prev,
+                        [selectedField]: preEditValueRef.current,
+                      }))
                     }
                     maskedSelection.clearMask()
                     setSelectedField(null)
@@ -278,14 +310,20 @@ export function TapDanceModal({
                 <ConfirmButton
                   testId="td-modal-clear"
                   confirming={clearAction.confirming}
-                  onClick={() => { revertAction.reset(); clearAction.trigger() }}
+                  onClick={() => {
+                    revertAction.reset()
+                    clearAction.trigger()
+                  }}
                   labelKey="common.clear"
                   confirmLabelKey="common.confirmClear"
                 />
                 <ConfirmButton
                   testId="td-modal-revert"
                   confirming={revertAction.confirming}
-                  onClick={() => { clearAction.reset(); revertAction.trigger() }}
+                  onClick={() => {
+                    clearAction.reset()
+                    revertAction.trigger()
+                  }}
                   labelKey="common.revert"
                   confirmLabelKey="common.confirmRevert"
                 />

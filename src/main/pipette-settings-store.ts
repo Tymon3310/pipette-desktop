@@ -24,14 +24,54 @@ function isValidPrefs(value: unknown): value is PipetteSettings {
   if (typeof obj.keyboardLayout !== 'string') return false
   if (typeof obj.autoAdvance !== 'boolean') return false
   if ('layerNames' in obj && !Array.isArray(obj.layerNames)) return false
-  if (Array.isArray(obj.layerNames) && (obj.layerNames as unknown[]).some((n) => typeof n !== 'string')) return false
-  if ('typingTestResults' in obj && obj.typingTestResults != null && !Array.isArray(obj.typingTestResults)) return false
-  if ('typingTestConfig' in obj && obj.typingTestConfig != null && (typeof obj.typingTestConfig !== 'object' || Array.isArray(obj.typingTestConfig))) return false
-  if ('typingTestLanguage' in obj && obj.typingTestLanguage != null && typeof obj.typingTestLanguage !== 'string') return false
-  if ('layerPanelOpen' in obj && obj.layerPanelOpen != null && typeof obj.layerPanelOpen !== 'boolean') return false
-  if ('basicViewType' in obj && obj.basicViewType != null && obj.basicViewType !== 'ansi' && obj.basicViewType !== 'iso' && obj.basicViewType !== 'jis' && obj.basicViewType !== 'list' && obj.basicViewType !== 'keyboard') return false
-  if ('splitKeyMode' in obj && obj.splitKeyMode != null && obj.splitKeyMode !== 'split' && obj.splitKeyMode !== 'flat') return false
-  if ('quickSelect' in obj && obj.quickSelect != null && typeof obj.quickSelect !== 'boolean') return false
+  if (
+    Array.isArray(obj.layerNames) &&
+    (obj.layerNames as unknown[]).some((n) => typeof n !== 'string')
+  )
+    return false
+  if (
+    'typingTestResults' in obj &&
+    obj.typingTestResults != null &&
+    !Array.isArray(obj.typingTestResults)
+  )
+    return false
+  if (
+    'typingTestConfig' in obj &&
+    obj.typingTestConfig != null &&
+    (typeof obj.typingTestConfig !== 'object' || Array.isArray(obj.typingTestConfig))
+  )
+    return false
+  if (
+    'typingTestLanguage' in obj &&
+    obj.typingTestLanguage != null &&
+    typeof obj.typingTestLanguage !== 'string'
+  )
+    return false
+  if (
+    'layerPanelOpen' in obj &&
+    obj.layerPanelOpen != null &&
+    typeof obj.layerPanelOpen !== 'boolean'
+  )
+    return false
+  if (
+    'basicViewType' in obj &&
+    obj.basicViewType != null &&
+    obj.basicViewType !== 'ansi' &&
+    obj.basicViewType !== 'iso' &&
+    obj.basicViewType !== 'jis' &&
+    obj.basicViewType !== 'list' &&
+    obj.basicViewType !== 'keyboard'
+  )
+    return false
+  if (
+    'splitKeyMode' in obj &&
+    obj.splitKeyMode != null &&
+    obj.splitKeyMode !== 'split' &&
+    obj.splitKeyMode !== 'flat'
+  )
+    return false
+  if ('quickSelect' in obj && obj.quickSelect != null && typeof obj.quickSelect !== 'boolean')
+    return false
   if ('_rev' in obj && obj._rev !== 1) return false
   return true
 }

@@ -13,7 +13,9 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('../editors/ModalCloseButton', () => ({
   ModalCloseButton: ({ testid, onClick }: { testid: string; onClick: () => void }) => (
-    <button data-testid={testid} onClick={onClick}>close</button>
+    <button data-testid={testid} onClick={onClick}>
+      close
+    </button>
   ),
 }))
 
@@ -21,7 +23,9 @@ const mockFavoriteStoreList = vi.fn().mockResolvedValue({ success: true, entries
 const mockFavoriteStoreRename = vi.fn().mockResolvedValue({ success: true })
 const mockFavoriteStoreDelete = vi.fn().mockResolvedValue({ success: true })
 const mockFavoriteStoreExport = vi.fn().mockResolvedValue({ success: true })
-const mockFavoriteStoreImport = vi.fn().mockResolvedValue({ success: true, imported: 1, skipped: 0 })
+const mockFavoriteStoreImport = vi
+  .fn()
+  .mockResolvedValue({ success: true, imported: 1, skipped: 0 })
 const mockOpenExternal = vi.fn().mockResolvedValue(undefined)
 
 Object.defineProperty(window, 'vialAPI', {
@@ -220,12 +224,16 @@ describe('DataModal', () => {
         fireEvent.change(input, { target: { value: 'New Name' } })
         fireEvent.keyDown(input, { key: 'Enter' })
 
-        act(() => { vi.advanceTimersByTime(0) })
+        act(() => {
+          vi.advanceTimersByTime(0)
+        })
 
         const card = screen.getByTestId('data-modal-fav-entry')
         expect(card.className).toContain('confirm-flash')
 
-        act(() => { vi.advanceTimersByTime(1200) })
+        act(() => {
+          vi.advanceTimersByTime(1200)
+        })
         expect(card.className).not.toContain('confirm-flash')
       })
 
@@ -245,7 +253,9 @@ describe('DataModal', () => {
         const input = screen.getByTestId('data-modal-fav-rename-input')
         fireEvent.keyDown(input, { key: 'Enter' })
 
-        act(() => { vi.advanceTimersByTime(0) })
+        act(() => {
+          vi.advanceTimersByTime(0)
+        })
 
         expect(mockFavoriteStoreRename).not.toHaveBeenCalled()
         const card = screen.getByTestId('data-modal-fav-entry')
@@ -280,7 +290,9 @@ describe('DataModal', () => {
       // After rename, refreshEntries is called
       mockFavoriteStoreList.mockResolvedValueOnce({
         success: true,
-        entries: [{ id: 'e1', label: 'New Hub Name', savedAt: Date.now(), hubPostId: 'hub-post-42' }],
+        entries: [
+          { id: 'e1', label: 'New Hub Name', savedAt: Date.now(), hubPostId: 'hub-post-42' },
+        ],
       })
 
       render(<DataModal {...makeProps({ onFavRenameOnHub })} />)
@@ -340,8 +352,18 @@ describe('DataModal', () => {
 
     it('renders post list when authenticated with posts', () => {
       const posts = [
-        { id: 'p1', title: 'My Layout 1', keyboard_name: 'BoardA', created_at: '2025-01-15T10:30:00Z' },
-        { id: 'p2', title: 'My Layout 2', keyboard_name: 'BoardB', created_at: '2025-02-20T14:00:00Z' },
+        {
+          id: 'p1',
+          title: 'My Layout 1',
+          keyboard_name: 'BoardA',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+        {
+          id: 'p2',
+          title: 'My Layout 2',
+          keyboard_name: 'BoardB',
+          created_at: '2025-02-20T14:00:00Z',
+        },
       ]
       render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts })} />)
 
@@ -354,9 +376,15 @@ describe('DataModal', () => {
     })
 
     it('shows pagination controls when total_pages > 1', () => {
-      const posts = [{ id: 'p1', title: 'Layout 1', keyboard_name: 'Board', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        { id: 'p1', title: 'Layout 1', keyboard_name: 'Board', created_at: '2025-01-15T10:30:00Z' },
+      ]
       const pagination = { total: 25, page: 1, per_page: 10, total_pages: 3 }
-      render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, hubPostsPagination: pagination })} />)
+      render(
+        <DataModal
+          {...makeProps({ ...HUB_PROPS, hubPosts: posts, hubPostsPagination: pagination })}
+        />,
+      )
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
 
@@ -367,9 +395,20 @@ describe('DataModal', () => {
 
     it('calls onHubRefresh when next page is clicked', () => {
       const onHubRefresh = vi.fn().mockResolvedValue(undefined)
-      const posts = [{ id: 'p1', title: 'Layout 1', keyboard_name: 'Board', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        { id: 'p1', title: 'Layout 1', keyboard_name: 'Board', created_at: '2025-01-15T10:30:00Z' },
+      ]
       const pagination = { total: 25, page: 1, per_page: 10, total_pages: 3 }
-      render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, hubPostsPagination: pagination, onHubRefresh })} />)
+      render(
+        <DataModal
+          {...makeProps({
+            ...HUB_PROPS,
+            hubPosts: posts,
+            hubPostsPagination: pagination,
+            onHubRefresh,
+          })}
+        />,
+      )
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
       fireEvent.click(screen.getByTestId('hub-page-next'))
@@ -379,7 +418,14 @@ describe('DataModal', () => {
 
     it('enters rename mode and submits on Enter', async () => {
       const onHubRename = vi.fn().mockResolvedValue(undefined)
-      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        {
+          id: 'p1',
+          title: 'My Layout',
+          keyboard_name: 'TestBoard',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+      ]
       render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, onHubRename })} />)
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
@@ -396,7 +442,14 @@ describe('DataModal', () => {
     })
 
     it('cancels rename on Escape', () => {
-      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        {
+          id: 'p1',
+          title: 'My Layout',
+          keyboard_name: 'TestBoard',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+      ]
       render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts })} />)
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
@@ -409,7 +462,14 @@ describe('DataModal', () => {
 
     it('commits hub post rename on blur', () => {
       const onHubRename = vi.fn().mockResolvedValue(undefined)
-      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        {
+          id: 'p1',
+          title: 'My Layout',
+          keyboard_name: 'TestBoard',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+      ]
       render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, onHubRename })} />)
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
@@ -431,7 +491,14 @@ describe('DataModal', () => {
       it('shows confirm flash after hub post Enter rename', async () => {
         vi.useFakeTimers()
         const onHubRename = vi.fn().mockResolvedValue(undefined)
-        const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+        const posts = [
+          {
+            id: 'p1',
+            title: 'My Layout',
+            keyboard_name: 'TestBoard',
+            created_at: '2025-01-15T10:30:00Z',
+          },
+        ]
         render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, onHubRename })} />)
 
         fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
@@ -447,19 +514,30 @@ describe('DataModal', () => {
         const postEl = screen.getByTestId('hub-post-p1')
         expect(postEl.querySelector('.confirm-flash')).toBeNull()
 
-        act(() => { vi.advanceTimersByTime(0) })
+        act(() => {
+          vi.advanceTimersByTime(0)
+        })
 
         const titleSpan = postEl.querySelector('.confirm-flash')
         expect(titleSpan).not.toBeNull()
 
-        act(() => { vi.advanceTimersByTime(1200) })
+        act(() => {
+          vi.advanceTimersByTime(1200)
+        })
         expect(postEl.querySelector('.confirm-flash')).toBeNull()
       })
 
       it('does not flash hub post when Enter is pressed without changes', () => {
         vi.useFakeTimers()
         const onHubRename = vi.fn().mockResolvedValue(undefined)
-        const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+        const posts = [
+          {
+            id: 'p1',
+            title: 'My Layout',
+            keyboard_name: 'TestBoard',
+            created_at: '2025-01-15T10:30:00Z',
+          },
+        ]
         render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, onHubRename })} />)
 
         fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
@@ -467,7 +545,9 @@ describe('DataModal', () => {
         const input = screen.getByTestId('hub-rename-input-p1')
         fireEvent.keyDown(input, { key: 'Enter' })
 
-        act(() => { vi.advanceTimersByTime(0) })
+        act(() => {
+          vi.advanceTimersByTime(0)
+        })
 
         expect(onHubRename).not.toHaveBeenCalled()
         const postEl = screen.getByTestId('hub-post-p1')
@@ -477,7 +557,14 @@ describe('DataModal', () => {
 
     it('shows error when rename fails', async () => {
       const onHubRename = vi.fn().mockRejectedValue(new Error('Rename failed'))
-      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        {
+          id: 'p1',
+          title: 'My Layout',
+          keyboard_name: 'TestBoard',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+      ]
       render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, onHubRename })} />)
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
@@ -493,7 +580,14 @@ describe('DataModal', () => {
 
     it('shows delete confirmation and calls onHubDelete when confirmed', async () => {
       const onHubDelete = vi.fn().mockResolvedValue(undefined)
-      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        {
+          id: 'p1',
+          title: 'My Layout',
+          keyboard_name: 'TestBoard',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+      ]
       render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, onHubDelete })} />)
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
@@ -508,7 +602,14 @@ describe('DataModal', () => {
 
     it('cancels delete confirmation', () => {
       const onHubDelete = vi.fn()
-      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        {
+          id: 'p1',
+          title: 'My Layout',
+          keyboard_name: 'TestBoard',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+      ]
       render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, onHubDelete })} />)
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
@@ -521,7 +622,14 @@ describe('DataModal', () => {
 
     it('shows error when delete fails', async () => {
       const onHubDelete = vi.fn().mockRejectedValue(new Error('Delete failed'))
-      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        {
+          id: 'p1',
+          title: 'My Layout',
+          keyboard_name: 'TestBoard',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+      ]
       render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, onHubDelete })} />)
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
@@ -534,15 +642,33 @@ describe('DataModal', () => {
     })
 
     it('shows open in browser button when hubOrigin is provided', () => {
-      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
-      render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, hubOrigin: 'https://hub.example.com' })} />)
+      const posts = [
+        {
+          id: 'p1',
+          title: 'My Layout',
+          keyboard_name: 'TestBoard',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+      ]
+      render(
+        <DataModal
+          {...makeProps({ ...HUB_PROPS, hubPosts: posts, hubOrigin: 'https://hub.example.com' })}
+        />,
+      )
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
       expect(screen.getByTestId('hub-open-p1')).toBeInTheDocument()
     })
 
     it('does not show open in browser button when hubOrigin is undefined', () => {
-      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        {
+          id: 'p1',
+          title: 'My Layout',
+          keyboard_name: 'TestBoard',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+      ]
       render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts })} />)
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
@@ -550,8 +676,19 @@ describe('DataModal', () => {
     })
 
     it('calls openExternal with correct URL when open button is clicked', () => {
-      const posts = [{ id: 'p1', title: 'My Layout', keyboard_name: 'TestBoard', created_at: '2025-01-15T10:30:00Z' }]
-      render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, hubOrigin: 'https://hub.example.com' })} />)
+      const posts = [
+        {
+          id: 'p1',
+          title: 'My Layout',
+          keyboard_name: 'TestBoard',
+          created_at: '2025-01-15T10:30:00Z',
+        },
+      ]
+      render(
+        <DataModal
+          {...makeProps({ ...HUB_PROPS, hubPosts: posts, hubOrigin: 'https://hub.example.com' })}
+        />,
+      )
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
       fireEvent.click(screen.getByTestId('hub-open-p1'))
@@ -560,9 +697,15 @@ describe('DataModal', () => {
     })
 
     it('does not show pagination when total_pages is 1', () => {
-      const posts = [{ id: 'p1', title: 'Layout 1', keyboard_name: 'Board', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        { id: 'p1', title: 'Layout 1', keyboard_name: 'Board', created_at: '2025-01-15T10:30:00Z' },
+      ]
       const pagination = { total: 1, page: 1, per_page: 10, total_pages: 1 }
-      render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, hubPostsPagination: pagination })} />)
+      render(
+        <DataModal
+          {...makeProps({ ...HUB_PROPS, hubPosts: posts, hubPostsPagination: pagination })}
+        />,
+      )
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
 
@@ -571,9 +714,15 @@ describe('DataModal', () => {
     })
 
     it('disables Next on last page', () => {
-      const posts = [{ id: 'p1', title: 'Layout 1', keyboard_name: 'Board', created_at: '2025-01-15T10:30:00Z' }]
+      const posts = [
+        { id: 'p1', title: 'Layout 1', keyboard_name: 'Board', created_at: '2025-01-15T10:30:00Z' },
+      ]
       const pagination = { total: 25, page: 3, per_page: 10, total_pages: 3 }
-      render(<DataModal {...makeProps({ ...HUB_PROPS, hubPosts: posts, hubPostsPagination: pagination })} />)
+      render(
+        <DataModal
+          {...makeProps({ ...HUB_PROPS, hubPosts: posts, hubPostsPagination: pagination })}
+        />,
+      )
 
       fireEvent.click(screen.getByTestId('data-modal-tab-hubPost'))
 

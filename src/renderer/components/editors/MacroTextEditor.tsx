@@ -66,7 +66,9 @@ export function MacroTextEditor({ initialJson, onApply, onClose }: Props) {
         aria-labelledby={titleId}
         className="w-[500px] rounded-lg border border-edge bg-surface p-4 shadow-xl"
       >
-        <h3 id={titleId} className="mb-3 text-sm font-medium">{t('editor.macro.textEditorTitle')}</h3>
+        <h3 id={titleId} className="mb-3 text-sm font-medium">
+          {t('editor.macro.textEditorTitle')}
+        </h3>
         <textarea
           ref={textareaRef}
           value={text}

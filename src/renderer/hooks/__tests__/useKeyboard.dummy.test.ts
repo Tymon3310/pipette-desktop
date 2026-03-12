@@ -10,7 +10,10 @@ const dummyDefinition: KeyboardDefinition = {
   name: 'Dummy 2x3',
   matrix: { rows: 2, cols: 3 },
   layouts: {
-    keymap: [['0,0', '0,1', '0,2'], ['1,0', '1,1', '1,2']],
+    keymap: [
+      ['0,0', '0,1', '0,2'],
+      ['1,0', '1,1', '1,2'],
+    ],
   },
 }
 

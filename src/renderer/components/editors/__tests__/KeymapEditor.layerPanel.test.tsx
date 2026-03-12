@@ -58,9 +58,7 @@ vi.mock('../MacroModal', () => ({ MacroModal: () => null }))
 import { KeymapEditor } from '../KeymapEditor'
 
 const makeLayout = () => ({
-  keys: [
-    { x: 0, y: 0, w: 1, h: 1, row: 0, col: 0, encoderIdx: -1, decal: false, labels: [] },
-  ],
+  keys: [{ x: 0, y: 0, w: 1, h: 1, row: 0, col: 0, encoderIdx: -1, decal: false, labels: [] }],
 })
 
 describe('KeymapEditor — LayerListPanel', () => {
@@ -74,7 +72,12 @@ describe('KeymapEditor — LayerListPanel', () => {
     layers: 4,
     currentLayer: 0,
     onLayerChange,
-    keymap: new Map([['0,0,0', 4], ['1,0,0', 5], ['2,0,0', 6], ['3,0,0', 7]]),
+    keymap: new Map([
+      ['0,0,0', 4],
+      ['1,0,0', 5],
+      ['2,0,0', 6],
+      ['3,0,0', 7],
+    ]),
     encoderLayout: new Map<string, number>(),
     encoderCount: 0,
     layoutOptions: new Map<number, number>(),
@@ -138,14 +141,26 @@ describe('KeymapEditor — LayerListPanel', () => {
     const onLayerPanelOpenChange = vi.fn()
 
     it('shows collapse button when expanded (layerPanelOpen=true)', () => {
-      render(<KeymapEditor {...defaultProps} layerPanelOpen={true} onLayerPanelOpenChange={onLayerPanelOpenChange} />)
+      render(
+        <KeymapEditor
+          {...defaultProps}
+          layerPanelOpen={true}
+          onLayerPanelOpenChange={onLayerPanelOpenChange}
+        />,
+      )
 
       expect(screen.getByTestId('layer-panel-collapse-btn')).toBeInTheDocument()
       expect(screen.queryByTestId('layer-panel-expand-btn')).not.toBeInTheDocument()
     })
 
     it('calls onLayerPanelOpenChange(false) when collapse button clicked', () => {
-      render(<KeymapEditor {...defaultProps} layerPanelOpen={true} onLayerPanelOpenChange={onLayerPanelOpenChange} />)
+      render(
+        <KeymapEditor
+          {...defaultProps}
+          layerPanelOpen={true}
+          onLayerPanelOpenChange={onLayerPanelOpenChange}
+        />,
+      )
 
       fireEvent.click(screen.getByTestId('layer-panel-collapse-btn'))
 
@@ -153,7 +168,13 @@ describe('KeymapEditor — LayerListPanel', () => {
     })
 
     it('renders collapsed view when layerPanelOpen=false', () => {
-      render(<KeymapEditor {...defaultProps} layerPanelOpen={false} onLayerPanelOpenChange={onLayerPanelOpenChange} />)
+      render(
+        <KeymapEditor
+          {...defaultProps}
+          layerPanelOpen={false}
+          onLayerPanelOpenChange={onLayerPanelOpenChange}
+        />,
+      )
 
       expect(screen.getByTestId('layer-list-panel-collapsed')).toBeInTheDocument()
       expect(screen.queryByTestId('layer-list-panel')).not.toBeInTheDocument()
@@ -165,7 +186,13 @@ describe('KeymapEditor — LayerListPanel', () => {
     })
 
     it('calls onLayerPanelOpenChange(true) when expand button clicked', () => {
-      render(<KeymapEditor {...defaultProps} layerPanelOpen={false} onLayerPanelOpenChange={onLayerPanelOpenChange} />)
+      render(
+        <KeymapEditor
+          {...defaultProps}
+          layerPanelOpen={false}
+          onLayerPanelOpenChange={onLayerPanelOpenChange}
+        />,
+      )
 
       fireEvent.click(screen.getByTestId('layer-panel-expand-btn'))
 
@@ -173,7 +200,13 @@ describe('KeymapEditor — LayerListPanel', () => {
     })
 
     it('still allows layer switching when collapsed', () => {
-      render(<KeymapEditor {...defaultProps} layerPanelOpen={false} onLayerPanelOpenChange={onLayerPanelOpenChange} />)
+      render(
+        <KeymapEditor
+          {...defaultProps}
+          layerPanelOpen={false}
+          onLayerPanelOpenChange={onLayerPanelOpenChange}
+        />,
+      )
 
       fireEvent.click(screen.getByTestId('layer-panel-layer-num-2'))
 
@@ -253,12 +286,16 @@ describe('KeymapEditor — LayerListPanel', () => {
       fireEvent.change(input, { target: { value: 'NewName' } })
       fireEvent.keyDown(input, { key: 'Enter' })
 
-      act(() => { vi.advanceTimersByTime(0) })
+      act(() => {
+        vi.advanceTimersByTime(0)
+      })
 
       const nameBox = screen.getByTestId('layer-panel-layer-name-box-0')
       expect(nameBox.className).toContain('confirm-flash')
 
-      act(() => { vi.advanceTimersByTime(1200) })
+      act(() => {
+        vi.advanceTimersByTime(1200)
+      })
       expect(nameBox.className).not.toContain('confirm-flash')
 
       vi.useRealTimers()

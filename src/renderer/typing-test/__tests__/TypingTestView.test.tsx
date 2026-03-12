@@ -112,9 +112,7 @@ describe('TypingTestView', () => {
         words: ['quick'],
         currentWordIndex: 1,
         currentInput: '',
-        wordResults: [
-          { word: 'quick', typed: 'quikc', correct: false },
-        ],
+        wordResults: [{ word: 'quick', typed: 'quikc', correct: false }],
       }),
     })
     const word0 = screen.getByTestId('word-0')
@@ -258,7 +256,12 @@ describe('TypingTestView mode tabs', () => {
   })
 
   it('highlights the selected word count option with accent color', () => {
-    const config: TypingTestConfig = { mode: 'words', wordCount: 60, punctuation: false, numbers: false }
+    const config: TypingTestConfig = {
+      mode: 'words',
+      wordCount: 60,
+      punctuation: false,
+      numbers: false,
+    }
     renderView({ config })
     expect(screen.getByTestId('word-count-60').className).toContain('text-accent')
     expect(screen.getByTestId('word-count-30').className).not.toContain('text-accent')
@@ -277,7 +280,12 @@ describe('TypingTestView mode tabs', () => {
   })
 
   it('shows duration options in time mode', () => {
-    const config: TypingTestConfig = { mode: 'time', duration: 30, punctuation: false, numbers: false }
+    const config: TypingTestConfig = {
+      mode: 'time',
+      duration: 30,
+      punctuation: false,
+      numbers: false,
+    }
     renderView({ config })
     expect(screen.getByTestId('duration-15')).toBeInTheDocument()
     expect(screen.getByTestId('duration-30')).toBeInTheDocument()
@@ -303,7 +311,12 @@ describe('TypingTestView toggles', () => {
   })
 
   it('shows punctuation and numbers toggles in time mode', () => {
-    const config: TypingTestConfig = { mode: 'time', duration: 30, punctuation: false, numbers: false }
+    const config: TypingTestConfig = {
+      mode: 'time',
+      duration: 30,
+      punctuation: false,
+      numbers: false,
+    }
     renderView({ config })
     expect(screen.getByTestId('toggle-punctuation')).toBeInTheDocument()
     expect(screen.getByTestId('toggle-numbers')).toBeInTheDocument()
@@ -317,7 +330,12 @@ describe('TypingTestView toggles', () => {
   })
 
   it('highlights active punctuation toggle', () => {
-    const config: TypingTestConfig = { mode: 'words', wordCount: 30, punctuation: true, numbers: false }
+    const config: TypingTestConfig = {
+      mode: 'words',
+      wordCount: 30,
+      punctuation: true,
+      numbers: false,
+    }
     renderView({ config })
     expect(screen.getByTestId('toggle-punctuation').className).toContain('text-accent')
   })
@@ -338,7 +356,12 @@ describe('TypingTestView toggle preservation', () => {
   it('preserves punctuation/numbers when switching words -> quote -> time', () => {
     const onConfigChange = vi.fn()
     // Start in words mode with punctuation enabled
-    const config: TypingTestConfig = { mode: 'words', wordCount: 30, punctuation: true, numbers: true }
+    const config: TypingTestConfig = {
+      mode: 'words',
+      wordCount: 30,
+      punctuation: true,
+      numbers: true,
+    }
     const { rerender } = render(
       <I18nextProvider i18n={i18n}>
         <TypingTestView
@@ -391,7 +414,12 @@ describe('TypingTestView toggle preservation', () => {
 
 describe('TypingTestView time mode display', () => {
   it('shows remaining time in time mode', () => {
-    const config: TypingTestConfig = { mode: 'time', duration: 30, punctuation: false, numbers: false }
+    const config: TypingTestConfig = {
+      mode: 'time',
+      duration: 30,
+      punctuation: false,
+      numbers: false,
+    }
     renderView({
       config,
       remainingSeconds: 25,

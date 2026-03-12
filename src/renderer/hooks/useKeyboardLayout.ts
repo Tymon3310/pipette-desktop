@@ -39,9 +39,12 @@ export function useKeyboardLayout(): UseKeyboardLayoutReturn {
     ? config.currentKeyboardLayout
     : 'qwerty'
 
-  const setLayout = useCallback((newLayout: KeyboardLayoutId) => {
-    set('currentKeyboardLayout', newLayout)
-  }, [set])
+  const setLayout = useCallback(
+    (newLayout: KeyboardLayoutId) => {
+      set('currentKeyboardLayout', newLayout)
+    },
+    [set],
+  )
 
   const remapLabel = useCallback(
     (qmkId: string): string => {

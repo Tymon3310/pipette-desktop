@@ -18,10 +18,12 @@ export function pLimit(concurrency: number): LimitFunction {
   return function limit<T>(fn: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       queue.push(() => {
-        fn().then(resolve, reject).finally(() => {
-          active--
-          next()
-        })
+        fn()
+          .then(resolve, reject)
+          .finally(() => {
+            active--
+            next()
+          })
       })
       next()
     })

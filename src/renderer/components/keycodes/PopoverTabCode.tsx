@@ -28,7 +28,12 @@ function extractDisplayCode(code: number, lmMode: boolean, maskOnly: boolean): n
   return code
 }
 
-function mergeInnerCode(currentCode: number, inner: number, lmMode: boolean, maskOnly: boolean): number {
+function mergeInnerCode(
+  currentCode: number,
+  inner: number,
+  lmMode: boolean,
+  maskOnly: boolean,
+): number {
   if (lmMode) {
     const lmMask = resolve('QMK_LM_MASK')
     return (currentCode & ~lmMask) | (inner & lmMask)
@@ -49,9 +54,8 @@ export function PopoverTabCode({ currentKeycode, maskOnly, onRawKeycodeSelect }:
   }, [currentKeycode, maskOnly, lmMode, maxDigits])
 
   const parsed = parseHexDigits(hexInput, maxDigits)
-  const fullCode = parsed !== null
-    ? mergeInnerCode(currentKeycode, parsed, !!lmMode, !!maskOnly)
-    : null
+  const fullCode =
+    parsed !== null ? mergeInnerCode(currentKeycode, parsed, !!lmMode, !!maskOnly) : null
   const qmkLabel = fullCode !== null ? serialize(fullCode) : null
   const canApply = fullCode !== null && fullCode !== currentKeycode && hasNamedKeycode(fullCode)
 

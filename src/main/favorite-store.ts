@@ -6,11 +6,28 @@ import { join } from 'node:path'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { IpcChannels } from '../shared/ipc/channels'
-import { isValidFavoriteType, isFavoriteDataFile, FAV_EXPORT_KEY_MAP, FAV_TYPE_TO_EXPORT_KEY, isValidFavExportFile, serializeFavData, deserializeFavData } from '../shared/favorite-data'
-import { serialize as serializeKeycode, deserialize as deserializeKeycode } from '../shared/keycodes/keycodes'
+import {
+  isValidFavoriteType,
+  isFavoriteDataFile,
+  FAV_EXPORT_KEY_MAP,
+  FAV_TYPE_TO_EXPORT_KEY,
+  isValidFavExportFile,
+  serializeFavData,
+  deserializeFavData,
+} from '../shared/favorite-data'
+import {
+  serialize as serializeKeycode,
+  deserialize as deserializeKeycode,
+} from '../shared/keycodes/keycodes'
 import { notifyChange } from './sync/sync-service'
 import { secureHandle } from './ipc-guard'
-import type { FavoriteType, SavedFavoriteMeta, FavoriteIndex, FavoriteExportEntry, FavoriteImportResult } from '../shared/types/favorite-store'
+import type {
+  FavoriteType,
+  SavedFavoriteMeta,
+  FavoriteIndex,
+  FavoriteExportEntry,
+  FavoriteImportResult,
+} from '../shared/types/favorite-store'
 
 function isSafePathSegment(segment: string): boolean {
   if (!segment || segment === '.' || segment === '..') return false
@@ -53,7 +70,10 @@ async function writeIndex(type: FavoriteType, index: FavoriteIndex): Promise<voi
   await writeFile(getIndexPath(type), JSON.stringify(index, null, 2), 'utf-8')
 }
 
-async function findEntry(type: FavoriteType, entryId: string): Promise<{ index: FavoriteIndex; entry: SavedFavoriteMeta } | null> {
+async function findEntry(
+  type: FavoriteType,
+  entryId: string,
+): Promise<{ index: FavoriteIndex; entry: SavedFavoriteMeta } | null> {
   const index = await readIndex(type)
   const entry = index.entries.find((e) => e.id === entryId)
   if (!entry) return null
@@ -63,7 +83,10 @@ async function findEntry(type: FavoriteType, entryId: string): Promise<{ index: 
 export function setupFavoriteStore(): void {
   secureHandle(
     IpcChannels.FAVORITE_STORE_LIST,
-    async (_event, type: unknown): Promise<{ success: boolean; entries?: SavedFavoriteMeta[]; error?: string }> => {
+    async (
+      _event,
+      type: unknown,
+    ): Promise<{ success: boolean; entries?: SavedFavoriteMeta[]; error?: string }> => {
       try {
         validateType(type)
         const index = await readIndex(type)
@@ -117,7 +140,11 @@ export function setupFavoriteStore(): void {
 
   secureHandle(
     IpcChannels.FAVORITE_STORE_LOAD,
-    async (_event, type: unknown, entryId: string): Promise<{ success: boolean; data?: string; error?: string }> => {
+    async (
+      _event,
+      type: unknown,
+      entryId: string,
+    ): Promise<{ success: boolean; data?: string; error?: string }> => {
       try {
         validateType(type)
         const found = await findEntry(type, entryId)
@@ -135,7 +162,12 @@ export function setupFavoriteStore(): void {
 
   secureHandle(
     IpcChannels.FAVORITE_STORE_RENAME,
-    async (_event, type: unknown, entryId: string, newLabel: string): Promise<{ success: boolean; error?: string }> => {
+    async (
+      _event,
+      type: unknown,
+      entryId: string,
+      newLabel: string,
+    ): Promise<{ success: boolean; error?: string }> => {
       try {
         validateType(type)
         const found = await findEntry(type, entryId)
@@ -154,7 +186,11 @@ export function setupFavoriteStore(): void {
 
   secureHandle(
     IpcChannels.FAVORITE_STORE_DELETE,
-    async (_event, type: unknown, entryId: string): Promise<{ success: boolean; error?: string }> => {
+    async (
+      _event,
+      type: unknown,
+      entryId: string,
+    ): Promise<{ success: boolean; error?: string }> => {
       try {
         validateType(type)
         const found = await findEntry(type, entryId)
@@ -175,21 +211,27 @@ export function setupFavoriteStore(): void {
   // --- Export ---
   secureHandle(
     IpcChannels.FAVORITE_STORE_EXPORT,
-    async (event, scope: unknown, entryId?: unknown): Promise<{ success: boolean; error?: string }> => {
+    async (
+      event,
+      scope: unknown,
+      entryId?: unknown,
+    ): Promise<{ success: boolean; error?: string }> => {
       try {
         const win = BrowserWindow.fromWebContents(event.sender)
         if (!win) return { success: false, error: 'No window' }
 
         if (!isValidFavoriteType(scope)) return { success: false, error: 'Invalid scope' }
-        if (entryId !== undefined && typeof entryId !== 'string') return { success: false, error: 'Invalid entryId' }
+        if (entryId !== undefined && typeof entryId !== 'string')
+          return { success: false, error: 'Invalid entryId' }
 
         const index = await readIndex(scope)
         const exportKey = FAV_TYPE_TO_EXPORT_KEY[scope]
 
         // Single entry or all active entries
-        const targetEntries = typeof entryId === 'string'
-          ? index.entries.filter((e) => e.id === entryId && !e.deletedAt)
-          : index.entries.filter((e) => !e.deletedAt)
+        const targetEntries =
+          typeof entryId === 'string'
+            ? index.entries.filter((e) => e.id === entryId && !e.deletedAt)
+            : index.entries.filter((e) => !e.deletedAt)
 
         // Fail fast if single-entry export finds nothing
         if (typeof entryId === 'string' && targetEntries.length === 0) {
@@ -218,12 +260,15 @@ export function setupFavoriteStore(): void {
           return { success: false, error: 'Entry unreadable' }
         }
 
-        const categories: Record<string, FavoriteExportEntry[]> = exportEntries.length > 0
-          ? { [exportKey]: exportEntries }
-          : {}
+        const categories: Record<string, FavoriteExportEntry[]> =
+          exportEntries.length > 0 ? { [exportKey]: exportEntries } : {}
 
         const now = new Date()
-        const ts = now.toISOString().replace(/:/g, '').replace(/\.\d+Z$/, '').replace('T', '-')
+        const ts = now
+          .toISOString()
+          .replace(/:/g, '')
+          .replace(/\.\d+Z$/, '')
+          .replace('T', '-')
         const defaultFilename = `pipette-fav-${exportKey}-${ts}.json`
 
         const result = await dialog.showSaveDialog(win, {
@@ -258,7 +303,12 @@ export function setupFavoriteStore(): void {
   // --- Set Hub Post ID ---
   secureHandle(
     IpcChannels.FAVORITE_STORE_SET_HUB_POST_ID,
-    async (_event, type: unknown, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }> => {
+    async (
+      _event,
+      type: unknown,
+      entryId: string,
+      hubPostId: string | null,
+    ): Promise<{ success: boolean; error?: string }> => {
       try {
         validateType(type)
         const found = await findEntry(type, entryId)
@@ -281,93 +331,100 @@ export function setupFavoriteStore(): void {
   )
 
   // --- Import ---
-  secureHandle(
-    IpcChannels.FAVORITE_STORE_IMPORT,
-    async (event): Promise<FavoriteImportResult> => {
-      try {
-        const win = BrowserWindow.fromWebContents(event.sender)
-        if (!win) return { success: false, imported: 0, skipped: 0, error: 'No window' }
+  secureHandle(IpcChannels.FAVORITE_STORE_IMPORT, async (event): Promise<FavoriteImportResult> => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      if (!win) return { success: false, imported: 0, skipped: 0, error: 'No window' }
 
-        const result = await dialog.showOpenDialog(win, {
-          title: 'Import Favorites',
-          filters: [
-            { name: 'JSON', extensions: ['json'] },
-            { name: 'All Files', extensions: ['*'] },
-          ],
-          properties: ['openFile'],
-        })
+      const result = await dialog.showOpenDialog(win, {
+        title: 'Import Favorites',
+        filters: [
+          { name: 'JSON', extensions: ['json'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+        properties: ['openFile'],
+      })
 
-        if (result.canceled || result.filePaths.length === 0) {
-          return { success: false, imported: 0, skipped: 0, error: 'cancelled' }
-        }
-
-        const raw = await readFile(result.filePaths[0], 'utf-8')
-        const parsed: unknown = JSON.parse(raw)
-
-        if (!isValidFavExportFile(parsed)) {
-          return { success: false, imported: 0, skipped: 0, error: 'Invalid export file format' }
-        }
-
-        let imported = 0
-        let skipped = 0
-        const changedTypes = new Set<FavoriteType>()
-
-        for (const [exportKey, entries] of Object.entries(parsed.categories)) {
-          const favType = FAV_EXPORT_KEY_MAP[exportKey]
-          if (!favType) { skipped += entries.length; continue }
-
-          const index = await readIndex(favType)
-          const dir = getFavoriteDir(favType)
-          await mkdir(dir, { recursive: true })
-
-          for (const entry of entries) {
-            const normalizedData = deserializeFavData(favType, entry.data, deserializeKeycode)
-            if (!isFavoriteDataFile({ type: favType, data: normalizedData }, favType)) {
-              skipped++
-              continue
-            }
-
-            const isDuplicate = index.entries.some(
-              (existing) => !existing.deletedAt && existing.label === entry.label && existing.savedAt === entry.savedAt,
-            )
-            if (isDuplicate) {
-              skipped++
-              continue
-            }
-
-            const now = new Date()
-            const timestamp = now.toISOString().replace(/:/g, '-')
-            const filename = `${favType}_${timestamp}_${randomUUID().slice(0, 8)}.json`
-            const filePath = getSafeFilePath(favType, filename)
-
-            await writeFile(filePath, JSON.stringify({ type: favType, data: normalizedData }), 'utf-8')
-
-            const meta: SavedFavoriteMeta = {
-              id: randomUUID(),
-              label: entry.label,
-              filename,
-              savedAt: entry.savedAt,
-              updatedAt: now.toISOString(),
-            }
-
-            index.entries.unshift(meta)
-            imported++
-            changedTypes.add(favType)
-          }
-
-          if (changedTypes.has(favType)) {
-            await writeIndex(favType, index)
-          }
-        }
-
-        for (const favType of changedTypes) {
-          notifyChange(`favorites/${favType}`)
-        }
-
-        return { success: true, imported, skipped }
-      } catch (err) {
-        return { success: false, imported: 0, skipped: 0, error: String(err) }
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, imported: 0, skipped: 0, error: 'cancelled' }
       }
-    },
-  )
+
+      const raw = await readFile(result.filePaths[0], 'utf-8')
+      const parsed: unknown = JSON.parse(raw)
+
+      if (!isValidFavExportFile(parsed)) {
+        return { success: false, imported: 0, skipped: 0, error: 'Invalid export file format' }
+      }
+
+      let imported = 0
+      let skipped = 0
+      const changedTypes = new Set<FavoriteType>()
+
+      for (const [exportKey, entries] of Object.entries(parsed.categories)) {
+        const favType = FAV_EXPORT_KEY_MAP[exportKey]
+        if (!favType) {
+          skipped += entries.length
+          continue
+        }
+
+        const index = await readIndex(favType)
+        const dir = getFavoriteDir(favType)
+        await mkdir(dir, { recursive: true })
+
+        for (const entry of entries) {
+          const normalizedData = deserializeFavData(favType, entry.data, deserializeKeycode)
+          if (!isFavoriteDataFile({ type: favType, data: normalizedData }, favType)) {
+            skipped++
+            continue
+          }
+
+          const isDuplicate = index.entries.some(
+            (existing) =>
+              !existing.deletedAt &&
+              existing.label === entry.label &&
+              existing.savedAt === entry.savedAt,
+          )
+          if (isDuplicate) {
+            skipped++
+            continue
+          }
+
+          const now = new Date()
+          const timestamp = now.toISOString().replace(/:/g, '-')
+          const filename = `${favType}_${timestamp}_${randomUUID().slice(0, 8)}.json`
+          const filePath = getSafeFilePath(favType, filename)
+
+          await writeFile(
+            filePath,
+            JSON.stringify({ type: favType, data: normalizedData }),
+            'utf-8',
+          )
+
+          const meta: SavedFavoriteMeta = {
+            id: randomUUID(),
+            label: entry.label,
+            filename,
+            savedAt: entry.savedAt,
+            updatedAt: now.toISOString(),
+          }
+
+          index.entries.unshift(meta)
+          imported++
+          changedTypes.add(favType)
+        }
+
+        if (changedTypes.has(favType)) {
+          await writeIndex(favType, index)
+        }
+      }
+
+      for (const favType of changedTypes) {
+        notifyChange(`favorites/${favType}`)
+      }
+
+      return { success: true, imported, skipped }
+    } catch (err) {
+      return { success: false, imported: 0, skipped: 0, error: String(err) }
+    }
+  })
 }

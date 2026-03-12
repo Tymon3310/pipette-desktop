@@ -4,7 +4,12 @@
 import { screen } from 'electron'
 import Store from 'electron-store'
 import { IpcChannels } from '../shared/ipc/channels'
-import { DEFAULT_APP_CONFIG, SETTABLE_APP_CONFIG_KEYS, type AppConfig, type WindowState } from '../shared/types/app-config'
+import {
+  DEFAULT_APP_CONFIG,
+  SETTABLE_APP_CONFIG_KEYS,
+  type AppConfig,
+  type WindowState,
+} from '../shared/types/app-config'
 import { secureHandle } from './ipc-guard'
 
 const MIN_WIDTH = 1320
@@ -100,14 +105,11 @@ export function onAppConfigChange(cb: ConfigChangeCallback): void {
 export function setupAppConfigIpc(): void {
   secureHandle(IpcChannels.APP_CONFIG_GET_ALL, () => loadAppConfig())
 
-  secureHandle(
-    IpcChannels.APP_CONFIG_SET,
-    (_event, key: string, value: unknown) => {
-      if (!SETTABLE_APP_CONFIG_KEYS.has(key as keyof AppConfig)) return
-      store.set(key as keyof AppConfig, value as AppConfig[keyof AppConfig])
-      for (const cb of changeCallbacks) {
-        cb(key as keyof AppConfig, value)
-      }
-    },
-  )
+  secureHandle(IpcChannels.APP_CONFIG_SET, (_event, key: string, value: unknown) => {
+    if (!SETTABLE_APP_CONFIG_KEYS.has(key as keyof AppConfig)) return
+    store.set(key as keyof AppConfig, value as AppConfig[keyof AppConfig])
+    for (const cb of changeCallbacks) {
+      cb(key as keyof AppConfig, value)
+    }
+  })
 }

@@ -44,7 +44,7 @@ export function isShiftedKeycode(qmkId: string): boolean {
 /** Look up the shifted counterpart of a base keycode, if any */
 export function getShiftedKeycode(qmkId: string): Keycode | null {
   const shiftedId = SHIFTED_MAP[qmkId]
-  return shiftedId ? findKeycode(shiftedId) ?? null : null
+  return shiftedId ? (findKeycode(shiftedId) ?? null) : null
 }
 
 export interface SplitKeyProps {
@@ -61,12 +61,19 @@ export interface SplitKeyProps {
 }
 
 function splitHalfClass(highlighted?: boolean, selected?: boolean, remapped?: boolean): string {
-  const text = selected ? 'text-accent' : highlighted ? 'text-accent' : remapped ? 'text-key-label-remap' : 'text-picker-item-text'
+  const text = selected
+    ? 'text-accent'
+    : highlighted
+      ? 'text-accent'
+      : remapped
+        ? 'text-key-label-remap'
+        : 'text-picker-item-text'
   const bg = selected ? 'bg-accent/20' : highlighted ? 'bg-accent/10' : ''
   return `${text} ${bg}`
 }
 
-const SPLIT_HALF_BASE = 'flex-1 cursor-pointer flex items-center justify-center text-[10px] leading-tight whitespace-nowrap transition-colors hover:bg-picker-item-hover'
+const SPLIT_HALF_BASE =
+  'flex-1 cursor-pointer flex items-center justify-center text-[10px] leading-tight whitespace-nowrap transition-colors hover:bg-picker-item-hover'
 
 function SplitKeyInner({
   base,
@@ -89,7 +96,9 @@ function SplitKeyInner({
   const anyHighlighted = baseHighlighted || shiftHighlighted
   const outerBorder = anySelected
     ? 'border-accent'
-    : anyHighlighted ? 'border-accent/50' : 'border-picker-item-border'
+    : anyHighlighted
+      ? 'border-accent/50'
+      : 'border-picker-item-border'
   const outerBg = !anySelected && !anyHighlighted ? 'bg-picker-item-bg' : ''
 
   const rawBaseLabel = base.label.includes('\n') ? base.label.split('\n')[1] : base.label
@@ -98,7 +107,8 @@ function SplitKeyInner({
 
   // When display labels are remapped, find the keycode matching the displayed symbol for tooltip
   const hoverBase = (baseDisplayLabel ? findKeycodeByLabel(baseDisplayLabel) : undefined) ?? base
-  const hoverShifted = (shiftedDisplayLabel ? findKeycodeByLabel(shiftedDisplayLabel) : undefined) ?? shifted
+  const hoverShifted =
+    (shiftedDisplayLabel ? findKeycodeByLabel(shiftedDisplayLabel) : undefined) ?? shifted
 
   return (
     <div className={`flex h-full w-full flex-col rounded border ${outerBorder} ${outerBg}`}>
