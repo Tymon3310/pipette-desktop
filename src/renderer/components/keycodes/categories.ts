@@ -16,6 +16,9 @@ import {
   KEYCODES_BASIC_SYSTEM,
   KEYCODES_SHIFTED,
   KEYCODES_ISO,
+  KEYCODES_JIS,
+  KEYCODES_INTERNATIONAL,
+  KEYCODES_LANGUAGE,
   KEYCODES_LAYERS,
   KEYCODES_LAYERS_SPECIAL,
   KEYCODES_LAYERS_MO,
@@ -27,8 +30,8 @@ import {
   KEYCODES_LAYERS_TO,
   KEYCODES_LAYERS_LT,
   KEYCODES_LAYERS_LM,
-  KEYCODES_QUANTUM,
   KEYCODES_QUANTUM_MAGIC,
+  KEYCODES_QUANTUM_MODE,
   KEYCODES_QUANTUM_AUDIO,
   KEYCODES_QUANTUM_HAPTIC,
   KEYCODES_QUANTUM_AUTOSHIFT,
@@ -114,14 +117,17 @@ function basicCharactersGroup(extra?: { layoutRow: number }): KeycodeGroup {
 function getBasicGroupsList(): KeycodeGroup[] {
   return [
     basicCharactersGroup(),
+    { labelKey: 'keycodes.group.function', keycodes: [...KEYCODES_BASIC_FUNCTION, ...KEYCODES_MEDIA_FKEYS] },
     { labelKey: 'keycodes.group.shifted', keycodes: KEYCODES_SHIFTED },
     { labelKey: 'keycodes.group.editing', keycodes: KEYCODES_BASIC_EDITING, layoutRow: 1 },
-    { labelKey: 'keycodes.group.function', keycodes: KEYCODES_BASIC_FUNCTION, layoutRow: 1 },
-    { labelKey: 'keycodes.group.modifiers', keycodes: KEYCODES_BASIC_MODS, layoutRow: 2 },
-    { labelKey: 'keycodes.group.navigation', keycodes: KEYCODES_BASIC_NAV, layoutRow: 2 },
+    { labelKey: 'keycodes.group.modifiers', keycodes: KEYCODES_BASIC_MODS, layoutRow: 1 },
+    { labelKey: 'keycodes.group.navigation', keycodes: KEYCODES_BASIC_NAV, layoutRow: 1 },
     { labelKey: 'keycodes.group.numpad', keycodes: KEYCODES_BASIC_NUMPAD },
     { labelKey: 'keycodes.group.internal', keycodes: KEYCODES_SPECIAL, layoutRow: 3 },
     { labelKey: 'keycodes.iso', keycodes: KEYCODES_ISO, layoutRow: 3 },
+    { labelKey: 'keycodes.jis', keycodes: KEYCODES_JIS, layoutRow: 3 },
+    { labelKey: 'keycodes.international', keycodes: KEYCODES_INTERNATIONAL, layoutRow: 3 },
+    { labelKey: 'keycodes.language', keycodes: KEYCODES_LANGUAGE, layoutRow: 3 },
     { labelKey: 'keycodes.group.lock', keycodes: KEYCODES_BASIC_LOCK, layoutRow: 3 },
     { labelKey: 'keycodes.group.system', keycodes: KEYCODES_BASIC_SYSTEM, layoutRow: 3 },
   ]
@@ -132,15 +138,18 @@ function getBasicGroupsAnsi(): KeycodeGroup[] {
   return [
     { labelKey: 'keycodes.group.numpad', keycodes: KEYCODES_BASIC_NUMPAD },
     { labelKey: 'keycodes.group.navigation', keycodes: KEYCODES_BASIC_NAV },
+    basicCharactersGroup({ layoutRow: 1 }),
+    { labelKey: 'keycodes.group.editing', keycodes: KEYCODES_BASIC_EDITING, layoutRow: 1 },
+    { labelKey: 'keycodes.group.modifiers', keycodes: KEYCODES_BASIC_MODS, layoutRow: 1 },
+    { labelKey: 'keycodes.group.function', keycodes: [...KEYCODES_BASIC_FUNCTION, ...KEYCODES_MEDIA_FKEYS] },
     { labelKey: 'keycodes.group.shifted', keycodes: KEYCODES_SHIFTED },
-    { labelKey: 'keycodes.group.internal', keycodes: KEYCODES_SPECIAL, layoutRow: 1 },
-    { labelKey: 'keycodes.iso', keycodes: KEYCODES_ISO, layoutRow: 1 },
+    { labelKey: 'keycodes.group.internal', keycodes: KEYCODES_SPECIAL, layoutRow: 2 },
+    { labelKey: 'keycodes.iso', keycodes: KEYCODES_ISO, layoutRow: 2 },
+    { labelKey: 'keycodes.jis', keycodes: KEYCODES_JIS, layoutRow: 2 },
+    { labelKey: 'keycodes.international', keycodes: KEYCODES_INTERNATIONAL, layoutRow: 2 },
+    { labelKey: 'keycodes.language', keycodes: KEYCODES_LANGUAGE, layoutRow: 2 },
     { labelKey: 'keycodes.group.lock', keycodes: KEYCODES_BASIC_LOCK, layoutRow: 2 },
     { labelKey: 'keycodes.group.system', keycodes: KEYCODES_BASIC_SYSTEM, layoutRow: 2 },
-    basicCharactersGroup(),
-    { labelKey: 'keycodes.group.editing', keycodes: KEYCODES_BASIC_EDITING, layoutRow: 3 },
-    { labelKey: 'keycodes.group.function', keycodes: KEYCODES_BASIC_FUNCTION, layoutRow: 3 },
-    { labelKey: 'keycodes.group.modifiers', keycodes: KEYCODES_BASIC_MODS },
   ]
 }
 
@@ -150,14 +159,17 @@ function getBasicGroupsIso(): KeycodeGroup[] {
     { labelKey: 'keycodes.group.numpad', keycodes: KEYCODES_BASIC_NUMPAD },
     { labelKey: 'keycodes.group.navigation', keycodes: KEYCODES_BASIC_NAV },
     basicCharactersGroup({ layoutRow: 1 }),
-    { labelKey: 'keycodes.group.shifted', keycodes: KEYCODES_SHIFTED, layoutRow: 1 },
+    { labelKey: 'keycodes.group.function', keycodes: [...KEYCODES_BASIC_FUNCTION, ...KEYCODES_MEDIA_FKEYS], layoutRow: 1 },
+    { labelKey: 'keycodes.group.shifted', keycodes: KEYCODES_SHIFTED },
     { labelKey: 'keycodes.group.internal', keycodes: KEYCODES_SPECIAL, layoutRow: 2 },
     { labelKey: 'keycodes.iso', keycodes: KEYCODES_ISO, layoutRow: 2 },
+    { labelKey: 'keycodes.jis', keycodes: KEYCODES_JIS, layoutRow: 2 },
+    { labelKey: 'keycodes.international', keycodes: KEYCODES_INTERNATIONAL, layoutRow: 2 },
+    { labelKey: 'keycodes.language', keycodes: KEYCODES_LANGUAGE, layoutRow: 2 },
     { labelKey: 'keycodes.group.lock', keycodes: KEYCODES_BASIC_LOCK, layoutRow: 3 },
     { labelKey: 'keycodes.group.system', keycodes: KEYCODES_BASIC_SYSTEM, layoutRow: 3 },
     { labelKey: 'keycodes.group.editing', keycodes: KEYCODES_BASIC_EDITING, layoutRow: 4 },
-    { labelKey: 'keycodes.group.function', keycodes: KEYCODES_BASIC_FUNCTION, layoutRow: 4 },
-    { labelKey: 'keycodes.group.modifiers', keycodes: KEYCODES_BASIC_MODS },
+    { labelKey: 'keycodes.group.modifiers', keycodes: KEYCODES_BASIC_MODS, layoutRow: 4 },
   ]
 }
 
@@ -165,10 +177,10 @@ export const KEYCODE_CATEGORIES: KeycodeCategory[] = [
   {
     id: 'basic',
     labelKey: 'keycodes.basic',
-    getKeycodes: () => [...KEYCODES_SPECIAL, ...KEYCODES_BASIC, ...KEYCODES_SHIFTED, ...KEYCODES_ISO],
+    getKeycodes: () => [...KEYCODES_SPECIAL, ...KEYCODES_BASIC, ...KEYCODES_SHIFTED, ...KEYCODES_ISO, ...KEYCODES_JIS, ...KEYCODES_INTERNATIONAL, ...KEYCODES_LANGUAGE, ...KEYCODES_MEDIA_FKEYS],
     getGroups: (viewType?: string) => {
       if (viewType === 'ansi') return getBasicGroupsAnsi()
-      if (viewType === 'iso') return getBasicGroupsIso()
+      if (viewType === 'iso' || viewType === 'jis') return getBasicGroupsIso()
       return getBasicGroupsList()
     },
   },
@@ -213,47 +225,24 @@ export const KEYCODE_CATEGORIES: KeycodeCategory[] = [
     ],
   },
   {
-    id: 'tapDance',
-    labelKey: 'keycodes.tapDance',
-    getKeycodes: () => KEYCODES_TAP_DANCE,
-  },
-  {
-    id: 'macro',
-    labelKey: 'keycodes.macro',
-    getKeycodes: () => KEYCODES_MACRO,
-    getGroups: () => [
-      { labelKey: 'keycodes.group.macroDM', keycodes: KEYCODES_MACRO_BASE },
-    ],
-  },
-  {
-    id: 'quantum',
-    labelKey: 'keycodes.quantum',
-    getKeycodes: () => [...KEYCODES_QUANTUM, ...KEYCODES_BOOT],
-    getGroups: () => [
-      { labelKey: 'keycodes.group.boot', keycodes: KEYCODES_BOOT, layoutRow: 1 },
-      { labelKey: 'keycodes.group.capsWord', keycodes: KEYCODES_QUANTUM_CAPS_WORD, layoutRow: 1 },
-      { labelKey: 'keycodes.group.audio', keycodes: KEYCODES_QUANTUM_AUDIO, layoutRow: 2 },
-      { labelKey: 'keycodes.group.haptic', keycodes: KEYCODES_QUANTUM_HAPTIC, layoutRow: 2 },
-      { labelKey: 'keycodes.group.magic', keycodes: KEYCODES_QUANTUM_MAGIC },
-      { labelKey: 'keycodes.group.autoShift', keycodes: KEYCODES_QUANTUM_AUTOSHIFT, layoutRow: 3 },
-      { labelKey: 'keycodes.group.combo', keycodes: KEYCODES_QUANTUM_COMBO, layoutRow: 3 },
-      { labelKey: 'keycodes.group.repeat', keycodes: KEYCODES_QUANTUM_REPEAT, layoutRow: 3 },
-      { labelKey: 'keycodes.group.keyOverride', keycodes: KEYCODES_QUANTUM_KEY_OVERRIDE, layoutRow: 3 },
-      { labelKey: 'keycodes.group.swapHands', keycodes: [...KEYCODES_QUANTUM_SWAP_HANDS, ...KEYCODES_QUANTUM_SWAP_HANDS_TAP] },
-    ],
-  },
-  {
     id: 'media',
     labelKey: 'keycodes.media',
-    getKeycodes: () => KEYCODES_MEDIA,
+    getKeycodes: () => [
+      ...KEYCODES_MEDIA.filter((kc) => !KEYCODES_MEDIA_FKEYS.includes(kc)),
+      ...KEYCODES_QUANTUM_AUDIO,
+      ...KEYCODES_QUANTUM_HAPTIC,
+      ...KEYCODES_BOOT,
+    ],
     getGroups: () => [
       { labelKey: 'keycodes.group.mouse', keycodes: KEYCODES_MEDIA_MOUSE },
       { labelKey: 'keycodes.group.joystick', keycodes: KEYCODES_MEDIA_JOYSTICK },
+      { labelKey: 'keycodes.group.audio', keycodes: KEYCODES_QUANTUM_AUDIO, layoutRow: 1 },
+      { labelKey: 'keycodes.group.haptic', keycodes: KEYCODES_QUANTUM_HAPTIC, layoutRow: 1 },
       { labelKey: 'keycodes.group.mediaPlayback', keycodes: KEYCODES_MEDIA_PLAYBACK },
-      { labelKey: 'keycodes.group.lockingKeys', keycodes: KEYCODES_MEDIA_LOCK, layoutRow: 1 },
-      { labelKey: 'keycodes.group.appBrowser', keycodes: KEYCODES_MEDIA_APP, layoutRow: 1 },
-      { labelKey: 'keycodes.group.fKeys', keycodes: KEYCODES_MEDIA_FKEYS, layoutRow: 2 },
-      { labelKey: 'keycodes.group.systemControl', keycodes: KEYCODES_MEDIA_SYSTEM, layoutRow: 2 },
+      { labelKey: 'keycodes.group.lockingKeys', keycodes: KEYCODES_MEDIA_LOCK, layoutRow: 2 },
+      { labelKey: 'keycodes.group.appBrowser', keycodes: KEYCODES_MEDIA_APP, layoutRow: 2 },
+      { labelKey: 'keycodes.group.systemControl', keycodes: KEYCODES_MEDIA_SYSTEM, layoutRow: 3 },
+      { labelKey: 'keycodes.group.boot', keycodes: KEYCODES_BOOT, layoutRow: 3 },
     ],
   },
   {
@@ -279,6 +268,62 @@ export const KEYCODE_CATEGORIES: KeycodeCategory[] = [
       { labelKey: 'keycodes.group.rgbLighting', keycodes: KEYCODES_LIGHTING_RGB },
       { labelKey: 'keycodes.group.backlight', keycodes: KEYCODES_LIGHTING_BL },
       { labelKey: 'keycodes.group.ledMatrix', keycodes: KEYCODES_LIGHTING_LED_MATRIX },
+    ],
+  },
+  {
+    id: 'tapDance',
+    labelKey: 'keycodes.tapDance',
+    getKeycodes: () => KEYCODES_TAP_DANCE,
+  },
+  {
+    id: 'macro',
+    labelKey: 'keycodes.macro',
+    getKeycodes: () => KEYCODES_MACRO,
+    getGroups: () => [
+      { labelKey: 'keycodes.group.macroDM', keycodes: KEYCODES_MACRO_BASE },
+    ],
+  },
+  {
+    id: 'combo',
+    labelKey: 'keycodes.combo',
+    getKeycodes: () => KEYCODES_QUANTUM_COMBO,
+    getGroups: () => [
+      { labelKey: 'keycodes.group.comboKeys', keycodes: KEYCODES_QUANTUM_COMBO },
+    ],
+  },
+  {
+    id: 'keyOverride',
+    labelKey: 'keycodes.keyOverride',
+    getKeycodes: () => KEYCODES_QUANTUM_KEY_OVERRIDE,
+    getGroups: () => [
+      { labelKey: 'keycodes.group.keyOverrideKeys', keycodes: KEYCODES_QUANTUM_KEY_OVERRIDE },
+    ],
+  },
+  {
+    id: 'altRepeatKey',
+    labelKey: 'keycodes.altRepeatKey',
+    getKeycodes: () => KEYCODES_QUANTUM_REPEAT,
+    getGroups: () => [
+      { labelKey: 'keycodes.group.altRepeatKeyKeys', keycodes: KEYCODES_QUANTUM_REPEAT },
+    ],
+  },
+  {
+    id: 'quantum',
+    labelKey: 'keycodes.quantum',
+    getKeycodes: () => [
+      ...KEYCODES_QUANTUM_MAGIC,
+      ...KEYCODES_QUANTUM_MODE,
+      ...KEYCODES_QUANTUM_AUTOSHIFT,
+      ...KEYCODES_QUANTUM_SWAP_HANDS,
+      ...KEYCODES_QUANTUM_SWAP_HANDS_TAP,
+      ...KEYCODES_QUANTUM_CAPS_WORD,
+    ],
+    getGroups: () => [
+      { labelKey: 'keycodes.group.magic', keycodes: KEYCODES_QUANTUM_MAGIC },
+      { labelKey: 'keycodes.group.mode', keycodes: KEYCODES_QUANTUM_MODE },
+      { labelKey: 'keycodes.group.autoShift', keycodes: KEYCODES_QUANTUM_AUTOSHIFT, layoutRow: 3 },
+      { labelKey: 'keycodes.group.swapHands', keycodes: [...KEYCODES_QUANTUM_SWAP_HANDS, ...KEYCODES_QUANTUM_SWAP_HANDS_TAP], layoutRow: 4 },
+      { labelKey: 'keycodes.group.capsWord', keycodes: KEYCODES_QUANTUM_CAPS_WORD, layoutRow: 4 },
     ],
   },
   {

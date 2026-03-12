@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ANSI_LAYOUTS, ISO_LAYOUTS, type DisplayLayoutDef } from './display-keyboard-defs'
+import { getLayoutsForViewType, type DisplayLayoutDef } from './display-keyboard-defs'
 import type { BasicViewType, SplitKeyMode } from '../../../shared/types/app-config'
 import { DisplayKeyboard } from './DisplayKeyboard'
 import { KeycodeGrid } from './KeycodeGrid'
@@ -10,6 +10,10 @@ import { KEYCODE_CATEGORIES, groupByLayoutRow, type KeycodeGroup } from './categ
 import {
   KEYCODES_SPECIAL,
   KEYCODES_BASIC,
+  KEYCODES_ISO,
+  KEYCODES_JIS,
+  KEYCODES_INTERNATIONAL,
+  KEYCODES_LANGUAGE,
   type Keycode,
   findKeycode,
 } from '../../../shared/keycodes/keycodes'
@@ -19,6 +23,7 @@ interface Props {
   viewType: BasicViewType
   splitKeyMode?: SplitKeyMode
   onKeycodeClick?: (keycode: Keycode, event: React.MouseEvent) => void
+  onKeycodeDoubleClick?: (keycode: Keycode) => void
   onKeycodeHover?: (keycode: Keycode, rect: DOMRect) => void
   onKeycodeHoverEnd?: () => void
   highlightedKeycodes?: Set<string>
@@ -68,6 +73,7 @@ export function BasicKeyboardView({
   viewType,
   splitKeyMode,
   onKeycodeClick,
+  onKeycodeDoubleClick,
   onKeycodeHover,
   onKeycodeHoverEnd,
   highlightedKeycodes,
@@ -93,7 +99,7 @@ export function BasicKeyboardView({
 
   const visCheck = isVisible ?? defaultIsVisible
 
-  const layouts = viewType === 'iso' ? ISO_LAYOUTS : ANSI_LAYOUTS
+  const layouts = getLayoutsForViewType(viewType)
 
   const selectedLayout = useMemo<DisplayLayoutDef | null>(() => {
     for (const def of layouts) {
@@ -109,7 +115,7 @@ export function BasicKeyboardView({
   }, [selectedLayout, visCheck, viewType])
 
   const flatKeycodes = useMemo(() => {
-    return [...KEYCODES_SPECIAL, ...KEYCODES_BASIC].filter(visCheck)
+    return [...KEYCODES_SPECIAL, ...KEYCODES_BASIC, ...KEYCODES_ISO, ...KEYCODES_JIS, ...KEYCODES_INTERNATIONAL, ...KEYCODES_LANGUAGE].filter(visCheck)
   }, [visCheck])
 
   function renderKeycodeGrid(keycodes: Keycode[]) {
@@ -117,6 +123,7 @@ export function BasicKeyboardView({
       <KeycodeGrid
         keycodes={keycodes}
         onClick={onKeycodeClick}
+        onDoubleClick={onKeycodeDoubleClick}
         onHover={onKeycodeHover}
         onHoverEnd={onKeycodeHoverEnd}
         highlightedKeycodes={highlightedKeycodes}
@@ -135,12 +142,14 @@ export function BasicKeyboardView({
           <DisplayKeyboard
             kle={selectedLayout.kle}
             onKeycodeClick={onKeycodeClick}
+            onKeycodeDoubleClick={onKeycodeDoubleClick}
             onKeycodeHover={onKeycodeHover}
             onKeycodeHoverEnd={onKeycodeHoverEnd}
             highlightedKeycodes={highlightedKeycodes}
             pickerSelectedKeycodes={pickerSelectedKeycodes}
             splitKeyMode={splitKeyMode}
             remapLabel={remapLabel}
+            isVisible={visCheck}
           />
           {remainingRows.length > 0 && (
             <div className="mt-1">

@@ -35,6 +35,8 @@ interface Props {
   onBasicViewTypeChange?: (type: BasicViewType) => void
   splitKeyMode?: SplitKeyMode
   onSplitKeyModeChange?: (mode: SplitKeyMode) => void
+  quickSelect?: boolean
+  onQuickSelectChange?: (enabled: boolean) => void
   matrixMode: boolean
   hasMatrixTester: boolean
   onToggleMatrix?: () => void
@@ -63,6 +65,8 @@ export function KeycodesOverlayPanel({
   onBasicViewTypeChange,
   splitKeyMode,
   onSplitKeyModeChange,
+  quickSelect,
+  onQuickSelectChange,
   matrixMode,
   hasMatrixTester,
   onToggleMatrix,
@@ -180,6 +184,7 @@ export function KeycodesOverlayPanel({
                 >
                   <option value="ansi">{t('settings.basicViewTypeAnsi')}</option>
                   <option value="iso">{t('settings.basicViewTypeIso')}</option>
+                  <option value="jis">{t('settings.basicViewTypeJis')}</option>
                   <option value="list">{t('settings.basicViewTypeList')}</option>
                 </select>
               </div>
@@ -239,6 +244,26 @@ export function KeycodesOverlayPanel({
                   data-testid="overlay-split-key-mode-toggle"
                 >
                   <span className={toggleKnobClass(splitKeyMode === 'split')} />
+                </button>
+              </div>
+            )}
+
+            {/* Quick select toggle */}
+            {quickSelect != null && onQuickSelectChange && (
+              <div className={ROW_CLASS} data-testid="overlay-quick-select-row">
+                <span className="text-[13px] font-medium text-content">
+                  {t('editorSettings.quickSelect')}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={quickSelect}
+                  aria-label={t('editorSettings.quickSelect')}
+                  className={toggleTrackClass(quickSelect)}
+                  onClick={() => onQuickSelectChange(!quickSelect)}
+                  data-testid="overlay-quick-select-toggle"
+                >
+                  <span className={toggleKnobClass(quickSelect)} />
                 </button>
               </div>
             )}

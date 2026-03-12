@@ -13,12 +13,12 @@ import { useFavoriteStore } from '../../hooks/useFavoriteStore'
 import { useTileContentOverride } from '../../hooks/useTileContentOverride'
 import { ConfirmButton } from './ConfirmButton'
 import { KeycodeField } from './KeycodeField'
-import { MaskKeyPreview } from './MaskKeyPreview'
 import { ModalCloseButton } from './ModalCloseButton'
 import { TabbedKeycodes } from '../keycodes/TabbedKeycodes'
 import { KeyPopover } from '../keycodes/KeyPopover'
 import { FavoriteStoreContent } from './FavoriteStoreContent'
 import type { FavHubEntryResult } from './FavoriteHubActions'
+import type { BasicViewType, SplitKeyMode } from '../../../shared/types/app-config'
 
 const COMBO_TIMEOUT_QSID = 2
 const COMBO_TIMEOUT_WIDTH = 2
@@ -34,6 +34,7 @@ interface Props {
   onSettingsUpdate?: (qsid: number, data: number[]) => void
   tapDanceEntries?: TapDanceEntry[]
   deserializedMacros?: MacroAction[][]
+  initialIndex?: number
   onClose: () => void
   // Hub integration (optional)
   hubOrigin?: string
@@ -44,6 +45,9 @@ interface Props {
   onUpdateOnHub?: (entryId: string) => void
   onRemoveFromHub?: (entryId: string) => void
   onRenameOnHub?: (entryId: string, hubPostId: string, newLabel: string) => void
+  quickSelect?: boolean
+  splitKeyMode?: SplitKeyMode
+  basicViewType?: BasicViewType
 }
 
 type KeycodeFieldName = 'key1' | 'key2' | 'key3' | 'key4' | 'output'
@@ -90,6 +94,7 @@ export function ComboPanelModal({
   onSettingsUpdate,
   tapDanceEntries,
   deserializedMacros,
+  initialIndex,
   onClose,
   hubOrigin,
   hubNeedsDisplayName,
@@ -99,10 +104,13 @@ export function ComboPanelModal({
   onUpdateOnHub,
   onRemoveFromHub,
   onRenameOnHub,
+  quickSelect,
+  splitKeyMode,
+  basicViewType,
 }: Props) {
   const { t } = useTranslation()
   const { guard, clearPending } = useUnlockGate({ unlocked, onUnlock })
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(initialIndex ?? null)
   const [comboTimeout, setComboTimeout] = useState<number | null>(null)
   const [savedTimeout, setSavedTimeout] = useState<number | null>(null)
   const [editedEntry, setEditedEntry] = useState<ComboEntry | null>(null)
@@ -197,8 +205,6 @@ export function ComboPanelModal({
 
   const updateField = useCallback((field: KeycodeFieldName, code: number) => {
     setEditedEntry((prev) => prev ? { ...prev, [field]: code } : prev)
-    setPopoverState(null)
-    setSelectedField(null)
   }, [])
 
   const maskedSelection = useMaskedKeycodeSelection({
@@ -212,6 +218,7 @@ export function ComboPanelModal({
     },
     resetKey: selectedField,
     initialValue: selectedField && editedEntry ? editedEntry[selectedField] : undefined,
+    quickSelect,
   })
 
   const tabContentOverride = useTileContentOverride(tapDanceEntries, deserializedMacros, maskedSelection.handleKeycodeSelect)
@@ -223,6 +230,11 @@ export function ComboPanelModal({
     },
     [selectedField],
   )
+
+  const confirmPopover = useCallback(() => {
+    setPopoverState(null)
+    setSelectedField(null)
+  }, [])
 
   const popoverField = popoverState?.field ?? null
 
@@ -356,8 +368,8 @@ export function ComboPanelModal({
                           onDoubleClick={selectedField ? (rect) => handleFieldDoubleClick(key, rect) : undefined}
                           label={t(labelKey, labelOpts)}
                         />
-                        {selectedField === key && (
-                          <MaskKeyPreview onConfirm={maskedSelection.confirm} />
+                        {selectedField === key && !popoverState && !quickSelect && editedEntry[key] !== preEditValueRef.current && (
+                          <span className="text-xs text-content-muted">{t('editor.keymap.pickerDoubleClickHint')}</span>
                         )}
                       </div>
                     )
@@ -367,10 +379,14 @@ export function ComboPanelModal({
                 {selectedField && (
                   <div className="mt-3">
                     <TabbedKeycodes
-                      onKeycodeSelect={maskedSelection.handleKeycodeSelect}
+                      onKeycodeSelect={maskedSelection.pickerSelect}
+                      onKeycodeDoubleClick={maskedSelection.pickerDoubleClick}
+                      onConfirm={maskedSelection.confirm}
                       maskOnly={maskedSelection.maskOnly}
                       lmMode={maskedSelection.lmMode}
                       tabContentOverride={tabContentOverride}
+                      splitKeyMode={splitKeyMode}
+                      basicViewType={basicViewType}
                       onClose={() => {
                         if (selectedField) {
                           setEditedEntry((prev) => prev ? { ...prev, [selectedField]: preEditValueRef.current } : prev)
@@ -389,6 +405,8 @@ export function ComboPanelModal({
                     onKeycodeSelect={handlePopoverKeycodeSelect}
                     onRawKeycodeSelect={handlePopoverRawKeycodeSelect}
                     onClose={() => setPopoverState(null)}
+                    onConfirm={confirmPopover}
+                    quickSelect={quickSelect}
                   />
                 )}
 

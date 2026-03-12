@@ -14,7 +14,6 @@ import { useFavoriteStore } from '../../hooks/useFavoriteStore'
 import { useTileContentOverride } from '../../hooks/useTileContentOverride'
 import { ConfirmButton } from './ConfirmButton'
 import { KeycodeField } from './KeycodeField'
-import { MaskKeyPreview } from './MaskKeyPreview'
 import { LayerPicker } from './LayerPicker'
 import { ModalCloseButton } from './ModalCloseButton'
 import { ModifierPicker } from './ModifierPicker'
@@ -22,10 +21,12 @@ import { TabbedKeycodes } from '../keycodes/TabbedKeycodes'
 import { KeyPopover } from '../keycodes/KeyPopover'
 import { FavoriteStoreContent } from './FavoriteStoreContent'
 import type { FavHubEntryResult } from './FavoriteHubActions'
+import type { BasicViewType, SplitKeyMode } from '../../../shared/types/app-config'
 
 interface Props {
   entries: KeyOverrideEntry[]
   onSetEntry: (index: number, entry: KeyOverrideEntry) => Promise<void>
+  initialIndex?: number
   unlocked?: boolean
   onUnlock?: () => void
   tapDanceEntries?: TapDanceEntry[]
@@ -40,6 +41,9 @@ interface Props {
   onUpdateOnHub?: (entryId: string) => void
   onRemoveFromHub?: (entryId: string) => void
   onRenameOnHub?: (entryId: string, hubPostId: string, newLabel: string) => void
+  quickSelect?: boolean
+  splitKeyMode?: SplitKeyMode
+  basicViewType?: BasicViewType
 }
 
 type KeycodeFieldName = 'triggerKey' | 'replacementKey'
@@ -88,6 +92,7 @@ function tileStyle(configured: boolean, enabled: boolean): string {
 export function KeyOverridePanelModal({
   entries,
   onSetEntry,
+  initialIndex,
   unlocked,
   onUnlock,
   tapDanceEntries,
@@ -101,10 +106,13 @@ export function KeyOverridePanelModal({
   onUpdateOnHub,
   onRemoveFromHub,
   onRenameOnHub,
+  quickSelect,
+  splitKeyMode,
+  basicViewType,
 }: Props) {
   const { t } = useTranslation()
   const { guard, clearPending } = useUnlockGate({ unlocked, onUnlock })
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(initialIndex ?? null)
   const [editedEntry, setEditedEntry] = useState<KeyOverrideEntry | null>(null)
   const [selectedField, setSelectedField] = useState<KeycodeFieldName | null>(null)
   const [popoverState, setPopoverState] = useState<{ field: KeycodeFieldName; anchorRect: DOMRect } | null>(null)
@@ -180,8 +188,6 @@ export function KeyOverridePanelModal({
 
   const updateField = useCallback((field: KeycodeFieldName, code: number) => {
     updateEntry(field, code)
-    setPopoverState(null)
-    setSelectedField(null)
   }, [updateEntry])
 
   const maskedSelection = useMaskedKeycodeSelection({
@@ -195,6 +201,7 @@ export function KeyOverridePanelModal({
     },
     resetKey: selectedField,
     initialValue: selectedField && editedEntry ? editedEntry[selectedField] : undefined,
+    quickSelect,
   })
 
   const tabContentOverride = useTileContentOverride(tapDanceEntries, deserializedMacros, maskedSelection.handleKeycodeSelect)
@@ -206,6 +213,11 @@ export function KeyOverridePanelModal({
     },
     [selectedField],
   )
+
+  const confirmPopover = useCallback(() => {
+    setPopoverState(null)
+    setSelectedField(null)
+  }, [])
 
   const popoverField = popoverState?.field ?? null
 
@@ -346,8 +358,8 @@ export function KeyOverridePanelModal({
                           onDoubleClick={selectedField ? (rect) => handleFieldDoubleClick(key, rect) : undefined}
                           label={t(labelKey)}
                         />
-                        {selectedField === key && (
-                          <MaskKeyPreview onConfirm={maskedSelection.confirm} />
+                        {selectedField === key && !popoverState && !quickSelect && editedEntry[key] !== preEditValueRef.current && (
+                          <span className="text-xs text-content-muted">{t('editor.keymap.pickerDoubleClickHint')}</span>
                         )}
                       </div>
                     )
@@ -357,10 +369,14 @@ export function KeyOverridePanelModal({
                 {selectedField && (
                   <div className="mt-3">
                     <TabbedKeycodes
-                      onKeycodeSelect={maskedSelection.handleKeycodeSelect}
+                      onKeycodeSelect={maskedSelection.pickerSelect}
+                      onKeycodeDoubleClick={maskedSelection.pickerDoubleClick}
+                      onConfirm={maskedSelection.confirm}
                       maskOnly={maskedSelection.maskOnly}
                       lmMode={maskedSelection.lmMode}
                       tabContentOverride={tabContentOverride}
+                      splitKeyMode={splitKeyMode}
+                      basicViewType={basicViewType}
                       onClose={() => {
                         if (selectedField) {
                           setEditedEntry((prev) => prev ? { ...prev, [selectedField]: preEditValueRef.current } : prev)
@@ -379,6 +395,8 @@ export function KeyOverridePanelModal({
                     onKeycodeSelect={handlePopoverKeycodeSelect}
                     onRawKeycodeSelect={handlePopoverRawKeycodeSelect}
                     onClose={() => setPopoverState(null)}
+                    onConfirm={confirmPopover}
+                    quickSelect={quickSelect}
                   />
                 )}
 

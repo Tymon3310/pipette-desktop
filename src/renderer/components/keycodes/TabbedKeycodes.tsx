@@ -5,8 +5,9 @@ import { useTranslation } from 'react-i18next'
 import { findKeycode, type Keycode, getKeycodeRevision, isBasic, getAvailableLMMods } from '../../../shared/keycodes/keycodes'
 import { parseKle } from '../../../shared/kle/kle-parser'
 import type { BasicViewType, SplitKeyMode } from '../../../shared/types/app-config'
+import { useAppConfig } from '../../hooks/useAppConfig'
 import { KEYCODE_CATEGORIES, groupByLayoutRow, type KeycodeCategory, type KeycodeGroup } from './categories'
-import { ANSI_LAYOUTS, ISO_LAYOUTS } from './display-keyboard-defs'
+import { getLayoutsForViewType } from './display-keyboard-defs'
 import { X } from 'lucide-react'
 import { KeycodeGrid } from './KeycodeGrid'
 import { BasicKeyboardView } from './BasicKeyboardView'
@@ -29,6 +30,8 @@ interface TooltipState {
 
 interface Props {
   onKeycodeSelect?: (keycode: Keycode) => void
+  onKeycodeDoubleClick?: (keycode: Keycode) => void
+  onConfirm?: () => void // Confirm current selection (Enter key)
   onKeycodeMultiSelect?: (keycode: Keycode, event: { ctrlKey: boolean; shiftKey: boolean }, tabKeycodes: Keycode[]) => void
   pickerSelectedKeycodes?: Set<string>
   onBackgroundClick?: () => void
@@ -48,6 +51,8 @@ interface Props {
 
 export function TabbedKeycodes({
   onKeycodeSelect,
+  onKeycodeDoubleClick,
+  onConfirm,
   onKeycodeMultiSelect,
   pickerSelectedKeycodes,
   onBackgroundClick,
@@ -65,10 +70,24 @@ export function TabbedKeycodes({
   remapLabel,
 }: Props) {
   const { t } = useTranslation()
+  const { config } = useAppConfig()
+  const resolvedBasicViewType = basicViewType ?? config.defaultBasicViewType
+  const resolvedSplitKeyMode = splitKeyMode ?? config.defaultSplitKeyMode
   const [activeTab, setActiveTab] = useState('basic')
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
+  // Guard against spurious double-clicks right after mount (layout shift can
+  // cause the second click of an external double-click to land on a key tile)
+  const mountTimeRef = useRef(Date.now())
+  const MOUNT_DBLCLICK_GUARD_MS = 400
+  const guardedDoubleClick = useMemo(() => {
+    if (!onKeycodeDoubleClick) return undefined
+    return (keycode: Keycode) => {
+      if (Date.now() - mountTimeRef.current < MOUNT_DBLCLICK_GUARD_MS) return
+      onKeycodeDoubleClick(keycode)
+    }
+  }, [onKeycodeDoubleClick])
 
   // Clamp tooltip horizontally after render so it never overflows the container
   useLayoutEffect(() => {
@@ -79,6 +98,20 @@ export function TabbedKeycodes({
     el.style.left = `${clampedLeft}px`
   }, [tooltip])
 
+  // Enter key confirms current selection and closes the picker
+  useEffect(() => {
+    if (!onConfirm) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return
+      const el = e.target as HTMLElement | null
+      if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.tagName === 'BUTTON' || el?.isContentEditable) return
+      e.preventDefault()
+      onConfirm()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onConfirm])
+
   const handleBackgroundClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!(e.target as Element).closest('button')) onBackgroundClick?.()
@@ -86,7 +119,7 @@ export function TabbedKeycodes({
     [onBackgroundClick],
   )
 
-  const useSplit = splitKeyMode !== 'flat'
+  const useSplit = resolvedSplitKeyMode !== 'flat'
 
   const isVisible = useCallback(
     (kc: Keycode): boolean => {
@@ -113,9 +146,9 @@ export function TabbedKeycodes({
 
     let keycodes: Keycode[]
 
-    // For keyboard views (ANSI/ISO), order by physical layout position
-    if (cat.id === 'basic' && basicViewType != null && basicViewType !== 'list' && !maskOnly && !lmMode) {
-      const layouts = basicViewType === 'iso' ? ISO_LAYOUTS : ANSI_LAYOUTS
+    // For keyboard views (ANSI/ISO/JIS), order by physical layout position
+    if (cat.id === 'basic' && resolvedBasicViewType != null && resolvedBasicViewType !== 'list' && !lmMode) {
+      const layouts = getLayoutsForViewType(resolvedBasicViewType)
       // Largest layout has the most keys — extract QMK IDs in physical row-major order
       const kleLayout = parseKle(layouts[0].kle)
       const layoutKeycodes: Keycode[] = []
@@ -130,7 +163,7 @@ export function TabbedKeycodes({
         }
       }
       // Append remaining keycodes from view-specific groups (not on the keyboard)
-      const groups = cat.getGroups?.(basicViewType)?.filter((g) => g.keycodes.some(isVisible))
+      const groups = cat.getGroups?.(resolvedBasicViewType)?.filter((g) => g.keycodes.some(isVisible))
       const remaining = groups
         ? groups.flatMap((g) => g.keycodes.filter((kc) => !layoutIds.has(kc.qmkId) && isVisible(kc)))
         : []
@@ -162,7 +195,7 @@ export function TabbedKeycodes({
     }
 
     return keycodes
-  }, [categories, activeTab, isVisible, revision, basicViewType, maskOnly, lmMode, useSplit])
+  }, [categories, activeTab, isVisible, revision, resolvedBasicViewType, maskOnly, lmMode, useSplit])
 
   // Reset active tab if it no longer exists in the filtered categories
   useEffect(() => {
@@ -207,12 +240,13 @@ export function TabbedKeycodes({
       <KeycodeGrid
         keycodes={keycodes}
         onClick={handleKeycodeClick}
+        onDoubleClick={guardedDoubleClick}
         onHover={handleKeycodeHover}
         onHoverEnd={handleKeycodeHoverEnd}
         highlightedKeycodes={highlightedKeycodes}
         pickerSelectedKeycodes={pickerSelectedKeycodes}
         isVisible={isVisible}
-        splitKeyMode={maskOnly ? 'flat' : splitKeyMode}
+        splitKeyMode={maskOnly ? 'flat' : resolvedSplitKeyMode}
         remapLabel={remapLabel}
       />
     )
@@ -240,13 +274,14 @@ export function TabbedKeycodes({
   }
 
   function renderCategoryContent(category: KeycodeCategory): React.ReactNode {
-    // Keyboard view for basic tab (ANSI or ISO)
-    if (category.id === 'basic' && basicViewType !== 'list' && basicViewType != null && !maskOnly && !lmMode) {
+    // Keyboard view for basic tab (ANSI, ISO, or JIS)
+    if (category.id === 'basic' && resolvedBasicViewType !== 'list' && resolvedBasicViewType != null && !lmMode) {
       return (
         <BasicKeyboardView
-          viewType={basicViewType}
-          splitKeyMode={splitKeyMode}
+          viewType={resolvedBasicViewType}
+          splitKeyMode={maskOnly ? 'flat' : resolvedSplitKeyMode}
           onKeycodeClick={handleKeycodeClick}
+          onKeycodeDoubleClick={guardedDoubleClick}
           onKeycodeHover={handleKeycodeHover}
           onKeycodeHoverEnd={handleKeycodeHoverEnd}
           highlightedKeycodes={highlightedKeycodes}

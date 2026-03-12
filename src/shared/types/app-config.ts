@@ -9,7 +9,7 @@ export interface WindowState {
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type AutoLockMinutes = 10 | 20 | 30 | 40 | 50 | 60
-export type BasicViewType = 'ansi' | 'iso' | 'list'
+export type BasicViewType = 'ansi' | 'iso' | 'jis' | 'list'
 export type SplitKeyMode = 'split' | 'flat'
 
 export interface AppConfig {
@@ -26,6 +26,7 @@ export interface AppConfig {
   lastNotificationSeen?: string
   defaultBasicViewType: BasicViewType
   defaultSplitKeyMode: SplitKeyMode
+  defaultQuickSelect: boolean
 }
 
 export const SETTABLE_APP_CONFIG_KEYS: ReadonlySet<keyof AppConfig> = new Set([
@@ -41,6 +42,7 @@ export const SETTABLE_APP_CONFIG_KEYS: ReadonlySet<keyof AppConfig> = new Set([
   'lastNotificationSeen',
   'defaultBasicViewType',
   'defaultSplitKeyMode',
+  'defaultQuickSelect',
 ])
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
@@ -55,4 +57,5 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   hubEnabled: false,
   defaultBasicViewType: 'ansi',
   defaultSplitKeyMode: 'split',
+  defaultQuickSelect: false,
 }

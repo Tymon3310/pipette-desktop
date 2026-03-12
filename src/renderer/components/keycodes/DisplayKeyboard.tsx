@@ -53,12 +53,14 @@ function computeSteppedKeyInfo(
 interface Props {
   kle: unknown[][]
   onKeycodeClick?: (keycode: Keycode, event: React.MouseEvent) => void
+  onKeycodeDoubleClick?: (keycode: Keycode) => void
   onKeycodeHover?: (keycode: Keycode, rect: DOMRect) => void
   onKeycodeHoverEnd?: () => void
   highlightedKeycodes?: Set<string>
   pickerSelectedKeycodes?: Set<string>
   splitKeyMode?: SplitKeyMode
   remapLabel?: (qmkId: string) => string
+  isVisible?: (kc: Keycode) => boolean
 }
 
 interface GridKey {
@@ -74,12 +76,14 @@ interface GridKey {
 export function DisplayKeyboard({
   kle,
   onKeycodeClick,
+  onKeycodeDoubleClick,
   onKeycodeHover,
   onKeycodeHoverEnd,
   highlightedKeycodes,
   pickerSelectedKeycodes,
   splitKeyMode,
   remapLabel,
+  isVisible,
 }: Props) {
   const { gridKeys, totalCols, totalRows } = useMemo(() => {
     const layout = parseKle(kle)
@@ -135,14 +139,18 @@ export function DisplayKeyboard({
       }}
     >
       {gridKeys.map((gk) => {
-        const isSelected = pickerSelectedKeycodes?.has(gk.keycode.qmkId)
-        const isHighlighted = highlightedKeycodes?.has(gk.keycode.qmkId)
+        const keyVisible = !isVisible || isVisible(gk.keycode)
+        const isSelected = keyVisible ? pickerSelectedKeycodes?.has(gk.keycode.qmkId) : false
+        const isHighlighted = keyVisible ? highlightedKeycodes?.has(gk.keycode.qmkId) : false
 
-        const buttonContent = gk.shiftedKeycode ? (
+        const buttonContent = !keyVisible ? (
+          <div className="w-full h-full rounded-md bg-surface-dim opacity-30" />
+        ) : gk.shiftedKeycode ? (
           <SplitKey
             base={gk.keycode}
             shifted={gk.shiftedKeycode}
             onClick={onKeycodeClick}
+            onDoubleClick={onKeycodeDoubleClick}
             onHover={onKeycodeHover}
             onHoverEnd={onKeycodeHoverEnd}
             highlightedKeycodes={highlightedKeycodes}
@@ -153,6 +161,7 @@ export function DisplayKeyboard({
           <KeycodeButton
             keycode={gk.keycode}
             onClick={onKeycodeClick}
+            onDoubleClick={onKeycodeDoubleClick}
             onHover={onKeycodeHover}
             onHoverEnd={onKeycodeHoverEnd}
             highlighted={isHighlighted}

@@ -308,8 +308,8 @@ interface KeyboardPaneProps {
   onKeyDoubleClick?: (key: KleKey, rect: DOMRect, maskClicked: boolean) => void
   onEncoderClick?: (key: KleKey, dir: number) => void
   onEncoderDoubleClick?: (key: KleKey, dir: number, rect: DOMRect) => void
-  onCopyAll?: () => void
-  copyAllPending?: string
+  onCopyLayer?: () => void
+  copyLayerPending?: string
   isCopying?: boolean
   pasteHint?: string
   onDeselect?: () => void
@@ -340,8 +340,8 @@ function KeyboardPane({
   onKeyDoubleClick,
   onEncoderClick,
   onEncoderDoubleClick,
-  onCopyAll,
-  copyAllPending,
+  onCopyLayer,
+  copyLayerPending,
   isCopying,
   pasteHint,
   onDeselect,
@@ -381,7 +381,7 @@ function KeyboardPane({
           readOnly={isDualMode ? !isActive : false}
         />
       </div>
-      {isActive && !onCopyAll && pasteHint && (
+      {isActive && !onCopyLayer && pasteHint && (
         <div data-testid="paste-hint" className="flex items-center justify-center py-1 text-xs text-content-muted">
           {pasteHint}
         </div>
@@ -390,17 +390,17 @@ function KeyboardPane({
         <span data-testid={layerLabelTestId} className="text-content-muted">
           {layerLabel}
         </span>
-        {isActive && isDualMode && onCopyAll && (
+        {isActive && isDualMode && onCopyLayer && (
           <button
             type="button"
-            data-testid="copy-all-button"
+            data-testid="copy-layer-button"
             disabled={isCopying}
-            className={copyAllPending
+            className={copyLayerPending
               ? `${COPY_BTN_BASE} border-danger text-danger hover:bg-danger/10`
               : `${COPY_BTN_BASE} border-edge text-content-secondary hover:text-content`}
-            onClick={(e) => { e.stopPropagation(); onCopyAll() }}
+            onClick={(e) => { e.stopPropagation(); onCopyLayer() }}
           >
-            {copyAllPending || t('editor.keymap.copyAll')}
+            {copyLayerPending || t('editor.keymap.copyLayer')}
           </button>
         )}
         <span className="flex items-center gap-1.5">
@@ -484,6 +484,9 @@ interface PopoverForStateProps {
   onRawKeycodeSelect: (code: number) => void
   onModMaskChange?: (newMask: number) => void
   onClose: () => void
+  quickSelect?: boolean
+  previousKeycode?: number
+  onUndo?: () => void
 }
 
 function PopoverForState({
@@ -496,6 +499,9 @@ function PopoverForState({
   onRawKeycodeSelect,
   onModMaskChange,
   onClose,
+  quickSelect,
+  previousKeycode,
+  onUndo,
 }: PopoverForStateProps) {
   const currentKeycode = popoverState.kind === 'key'
     ? keymap.get(`${currentLayer},${popoverState.row},${popoverState.col}`) ?? 0
@@ -514,6 +520,9 @@ function PopoverForState({
       onRawKeycodeSelect={onRawKeycodeSelect}
       onModMaskChange={onModMaskChange}
       onClose={onClose}
+      quickSelect={quickSelect}
+      previousKeycode={previousKeycode}
+      onUndo={onUndo}
     />
   )
 }
@@ -572,6 +581,8 @@ interface Props {
   onBasicViewTypeChange?: (type: BasicViewType) => void
   splitKeyMode?: SplitKeyMode
   onSplitKeyModeChange?: (mode: SplitKeyMode) => void
+  quickSelect?: boolean
+  onQuickSelectChange?: (enabled: boolean) => void
   keyboardLayout?: KeyboardLayoutId
   onKeyboardLayoutChange?: (layout: KeyboardLayoutId) => void
   onLock?: () => void
@@ -581,9 +592,12 @@ interface Props {
   onOpenKeychronRgb?: () => void
   onOpenKeychronAnalog?: () => void
   onOpenKeychronFlasher?: () => void
-  onOpenCombo?: () => void
-  onOpenAltRepeatKey?: () => void
-  onOpenKeyOverride?: () => void
+  comboEntries?: import('../../../shared/types/protocol').ComboEntry[]
+  onOpenCombo?: (index?: number) => void
+  keyOverrideEntries?: import('../../../shared/types/protocol').KeyOverrideEntry[]
+  onOpenKeyOverride?: (index?: number) => void
+  altRepeatKeyEntries?: import('../../../shared/types/protocol').AltRepeatKeyEntry[]
+  onOpenAltRepeatKey?: (index?: number) => void
   toolsExtra?: React.ReactNode
   dataPanel?: React.ReactNode
   onOverlayOpen?: () => void
@@ -669,6 +683,8 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
   onBasicViewTypeChange,
   splitKeyMode,
   onSplitKeyModeChange,
+  quickSelect,
+  onQuickSelectChange,
   keyboardLayout = 'qwerty',
   onKeyboardLayoutChange,
   onLock,
@@ -678,9 +694,12 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
   onOpenKeychronRgb,
   onOpenKeychronFlasher,
   onOpenKeychronAnalog,
+  comboEntries,
   onOpenCombo,
-  onOpenAltRepeatKey,
+  keyOverrideEntries,
   onOpenKeyOverride,
+  altRepeatKeyEntries,
+  onOpenAltRepeatKey,
   toolsExtra,
   dataPanel,
   onOverlayOpen,
@@ -749,7 +768,7 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
   const [selectionMode, setSelectionMode] = useState<'ctrl' | 'shift'>('ctrl')
   const [isCopying, setIsCopying] = useState(false)
   const isCopyingRef = useRef(false)
-  const [copyAllPending, setCopyAllPending] = useState(false)
+  const [copyLayerPending, setCopyLayerPending] = useState(false)
 
   const [pickerSelectedKeycodes, setPickerSelectedKeycodes] = useState<Keycode[]>([])
   const [pickerAnchor, setPickerAnchor] = useState<string | null>(null)
@@ -772,18 +791,26 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
   }, [])
 
   /** Clear the single-key/encoder selection and popover. */
-  function clearSingleSelection(): void {
+  const clearSingleSelection = useCallback((): void => {
     setSelectedKey(null)
     setSelectedEncoder(null)
     setSelectedMaskPart(false)
     setPopoverState(null)
-  }
+  }, [])
 
   const [popoverState, setPopoverState] = useState<
     | { anchorRect: DOMRect; kind: 'key'; row: number; col: number; maskClicked: boolean }
     | { anchorRect: DOMRect; kind: 'encoder'; idx: number; dir: number }
     | null
   >(null)
+
+  // Per-key undo: stores the keycode before the most recent change (cleared on disconnect)
+  const [undoMap, setUndoMap] = useState<Map<string, number>>(() => new Map())
+
+  // Clear undo history when keymap is emptied (device disconnect/reset)
+  useEffect(() => {
+    if (keymap.size === 0) setUndoMap(new Map())
+  }, [keymap])
 
   const [tdModalIndex, setTdModalIndex] = useState<number | null>(null)
   const [macroModalIndex, setMacroModalIndex] = useState<number | null>(null)
@@ -956,6 +983,18 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [layoutPanelOpen])
+
+  // Escape deselects the current key/encoder selection
+  useEffect(() => {
+    if (!selectedKey && !selectedEncoder) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        clearSingleSelection()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selectedKey, selectedEncoder, clearSingleSelection])
 
   // --- Matrix tester polling ---
   const poll = useCallback(async () => {
@@ -1362,7 +1401,7 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
       clearMultiSelection()
       clearPickerSelection()
     }
-    setCopyAllPending(false)
+    setCopyLayerPending(false)
   }, [currentLayer, activePane, clearMultiSelection, clearPickerSelection])
 
   // Clear single selection when active pane changes; keep multi-selection for click-to-paste
@@ -1374,7 +1413,7 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
   useEffect(() => {
     if (!dualMode) {
       clearMultiSelection()
-      setCopyAllPending(false)
+      setCopyLayerPending(false)
     }
   }, [dualMode, clearMultiSelection])
 
@@ -1604,7 +1643,7 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
     clearSingleSelection()
     clearMultiSelection()
     clearPickerSelection()
-    setCopyAllPending(false)
+    setCopyLayerPending(false)
   }, [clearMultiSelection, clearPickerSelection])
 
   const handleDeselectClick = useCallback((e: React.MouseEvent) => {
@@ -1654,25 +1693,40 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
     [selectedKey, selectedEncoder, currentLayer, keymap, isMaskKey, autoAdvance, onSetKey, onSetEncoder, advanceToNextKey, openTdModal, openMacroModal, guard, clearPending, clearPickerSelection],
   )
 
+  // Save the current keycode to the undo map before applying a change
+  const recordUndo = useCallback((mapKey: string, currentCode: number) => {
+    setUndoMap((prev) => {
+      if (prev.get(mapKey) === currentCode) return prev
+      const next = new Map(prev)
+      next.set(mapKey, currentCode)
+      return next
+    })
+  }, [])
+
   const handlePopoverKeycodeSelect = useCallback(
     async (kc: Keycode) => {
       clearPending()
       if (!popoverState) return
       const code = deserialize(kc.qmkId)
       if (popoverState.kind === 'key') {
-        const currentCode = keymap.get(`${currentLayer},${popoverState.row},${popoverState.col}`) ?? 0
+        const mapKey = `${currentLayer},${popoverState.row},${popoverState.col}`
+        const currentCode = keymap.get(mapKey) ?? 0
         const popoverMask = popoverState.maskClicked && isMask(serialize(currentCode))
+        recordUndo(mapKey, currentCode)
         await guard([code], async () => {
           const finalCode = resolveKeycode(currentCode, code, popoverMask)
           await onSetKey(currentLayer, popoverState.row, popoverState.col, finalCode)
         })
       } else {
+        const mapKey = `${currentLayer},${popoverState.idx},${popoverState.dir}`
+        const currentCode = encoderLayout.get(mapKey) ?? 0
+        recordUndo(mapKey, currentCode)
         await guard([code], async () => {
           await onSetEncoder(currentLayer, popoverState.idx, popoverState.dir, code)
         })
       }
     },
-    [popoverState, currentLayer, keymap, onSetKey, onSetEncoder, guard, clearPending],
+    [popoverState, currentLayer, keymap, encoderLayout, onSetKey, onSetEncoder, guard, clearPending, recordUndo],
   )
 
   const handlePopoverRawKeycodeSelect = useCallback(
@@ -1680,16 +1734,22 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
       clearPending()
       if (!popoverState) return
       if (popoverState.kind === 'key') {
+        const mapKey = `${currentLayer},${popoverState.row},${popoverState.col}`
+        const currentCode = keymap.get(mapKey) ?? 0
+        recordUndo(mapKey, currentCode)
         await guard([code], async () => {
           await onSetKey(currentLayer, popoverState.row, popoverState.col, code)
         })
       } else {
+        const mapKey = `${currentLayer},${popoverState.idx},${popoverState.dir}`
+        const currentCode = encoderLayout.get(mapKey) ?? 0
+        recordUndo(mapKey, currentCode)
         await guard([code], async () => {
           await onSetEncoder(currentLayer, popoverState.idx, popoverState.dir, code)
         })
       }
     },
-    [popoverState, currentLayer, onSetKey, onSetEncoder, guard, clearPending],
+    [popoverState, currentLayer, keymap, encoderLayout, onSetKey, onSetEncoder, guard, clearPending, recordUndo],
   )
 
   const handlePopoverModMaskChange = useCallback(
@@ -1705,14 +1765,29 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
     [popoverState, currentLayer, keymap, onSetKey, guard],
   )
 
-  const handleCopyAllClick = useCallback(async () => {
-    if (!copyAllPending) {
+  // Undo support for the popover: derive previous keycode and handler from undoMap
+  const popoverUndoKeycode = useMemo(() => {
+    if (!popoverState) return undefined
+    const mapKey = popoverState.kind === 'key'
+      ? `${currentLayer},${popoverState.row},${popoverState.col}`
+      : `${currentLayer},${popoverState.idx},${popoverState.dir}`
+    return undoMap.get(mapKey)
+  }, [popoverState, currentLayer, undoMap])
+
+  const handlePopoverUndo = useCallback(() => {
+    if (popoverUndoKeycode == null) return
+    handlePopoverRawKeycodeSelect(popoverUndoKeycode)
+    setPopoverState(null)
+  }, [popoverUndoKeycode, handlePopoverRawKeycodeSelect])
+
+  const handleCopyLayerClick = useCallback(async () => {
+    if (!copyLayerPending) {
       // First click -- show confirmation (stays until second click or deselect)
-      setCopyAllPending(true)
+      setCopyLayerPending(true)
       return
     }
     // Second click -- execute copy
-    setCopyAllPending(false)
+    setCopyLayerPending(false)
     if (inactivePaneLayer == null) return
     const src = currentLayer
     const tgt = inactivePaneLayer
@@ -1730,7 +1805,7 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
         }
       }
     })
-  }, [copyAllPending, currentLayer, inactivePaneLayer, keymap, onSetKeysBulk, encoderLayout, encoderCount, onSetEncoder, runCopy])
+  }, [copyLayerPending, currentLayer, inactivePaneLayer, keymap, onSetKeysBulk, encoderLayout, encoderCount, onSetEncoder, runCopy])
 
   const tabFooterContent = useMemo(() => {
     const btnClass = 'rounded border border-edge px-3 py-1 text-xs text-content-secondary hover:text-content hover:bg-surface-dim'
@@ -1742,9 +1817,7 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
       { tab: 'modifiers', key: 'oneShotKeys', label: t('editor.keymap.oneShotKeysLabel'), onClick: () => setShowOneShotKeysSettings(true), testId: 'one-shot-keys-settings-btn', enabled: oneShotKeysSupported },
       { tab: 'quantum', key: 'magic', label: t('editor.keymap.magicLabel'), onClick: () => setShowMagicSettings(true), testId: 'magic-settings-btn', enabled: magicSupported },
       { tab: 'quantum', key: 'autoshift', label: t('editor.keymap.autoShiftLabel'), onClick: () => setShowAutoShiftSettings(true), testId: 'auto-shift-settings-btn', enabled: autoShiftSupported },
-      { tab: 'quantum', key: 'combo', label: t('editor.combo.title'), onClick: onOpenCombo, testId: 'combo-settings-btn', enabled: !!onOpenCombo },
-      { tab: 'quantum', key: 'altRepeatKey', label: t('editor.altRepeatKey.title'), onClick: onOpenAltRepeatKey, testId: 'alt-repeat-key-settings-btn', enabled: !!onOpenAltRepeatKey },
-      { tab: 'quantum', key: 'keyOverride', label: t('editor.keyOverride.title'), onClick: onOpenKeyOverride, testId: 'key-override-settings-btn', enabled: !!onOpenKeyOverride },
+      // Combo, Key Override, Alt Repeat Key settings are shown inline via tile grids in their tabs
       { tab: 'backlight', key: 'lighting', label: t('editor.lighting.title'), onClick: onOpenLighting, testId: 'lighting-settings-btn', enabled: !!onOpenLighting },
       { tab: 'quantum', key: 'keychron', label: t('keychron.settings', 'Keychron'), onClick: onOpenKeychron, testId: 'keychron-settings-btn', enabled: !!onOpenKeychron },
       { tab: 'backlight', key: 'keychron-rgb', label: t('keychron.rgb', 'Keychron RGB'), onClick: onOpenKeychronRgb, testId: 'keychron-rgb-settings-btn', enabled: !!onOpenKeychronRgb },
@@ -1781,7 +1854,11 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
     return content
   }, [tapHoldSupported, mouseKeysSupported, magicSupported, autoShiftSupported, graveEscapeSupported, oneShotKeysSupported, onOpenLighting, onOpenKeychron, onOpenKeychronRgb, onOpenKeychronAnalog, onOpenKeychronFlasher, onOpenCombo, onOpenAltRepeatKey, onOpenKeyOverride, t])
 
-  const tabContentOverride = useTileContentOverride(tapDanceEntries, deserializedMacros, handleKeycodeSelect)
+  const tabContentOverride = useTileContentOverride(tapDanceEntries, deserializedMacros, handleKeycodeSelect, {
+    comboEntries, onOpenCombo,
+    keyOverrideEntries, onOpenKeyOverride,
+    altRepeatKeyEntries, onOpenAltRepeatKey,
+  })
 
   if (!layout) {
     return <div className="p-4 text-content-muted">{t('common.loading')}</div>
@@ -1808,10 +1885,10 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
     && selectionSourcePane != null
     && selectionSourcePane !== activePane
     && multiSelectedKeys.size > 0
-  const showCopyAll = canCopy && !panePasteReady
+  const showCopyLayer = canCopy && !panePasteReady
   const pasteHintText: string | undefined = undefined
-  const copyAllConfirmText = inactivePaneLayer != null
-    ? t('editor.keymap.copyAllConfirm', { source: layerLabel(currentLayer), target: layerLabel(inactivePaneLayer) })
+  const copyLayerConfirmText = inactivePaneLayer != null
+    ? t('editor.keymap.copyLayerConfirm', { source: layerLabel(currentLayer), target: layerLabel(inactivePaneLayer) })
     : undefined
 
   const zoomButtonClass = `${toggleButtonClass(false)} disabled:opacity-30 disabled:pointer-events-none`
@@ -2005,8 +2082,8 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
                 onKeyDoubleClick={handleKeyDoubleClick}
                 onEncoderClick={handleEncoderClick}
                 onEncoderDoubleClick={handleEncoderDoubleClick}
-                onCopyAll={showCopyAll && activePane === 'primary' ? handleCopyAllClick : undefined}
-                copyAllPending={activePane === 'primary' && dualMode && copyAllPending ? copyAllConfirmText : undefined}
+                onCopyLayer={showCopyLayer && activePane === 'primary' ? handleCopyLayerClick : undefined}
+                copyLayerPending={activePane === 'primary' && dualMode && copyLayerPending ? copyLayerConfirmText : undefined}
                 isCopying={isCopying}
                 pasteHint={activePane === 'primary' ? pasteHintText : undefined}
                 onDeselect={handleDeselect}
@@ -2038,8 +2115,8 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
                   onKeyDoubleClick={handleKeyDoubleClick}
                   onEncoderClick={handleEncoderClick}
                   onEncoderDoubleClick={handleEncoderDoubleClick}
-                  onCopyAll={showCopyAll && activePane === 'secondary' ? handleCopyAllClick : undefined}
-                  copyAllPending={activePane === 'secondary' && dualMode && copyAllPending ? copyAllConfirmText : undefined}
+                  onCopyLayer={showCopyLayer && activePane === 'secondary' ? handleCopyLayerClick : undefined}
+                  copyLayerPending={activePane === 'secondary' && dualMode && copyLayerPending ? copyLayerConfirmText : undefined}
                   isCopying={isCopying}
                   pasteHint={activePane === 'secondary' ? pasteHintText : undefined}
                   onDeselect={handleDeselect}
@@ -2064,6 +2141,9 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
           onRawKeycodeSelect={handlePopoverRawKeycodeSelect}
           onModMaskChange={popoverState.kind === 'key' ? handlePopoverModMaskChange : undefined}
           onClose={() => setPopoverState(null)}
+          quickSelect={quickSelect}
+          previousKeycode={popoverUndoKeycode}
+          onUndo={handlePopoverUndo}
         />
       )}
 
@@ -2139,6 +2219,8 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
                   onBasicViewTypeChange={onBasicViewTypeChange}
                   splitKeyMode={splitKeyMode}
                   onSplitKeyModeChange={onSplitKeyModeChange}
+                  quickSelect={quickSelect}
+                  onQuickSelectChange={onQuickSelectChange}
                   matrixMode={matrixMode}
                   hasMatrixTester={hasMatrixTester}
                   onToggleMatrix={handleMatrixToggle}
@@ -2165,6 +2247,9 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
           isDummy={isDummy}
           tapDanceEntries={tapDanceEntries}
           deserializedMacros={deserializedMacros}
+          quickSelect={quickSelect}
+          splitKeyMode={splitKeyMode}
+          basicViewType={basicViewType}
           hubOrigin={favHubOrigin}
           hubNeedsDisplayName={favHubNeedsDisplayName}
           hubUploading={favHubUploading}
@@ -2191,6 +2276,9 @@ export const KeymapEditor = forwardRef<KeymapEditorHandle, Props>(function Keyma
           isDummy={isDummy}
           tapDanceEntries={tapDanceEntries}
           deserializedMacros={deserializedMacros}
+          quickSelect={quickSelect}
+          splitKeyMode={splitKeyMode}
+          basicViewType={basicViewType}
           hubOrigin={favHubOrigin}
           hubNeedsDisplayName={favHubNeedsDisplayName}
           hubUploading={favHubUploading}

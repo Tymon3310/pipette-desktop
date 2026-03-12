@@ -24,9 +24,9 @@ import { useMaskedKeycodeSelection } from '../../hooks/useMaskedKeycodeSelection
 import { useFavoriteStore } from '../../hooks/useFavoriteStore'
 import { useTileContentOverride } from '../../hooks/useTileContentOverride'
 import { ConfirmButton } from './ConfirmButton'
-import { MaskKeyPreview } from './MaskKeyPreview'
 import { FavoriteStoreContent } from './FavoriteStoreContent'
 import type { FavHubEntryResult } from './FavoriteHubActions'
+import type { BasicViewType, SplitKeyMode } from '../../../shared/types/app-config'
 
 interface Props {
   macroCount: number
@@ -52,6 +52,9 @@ interface Props {
   onUpdateOnHub?: (entryId: string) => void
   onRemoveFromHub?: (entryId: string) => void
   onRenameOnHub?: (entryId: string, hubPostId: string, newLabel: string) => void
+  quickSelect?: boolean
+  splitKeyMode?: SplitKeyMode
+  basicViewType?: BasicViewType
 }
 
 function parseMacroBuffer(
@@ -98,6 +101,9 @@ export function MacroEditor({
   onUpdateOnHub,
   onRemoveFromHub,
   onRenameOnHub,
+  quickSelect,
+  splitKeyMode,
+  basicViewType,
 }: Props) {
   const { t } = useTranslation()
   const { guardAll, clearPending } = useUnlockGate({ unlocked, onUnlock })
@@ -342,6 +348,7 @@ export function MacroEditor({
     },
     resetKey: selectedKey,
     initialValue: macroInitialValue,
+    quickSelect,
   })
 
   const tabContentOverride = useTileContentOverride(tapDanceEntries, deserializedMacros, maskedSelection.handleKeycodeSelect)
@@ -368,8 +375,6 @@ export function MacroEditor({
       const newKeycodes = [...action.keycodes]
       newKeycodes[popoverState.keycodeIndex] = code
       setKeycodeAt(popoverState.actionIndex, newKeycodes)
-      setPopoverState(null)
-      setSelectedKey(null)
     },
     [popoverState, currentActions, setKeycodeAt],
   )
@@ -419,7 +424,6 @@ export function MacroEditor({
       // Resolve to Element for text node targets (e.g. spans inside buttons)
       const el = target instanceof Element ? target : target.parentElement
       if (el?.closest('[data-testid="keycode-field"]')) return
-      if (el?.closest('[data-testid="mask-confirm-btn"]')) return
       revertAndDeselect()
     }
     window.addEventListener('click', handler)
@@ -495,8 +499,8 @@ export function MacroEditor({
                   onKeycodeDoubleClick={(ki, rect) => handleKeycodeDoubleClick(i, ki, rect)}
                   onKeycodeAdd={() => handleKeycodeAdd(i)}
                   onMaskPartClick={(ki, part) => handleMaskPartClick(i, ki, part)}
-                  selectButton={isSelectedAction ? <MaskKeyPreview onConfirm={maskedSelection.confirm} /> : undefined}
                   focusMode={isEditing}
+                  showConfirmHint={isSelectedAction && isEditing && !popoverState && !quickSelect && isKeycodeAction(action) && action.keycodes[selectedKey.keycodeIndex] !== preEditValueRef.current}
                 />
               )
             })}
@@ -504,10 +508,14 @@ export function MacroEditor({
 
           <div ref={pickerRef} className={`mt-3 ${isEditing ? '' : 'hidden'}`}>
             <TabbedKeycodes
-              onKeycodeSelect={maskedSelection.handleKeycodeSelect}
+              onKeycodeSelect={maskedSelection.pickerSelect}
+              onKeycodeDoubleClick={maskedSelection.pickerDoubleClick}
+              onConfirm={maskedSelection.confirm}
               maskOnly={maskedSelection.maskOnly}
               lmMode={maskedSelection.lmMode}
               tabContentOverride={tabContentOverride}
+              splitKeyMode={splitKeyMode}
+              basicViewType={basicViewType}
               onClose={revertAndDeselect}
             />
           </div>
@@ -551,6 +559,8 @@ export function MacroEditor({
             onKeycodeSelect={handlePopoverKeycodeSelect}
             onRawKeycodeSelect={applyPopoverKeycode}
             onClose={closePopover}
+            onConfirm={() => { closePopover(); maskedSelection.clearMask(); setSelectedKey(null) }}
+            quickSelect={quickSelect}
           />
         )}
 

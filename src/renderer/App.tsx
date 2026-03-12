@@ -312,8 +312,11 @@ export function App() {
   const [fileSuccessKind, setFileSuccessKind] = useState<'import' | 'export' | null>(null)
   const [showLightingModal, setShowLightingModal] = useState(false)
   const [showComboModal, setShowComboModal] = useState(false)
+  const [comboInitialIndex, setComboInitialIndex] = useState<number | undefined>(undefined)
   const [showAltRepeatKeyModal, setShowAltRepeatKeyModal] = useState(false)
+  const [altRepeatKeyInitialIndex, setAltRepeatKeyInitialIndex] = useState<number | undefined>(undefined)
   const [showKeyOverrideModal, setShowKeyOverrideModal] = useState(false)
+  const [keyOverrideInitialIndex, setKeyOverrideInitialIndex] = useState<number | undefined>(undefined)
   const [showKeychronModal, setShowKeychronModal] = useState(false)
   const [showKeychronRgbModal, setShowKeychronRgbModal] = useState(false)
   const [showKeychronFlasherModal, setShowKeychronFlasherModal] = useState(false)
@@ -1152,6 +1155,8 @@ export function App() {
             onDefaultBasicViewTypeChange={devicePrefs.setDefaultBasicViewType}
             defaultSplitKeyMode={devicePrefs.defaultSplitKeyMode}
             onDefaultSplitKeyModeChange={devicePrefs.setDefaultSplitKeyMode}
+            defaultQuickSelect={devicePrefs.defaultQuickSelect}
+            onDefaultQuickSelectChange={devicePrefs.setDefaultQuickSelect}
             autoLockTime={devicePrefs.autoLockTime}
             onAutoLockTimeChange={devicePrefs.setAutoLockTime}
             onResetStart={() => setResettingData(true)}
@@ -1379,6 +1384,8 @@ export function App() {
             onBasicViewTypeChange={devicePrefs.setBasicViewType}
             splitKeyMode={devicePrefs.splitKeyMode}
             onSplitKeyModeChange={devicePrefs.setSplitKeyMode}
+            quickSelect={devicePrefs.quickSelect}
+            onQuickSelectChange={devicePrefs.setQuickSelect}
             keyboardLayout={devicePrefs.layout}
             onKeyboardLayoutChange={devicePrefs.setLayout}
             onLock={handleLock}
@@ -1388,9 +1395,12 @@ export function App() {
             onOpenKeychronRgb={(keyboard.keychron?.hasRgb && keyboard.keychron.rgb) ? () => setShowKeychronRgbModal(true) : undefined}
             onOpenKeychronFlasher={keychronSupported ? () => setShowKeychronFlasherModal(true) : undefined}
             onOpenKeychronAnalog={keyboard.keychron?.hasAnalog ? handleOpenKeychronAnalog : undefined}
-            onOpenCombo={comboSupported ? () => setShowComboModal(true) : undefined}
-            onOpenAltRepeatKey={altRepeatKeySupported ? () => setShowAltRepeatKeyModal(true) : undefined}
-            onOpenKeyOverride={keyOverrideSupported ? () => setShowKeyOverrideModal(true) : undefined}
+            comboEntries={comboSupported ? keyboard.comboEntries : undefined}
+            onOpenCombo={comboSupported ? (index?: number) => { setComboInitialIndex(index); setShowComboModal(true) } : undefined}
+            keyOverrideEntries={keyOverrideSupported ? keyboard.keyOverrideEntries : undefined}
+            onOpenKeyOverride={keyOverrideSupported ? (index?: number) => { setKeyOverrideInitialIndex(index); setShowKeyOverrideModal(true) } : undefined}
+            altRepeatKeyEntries={altRepeatKeySupported ? keyboard.altRepeatKeyEntries : undefined}
+            onOpenAltRepeatKey={altRepeatKeySupported ? (index?: number) => { setAltRepeatKeyInitialIndex(index); setShowAltRepeatKeyModal(true) } : undefined}
             layerNames={!device.isDummy ? keyboard.layerNames : undefined}
             onSetLayerName={!device.isDummy ? keyboard.setLayerName : undefined}
             toolsExtra={toolsExtra}
@@ -1597,6 +1607,7 @@ export function App() {
         <ComboPanelModal
           entries={keyboard.comboEntries}
           onSetEntry={keyboard.setComboEntry}
+          initialIndex={comboInitialIndex}
           unlocked={keyboard.unlockStatus.unlocked}
           onUnlock={() => setShowUnlockDialog(true)}
           qmkSettingsGet={comboTimeoutSupported ? api.qmkSettingsGet : undefined}
@@ -1604,7 +1615,10 @@ export function App() {
           onSettingsUpdate={comboTimeoutSupported ? keyboard.updateQmkSettingsValue : undefined}
           tapDanceEntries={keyboard.tapDanceEntries}
           deserializedMacros={deserializedMacros}
-          onClose={() => setShowComboModal(false)}
+          quickSelect={devicePrefs.quickSelect}
+          splitKeyMode={devicePrefs.splitKeyMode}
+          basicViewType={devicePrefs.basicViewType}
+          onClose={() => { setShowComboModal(false); setComboInitialIndex(undefined) }}
           hubOrigin={hubReady ? hubOrigin : undefined}
           hubNeedsDisplayName={hubReady && !hubCanUpload}
           hubUploading={favHubUploading}
@@ -1620,11 +1634,15 @@ export function App() {
         <AltRepeatKeyPanelModal
           entries={keyboard.altRepeatKeyEntries}
           onSetEntry={keyboard.setAltRepeatKeyEntry}
+          initialIndex={altRepeatKeyInitialIndex}
           unlocked={keyboard.unlockStatus.unlocked}
           onUnlock={() => setShowUnlockDialog(true)}
           tapDanceEntries={keyboard.tapDanceEntries}
           deserializedMacros={deserializedMacros}
-          onClose={() => setShowAltRepeatKeyModal(false)}
+          quickSelect={devicePrefs.quickSelect}
+          splitKeyMode={devicePrefs.splitKeyMode}
+          basicViewType={devicePrefs.basicViewType}
+          onClose={() => { setShowAltRepeatKeyModal(false); setAltRepeatKeyInitialIndex(undefined) }}
           hubOrigin={hubReady ? hubOrigin : undefined}
           hubNeedsDisplayName={hubReady && !hubCanUpload}
           hubUploading={favHubUploading}
@@ -1640,11 +1658,15 @@ export function App() {
         <KeyOverridePanelModal
           entries={keyboard.keyOverrideEntries}
           onSetEntry={keyboard.setKeyOverrideEntry}
+          initialIndex={keyOverrideInitialIndex}
           unlocked={keyboard.unlockStatus.unlocked}
           onUnlock={() => setShowUnlockDialog(true)}
           tapDanceEntries={keyboard.tapDanceEntries}
           deserializedMacros={deserializedMacros}
-          onClose={() => setShowKeyOverrideModal(false)}
+          quickSelect={devicePrefs.quickSelect}
+          splitKeyMode={devicePrefs.splitKeyMode}
+          basicViewType={devicePrefs.basicViewType}
+          onClose={() => { setShowKeyOverrideModal(false); setKeyOverrideInitialIndex(undefined) }}
           hubOrigin={hubReady ? hubOrigin : undefined}
           hubNeedsDisplayName={hubReady && !hubCanUpload}
           hubUploading={favHubUploading}

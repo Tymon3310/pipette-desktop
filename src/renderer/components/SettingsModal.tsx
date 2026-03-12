@@ -582,6 +582,8 @@ interface Props {
   onDefaultBasicViewTypeChange: (type: BasicViewType) => void
   defaultSplitKeyMode: SplitKeyMode
   onDefaultSplitKeyModeChange: (mode: SplitKeyMode) => void
+  defaultQuickSelect: boolean
+  onDefaultQuickSelectChange: (enabled: boolean) => void
   autoLockTime: AutoLockMinutes
   onAutoLockTimeChange: (m: AutoLockMinutes) => void
   onResetStart?: () => void
@@ -713,6 +715,8 @@ export function SettingsModal({
   onDefaultBasicViewTypeChange,
   defaultSplitKeyMode,
   onDefaultSplitKeyModeChange,
+  defaultQuickSelect,
+  onDefaultQuickSelectChange,
   autoLockTime,
   onAutoLockTimeChange,
   onResetStart,
@@ -1141,6 +1145,7 @@ export function SettingsModal({
                     >
                       <option value="ansi">{t('settings.basicViewTypeAnsi')}</option>
                       <option value="iso">{t('settings.basicViewTypeIso')}</option>
+                      <option value="jis">{t('settings.basicViewTypeJis')}</option>
                       <option value="list">{t('settings.basicViewTypeList')}</option>
                     </select>
                   </div>
@@ -1195,6 +1200,23 @@ export function SettingsModal({
                       data-testid="settings-default-split-key-mode-toggle"
                     >
                       <span className={toggleKnobClass(defaultSplitKeyMode === 'split')} />
+                    </button>
+                  </div>
+
+                  <div className={ROW_CLASS} data-testid="settings-default-quick-select-row">
+                    <span className="text-[13px] font-medium text-content">
+                      {t('settings.defaultQuickSelect')}
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={defaultQuickSelect}
+                      aria-label={t('settings.defaultQuickSelect')}
+                      className={toggleTrackClass(defaultQuickSelect)}
+                      onClick={() => onDefaultQuickSelectChange(!defaultQuickSelect)}
+                      data-testid="settings-default-quick-select-toggle"
+                    >
+                      <span className={toggleKnobClass(defaultQuickSelect)} />
                     </button>
                   </div>
 
