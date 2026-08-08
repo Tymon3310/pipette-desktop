@@ -3,17 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  LabelList,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
-import {
   primaryDeviceScope,
   scopeToSelectValue,
   type DeviceScope,
@@ -25,19 +14,22 @@ import type {
   TypingKeymapSnapshot,
 } from '../../../shared/types/typing-analytics'
 import { fetchBigramAggregateForRange } from './analyze-fetch'
-import { bigramPairLabel } from './analyze-bigram-format'
-import {
-  aggregateFingerPairs,
-} from './analyze-bigram-finger'
 import { useKeycodeFingerMap } from './use-keycode-finger-map'
-import {
-  avgIkiAtOrAboveThreshold,
-  percentileFromHist,
-} from './analyze-bigram-heatmap'
-import { FILTER_SELECT, LIST_LIMIT_OPTIONS } from './analyze-filter-styles'
+import { useSnapshotQmkByCode } from './use-snapshot-qmk-by-code'
+import { aggregateBigramClasses } from './analyze-bigram-classes'
+import { aggregateWordPosition } from './analyze-bigram-word-position'
+import { ALL_PAIRS_LIMIT } from './analyze-constants'
+import { FILTER_SELECT } from './analyze-filter-styles'
 import type { RangeMs } from './analyze-types'
-import { Stat, TooltipShell } from './analyze-tooltip'
-import { CHART_TICK_FONT_SIZE } from '../../utils/chart-palette'
+import {
+  Quadrant,
+  LimitSelect,
+  PairIntervalThresholdInput,
+  GramToggle,
+} from './bigrams-quadrant-ui'
+import { TopRanking, SlowRanking } from './BigramsRankingTables'
+import { BigramFingerBarChart, type FingerSort } from './BigramsFingerQuadrant'
+import { BigramClassesCoverage, BigramClassesTable } from './BigramsClassesQuadrant'
 
 interface BigramsChartProps {
   uid: string
@@ -45,6 +37,8 @@ interface BigramsChartProps {
   deviceScopes: readonly DeviceScope[]
   /** App filter — see WpmChart.Props.appScopes. */
   appScopes: string[]
+  typingTestScopes: string[]
+  runIdScopes: string[]
   topLimit: number
   slowLimit: number
   fingerLimit: number
@@ -54,38 +48,48 @@ interface BigramsChartProps {
    * components rename this to `minAvgIkiMs` to make the avgIki bucket
    * approximation explicit at the predicate site. */
   pairIntervalThresholdMs: number
+  /** 2 = bigram, 3 = trigram — forwarded to the IPC as
+   * `options.gram`. The Finger IKI quadrant only exists for bigrams
+   * (a 3-key finger-pair isn't a defined concept), so it's hidden
+   * whenever `gram === 3`. */
+  gram: 2 | 3
   onTopLimitChange: (next: number) => void
   onSlowLimitChange: (next: number) => void
   onFingerLimitChange: (next: number) => void
   onPairIntervalThresholdChange: (next: number) => void
+  onGramChange: (next: 2 | 3) => void
   snapshot: TypingKeymapSnapshot | null
   fingerOverrides?: Record<string, FingerType>
 }
 
-// Pull a high limit so the renderer can derive Top / Slow / Finger
-// sub-views from a single fetch instead of 3 round-trips.
-const ALL_PAIRS_LIMIT = 5000
-
-type FingerSort = 'desc' | 'asc'
+// Stable empty-array reference so the classes aggregate's useMemo dep
+// doesn't churn every render while the Classes quadrant is hidden
+// (gram === 3) — a fresh `[]` literal would defeat the memo instead of
+// skipping the computation.
+const EMPTY_CLASSES_ENTRIES: readonly TypingBigramTopEntry[] = []
 
 export function BigramsChart({
   uid,
   range,
   deviceScopes,
   appScopes,
+  typingTestScopes,
+  runIdScopes,
   topLimit,
   slowLimit,
   fingerLimit,
   pairIntervalThresholdMs,
+  gram,
   onTopLimitChange,
   onSlowLimitChange,
   onFingerLimitChange,
   onPairIntervalThresholdChange,
+  onGramChange,
   snapshot,
   fingerOverrides,
 }: BigramsChartProps): JSX.Element {
   const { t } = useTranslation()
-  const [result, setResult] = useState<TypingBigramAggregateResult>({ view: 'top', entries: [] })
+  const [result, setResult] = useState<TypingBigramAggregateResult>({ view: 'top', entries: [], truncated: false })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   // Finger interval sort direction. Local UI state only — defaults to
@@ -102,7 +106,8 @@ export function BigramsChart({
     setError(false)
     fetchBigramAggregateForRange(uid, scope, range.fromMs, range.toMs, 'top', {
       limit: ALL_PAIRS_LIMIT,
-    }, appScopes)
+      gram,
+    }, appScopes, typingTestScopes, runIdScopes)
       .then((next) => {
         if (cancelled) return
         setResult(next)
@@ -119,37 +124,84 @@ export function BigramsChart({
     }
     // scope is captured inside the effect via closure but not listed —
     // scopeKey is the stable identity proxy.
-  }, [uid, range.fromMs, range.toMs, scopeKey, appScopes.join('|')])
+  }, [uid, range.fromMs, range.toMs, scopeKey, appScopes.join('|'), gram])
 
   const entries = result.entries
 
-  if (loading) {
-    return (
-      <div className="py-4 text-center text-sm text-content-muted" data-testid="analyze-bigrams-loading">
-        {t('analyze.bigrams.loading')}
+  // The server truncates `view:'top'` to the count-ranked top
+  // `ALL_PAIRS_LIMIT` distinct n-grams. When the period has that many
+  // distinct pairs/triples, low-frequency-but-slow entries can fall
+  // outside the fetched set — Top pairs stays accurate (it's count
+  // order), but Pair interval and Finger IKI (which re-rank by avgIki)
+  // may be missing entries. `result.truncated` is computed server-side
+  // from the full pair universe, so this reads the real signal instead
+  // of guessing from `entries.length` (which false-positives whenever
+  // the period has exactly `ALL_PAIRS_LIMIT` distinct pairs).
+  const cappedNoticeText = t('analyze.bigrams.cappedNotice', { limit: ALL_PAIRS_LIMIT })
+  const cappedNotice = (testId: string): React.ReactNode =>
+    result.truncated ? (
+      <div className="text-xs text-content-muted" data-testid={testId}>
+        {cappedNoticeText}
       </div>
-    )
-  }
-  if (error) {
-    return (
-      <div className="py-4 text-center text-sm text-content-muted" data-testid="analyze-bigrams-error">
-        {t('analyze.bigrams.error')}
-      </div>
-    )
-  }
-  if (entries.length === 0) {
-    return (
-      <div className="py-4 text-center text-sm text-content-muted" data-testid="analyze-bigrams-empty">
-        {t('analyze.bigrams.empty')}
-      </div>
-    )
-  }
+    ) : undefined
 
-  return (
-    <div
-      className="grid h-full min-h-0 grid-cols-2 grid-rows-2 gap-3"
-      data-testid="analyze-bigrams-content"
-    >
+  // Finger IKI has no defined meaning for trigrams (a 3-key finger pair
+  // isn't a thing), so gram === 3 renders Top + Slow only. Dropping to a
+  // single row keeps the two quadrants full-height instead of leaving an
+  // empty grid cell where Finger IKI used to sit.
+  const showFingerIki = gram === 2
+  const gridClass = showFingerIki
+    ? 'grid h-full min-h-0 grid-cols-2 grid-rows-2 gap-3'
+    : 'grid h-full min-h-0 grid-cols-2 grid-rows-1 gap-3'
+
+  // Classes (hand-usage) aggregate — computed once here rather than
+  // separately inside BigramClassesCoverage and BigramClassesTable,
+  // which used to each run useKeycodeFingerMap + aggregateBigramClasses
+  // on their own, doubling the work whenever either sibling quadrant
+  // re-rendered. Both `snapshot` and `entries` fall back to a stable
+  // empty value while the quadrant is hidden (gram === 3) so the memo
+  // below settles on an empty aggregate instead of doing the fold for a
+  // quadrant nobody sees.
+  const classesFingerMap = useKeycodeFingerMap(showFingerIki ? snapshot : null, fingerOverrides)
+  const classesEntries = showFingerIki ? entries : EMPTY_CLASSES_ENTRIES
+
+  // Snapshot's own `code -> qmkId` map — threaded into Top/Slow pair
+  // labels below so they resolve from the snapshot's own recorded
+  // keymap strings instead of the session's `RAWCODES_MAP` (see
+  // analyze-snapshot-codes.ts / Task-speed-ranking-snapshot-labels.md).
+  const qmkByCode = useSnapshotQmkByCode(snapshot)
+  const classesAggregate = useMemo(
+    () => aggregateBigramClasses(classesEntries, classesFingerMap),
+    [classesEntries, classesFingerMap],
+  )
+
+  // Word-position (initiation / in-word) aggregate — same "1
+  // calculation, N consumers" treatment as `classesAggregate` above,
+  // but with no finger map dependency: it only compares keycodes
+  // against a fixed separator set, so it doesn't need a snapshot.
+  // The snapshot is passed for its `vialProtocol` alone, not for a
+  // keymap: it decides whether dual-role (LT/MT/SH_T) space keys can be
+  // unwrapped safely. Without a snapshot the rows still render, just
+  // counting bare KC_SPACE / KC_ENTER — see `aggregateWordPosition`.
+  const wordPositionAggregate = useMemo(
+    () => aggregateWordPosition(classesEntries, snapshot?.vialProtocol),
+    [classesEntries, snapshot],
+  )
+
+  const body = loading ? (
+    <div className="py-4 text-center text-sm text-content-muted" data-testid="analyze-bigrams-loading">
+      {t('analyze.bigrams.loading')}
+    </div>
+  ) : error ? (
+    <div className="py-4 text-center text-sm text-content-muted" data-testid="analyze-bigrams-error">
+      {t('analyze.bigrams.error')}
+    </div>
+  ) : entries.length === 0 ? (
+    <div className="py-4 text-center text-sm text-content-muted" data-testid="analyze-bigrams-empty">
+      {t('analyze.bigrams.empty')}
+    </div>
+  ) : (
+    <div className={gridClass} data-testid="analyze-bigrams-content">
       <Quadrant
         title={t('analyze.bigrams.quadrant.top')}
         controls={
@@ -160,46 +212,50 @@ export function BigramsChart({
           />
         }
       >
-        <TopRanking entries={entries} listLimit={topLimit} />
+        <TopRanking entries={entries} listLimit={topLimit} gram={gram} qmkByCode={qmkByCode} vialProtocol={snapshot?.vialProtocol} />
       </Quadrant>
-      <Quadrant
-        title={t('analyze.bigrams.quadrant.fingerIki')}
-        controls={
-          <>
-            <PairIntervalThresholdInput
-              value={pairIntervalThresholdMs}
-              onChange={onPairIntervalThresholdChange}
-              testId="analyze-bigrams-finger-threshold-input"
-            />
-            <select
-              value={fingerSort}
-              onChange={(e) => setFingerSort(e.target.value as FingerSort)}
-              className={FILTER_SELECT}
-              data-testid="analyze-bigrams-finger-sort-select"
-              aria-label={t('analyze.bigrams.fingerIki.sortLabel')}
-            >
-              <option value="desc">{t('analyze.bigrams.fingerIki.sort.desc')}</option>
-              <option value="asc">{t('analyze.bigrams.fingerIki.sort.asc')}</option>
-            </select>
-            <LimitSelect
-              value={fingerLimit}
-              onChange={onFingerLimitChange}
-              testId="analyze-bigrams-finger-limit-select"
-            />
-          </>
-        }
-      >
-        <BigramFingerBarChart
-          entries={entries}
-          snapshot={snapshot}
-          fingerOverrides={fingerOverrides}
-          listLimit={fingerLimit}
-          sort={fingerSort}
-          minAvgIkiMs={pairIntervalThresholdMs}
-        />
-      </Quadrant>
+      {showFingerIki && (
+        <Quadrant
+          title={t('analyze.bigrams.quadrant.fingerIki')}
+          notice={cappedNotice('analyze-bigrams-finger-capped-notice')}
+          controls={
+            <>
+              <PairIntervalThresholdInput
+                value={pairIntervalThresholdMs}
+                onChange={onPairIntervalThresholdChange}
+                testId="analyze-bigrams-finger-threshold-input"
+              />
+              <select
+                value={fingerSort}
+                onChange={(e) => setFingerSort(e.target.value as FingerSort)}
+                className={FILTER_SELECT}
+                data-testid="analyze-bigrams-finger-sort-select"
+                aria-label={t('analyze.bigrams.fingerIki.sortLabel')}
+              >
+                <option value="desc">{t('analyze.bigrams.fingerIki.sort.desc')}</option>
+                <option value="asc">{t('analyze.bigrams.fingerIki.sort.asc')}</option>
+              </select>
+              <LimitSelect
+                value={fingerLimit}
+                onChange={onFingerLimitChange}
+                testId="analyze-bigrams-finger-limit-select"
+              />
+            </>
+          }
+        >
+          <BigramFingerBarChart
+            entries={entries}
+            snapshot={snapshot}
+            fingerOverrides={fingerOverrides}
+            listLimit={fingerLimit}
+            sort={fingerSort}
+            minAvgIkiMs={pairIntervalThresholdMs}
+          />
+        </Quadrant>
+      )}
       <Quadrant
         title={t('analyze.bigrams.quadrant.slow')}
+        notice={cappedNotice('analyze-bigrams-slow-capped-notice')}
         controls={
           <>
             <PairIntervalThresholdInput
@@ -219,496 +275,37 @@ export function BigramsChart({
           entries={entries}
           listLimit={slowLimit}
           minAvgIkiMs={pairIntervalThresholdMs}
+          gram={gram}
+          qmkByCode={qmkByCode}
+          vialProtocol={snapshot?.vialProtocol}
         />
       </Quadrant>
-    </div>
-  )
-}
-
-interface QuadrantProps {
-  title: string
-  controls?: React.ReactNode
-  children: React.ReactNode
-}
-
-function Quadrant({ title, controls, children }: QuadrantProps): JSX.Element {
-  return (
-    <div className="flex min-h-0 min-w-0 flex-col gap-2 rounded border border-edge p-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="text-xs font-medium text-content">{title}</div>
-        {controls}
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto pr-1">{children}</div>
-    </div>
-  )
-}
-
-interface LimitSelectProps {
-  value: number
-  onChange: (next: number) => void
-  testId: string
-}
-
-function LimitSelect({ value, onChange, testId }: LimitSelectProps): JSX.Element {
-  const options = LIST_LIMIT_OPTIONS.includes(value)
-    ? LIST_LIMIT_OPTIONS
-    : [...LIST_LIMIT_OPTIONS, value].sort((a, b) => a - b)
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      data-testid={testId}
-      className={FILTER_SELECT}
-    >
-      {options.map((n) => (
-        <option key={n} value={n}>
-          {n}
-        </option>
-      ))}
-    </select>
-  )
-}
-
-interface PairIntervalThresholdInputProps {
-  value: number
-  onChange: (next: number) => void
-  testId: string
-}
-
-/** Compact `[label] [N] [suffix]` control rendered in both fingerIki
- * and slow quadrant headers. The local draft state lets the user blank
- * the field mid-edit without leaking '' upstream — the parent is only
- * notified on blur / Enter, and an empty draft commits as `0`. */
-function PairIntervalThresholdInput({
-  value,
-  onChange,
-  testId,
-}: PairIntervalThresholdInputProps): JSX.Element {
-  const { t } = useTranslation()
-  const [draft, setDraft] = useState<string>(String(value))
-
-  // Sync the draft when the sibling quadrant's input commits a change.
-  useEffect(() => {
-    setDraft(String(value))
-  }, [value])
-
-  const commit = (raw: string): void => {
-    const trimmed = raw.trim()
-    const parsed = trimmed === '' ? 0 : Math.max(0, Math.floor(Number(trimmed)))
-    const next = Number.isFinite(parsed) ? parsed : 0
-    setDraft(String(next))
-    if (next !== value) onChange(next)
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1 text-xs text-content-muted">
-      <span>{t('analyze.bigrams.pairIntervalThreshold.label')}</span>
-      <input
-        type="number"
-        inputMode="numeric"
-        min={0}
-        step={1}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={(e) => commit(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.currentTarget.blur()
+      {showFingerIki && (
+        <Quadrant
+          title={t('analyze.bigrams.quadrant.classes')}
+          notice={
+            <>
+              {cappedNotice('analyze-bigrams-classes-capped-notice')}
+              <BigramClassesCoverage aggregate={classesAggregate} hasSnapshot={snapshot !== null} />
+            </>
           }
-        }}
-        aria-label={t('analyze.bigrams.pairIntervalThreshold.ariaLabel')}
-        data-testid={testId}
-        className="w-14 rounded border border-edge bg-surface px-1 py-0.5 text-right tabular-nums text-content focus:border-accent focus:outline-none"
-      />
-      <span>{t('analyze.bigrams.pairIntervalThreshold.suffix')}</span>
-    </span>
-  )
-}
-
-type SortKey = 'count' | 'avgIki' | 'p95'
-interface SortState<K extends SortKey> {
-  key: K
-  dir: 'asc' | 'desc'
-}
-
-function compareNumeric(a: number | null, b: number | null, dir: 'asc' | 'desc'): number {
-  if (a === null && b === null) return 0
-  if (a === null) return 1
-  if (b === null) return -1
-  return dir === 'asc' ? a - b : b - a
-}
-
-interface TopRankingProps {
-  entries: readonly TypingBigramTopEntry[]
-  listLimit: number
-}
-
-function TopRanking({ entries, listLimit }: TopRankingProps): JSX.Element {
-  const { t } = useTranslation()
-  const [sort, setSort] = useState<SortState<'count' | 'avgIki'>>({ key: 'count', dir: 'desc' })
-
-  const sliced = useMemo(() => {
-    const arr = [...entries].slice(0, Math.max(listLimit, 0))
-    arr.sort((a, b) => {
-      switch (sort.key) {
-        case 'count':
-          return sort.dir === 'asc' ? a.count - b.count : b.count - a.count
-        case 'avgIki':
-          return compareNumeric(a.avgIki, b.avgIki, sort.dir)
-      }
-    })
-    return arr
-  }, [entries, listLimit, sort])
-
-  if (sliced.length === 0) {
-    return <EmptyQuadrant text={t('analyze.bigrams.empty')} />
-  }
-  return (
-    <table className="w-full text-xs">
-      <thead className="text-content-muted">
-        <tr>
-          <th className="px-1 py-1 text-right font-medium">#</th>
-          <th className="px-2 py-1 text-left font-medium">{t('analyze.bigrams.column.pair')}</th>
-          <SortHeader
-            align="right"
-            label={t('analyze.bigrams.column.count')}
-            active={sort.key === 'count'}
-            indicator={sortIndicator(sort, 'count')}
-            onClick={() =>
-              setSort((prev) => (prev.key === 'count'
-                ? { key: 'count', dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-                : { key: 'count', dir: 'desc' }))
-            }
-          />
-          <SortHeader
-            align="right"
-            label={t('analyze.bigrams.column.avgIki')}
-            active={sort.key === 'avgIki'}
-            indicator={sortIndicator(sort, 'avgIki')}
-            onClick={() =>
-              setSort((prev) => (prev.key === 'avgIki'
-                ? { key: 'avgIki', dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-                : { key: 'avgIki', dir: 'desc' }))
-            }
-          />
-        </tr>
-      </thead>
-      <tbody>
-        {sliced.map((entry, i) => (
-          <tr key={entry.bigramId} className="border-t border-surface-dim">
-            <td className="px-1 py-1 text-right tabular-nums text-content-muted">{i + 1}</td>
-            <td className="px-2 py-1 font-mono">{bigramPairLabel(entry.bigramId)}</td>
-            <td className="px-2 py-1 text-right tabular-nums">{entry.count.toLocaleString()}</td>
-            <td className="px-2 py-1 text-right tabular-nums">
-              {entry.avgIki !== null ? `${Math.round(entry.avgIki)} ms` : '—'}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-interface SlowEntry {
-  bigramId: string
-  count: number
-  hist: number[]
-  avgIki: number | null
-  p95: number | null
-}
-
-interface SlowRankingProps {
-  entries: readonly TypingBigramTopEntry[]
-  listLimit: number
-  /** Shared threshold from `pairIntervalThresholdMs` — see
-   * `avgIkiAtOrAboveThreshold` for the bucket-center caveat. */
-  minAvgIkiMs: number
-}
-
-function SlowRanking({ entries, listLimit, minAvgIkiMs }: SlowRankingProps): JSX.Element {
-  const { t } = useTranslation()
-  const [sort, setSort] = useState<SortState<'count' | 'avgIki' | 'p95'>>({ key: 'avgIki', dir: 'desc' })
-
-  const slowEntries = useMemo<SlowEntry[]>(() => {
-    const eligible: SlowEntry[] = []
-    for (const entry of entries) {
-      const avg = avgIkiAtOrAboveThreshold(entry.hist, minAvgIkiMs)
-      if (avg === null) continue
-      eligible.push({
-        bigramId: entry.bigramId,
-        count: entry.count,
-        hist: entry.hist,
-        avgIki: avg,
-        p95: percentileFromHist(entry.hist, 0.95),
-      })
-    }
-    eligible.sort((a, b) => {
-      switch (sort.key) {
-        case 'count':
-          return sort.dir === 'asc' ? a.count - b.count : b.count - a.count
-        case 'avgIki':
-          return compareNumeric(a.avgIki, b.avgIki, sort.dir)
-        case 'p95':
-          return compareNumeric(a.p95, b.p95, sort.dir)
-      }
-    })
-    return eligible.slice(0, Math.max(listLimit, 0))
-  }, [entries, listLimit, minAvgIkiMs, sort])
-
-  if (slowEntries.length === 0) {
-    return <EmptyQuadrant text={t('analyze.bigrams.empty')} />
-  }
-  return (
-    <table className="w-full text-xs" data-testid="analyze-bigrams-slow-ranking">
-      <thead className="text-content-muted">
-        <tr>
-          <th className="px-1 py-1 text-right font-medium">#</th>
-          <th className="px-2 py-1 text-left font-medium">{t('analyze.bigrams.column.pair')}</th>
-          <SortHeader
-            align="right"
-            label={t('analyze.bigrams.column.count')}
-            active={sort.key === 'count'}
-            indicator={sortIndicator(sort, 'count')}
-            onClick={() =>
-              setSort((prev) => (prev.key === 'count'
-                ? { key: 'count', dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-                : { key: 'count', dir: 'desc' }))
-            }
-          />
-          <SortHeader
-            align="right"
-            label={t('analyze.bigrams.column.avgIki')}
-            active={sort.key === 'avgIki'}
-            indicator={sortIndicator(sort, 'avgIki')}
-            onClick={() =>
-              setSort((prev) => (prev.key === 'avgIki'
-                ? { key: 'avgIki', dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-                : { key: 'avgIki', dir: 'desc' }))
-            }
-          />
-          <SortHeader
-            align="right"
-            label={t('analyze.bigrams.column.p95')}
-            active={sort.key === 'p95'}
-            indicator={sortIndicator(sort, 'p95')}
-            onClick={() =>
-              setSort((prev) => (prev.key === 'p95'
-                ? { key: 'p95', dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-                : { key: 'p95', dir: 'desc' }))
-            }
-          />
-        </tr>
-      </thead>
-      <tbody>
-        {slowEntries.map((entry, i) => (
-          <tr key={entry.bigramId} className="border-t border-surface-dim">
-            <td className="px-1 py-1 text-right tabular-nums text-content-muted">{i + 1}</td>
-            <td className="px-2 py-1 font-mono">{bigramPairLabel(entry.bigramId)}</td>
-            <td className="px-2 py-1 text-right tabular-nums">{entry.count.toLocaleString()}</td>
-            <td className="px-2 py-1 text-right tabular-nums">
-              {entry.avgIki !== null ? `${Math.round(entry.avgIki)} ms` : '—'}
-            </td>
-            <td className="px-2 py-1 text-right tabular-nums">
-              {entry.p95 !== null ? `${Math.round(entry.p95)} ms` : '—'}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-function sortIndicator<K extends SortKey>(sort: SortState<K>, key: K): string {
-  if (sort.key !== key) return ''
-  return sort.dir === 'asc' ? ' ▲' : ' ▼'
-}
-
-interface SortHeaderProps {
-  label: string
-  indicator: string
-  align: 'left' | 'right'
-  active: boolean
-  onClick: () => void
-}
-
-function SortHeader({ label, indicator, align, active, onClick }: SortHeaderProps): JSX.Element {
-  return (
-    <th className={`select-none px-2 py-1 font-medium ${align === 'right' ? 'text-right' : 'text-left'}`}>
-      <button
-        type="button"
-        onClick={onClick}
-        className={`cursor-pointer ${active ? 'text-content' : 'text-content-muted hover:text-content'}`}
-      >
-        {label}
-        {indicator}
-      </button>
-    </th>
-  )
-}
-
-function EmptyQuadrant({ text }: { text: string }): JSX.Element {
-  return <div className="py-4 text-center text-xs text-content-muted">{text}</div>
-}
-
-interface FingerBarChartProps {
-  entries: readonly TypingBigramTopEntry[]
-  snapshot: TypingKeymapSnapshot | null
-  fingerOverrides?: Record<string, FingerType>
-  listLimit: number
-  sort: FingerSort
-  /** Shared threshold from `pairIntervalThresholdMs` — see
-   * `avgIkiAtOrAboveThreshold` for the bucket-center caveat. */
-  minAvgIkiMs: number
-}
-
-function BigramFingerBarChart({
-  entries,
-  snapshot,
-  fingerOverrides,
-  listLimit,
-  sort,
-  minAvgIkiMs,
-}: FingerBarChartProps): JSX.Element {
-  const { t } = useTranslation()
-  const fingerMap = useKeycodeFingerMap(snapshot, fingerOverrides)
-  const data = useMemo<BarDatum[]>(() => {
-    if (fingerMap.size === 0) return []
-    const totals = aggregateFingerPairs(entries, fingerMap)
-    const ranked: BarDatum[] = []
-    for (const [pairKey, total] of totals) {
-      const avg = avgIkiAtOrAboveThreshold(total.hist, minAvgIkiMs)
-      if (avg === null) continue
-      const [fromFinger, toFinger] = pairKey.split('_') as [FingerType, FingerType]
-      const fromLabel = t(`analyze.finger.short.${fromFinger}`)
-      const toLabel = t(`analyze.finger.short.${toFinger}`)
-      ranked.push({
-        id: pairKey,
-        label: `${fromLabel} → ${toLabel}`,
-        value: avg,
-        count: total.count,
-        color: fromFinger.startsWith('left-') ? BAR_LEFT : BAR_RIGHT,
-      })
-    }
-    const dir = sort === 'desc' ? 1 : -1
-    ranked.sort((a, b) => dir * (b.value - a.value) || a.id.localeCompare(b.id))
-    return ranked.slice(0, Math.max(listLimit, 0))
-  }, [entries, fingerMap, listLimit, minAvgIkiMs, sort, t])
-
-  if (snapshot === null) {
-    return (
-      <div className="py-4 text-center text-xs text-content-muted" data-testid="analyze-bigrams-finger-no-snapshot">
-        {t('analyze.bigrams.fingerIki.noSnapshot')}
-      </div>
-    )
-  }
-  if (data.length === 0) {
-    return <EmptyQuadrant text={t('analyze.bigrams.empty')} />
-  }
-  return (
-    <div data-testid="analyze-bigrams-finger-bars">
-      <BigramBarChart data={data} yAxisWidth={100} unit="ms" />
-    </div>
-  )
-}
-
-const BAR_LEFT = 'var(--color-accent-hover)'
-const BAR_RIGHT = 'var(--color-danger)'
-
-interface BarDatum {
-  id: string
-  label: string
-  value: number
-  count: number
-  color: string
-}
-
-const BAR_ROW_PX = 24
-const CHART_VERTICAL_PADDING_PX = 16
-
-interface BigramBarChartProps {
-  data: BarDatum[]
-  yAxisWidth: number
-  unit: string
-}
-
-/** Horizontal bar chart shared by the Finger and Key bigram quadrants.
- * Each row is one categorical bar; height is sized to fit the row count
- * so the parent quadrant's `overflow-auto` handles long lists. recharts'
- * native Tooltip provides the cursor-following bubble that matches the
- * Ergonomics tab's bar charts. */
-function BigramBarChart({ data, yAxisWidth, unit }: BigramBarChartProps): JSX.Element {
-  // Floor at 120px so single-row charts don't squeeze the axis labels.
-  const height = Math.max(120, data.length * BAR_ROW_PX + CHART_VERTICAL_PADDING_PX * 2 + 24)
-  return (
-    <div style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={data}
-          layout="vertical"
-          margin={{ top: CHART_VERTICAL_PADDING_PX, right: 40, bottom: CHART_VERTICAL_PADDING_PX, left: 4 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-edge)" horizontal={false} />
-          <XAxis
-            type="number"
-            stroke="var(--color-content-muted)"
-            fontSize={CHART_TICK_FONT_SIZE}
-            tickFormatter={(v) => `${Math.round(Number(v))}`}
+          <BigramClassesTable
+            aggregate={classesAggregate}
+            wordPositionAggregate={wordPositionAggregate}
+            hasSnapshot={snapshot !== null}
           />
-          <YAxis
-            type="category"
-            dataKey="label"
-            stroke="var(--color-content-muted)"
-            fontSize={CHART_TICK_FONT_SIZE}
-            width={yAxisWidth}
-            interval={0}
-          />
-          <Tooltip
-            cursor={{ fill: 'var(--color-surface-dim)' }}
-            content={(p) => <BigramCellTooltip {...p} />}
-          />
-          <Bar dataKey="value" isAnimationActive={false}>
-            {data.map((row) => (
-              <Cell key={row.id} fill={row.color} />
-            ))}
-            <LabelList
-              dataKey="value"
-              position="right"
-              formatter={(v: unknown) => `${Math.round(Number(v))} ${unit}`}
-              style={{ fill: 'var(--color-content-muted)', fontSize: CHART_TICK_FONT_SIZE }}
-            />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+        </Quadrant>
+      )}
     </div>
   )
-}
 
-interface BigramCellTooltipProps {
-  active?: boolean
-  label?: unknown
-  payload?: ReadonlyArray<{ payload?: BarDatum }>
-}
-
-/** recharts content renderer — the default `formatter` path renders a
- * leading separator when the item name is empty, and threading a name
- * through every row would obscure the per-bigram label that's already
- * on the Y axis. Owning the markup keeps the bubble compact. */
-function BigramCellTooltip({ active, label, payload }: BigramCellTooltipProps): JSX.Element | null {
-  const { t } = useTranslation()
-  if (!active || !payload?.length) return null
-  const datum = payload[0]?.payload
-  if (!datum) return null
-  const displayLabel = typeof label === 'string' || typeof label === 'number' ? label : datum.label
   return (
-    <TooltipShell header={displayLabel}>
-      <Stat
-        label={t('analyze.bigrams.cellTooltipOccurrencesLabel')}
-        value={datum.count.toLocaleString()}
-      />
-      <Stat
-        label={t('analyze.bigrams.cellTooltipAvgIkiLabel')}
-        value={`${Math.round(datum.value)} ms`}
-      />
-    </TooltipShell>
+    <div className="flex h-full min-h-0 flex-col gap-2" data-testid="analyze-bigrams-root">
+      <div className="flex shrink-0 justify-end">
+        <GramToggle value={gram} onChange={onGramChange} />
+      </div>
+      <div className="min-h-0 flex-1">{body}</div>
+    </div>
   )
 }

@@ -123,12 +123,20 @@ vi.mock('../TapDanceModal', () => ({ TapDanceModal: () => null }))
 vi.mock('../MacroModal', () => ({ MacroModal: () => null }))
 
 import { KeymapEditor } from '../KeymapEditor'
+import type { KleKey } from '../../../../shared/kle/types'
+
+const KEY_DEFAULTS: KleKey = {
+  x: 0, y: 0, width: 1, height: 1, row: 0, col: 0,
+  encoderIdx: -1, encoderDir: -1, layoutIndex: -1, layoutOption: -1,
+  decal: false, labels: [], x2: 0, y2: 0, width2: 1, height2: 1,
+  rotation: 0, rotationX: 0, rotationY: 0, color: '',
+  textColor: [], textSize: [], nub: false, stepped: false, ghost: false,
+}
+
+const makeKey = (x: number, col: number): KleKey => ({ ...KEY_DEFAULTS, x, col })
 
 const makeLayout = () => ({
-  keys: [
-    { x: 0, y: 0, w: 1, h: 1, row: 0, col: 0, encoderIdx: -1, decal: false, labels: [] },
-    { x: 1, y: 0, w: 1, h: 1, row: 0, col: 1, encoderIdx: -1, decal: false, labels: [] },
-  ],
+  keys: [makeKey(0, 0), makeKey(1, 1)],
 })
 
 describe('KeymapEditor — undo after single-click selection', () => {
@@ -232,12 +240,17 @@ describe('KeymapEditor — undo after single-click selection', () => {
     // No undo initially
     expect(screen.queryByTestId('popover-undo')).not.toBeInTheDocument()
 
-    // Select keycode via popover — triggers handlePopoverKeycodeSelect
+    // Select keycode via popover — triggers handlePopoverKeycodeSelect.
+    // Auto Move is off here, so a genuine confirm closes the popover
+    // (same as every popover confirm before Auto Move follow-along).
     await act(async () => {
       fireEvent.click(screen.getByTestId('popover-kc-a'))
     })
+    expect(screen.queryByTestId('key-popover')).not.toBeInTheDocument()
 
-    // Popover should still be open and now show undo
+    // Re-opening the popover on the same key shows undo for the entry
+    // the popover selection just recorded.
+    act(() => capturedOnKeyDoubleClick?.({ row: 0, col: 0 }, mockRect))
     expect(screen.getByTestId('key-popover')).toBeInTheDocument()
     expect(screen.getByTestId('popover-undo')).toBeInTheDocument()
     expect(capturedPreviousKeycode).toBe(5)

@@ -7,10 +7,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { IpcChannels } from '../shared/ipc/channels'
 import { notifyChange } from './sync/sync-service'
+import { withWriteLock } from './per-uid-write-lock'
 import { upsertKeyboardMeta } from './sync/keyboard-meta'
 import { KEYBOARD_META_SYNC_UNIT } from '../shared/types/keyboard-meta'
 import { secureHandle } from './ipc-guard'
+import { isSafePathSegment, tsForFilename } from './utils/safe-filename'
 import type { SnapshotMeta, SnapshotIndex } from '../shared/types/snapshot-store'
+import type { HubPrivateLink } from '../shared/types/hub-private'
 
 const MAX_ENTRIES_PER_KEYBOARD = 30
 
@@ -20,12 +23,6 @@ function sanitizeFilename(name: string): string {
     .replace(/[\x00-\x1f]/g, '')
     .replace(/\.+$/, '')
     .trim() || 'keyboard'
-}
-
-// Reject uid or filename values that could escape the snapshots directory
-function isSafePathSegment(segment: string): boolean {
-  if (!segment || segment === '.' || segment === '..') return false
-  return !/[/\\]/.test(segment)
 }
 
 function validateUid(uid: string): void {
@@ -87,15 +84,6 @@ async function updateEntry(
   })
 }
 
-// Simple per-uid write serialization to prevent race conditions
-const writeLocks = new Map<string, Promise<unknown>>()
-function withWriteLock<T>(uid: string, fn: () => Promise<T>): Promise<T> {
-  const prev = writeLocks.get(uid) ?? Promise.resolve()
-  const next = prev.then(fn, fn)
-  writeLocks.set(uid, next)
-  return next
-}
-
 export function setupSnapshotStore(): void {
   secureHandle(
     IpcChannels.SNAPSHOT_STORE_LIST,
@@ -133,7 +121,7 @@ export function setupSnapshotStore(): void {
           await mkdir(dir, { recursive: true })
 
           const now = new Date()
-          const timestamp = now.toISOString().replace(/:/g, '-')
+          const timestamp = tsForFilename(now)
           const safeName = sanitizeFilename(deviceName)
           const filename = `${safeName}_${timestamp}.pipette`
           const filePath = getSafeFilePath(uid, filename)
@@ -241,8 +229,33 @@ export function setupSnapshotStore(): void {
           delete entry.hubPostId
         } else {
           entry.hubPostId = normalized
+          // public and private linkage are mutually exclusive
+          delete entry.hubPrivate
         }
       })
     },
   )
+
+  secureHandle(
+    IpcChannels.SNAPSHOT_STORE_SET_HUB_PRIVATE,
+    async (_event, uid: string, entryId: string, link: HubPrivateLink | null) =>
+      setSnapshotHubPrivate(uid, entryId, link),
+  )
+}
+
+/** Sets (or clears with `null`) the private Hub linkage on a snapshot
+ *  entry. Setting a link clears the mutually-exclusive public `hubPostId`. */
+export async function setSnapshotHubPrivate(
+  uid: string,
+  entryId: string,
+  link: HubPrivateLink | null,
+): Promise<{ success: boolean; error?: string }> {
+  return updateEntry(uid, entryId, (entry) => {
+    if (link === null) {
+      delete entry.hubPrivate
+    } else {
+      entry.hubPrivate = link
+      delete entry.hubPostId
+    }
+  })
 }

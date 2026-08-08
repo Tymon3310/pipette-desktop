@@ -8,6 +8,7 @@ import { generateKeymapPdf } from '../../../shared/pdf-export'
 import { generatePdfThumbnail } from '../../utils/pdf-thumbnail'
 import { isVilFile, recordToMap, deriveLayerCount } from '../../../shared/vil-file'
 import { vilToVialGuiJson } from '../../../shared/vil-compat'
+import { FALLBACK_VIAL_PROTOCOL } from '../../../shared/favorite-data'
 import {
   splitMacroBuffer,
   deserializeMacro,
@@ -30,6 +31,12 @@ interface Options {
   deviceName: string
 }
 
+// KeyboardDefinition (the static JSON bundled in a snapshot) never carries
+// a macro count — dynamic_keymap_macro_get_count is a live protocol query,
+// not part of the definition file, so this always falls back to 16 (the
+// common VIA/Vial default).
+const FALLBACK_MACRO_COUNT = 16
+
 function loadVilData(uid: string, entryId: string): Promise<VilFile | null> {
   return window.vialAPI.snapshotStoreLoad(uid, entryId).then((result) => {
     if (!result.success || !result.data) return null
@@ -47,8 +54,8 @@ function buildParams(vilData: VilFile) {
   const encoderCount = def.layouts?.keymap
     ? (def.layouts.keymap as unknown[][]).flat().filter((k) => typeof k === 'string' && k.includes('\n\n\n\n\n\n\n\n\n\ne')).length
     : 0
-  const macroCount = def.macro_count ?? 16
-  const vialProtocol = vilData.vialProtocol ?? 9
+  const macroCount = FALLBACK_MACRO_COUNT
+  const vialProtocol = vilData.vialProtocol ?? FALLBACK_VIAL_PROTOCOL
 
   return {
     layers: deriveLayerCount(vilData.keymap),
@@ -78,8 +85,8 @@ export function useSnapshotActions({ uid, deviceName }: Options) {
       const vilData = await loadVilData(uid, entryId)
       if (!vilData) return
       const def = vilData.definition!
-      const macroCount = def.macro_count ?? 16
-      const vialProtocol = vilData.vialProtocol ?? 9
+      const macroCount = FALLBACK_MACRO_COUNT
+      const vialProtocol = vilData.vialProtocol ?? FALLBACK_VIAL_PROTOCOL
       const viaProtocol = vilData.viaProtocol ?? 12
       const rows = def.matrix?.rows ?? 0
       const cols = def.matrix?.cols ?? 0
@@ -138,8 +145,8 @@ export function useSnapshotActions({ uid, deviceName }: Options) {
         findInnerKeycode,
       })
       const def = vilData.definition!
-      const macroCount = def.macro_count ?? 16
-      const vialProtocol = vilData.vialProtocol ?? 9
+      const macroCount = FALLBACK_MACRO_COUNT
+      const vialProtocol = vilData.vialProtocol ?? FALLBACK_VIAL_PROTOCOL
       const viaProtocol = vilData.viaProtocol ?? 12
       const rows = def.matrix?.rows ?? 0
       const cols = def.matrix?.cols ?? 0
@@ -177,8 +184,8 @@ export function useSnapshotActions({ uid, deviceName }: Options) {
         findInnerKeycode,
       })
       const def = vilData.definition!
-      const macroCount = def.macro_count ?? 16
-      const vialProtocol = vilData.vialProtocol ?? 9
+      const macroCount = FALLBACK_MACRO_COUNT
+      const vialProtocol = vilData.vialProtocol ?? FALLBACK_VIAL_PROTOCOL
       const viaProtocol = vilData.viaProtocol ?? 12
       const rows = def.matrix?.rows ?? 0
       const cols = def.matrix?.cols ?? 0

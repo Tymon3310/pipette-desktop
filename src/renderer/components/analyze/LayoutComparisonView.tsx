@@ -16,6 +16,7 @@ import {
   type LayoutComparisonFilters,
 } from '../../../shared/types/analyze-filters'
 import type { KeyboardLayout, KleKey } from '../../../shared/kle/types'
+import type { FingerType } from '../../../shared/kle/kle-ergonomics'
 import type {
   LayoutComparisonResult,
   TypingKeymapSnapshot,
@@ -36,12 +37,19 @@ interface Props {
   deviceScopes: readonly DeviceScope[]
   /** App filter — see WpmChart.Props.appScopes. */
   appScopes: string[]
+  typingTestScopes: string[]
+  runIdScopes: string[]
   snapshot: TypingKeymapSnapshot | null
   /** Persisted source / target read from `useAnalyzeFilters`. The
    * AnalyzePane filter row owns the picker UI; this view stays
    * read-only on the filter so the IPC fetch stays the side-effect
    * source of truth. */
   filter: Required<LayoutComparisonFilters>
+  /** Per-cell finger assignments the live Ergonomics / Bigrams charts
+   * already use. Forwarded to the main-side layout resolver so the
+   * fingerLoad / handBalance metrics agree with the user's overrides
+   * instead of only reflecting the KLE geometry estimate. */
+  fingerOverrides: Record<string, FingerType>
   /** Notifies the page chrome (TypingAnalyticsView footer) of the
    * current max skip rate so the warning can render alongside the
    * split-view toggle instead of as a banner inside the panel. The
@@ -55,8 +63,11 @@ export function LayoutComparisonView({
   range,
   deviceScopes,
   appScopes,
+  typingTestScopes,
+  runIdScopes,
   snapshot,
   filter,
+  fingerOverrides,
   onSkipPercentChange,
 }: Props): JSX.Element {
   const { t } = useTranslation()
@@ -111,7 +122,8 @@ export function LayoutComparisonView({
       source,
       targets: [source, target],
       metrics: [...LAYOUT_COMPARISON_PHASE_1_METRICS],
-    }, appScopes)
+      fingerOverrides,
+    }, appScopes, typingTestScopes, runIdScopes)
       .then((next) => {
         if (cancelled) return
         setResult(next)
@@ -128,8 +140,10 @@ export function LayoutComparisonView({
     }
     // appScopesKey carries appScopes' identity for memo equality.
     // sourceMap/targetMap re-run the fetch once the lookup finishes
-    // loading a downloaded entry's payload via IPC.
-  }, [uid, range.fromMs, range.toMs, scopeKey, sourceLayoutId, targetLayoutId, shouldFetch, appScopesKey, sourceMap, targetMap])
+    // loading a downloaded entry's payload via IPC. fingerOverrides is
+    // a new object only when the user saves the finger-assignment
+    // modal, so this re-fetches on save without polling.
+  }, [uid, range.fromMs, range.toMs, scopeKey, sourceLayoutId, targetLayoutId, shouldFetch, appScopesKey, sourceMap, targetMap, fingerOverrides])
 
   const columnLabels = useMemo(() => {
     if (!result) return []

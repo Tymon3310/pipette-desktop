@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import { UnlockDialog } from '../UnlockDialog'
 import type { KleKey } from '../../../../shared/kle/types'
@@ -47,9 +47,9 @@ function makeKey(row: number, col: number): KleKey {
 }
 
 describe('UnlockDialog', () => {
-  let unlockStart: ReturnType<typeof vi.fn>
-  let unlockPoll: ReturnType<typeof vi.fn>
-  let onComplete: ReturnType<typeof vi.fn>
+  let unlockStart: Mock<() => Promise<void>>
+  let unlockPoll: Mock<() => Promise<number[]>>
+  let onComplete: Mock<() => void>
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -165,5 +165,26 @@ describe('UnlockDialog', () => {
     const warning = screen.getByTestId('macro-unlock-warning')
     expect(warning).toBeInTheDocument()
     expect(screen.getByText('Click the macro key again after unlocking.')).toBeInTheDocument()
+  })
+
+  it('calls onDisconnect when unlockStart rejects', async () => {
+    unlockStart.mockRejectedValue(new Error('failed to start unlock'))
+    const onDisconnect = vi.fn()
+
+    await act(async () => {
+      render(
+        <UnlockDialog
+          keys={keys}
+          unlockKeys={unlockKeys}
+          unlockStart={unlockStart}
+          unlockPoll={unlockPoll}
+          onComplete={onComplete}
+          onDisconnect={onDisconnect}
+        />,
+      )
+    })
+
+    expect(onDisconnect).toHaveBeenCalledTimes(1)
+    expect(unlockPoll).not.toHaveBeenCalled()
   })
 })

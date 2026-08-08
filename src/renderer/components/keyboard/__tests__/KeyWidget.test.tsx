@@ -7,22 +7,26 @@ import { KeyWidget } from '../KeyWidget'
 import {
   KEY_BG_COLOR,
   KEY_SELECTED_COLOR,
+  KEY_MULTI_SELECTED_COLOR,
   KEY_PRESSED_COLOR,
   KEY_EVER_PRESSED_COLOR,
   KEY_HIGHLIGHT_COLOR,
   KEY_BORDER_COLOR,
   KEY_MASK_RECT_COLOR,
   KEY_TEXT_COLOR,
+  KEY_DUPLICATE_COLOR,
+  KEY_REMAP_COLOR,
 } from '../constants'
 import type { KleKey } from '../../../../shared/kle/types'
 
 let mockIsMask = false
+let mockInnerKeycode: { qmkId: string } = { qmkId: 'KC_A' }
 
 vi.mock('../../../../shared/keycodes/keycodes', () => ({
   keycodeLabel: (kc: string) => kc,
   isMask: () => mockIsMask,
   findOuterKeycode: () => ({ qmkId: 'LT0' }),
-  findInnerKeycode: () => ({ qmkId: 'KC_A' }),
+  findInnerKeycode: () => mockInnerKeycode,
 }))
 
 function makeKey(overrides: Partial<KleKey> = {}): KleKey {
@@ -59,6 +63,7 @@ function makeKey(overrides: Partial<KleKey> = {}): KleKey {
 describe('KeyWidget', () => {
   beforeEach(() => {
     mockIsMask = false
+    mockInnerKeycode = { qmkId: 'KC_A' }
   })
 
   it('renders default fill when no state props set', () => {
@@ -139,6 +144,199 @@ describe('KeyWidget', () => {
     )
     const rect = container.querySelector('rect')!
     expect(rect.getAttribute('fill')).toBe(KEY_EVER_PRESSED_COLOR)
+  })
+
+  it('renders customFill (e.g. the View Matrix duplicate-position fill) when no higher-priority state is active', () => {
+    const { container } = render(
+      <svg>
+        <KeyWidget kleKey={makeKey()} keycode="KC_A" customFill={KEY_DUPLICATE_COLOR} />
+      </svg>,
+    )
+    const rect = container.querySelector('rect')!
+    expect(rect.getAttribute('fill')).toBe(KEY_DUPLICATE_COLOR)
+  })
+
+  it('renders everPressed color over customFill (everPressed takes priority)', () => {
+    const { container } = render(
+      <svg>
+        <KeyWidget kleKey={makeKey()} keycode="KC_A" everPressed customFill={KEY_DUPLICATE_COLOR} />
+      </svg>,
+    )
+    const rect = container.querySelector('rect')!
+    expect(rect.getAttribute('fill')).toBe(KEY_EVER_PRESSED_COLOR)
+  })
+
+  describe('flashed (post-rewrite flash)', () => {
+    it('does not render a flash overlay when flashed is unset', () => {
+      const { container } = render(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" />
+        </svg>,
+      )
+      expect(container.querySelector('[data-testid="flash-overlay"]')).toBeNull()
+    })
+
+    it('renders a flash overlay with the selected fill and the key-flash animation class when flashed=true', () => {
+      const { container } = render(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed />
+        </svg>,
+      )
+      const overlay = container.querySelector('[data-testid="flash-overlay"]')!
+      expect(overlay).not.toBeNull()
+      expect(overlay.getAttribute('fill')).toBe(KEY_SELECTED_COLOR)
+      expect(overlay.classList.contains('key-flash-overlay')).toBe(true)
+    })
+
+    it('removes the flash overlay once the caller clears flashed', () => {
+      const { container, rerender } = render(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed />
+        </svg>,
+      )
+      expect(container.querySelector('[data-testid="flash-overlay"]')).not.toBeNull()
+
+      rerender(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" />
+        </svg>,
+      )
+      expect(container.querySelector('[data-testid="flash-overlay"]')).toBeNull()
+    })
+
+    it('leaves the key face fill untouched by flashed (no priority branch — the overlay paints on top)', () => {
+      const { container } = render(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed />
+        </svg>,
+      )
+      const rect = container.querySelector('rect')!
+      expect(rect.getAttribute('fill')).toBe(KEY_BG_COLOR)
+    })
+
+    it('inverts label text when flashed, same as selected', () => {
+      const { container } = render(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed />
+        </svg>,
+      )
+      const text = container.querySelector('text')!
+      expect(text.getAttribute('fill')).toBe('var(--content-inverse)')
+    })
+
+    it('still renders the flash overlay alongside other states (independent of the fill-priority chain)', () => {
+      const { container } = render(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed everPressed multiSelected />
+        </svg>,
+      )
+      const overlay = container.querySelector('[data-testid="flash-overlay"]')!
+      expect(overlay).not.toBeNull()
+      expect(overlay.getAttribute('fill')).toBe(KEY_SELECTED_COLOR)
+      // The base fill still resolves through its own priority chain,
+      // unaffected by `flashed` — multiSelected wins here as normal.
+      const rect = container.querySelector('rect')!
+      expect(rect.getAttribute('fill')).toBe(KEY_MULTI_SELECTED_COLOR)
+    })
+
+    it('does not let the flash overlay intercept clicks meant for the key', () => {
+      const { container } = render(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed />
+        </svg>,
+      )
+      const overlay = container.querySelector('[data-testid="flash-overlay"]')! as SVGElement
+      expect(overlay.style.pointerEvents).toBe('none')
+    })
+
+    it('remounts the overlay (restarting its animation) when flashGeneration bumps on a re-apply', () => {
+      const { container, rerender } = render(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed flashGeneration={1} />
+        </svg>,
+      )
+      const firstOverlay = container.querySelector('[data-testid="flash-overlay"]')!
+      expect(firstOverlay).not.toBeNull()
+
+      // Same `flashed=true` the whole time (position still flashing) but a
+      // new apply bumped the generation — this must force a fresh DOM
+      // node so the CSS animation restarts instead of reusing one whose
+      // `forwards` fill-mode may already have settled at opacity 0.
+      rerender(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed flashGeneration={2} />
+        </svg>,
+      )
+      const secondOverlay = container.querySelector('[data-testid="flash-overlay"]')!
+      expect(secondOverlay).not.toBeNull()
+      expect(secondOverlay).not.toBe(firstOverlay)
+    })
+
+    it('computes a negative animation-delay from flashStartedAt for a late-mounted overlay', () => {
+      const now = Date.now()
+      vi.useFakeTimers()
+      vi.setSystemTime(now + 500)
+      try {
+        const { container } = render(
+          <svg>
+            <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed flashStartedAt={now} />
+          </svg>,
+        )
+        const overlay = container.querySelector('[data-testid="flash-overlay"]')! as SVGElement
+        expect(overlay.style.animationDelay).toBe('-500ms')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('clamps animation-delay to the full animation length for a stale flashStartedAt', () => {
+      const now = Date.now()
+      vi.useFakeTimers()
+      vi.setSystemTime(now + 5000)
+      try {
+        const { container } = render(
+          <svg>
+            <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed flashStartedAt={now} />
+          </svg>,
+        )
+        const overlay = container.querySelector('[data-testid="flash-overlay"]')! as SVGElement
+        expect(overlay.style.animationDelay).toBe('-700ms')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('renders a stroke-only border copy on top of the overlay while flashed, matching the outer border', () => {
+      const { container } = render(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed selected />
+        </svg>,
+      )
+      const borderCopy = container.querySelector('[data-testid="flash-overlay-border"]')!
+      expect(borderCopy).not.toBeNull()
+      expect(borderCopy.getAttribute('fill')).toBe('none')
+      // `selected` also drives the outer rect's own stroke — the border
+      // copy must match it so the accent border reads unbroken through
+      // the overlay.
+      expect(borderCopy.getAttribute('stroke')).toBe(KEY_SELECTED_COLOR)
+      expect(borderCopy.getAttribute('stroke-width')).toBe('2')
+    })
+
+    it('removes the border copy once the caller clears flashed', () => {
+      const { container, rerender } = render(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed />
+        </svg>,
+      )
+      expect(container.querySelector('[data-testid="flash-overlay-border"]')).not.toBeNull()
+
+      rerender(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" />
+        </svg>,
+      )
+      expect(container.querySelector('[data-testid="flash-overlay-border"]')).toBeNull()
+    })
   })
 
   describe('masked key split-click', () => {
@@ -309,5 +507,108 @@ describe('KeyWidget', () => {
       expect(outerRect.getAttribute('stroke')).toBe(KEY_SELECTED_COLOR)
       expect(outerRect.getAttribute('stroke-width')).toBe('2')
     })
+  })
+})
+
+// --- issue #295/#296: composite (masked) key inner label honors the
+// active Key Label pack's remap, and a two-part inner label (shift +
+// base) renders stacked instead of crammed onto one line. ---
+
+describe('KeyWidget — inner label remap resolution (issue #295)', () => {
+  it('resolves the inner label via remapLabel when the pack remaps the inner basic keycode', () => {
+    mockIsMask = true
+    mockInnerKeycode = { qmkId: 'KC_8' }
+    const remapLabel = (id: string) => (id === 'KC_8' ? '(\n8' : id)
+    const { container } = render(
+      <svg>
+        <KeyWidget kleKey={makeKey()} keycode="LSFT(KC_8)" remapLabel={remapLabel} />
+      </svg>,
+    )
+    const texts = Array.from(container.querySelectorAll('text')).map((t) => t.textContent)
+    expect(texts).toContain('(')
+    expect(texts).toContain('8')
+  })
+
+  it('falls back to the default inner label when the pack does not remap this inner keycode', () => {
+    mockIsMask = true
+    mockInnerKeycode = { qmkId: 'KC_9' }
+    const remapLabel = (id: string) => (id === 'KC_8' ? '(\n8' : id)
+    const { container } = render(
+      <svg>
+        <KeyWidget kleKey={makeKey()} keycode="LSFT(KC_9)" remapLabel={remapLabel} />
+      </svg>,
+    )
+    const texts = Array.from(container.querySelectorAll('text')).map((t) => t.textContent)
+    expect(texts).toContain('KC_9')
+    expect(texts).not.toContain('(')
+  })
+
+  it('renders the default inner label unchanged when no pack is active (no remapLabel prop) — no-pack regression check', () => {
+    mockIsMask = true
+    mockInnerKeycode = { qmkId: 'KC_A' }
+    const { container } = render(
+      <svg>
+        <KeyWidget kleKey={makeKey()} keycode="LT1(KC_A)" />
+      </svg>,
+    )
+    const texts = Array.from(container.querySelectorAll('text')).map((t) => t.textContent)
+    expect(texts).toContain('KC_A')
+  })
+})
+
+describe('KeyWidget — stacked shift/base inner label (issue #296)', () => {
+  it('renders a two-part inner label as two stacked text elements, shifted char above base', () => {
+    mockIsMask = true
+    mockInnerKeycode = { qmkId: 'KC_8' }
+    const remapLabel = (id: string) => (id === 'KC_8' ? '(\n8' : id)
+    const { container } = render(
+      <svg>
+        <KeyWidget kleKey={makeKey()} keycode="LSFT(KC_8)" remapLabel={remapLabel} />
+      </svg>,
+    )
+    const texts = Array.from(container.querySelectorAll('text'))
+    const shiftText = texts.find((t) => t.textContent === '(')!
+    const baseText = texts.find((t) => t.textContent === '8')!
+    expect(shiftText).toBeTruthy()
+    expect(baseText).toBeTruthy()
+    expect(Number(shiftText.getAttribute('y'))).toBeLessThan(Number(baseText.getAttribute('y')))
+  })
+
+  it('renders a single-part inner label as one centered text element (unchanged)', () => {
+    mockIsMask = true
+    mockInnerKeycode = { qmkId: 'KC_A' }
+    const { container } = render(
+      <svg>
+        <KeyWidget kleKey={makeKey()} keycode="LT1(KC_A)" />
+      </svg>,
+    )
+    const innerTexts = Array.from(container.querySelectorAll('text')).filter((t) => t.textContent === 'KC_A')
+    expect(innerTexts).toHaveLength(1)
+  })
+})
+
+describe('KeyWidget — remap tint applies to the inner label too (consistency with #294)', () => {
+  it('tints the inner label with the remap color when remapped=true', () => {
+    mockIsMask = true
+    mockInnerKeycode = { qmkId: 'KC_9' }
+    const { container } = render(
+      <svg>
+        <KeyWidget kleKey={makeKey()} keycode="LSFT(KC_9)" remapped />
+      </svg>,
+    )
+    const innerText = Array.from(container.querySelectorAll('text')).find((t) => t.textContent === 'KC_9')!
+    expect(innerText.getAttribute('fill')).toBe(KEY_REMAP_COLOR)
+  })
+
+  it('does not tint the inner label when remapped is false/unset', () => {
+    mockIsMask = true
+    mockInnerKeycode = { qmkId: 'KC_9' }
+    const { container } = render(
+      <svg>
+        <KeyWidget kleKey={makeKey()} keycode="LSFT(KC_9)" />
+      </svg>,
+    )
+    const innerText = Array.from(container.querySelectorAll('text')).find((t) => t.textContent === 'KC_9')!
+    expect(innerText.getAttribute('fill')).not.toBe(KEY_REMAP_COLOR)
   })
 })

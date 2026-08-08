@@ -31,6 +31,7 @@ import {
   mergeKeyboardMetaIndex,
   readKeyboardMetaIndex,
   upsertKeyboardMeta,
+  nameKeyboardOnConnect,
   tombstoneKeyboardMeta,
   tombstoneAllKeyboardMeta,
   applyRemoteKeyboardMetaIndex,
@@ -205,5 +206,36 @@ describe('getActiveKeyboardMetaMap', () => {
     expect(map.get('0xA')).toBe('A')
     expect(map.has('0xB')).toBe(false)
     expect(map.has('0xC')).toBe(false)
+  })
+})
+
+describe('nameKeyboardOnConnect', () => {
+  it('records the name when the keyboard has none', async () => {
+    expect(await nameKeyboardOnConnect('0xc5', 'Ieneko54R')).toBe('upserted')
+    const map = getActiveKeyboardMetaMap(await readKeyboardMetaIndex())
+    expect(map.get('0xc5')).toBe('Ieneko54R')
+  })
+
+  it('does not overwrite an active name (preserves a user rename, no churn)', async () => {
+    await upsertKeyboardMeta('0xc5', 'My Custom Name')
+    expect(await nameKeyboardOnConnect('0xc5', 'Ieneko54R')).toBe('unchanged')
+    const map = getActiveKeyboardMetaMap(await readKeyboardMetaIndex())
+    expect(map.get('0xc5')).toBe('My Custom Name')
+  })
+
+  it('is a no-op for an empty uid or name', async () => {
+    expect(await nameKeyboardOnConnect('', 'Name')).toBe('unchanged')
+    expect(await nameKeyboardOnConnect('0xc5', '   ')).toBe('unchanged')
+    expect(getActiveKeyboardMetaMap(await readKeyboardMetaIndex()).size).toBe(0)
+  })
+
+  it('revives a tombstoned entry so a reconnected keyboard is named again', async () => {
+    // Reproduces the "Delete all → reconnect" state: the uid is tombstoned but
+    // the physical keyboard is back, so connecting must restore its name.
+    await upsertKeyboardMeta('0xc5', 'Ieneko54R')
+    await tombstoneKeyboardMeta('0xc5')
+    expect(await nameKeyboardOnConnect('0xc5', 'Ieneko54R')).toBe('upserted')
+    const map = getActiveKeyboardMetaMap(await readKeyboardMetaIndex())
+    expect(map.get('0xc5')).toBe('Ieneko54R')
   })
 })

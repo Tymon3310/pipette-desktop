@@ -43,17 +43,35 @@ export interface TooltipProps {
   describedByOn?: 'trigger' | 'wrapper'
 }
 
-const BUBBLE_BASE =
-  'pointer-events-none fixed z-50 w-max rounded-md border border-edge bg-surface-alt px-2.5 py-1.5 shadow-lg text-xs font-medium text-content whitespace-pre-line transition-opacity'
+// Exported so the handful of hand-rolled shared-bubble tooltips (perf-
+// sensitive surfaces that render one bubble over many hover targets
+// instead of wrapping each target in its own `Tooltip`, e.g. the keycode
+// picker) can match this exact skin instead of drifting into their own
+// ad-hoc styling. `max-w-sm` is the default cap for dynamic/long content
+// (filter summaries, snapshot labels, …); callers needing a narrower
+// bubble still pass their own `max-w-xs` via `className`, which wins
+// because it's appended after this base string.
+export const BUBBLE_BASE =
+  'pointer-events-none fixed z-50 w-max max-w-sm rounded-md border border-edge bg-surface-alt px-2.5 py-1.5 shadow-lg text-xs font-medium text-content whitespace-pre-line transition-opacity'
 
 const WRAPPER_BASE = 'relative inline-block'
 
-function computeBubblePosition(
+const VIEWPORT_MARGIN = 8
+
+function clampAxis(value: number, size: number, viewport: number, margin: number): number {
+  // When the bubble is wider/taller than the available space, pin it to the
+  // near edge rather than producing a negative max (which would flip the clamp).
+  const max = Math.max(margin, viewport - size - margin)
+  return Math.min(Math.max(value, margin), max)
+}
+
+export function computeBubblePosition(
   trigger: DOMRect,
   bubble: DOMRect,
   side: TooltipSide,
   align: TooltipAlign,
   offset: number,
+  viewport: { width: number; height: number },
 ): { top: number; left: number } {
   let top = 0
   let left = 0
@@ -75,7 +93,12 @@ function computeBubblePosition(
     else if (align === 'end') top = trigger.bottom - bubble.height
     else top = trigger.top + trigger.height / 2 - bubble.height / 2
   }
-  return { top, left }
+  // Keep the whole bubble inside the viewport so triggers near a screen edge
+  // (e.g. the collapsed layer-panel toggle) don't render a clipped tooltip.
+  return {
+    top: clampAxis(top, bubble.height, viewport.height, VIEWPORT_MARGIN),
+    left: clampAxis(left, bubble.width, viewport.width, VIEWPORT_MARGIN),
+  }
 }
 
 export function Tooltip({
@@ -111,22 +134,47 @@ export function Tooltip({
     const wrap = wrapperRef.current
     const bubble = bubbleRef.current
     if (!wrap || !bubble) return
-    setPosition(computeBubblePosition(
+    const next = computeBubblePosition(
       wrap.getBoundingClientRect(),
       bubble.getBoundingClientRect(),
       side,
       align,
       Math.max(0, offset),
-    ))
+      { width: window.innerWidth, height: window.innerHeight },
+    )
+    // Bail out (return the SAME object) when the coordinates didn't
+    // actually change. `computeBubblePosition` always returns a fresh
+    // object literal, and this runs from a deps-less layout effect (see
+    // below) — setting unconditionally would re-render every time,
+    // which re-runs the effect, which sets state again, forever.
+    setPosition((prev) => (prev.top === next.top && prev.left === next.left) ? prev : next)
   }, [side, align, offset])
 
-  // Re-position whenever the bubble opens or any layout-affecting input
-  // changes. `useLayoutEffect` so the position is in place before paint
-  // (avoids a one-frame flash at the previous coords).
+  // Keep `position` synced to the wrapper's actual on-screen location on
+  // EVERY render — deliberately unconditional (no `if (!open)` guard, no
+  // dependency array), and deliberately decoupled from `open`: position
+  // TRACKING and VISIBILITY are two different concerns, and gating the
+  // former on the latter is exactly what caused a real bug. When a
+  // consumer reuses the same React key for a logically-identical item
+  // across two different layouts (e.g. AnalyzeStatGrid's "Longest
+  // session" card, which shares its `labelKey`/`descriptionKey` between
+  // Interval's timeSeries and distribution summaries), React preserves
+  // this exact Tooltip instance across the switch instead of unmounting
+  // it, even though the grid cell it renders into moves — and it can
+  // take more than one render for the trigger to reach its FINAL
+  // settled position (an intermediate reflow, then a later one once
+  // sibling content — e.g. a filter row losing a control — finishes
+  // settling). If repositioning only ran while `open`, and the browser
+  // closes the tooltip (a real mouseleave once the trigger has visibly
+  // moved out from under a stationary cursor) before that later reflow
+  // lands, the bubble is left mid-fade at whatever intermediate
+  // coordinates it last computed — visibly "floating" over unrelated
+  // content until the fade-out finishes. Running this on every render
+  // regardless of `open` means the position keeps catching up to
+  // reality for as long as the bubble is even partially visible.
   useLayoutEffect(() => {
-    if (!open) return
     updatePosition()
-  }, [open, updatePosition, content])
+  })
 
   // While open, follow scroll / resize so the bubble stays glued to the
   // trigger as the page moves.

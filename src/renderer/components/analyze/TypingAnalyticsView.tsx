@@ -12,7 +12,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TypingKeyboardSummary } from '../../../shared/types/typing-analytics'
 import { AnalyzePane } from './AnalyzePane'
+import type { ConnectedTappingTerm } from './analyze-types'
 import { formatSharePercent } from './analyze-format'
+import { Tooltip } from '../ui/Tooltip'
 
 // Below this viewport width the two panes can't fit side-by-side
 // without crushing the per-tab filter row, so the toggle is disabled
@@ -39,9 +41,17 @@ interface TypingAnalyticsViewProps {
    * this handler. Omit to hide the button (e.g. when the Analyze view
    * is embedded somewhere without a meaningful "back" destination). */
   onBack?: () => void
+  /** TAPPING_TERM of the physically connected keyboard — forwarded
+   * unchanged to every pane (see AnalyzePaneProps). Both Pane A and
+   * Pane B receive the same value; each pane matches it against its
+   * own selected uid independently. */
+  connectedTappingTerm?: ConnectedTappingTerm | null
+  /** Analyze -> Typing Test "open timeline" handoff, forwarded
+   * unchanged to every pane (see AnalyzePaneProps). */
+  onOpenRunTimeline?: (runId: string) => void
 }
 
-export function TypingAnalyticsView({ initialUid, onBack }: TypingAnalyticsViewProps = {}) {
+export function TypingAnalyticsView({ initialUid, onBack, connectedTappingTerm, onOpenRunTimeline }: TypingAnalyticsViewProps = {}) {
   const { t } = useTranslation()
   const [splitEnabled, setSplitEnabled] = useState(false)
 
@@ -133,51 +143,60 @@ export function TypingAnalyticsView({ initialUid, onBack }: TypingAnalyticsViewP
       className="flex h-full min-h-modal-70vh flex-col"
       data-testid="analyze-view"
     >
-      <div className="flex flex-1 min-h-0 min-w-0 gap-4">
+      <main className="flex flex-1 min-h-0 min-w-0 gap-4 p-8 pb-4">
         <AnalyzePane
           paneKey="A"
-          splitMode={splitVisible}
           keyboards={keyboards}
           loading={loading}
           selectedUid={selectedUidA}
           onSelectUid={setSelectedUidA}
           onSkipPercentChange={setSkipPercentA}
+          connectedTappingTerm={connectedTappingTerm}
+          onOpenRunTimeline={onOpenRunTimeline}
         />
         {splitVisible && (
           <AnalyzePane
             paneKey="B"
-            splitMode
             keyboards={keyboards}
             loading={loading}
             selectedUid={selectedUidB}
             onSelectUid={handleSelectUidB}
             onSkipPercentChange={setSkipPercentB}
+            connectedTappingTerm={connectedTappingTerm}
+            onOpenRunTimeline={onOpenRunTimeline}
           />
         )}
-      </div>
-      <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-edge pt-2">
+      </main>
+      {/* Full-bleed footer bar (mirrors the keymap editor's StatusBar
+       * visual language) so Split View / Back read as a docked bar
+       * instead of buttons floating at the end of the scroll content. */}
+      <footer
+        className="flex shrink-0 items-center justify-between gap-2 border-t border-edge bg-surface-alt px-4 py-1.5 text-xs leading-none text-content-secondary"
+        data-testid="analyze-footer"
+      >
         <div
-          className="min-w-0 flex-1 truncate text-left text-xs text-content-muted"
+          className="min-w-0 flex-1 truncate text-left text-content-muted"
           data-testid="analyze-skip-warning"
         >
           {skipWarningMessage}
         </div>
-        <button
-          type="button"
-          role="switch"
-          className={`${FOOTER_BUTTON_BASE} disabled:cursor-not-allowed disabled:opacity-50 ${
-            splitVisible
-              ? 'border-accent bg-accent/10 text-accent'
-              : 'border-edge text-content-secondary hover:text-content'
-          }`}
-          onClick={handleToggleSplit}
-          disabled={!isWideViewport}
-          aria-checked={splitEnabled}
-          title={!isWideViewport ? t('analyze.splitView.narrowWindow') : undefined}
-          data-testid="analyze-split-toggle"
-        >
-          {t('analyze.splitView.toggle')}
-        </button>
+        <Tooltip content={t('analyze.splitView.narrowWindow')} disabled={isWideViewport}>
+          <button
+            type="button"
+            role="switch"
+            className={`${FOOTER_BUTTON_BASE} disabled:cursor-not-allowed disabled:opacity-50 ${
+              splitVisible
+                ? 'border-accent bg-accent/10 text-accent'
+                : 'border-edge text-content-secondary hover:text-content'
+            }`}
+            onClick={handleToggleSplit}
+            disabled={!isWideViewport}
+            aria-checked={splitEnabled}
+            data-testid="analyze-split-toggle"
+          >
+            {t('analyze.splitView.toggle')}
+          </button>
+        </Tooltip>
         {onBack && (
           <button
             type="button"

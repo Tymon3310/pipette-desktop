@@ -61,6 +61,7 @@ import {
   ANALYTICS_MIN_KEYSTROKES,
   buildAnalyticsExport,
   estimateAnalyticsExportSizeBytes,
+  sanitizeFingerOverrides,
   validateAnalyticsExport,
 } from '../hub-analytics'
 import {
@@ -75,7 +76,7 @@ import {
 } from '../../typing-analytics/bigram-aggregate'
 import { computeLayoutComparison } from '../../typing-analytics/compute-layout-comparison'
 import type { TypingKeymapSnapshot } from '../../../shared/types/typing-analytics'
-import type { HubAnalyticsFilters } from '../../../shared/types/hub'
+import type { HubAnalyticsFilters, HubAnalyticsExportV1 } from '../../../shared/types/hub'
 
 function emptyPeakRecords(): {
   peakWpm: null
@@ -214,6 +215,38 @@ describe('buildAnalyticsExport', () => {
     expect(result.data.layoutComparison).toEqual({ sourceLayoutId: 'src', targets: [] })
   })
 
+  it('threads fingerOverrides through to computeLayoutComparison', async () => {
+    const fingerOverrides = { '0,0': 'left-index' as const }
+    await buildAnalyticsExport({
+      ...baseInput(),
+      layoutComparisonInputs: {
+        source: { id: 'qwerty', map: { 'KC_A': 'a' } },
+        targets: [{ id: 'colemak', map: { 'KC_A': 'a' } }],
+        metrics: [],
+        kleKeys: [],
+      },
+      fingerOverrides,
+    })
+    expect(computeLayoutComparison).toHaveBeenCalledWith(
+      expect.objectContaining({ fingerOverrides }),
+    )
+  })
+
+  it('omits fingerOverrides from the computeLayoutComparison call when none are supplied', async () => {
+    await buildAnalyticsExport({
+      ...baseInput(),
+      layoutComparisonInputs: {
+        source: { id: 'qwerty', map: { 'KC_A': 'a' } },
+        targets: [{ id: 'colemak', map: { 'KC_A': 'a' } }],
+        metrics: [],
+        kleKeys: [],
+      },
+    })
+    expect(computeLayoutComparison).toHaveBeenCalledWith(
+      expect.objectContaining({ fingerOverrides: undefined }),
+    )
+  })
+
   it('forwards the App-tab aggregates for ByApp', async () => {
     const result = await buildAnalyticsExport(baseInput())
     expect(result.data.appUsage).toEqual([{ name: 'VSCode', keystrokes: 500, activeMs: 50_000 }])
@@ -250,7 +283,9 @@ describe('buildAnalyticsExport', () => {
 })
 
 describe('validateAnalyticsExport', () => {
-  function makeExport(overrides: Partial<{ totalKeystrokes: number; fromMs: number; toMs: number }> = {}) {
+  function makeExport(
+    overrides: Partial<{ totalKeystrokes: number; fromMs: number; toMs: number }> = {},
+  ): HubAnalyticsExportV1 {
     return {
       version: 1,
       kind: 'analytics',
@@ -271,7 +306,7 @@ describe('validateAnalyticsExport', () => {
         peakRecords: emptyPeakRecords(),
         layoutComparison: null,
       },
-    } as const
+    }
   }
 
   it('accepts a payload at the threshold', () => {
@@ -315,5 +350,38 @@ describe('estimateAnalyticsExportSizeBytes', () => {
     // entries should land in the kilobyte range, not megabytes.
     expect(bytes).toBeGreaterThan(100)
     expect(bytes).toBeLessThan(50_000)
+  })
+})
+
+describe('sanitizeFingerOverrides', () => {
+  it('returns undefined for undefined input', () => {
+    expect(sanitizeFingerOverrides(undefined)).toBeUndefined()
+  })
+
+  it('returns undefined for an empty object', () => {
+    expect(sanitizeFingerOverrides({})).toBeUndefined()
+  })
+
+  it('passes through valid entries', () => {
+    expect(sanitizeFingerOverrides({ '0,0': 'left-index', '1,3': 'right-pinky' })).toEqual({
+      '0,0': 'left-index',
+      '1,3': 'right-pinky',
+    })
+  })
+
+  it('drops entries with a malformed key', () => {
+    expect(sanitizeFingerOverrides({ 'not-a-pos': 'left-index', '0,0': 'left-index' })).toEqual({
+      '0,0': 'left-index',
+    })
+  })
+
+  it('drops entries whose value is not one of the 10 finger names', () => {
+    expect(sanitizeFingerOverrides({ '0,0': 'left-elbow', '0,1': 'right-thumb' })).toEqual({
+      '0,1': 'right-thumb',
+    })
+  })
+
+  it('returns undefined when every entry is invalid', () => {
+    expect(sanitizeFingerOverrides({ 'bad-key': 'not-a-finger' })).toBeUndefined()
   })
 })

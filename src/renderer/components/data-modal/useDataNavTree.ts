@@ -48,11 +48,14 @@ export function useDataNavTree({ showHubTab, syncEnabled }: UseDataNavTreeOption
     try {
       // Merge cache-known hashes (immediate) with cloud-discovered
       // hashes (authoritative) so a device we've never fetched from
-      // still appears in the Sync > Typing tree.
-      const [local, cloud] = await Promise.all([
-        window.vialAPI.typingAnalyticsListRemoteHashes(uid),
+      // still appears in the Sync > Typing tree. Cache-known hashes come
+      // from the device-info bundle (the dedicated remote-hash IPC was
+      // dropped when the Analyze device filter moved to labelled infos).
+      const [infoBundle, cloud] = await Promise.all([
+        window.vialAPI.typingAnalyticsListDeviceInfos(uid),
         window.vialAPI.typingAnalyticsListRemoteCloudHashes(uid),
       ])
+      const local = infoBundle ? infoBundle.remotes.map((r) => r.machineHash) : []
       const merged = Array.from(new Set<string>([...local, ...cloud])).sort()
       setRemoteTypingHashes((prev) => ({ ...prev, [uid]: merged }))
     } catch {
@@ -200,6 +203,14 @@ export function useDataNavTree({ showHubTab, syncEnabled }: UseDataNavTreeOption
     refreshStoredKeyboards,
     refreshTypingKeyboards,
     syncScanResult: filteredSyncScanResult,
+    // Unfiltered scan, threaded through to CloudDataContent (Sync >
+    // Cloud Data) so it can reuse this same scan instead of running its
+    // own second full download+decrypt pass — the filtered result above
+    // intentionally zeroes `favorites` for the orphan-discovery tree,
+    // which is wrong for Cloud Data's actual need (showing/resetting a
+    // target's remote copy regardless of whether it's also filtered out
+    // of that tree).
+    rawSyncScanResult: syncScanResult,
     syncScanning,
     handleSyncScan,
     onSyncKeyboardSelect,

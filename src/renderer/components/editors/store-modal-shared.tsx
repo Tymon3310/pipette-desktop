@@ -10,6 +10,9 @@ export const SELECT_BASE =
 export const INPUT_COMPACT =
   'rounded border border-edge bg-transparent px-1.5 py-0.5 text-xs text-content ' +
   'focus:border-accent focus:outline-none'
+export const FILTER_SELECT_CLASS =
+  'h-8 rounded-md border border-edge bg-surface-alt px-2 text-sm text-content-secondary ' +
+  'focus:border-accent focus:outline-none'
 
 // Modal width tiers — use these instead of inline w-[*px] values.
 export const MODAL_SM  = 'w-modal-sm  max-w-modal-vw'
@@ -22,8 +25,18 @@ export const ACTION_BTN =
   'text-xs font-medium text-content hover:text-content cursor-pointer bg-transparent border-none px-2 py-1 rounded'
 export const DELETE_BTN =
   'text-xs font-medium text-danger hover:text-danger cursor-pointer bg-transparent border-none px-2 py-1 rounded'
+// Accent-colored twin of DELETE_BTN — same initial-action row-button shape,
+// for actions that load/apply rather than delete (e.g. the initial Load
+// button), so it stays visually consistent with its own confirm step.
+export const LOAD_BTN =
+  'text-xs font-medium text-accent hover:text-accent cursor-pointer bg-transparent border-none px-2 py-1 rounded'
 export const CONFIRM_DELETE_BTN =
   'text-xs font-medium text-danger hover:bg-danger/10 px-2 py-1 rounded cursor-pointer bg-transparent border-none'
+// Accent-colored twin of CONFIRM_DELETE_BTN — same compact row-button shape,
+// for confirm-style actions that apply/overwrite rather than delete (e.g.
+// the Load confirm), so they read as distinct from the red delete confirm.
+export const CONFIRM_ACCENT_BTN =
+  'text-xs font-medium text-accent hover:bg-accent/10 px-2 py-1 rounded cursor-pointer bg-transparent border-none'
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0')

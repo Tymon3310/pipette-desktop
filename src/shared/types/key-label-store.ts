@@ -12,7 +12,7 @@ export interface KeyLabelMeta {
   /** Hub `uploader_name` cached locally for the Author column. Absent
    *  for entries that have never been associated with a Hub post. */
   uploaderName?: string
-  /** Hub post id when synced to Pipette Hub. */
+  /** Hub post id when synced publicly to Pipette Hub. */
   hubPostId?: string
   /** Hub-side `updated_at` cached locally so the Updated column shows
    *  the same value as the Hub website (= when the author last
@@ -42,6 +42,16 @@ export interface KeyLabelEntryFile {
   name: string
   map: Record<string, string>
   compositeLabels?: Record<string, string>
+  /**
+   * Opt-in marker set by the label author: this label set is a pure
+   * QWERTY-keycode permutation (e.g. Colemak, Dvorak) and can be used
+   * to bulk-rewrite the actual keymap, not just the display labels.
+   * The flag alone is not sufficient proof — the rewrite-table builder
+   * (`buildKeymapRewriteTable` in `src/shared/keymap/keymap-apply.ts`)
+   * is the final authority and will refuse to apply a map that fails
+   * its validation even when this flag is set.
+   */
+  keymapApplicable?: boolean
 }
 
 /** Combined meta + entry payload returned by `get`. */
@@ -63,4 +73,30 @@ export interface KeyLabelStoreResult<T> {
   data?: T
   errorCode?: KeyLabelStoreErrorCode
   error?: string
+}
+
+/** One file's failure within a multi-file `importFromDialog` batch. */
+export interface KeyLabelImportRejection {
+  fileName: string
+  errorCode: KeyLabelStoreErrorCode
+  error: string
+}
+
+/** One file's success within a multi-file `importFromDialog` batch.
+ *  Carries the originating filename alongside the saved meta so the
+ *  renderer can report a failure (e.g. a Hub-sync failure after the
+ *  save itself succeeded) against the file the user picked, not the
+ *  label's internal display name — the main process is the only side
+ *  that knows which `filePaths[i]` produced a given saved entry. */
+export interface KeyLabelImportSuccess {
+  fileName: string
+  meta: KeyLabelMeta
+}
+
+/** Result of importing a batch of files selected via the multi-select
+ *  file dialog. Every selected file is processed independently — a bad
+ *  file is recorded in `rejections` rather than aborting the rest. */
+export interface KeyLabelImportBatchResult {
+  imported: KeyLabelImportSuccess[]
+  rejections: KeyLabelImportRejection[]
 }

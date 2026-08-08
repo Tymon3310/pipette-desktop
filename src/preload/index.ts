@@ -10,10 +10,13 @@ import * as protocol from './protocol'
 import * as keychronProtocol from './keychron-protocol'
 import { IpcChannels } from '../shared/ipc/channels'
 import type { DeviceInfo, KeyboardDefinition, ProbeResult } from '../shared/types/protocol'
+import type { TrayStatus } from '../shared/types/vial-api'
 import type { SnapshotMeta } from '../shared/types/snapshot-store'
 import type { AnalyzeFilterSnapshotMeta } from '../shared/types/analyze-filter-store'
+import type { RunKeystrokeLog, RunLogMeta } from '../shared/types/typing-run-log'
 import type { SavedFavoriteMeta, FavoriteImportResult } from '../shared/types/favorite-store'
-import type { KeyLabelMeta, KeyLabelRecord, KeyLabelStoreResult } from '../shared/types/key-label-store'
+import type { KeyLabelMeta, KeyLabelRecord, KeyLabelStoreResult, KeyLabelImportBatchResult } from '../shared/types/key-label-store'
+import type { TypingTestTextMeta, TypingTestTextRecord, TypingTestTextStoreResult } from '../shared/types/typing-test-text-store'
 import type { HubKeyLabelItem, HubKeyLabelListResponse, HubKeyLabelListParams, HubKeyLabelTimestampsResponse } from '../shared/types/hub-key-label'
 import type {
   I18nPackMeta,
@@ -43,11 +46,17 @@ import type {
   HubThemePackTimestampsResponse,
   HubUploadResult,
   HubDeleteResult,
+  HubPrivateUploadResult,
+  HubPrivateUploadPostParams,
+  HubPrivateUploadFavoritePostParams,
+  HubPrivateUploadAnalyticsPostParams,
+  HubPrivateKind,
 } from '../shared/types/hub'
+import type { HubPrivateLink } from '../shared/types/hub-private'
 import type { AppConfig } from '../shared/types/app-config'
 import type { DeviceScope } from '../shared/types/analyze-filters'
 import type { SyncAuthStatus, SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, UndecryptableFile, SyncDataScanResult, SyncScope, StoredKeyboardInfo, SyncOperationResult } from '../shared/types/sync'
-import type { PipetteSettings } from '../shared/types/pipette-settings'
+import type { PipetteSettings, PipetteSettingsPatch, PooledTypingTestResult } from '../shared/types/pipette-settings'
 import type {
   LayoutComparisonOptions,
   LayoutComparisonResult,
@@ -64,6 +73,8 @@ import type {
   TypingMatrixCellRow,
   TypingMatrixCellDailyRow,
   TypingMinuteStatsRow,
+  TypingRolloverMinuteRow,
+  TypingDurationCell,
   TypingSessionRow,
   TypingBksMinuteRow,
   TypingTombstoneResult,
@@ -73,7 +84,8 @@ import type {
   TypingBigramAggregateView,
 } from '../shared/types/typing-analytics'
 import type { LanguageListEntry } from '../shared/types/language-store'
-import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyPostsParams, HubFetchMyKeyboardPostsResult, HubUserResult, HubUploadFavoritePostParams, HubUpdateFavoritePostParams, HubUploadAnalyticsPostParams, HubUpdateAnalyticsPostParams, HubPreviewAnalyticsPostParams, HubAnalyticsPreview, HubI18nPackTimestampsResponse } from '../shared/types/hub'
+import type { AozoraImportResult } from '../shared/types/aozora-import'
+import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubFetchMyPostsResult, HubFetchMyPostsParams, HubFetchMyKeyboardPostsResult, HubUserResult, HubUploadFavoritePostParams, HubUpdateFavoritePostParams, HubUploadAnalyticsPostParams, HubUpdateAnalyticsPostParams, HubPreviewAnalyticsPostParams, HubAnalyticsPreview, HubI18nPackTimestampsResponse } from '../shared/types/hub'
 import type { NotificationFetchResult } from '../shared/types/notification'
 
 /**
@@ -86,7 +98,7 @@ const vialAPI = {
   // --- Device Management (node-hid via IPC) ---
   listDevices: (): Promise<DeviceInfo[]> => listDevices(),
   openDevice: (vendorId: number, productId: number, serialNumber?: string): Promise<boolean> =>
-    openHidDevice(vendorId, productId, serialNumber),
+    openHidDevice(vendorId, productId),
   closeDevice: (): Promise<void> => closeHidDevice(),
   isDeviceOpen: (): Promise<boolean> => isDeviceOpen(),
   probeDevice: (vendorId: number, productId: number, serialNumber?: string): Promise<ProbeResult> =>
@@ -376,6 +388,14 @@ const vialAPI = {
   analyzeFilterStoreDelete: (uid: string, entryId: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.ANALYZE_FILTER_STORE_DELETE, uid, entryId),
 
+  // --- Typing Run Log Store (per-run raw keystroke log) ---
+  typingRunLogSave: (uid: string, log: RunKeystrokeLog): Promise<{ success: boolean; entry?: RunLogMeta; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_RUN_LOG_SAVE, uid, log),
+  typingRunLogList: (uid: string): Promise<{ success: boolean; entries?: RunLogMeta[]; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_RUN_LOG_LIST, uid),
+  typingRunLogGet: (uid: string, runId: string): Promise<{ success: boolean; data?: RunKeystrokeLog; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_RUN_LOG_GET, uid, runId),
+
   // --- Favorite Store (internal save/load via IPC) ---
   favoriteStoreList: (type: string): Promise<{ success: boolean; entries?: SavedFavoriteMeta[]; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FAVORITE_STORE_LIST, type),
@@ -407,7 +427,7 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.KEY_LABEL_STORE_RENAME, id, newName),
   keyLabelStoreDelete: (id: string): Promise<KeyLabelStoreResult<void>> =>
     ipcRenderer.invoke(IpcChannels.KEY_LABEL_STORE_DELETE, id),
-  keyLabelStoreImport: (): Promise<KeyLabelStoreResult<KeyLabelMeta>> =>
+  keyLabelStoreImport: (): Promise<KeyLabelStoreResult<KeyLabelImportBatchResult>> =>
     ipcRenderer.invoke(IpcChannels.KEY_LABEL_STORE_IMPORT),
   keyLabelStoreExport: (id: string): Promise<KeyLabelStoreResult<{ filePath: string }>> =>
     ipcRenderer.invoke(IpcChannels.KEY_LABEL_STORE_EXPORT, id),
@@ -417,6 +437,20 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.KEY_LABEL_STORE_SET_HUB_POST_ID, id, hubPostId),
   keyLabelStoreHasName: (name: string, excludeId?: string): Promise<KeyLabelStoreResult<boolean>> =>
     ipcRenderer.invoke(IpcChannels.KEY_LABEL_STORE_HAS_NAME, name, excludeId),
+
+  // --- Typing Test Text Store (local) ---
+  typingTestTextStoreList: (): Promise<TypingTestTextStoreResult<TypingTestTextMeta[]>> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_TEST_TEXT_LIST),
+  typingTestTextStoreGet: (id: string): Promise<TypingTestTextStoreResult<TypingTestTextRecord>> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_TEST_TEXT_GET, id),
+  typingTestTextStoreRename: (id: string, newName: string): Promise<TypingTestTextStoreResult<TypingTestTextMeta>> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_TEST_TEXT_RENAME, id, newName),
+  typingTestTextStoreDelete: (id: string): Promise<TypingTestTextStoreResult<void>> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_TEST_TEXT_DELETE, id),
+  typingTestTextStoreImport: (): Promise<TypingTestTextStoreResult<TypingTestTextMeta>> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_TEST_TEXT_IMPORT),
+  typingTestTextStoreImportConfirm: (): Promise<TypingTestTextStoreResult<TypingTestTextMeta>> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_TEST_TEXT_IMPORT_CONFIRM),
 
   // --- Key Label Hub ---
   keyLabelHubList: (params?: HubKeyLabelListParams): Promise<KeyLabelStoreResult<HubKeyLabelListResponse>> =>
@@ -447,10 +481,12 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.I18N_PACK_STORE_SET_ENABLED, id, enabled),
   i18nPackDelete: (id: string): Promise<I18nPackStoreResult<void>> =>
     ipcRenderer.invoke(IpcChannels.I18N_PACK_STORE_DELETE, id),
-  i18nPackSetHubPostId: (id: string, hubPostId: string | null): Promise<I18nPackStoreResult<I18nPackMeta>> =>
-    ipcRenderer.invoke(IpcChannels.I18N_PACK_STORE_SET_HUB_POST_ID, id, hubPostId),
+  i18nPackSetHubPostId: (id: string, hubPostId: string | null, uploaderName?: string, hubUpdatedAt?: string): Promise<I18nPackStoreResult<I18nPackMeta>> =>
+    ipcRenderer.invoke(IpcChannels.I18N_PACK_STORE_SET_HUB_POST_ID, id, hubPostId, uploaderName, hubUpdatedAt),
   i18nPackHasName: (name: string, excludeId?: string): Promise<I18nPackStoreResult<boolean>> =>
     ipcRenderer.invoke(IpcChannels.I18N_PACK_STORE_HAS_NAME, name, excludeId),
+  i18nPackReorder: (orderedIds: string[]): Promise<I18nPackStoreResult<void>> =>
+    ipcRenderer.invoke(IpcChannels.I18N_PACK_STORE_REORDER, orderedIds),
   i18nPackImport: (): Promise<I18nPackImportDialogResult> =>
     ipcRenderer.invoke(IpcChannels.I18N_PACK_IMPORT),
   i18nPackImportApply: (raw: unknown, options?: I18nPackImportApplyOptions): Promise<I18nPackStoreResult<I18nPackMeta>> =>
@@ -474,10 +510,12 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.THEME_PACK_STORE_RENAME, id, newName),
   themePackDelete: (id: string): Promise<ThemePackStoreResult<void>> =>
     ipcRenderer.invoke(IpcChannels.THEME_PACK_STORE_DELETE, id),
-  themePackSetHubPostId: (id: string, hubPostId: string | null): Promise<ThemePackStoreResult<ThemePackMeta>> =>
-    ipcRenderer.invoke(IpcChannels.THEME_PACK_STORE_SET_HUB_POST_ID, id, hubPostId),
+  themePackSetHubPostId: (id: string, hubPostId: string | null, uploaderName?: string, hubUpdatedAt?: string): Promise<ThemePackStoreResult<ThemePackMeta>> =>
+    ipcRenderer.invoke(IpcChannels.THEME_PACK_STORE_SET_HUB_POST_ID, id, hubPostId, uploaderName, hubUpdatedAt),
   themePackHasName: (name: string, excludeId?: string): Promise<ThemePackStoreResult<boolean>> =>
     ipcRenderer.invoke(IpcChannels.THEME_PACK_STORE_HAS_NAME, name, excludeId),
+  themePackReorder: (orderedIds: string[]): Promise<ThemePackStoreResult<void>> =>
+    ipcRenderer.invoke(IpcChannels.THEME_PACK_STORE_REORDER, orderedIds),
   themePackImport: (): Promise<ThemePackImportDialogResult> =>
     ipcRenderer.invoke(IpcChannels.THEME_PACK_IMPORT),
   themePackImportApply: (raw: unknown, options?: ThemePackImportApplyOptions): Promise<ThemePackStoreResult<ThemePackMeta>> =>
@@ -519,8 +557,10 @@ const vialAPI = {
   // --- Pipette Settings Store (internal save/load via IPC) ---
   pipetteSettingsGet: (uid: string): Promise<PipetteSettings | null> =>
     ipcRenderer.invoke(IpcChannels.PIPETTE_SETTINGS_GET, uid),
-  pipetteSettingsSet: (uid: string, prefs: PipetteSettings): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke(IpcChannels.PIPETTE_SETTINGS_SET, uid, prefs),
+  pipetteSettingsPatch: (uid: string, partial: PipetteSettingsPatch): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.PIPETTE_SETTINGS_PATCH, uid, partial),
+  pipetteSettingsListAllTypingResults: (): Promise<PooledTypingTestResult[]> =>
+    ipcRenderer.invoke(IpcChannels.PIPETTE_SETTINGS_LIST_ALL_TYPING_RESULTS),
 
   // --- Typing Analytics (fire-and-forget event dispatch) ---
   typingAnalyticsEvent: (event: TypingAnalyticsEvent): Promise<void> =>
@@ -534,6 +574,21 @@ const vialAPI = {
     scope: unknown,
   ): Promise<{ name: string; keystrokes: number; activeMs: number }[]> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_APPS_FOR_RANGE, uid, sinceMs, untilMs, scope),
+  typingAnalyticsListTypingTestsForRange: (
+    uid: string,
+    sinceMs: number,
+    untilMs: number,
+    scope: unknown,
+  ): Promise<{ name: string; keystrokes: number; activeMs: number }[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_TYPING_TESTS_FOR_RANGE, uid, sinceMs, untilMs, scope),
+  typingAnalyticsListTypingTestRunsForRange: (
+    uid: string,
+    sinceMs: number,
+    untilMs: number,
+    scope: unknown,
+    typingTestScopes: string[],
+  ): Promise<{ runId: string; keystrokes: number; firstMs: number }[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_TYPING_TEST_RUNS_FOR_RANGE, uid, sinceMs, untilMs, scope, typingTestScopes),
   typingAnalyticsGetAppUsageForRange: (
     uid: string,
     sinceMs: number,
@@ -550,8 +605,8 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_GET_WPM_BY_APP_FOR_RANGE, uid, sinceMs, untilMs, scope),
   typingAnalyticsListKeyboards: (): Promise<TypingKeyboardSummary[]> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_KEYBOARDS),
-  typingAnalyticsListItems: (uid: string, appScopes: string[] = []): Promise<TypingDailySummary[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ITEMS, uid, appScopes),
+  typingAnalyticsListItems: (uid: string, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingDailySummary[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ITEMS, uid, appScopes, typingTestScopes, runIdScopes),
   typingAnalyticsDeleteItems: (uid: string, dates: string[]): Promise<TypingTombstoneResult> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_DELETE_ITEMS, uid, dates),
   typingAnalyticsDeleteAll: (uid: string): Promise<TypingTombstoneResult> =>
@@ -562,74 +617,74 @@ const vialAPI = {
     sinceMs: number,
   ): Promise<TypingHeatmapByCell> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_GET_MATRIX_HEATMAP, uid, layer, sinceMs),
-  typingAnalyticsListItemsLocal: (uid: string, appScopes: string[] = []): Promise<TypingDailySummary[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ITEMS_LOCAL, uid, appScopes),
+  typingAnalyticsListItemsLocal: (uid: string, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingDailySummary[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ITEMS_LOCAL, uid, appScopes, typingTestScopes, runIdScopes),
   typingAnalyticsListDeviceInfos: (uid: string): Promise<TypingAnalyticsDeviceInfoBundle | null> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_DEVICE_INFOS, uid),
-  typingAnalyticsListItemsForHash: (uid: string, machineHash: string, appScopes: string[] = []): Promise<TypingDailySummary[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ITEMS_FOR_HASH, uid, machineHash, appScopes),
+  typingAnalyticsListItemsForHash: (uid: string, machineHash: string, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingDailySummary[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ITEMS_FOR_HASH, uid, machineHash, appScopes, typingTestScopes, runIdScopes),
   typingAnalyticsListIntervalItems: (uid: string): Promise<TypingIntervalDailySummary[]> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_INTERVAL_ITEMS, uid),
   typingAnalyticsListIntervalItemsLocal: (uid: string): Promise<TypingIntervalDailySummary[]> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_INTERVAL_ITEMS_LOCAL, uid),
   typingAnalyticsListIntervalItemsForHash: (uid: string, machineHash: string): Promise<TypingIntervalDailySummary[]> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_INTERVAL_ITEMS_FOR_HASH, uid, machineHash),
-  typingAnalyticsListActivityGrid: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingActivityCell[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ACTIVITY_GRID, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsListActivityGridLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingActivityCell[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ACTIVITY_GRID_LOCAL, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsListActivityGridForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingActivityCell[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ACTIVITY_GRID_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes),
-  typingAnalyticsListLayerUsage: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingLayerUsageRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_LAYER_USAGE, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsListLayerUsageLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingLayerUsageRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_LAYER_USAGE_LOCAL, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsListLayerUsageForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingLayerUsageRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_LAYER_USAGE_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes),
-  typingAnalyticsListMatrixCells: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingMatrixCellRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MATRIX_CELLS, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsListMatrixCellsLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingMatrixCellRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MATRIX_CELLS_LOCAL, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsListMatrixCellsForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingMatrixCellRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MATRIX_CELLS_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes),
-  typingAnalyticsListMatrixCellsByDay: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingMatrixCellDailyRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MATRIX_CELLS_BY_DAY, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsListMatrixCellsByDayLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingMatrixCellDailyRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MATRIX_CELLS_BY_DAY_LOCAL, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsListMatrixCellsByDayForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingMatrixCellDailyRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MATRIX_CELLS_BY_DAY_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes),
-  typingAnalyticsListMinuteStats: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingMinuteStatsRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MINUTE_STATS, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsListMinuteStatsLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingMinuteStatsRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MINUTE_STATS_LOCAL, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsListMinuteStatsForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingMinuteStatsRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MINUTE_STATS_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes),
+  typingAnalyticsListActivityGrid: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingActivityCell[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ACTIVITY_GRID, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListActivityGridLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingActivityCell[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ACTIVITY_GRID_LOCAL, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListActivityGridForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingActivityCell[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ACTIVITY_GRID_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListLayerUsage: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingLayerUsageRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_LAYER_USAGE, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListLayerUsageLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingLayerUsageRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_LAYER_USAGE_LOCAL, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListLayerUsageForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingLayerUsageRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_LAYER_USAGE_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListMatrixCells: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingMatrixCellRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MATRIX_CELLS, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListMatrixCellsLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingMatrixCellRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MATRIX_CELLS_LOCAL, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListMatrixCellsForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingMatrixCellRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MATRIX_CELLS_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListMatrixCellsByDay: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingMatrixCellDailyRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MATRIX_CELLS_BY_DAY, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListMatrixCellsByDayLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingMatrixCellDailyRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MATRIX_CELLS_BY_DAY_LOCAL, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListMatrixCellsByDayForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingMatrixCellDailyRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MATRIX_CELLS_BY_DAY_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListMinuteStats: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingMinuteStatsRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MINUTE_STATS, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListMinuteStatsLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingMinuteStatsRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MINUTE_STATS_LOCAL, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListMinuteStatsForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingMinuteStatsRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_MINUTE_STATS_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
   typingAnalyticsListSessions: (uid: string, sinceMs: number, untilMs: number): Promise<TypingSessionRow[]> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_SESSIONS, uid, sinceMs, untilMs),
   typingAnalyticsListSessionsLocal: (uid: string, sinceMs: number, untilMs: number): Promise<TypingSessionRow[]> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_SESSIONS_LOCAL, uid, sinceMs, untilMs),
   typingAnalyticsListSessionsForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number): Promise<TypingSessionRow[]> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_SESSIONS_FOR_HASH, uid, machineHash, sinceMs, untilMs),
-  typingAnalyticsListBksMinute: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingBksMinuteRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_BKS_MINUTE, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsListBksMinuteLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingBksMinuteRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_BKS_MINUTE_LOCAL, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsListBksMinuteForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<TypingBksMinuteRow[]> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_BKS_MINUTE_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes),
-  typingAnalyticsGetPeakRecords: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<PeakRecords> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_GET_PEAK_RECORDS, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsGetPeakRecordsLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<PeakRecords> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_GET_PEAK_RECORDS_LOCAL, uid, sinceMs, untilMs, appScopes),
-  typingAnalyticsGetPeakRecordsForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = []): Promise<PeakRecords> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_GET_PEAK_RECORDS_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes),
+  typingAnalyticsListBksMinute: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingBksMinuteRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_BKS_MINUTE, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListBksMinuteLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingBksMinuteRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_BKS_MINUTE_LOCAL, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsListBksMinuteForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingBksMinuteRow[]> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_BKS_MINUTE_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsGetPeakRecords: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<PeakRecords> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_GET_PEAK_RECORDS, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsGetPeakRecordsLocal: (uid: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<PeakRecords> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_GET_PEAK_RECORDS_LOCAL, uid, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
+  typingAnalyticsGetPeakRecordsForHash: (uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<PeakRecords> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_GET_PEAK_RECORDS_FOR_HASH, uid, machineHash, sinceMs, untilMs, appScopes, typingTestScopes, runIdScopes),
   typingAnalyticsSaveKeymapSnapshot: (partial: Omit<TypingKeymapSnapshot, 'machineHash'>): Promise<{ saved: boolean; savedAt: number | null }> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_SAVE_KEYMAP_SNAPSHOT, partial),
   typingAnalyticsGetKeymapSnapshotForRange: (uid: string, fromMs: number, toMs: number): Promise<TypingKeymapSnapshot | null> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_GET_KEYMAP_SNAPSHOT_FOR_RANGE, uid, fromMs, toMs),
   typingAnalyticsListKeymapSnapshots: (uid: string): Promise<TypingKeymapSnapshotSummary[]> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_KEYMAP_SNAPSHOTS, uid),
-  typingAnalyticsGetMatrixHeatmapForRange: (uid: string, layer: number, sinceMs: number, untilMs: number, scope: DeviceScope, appScopes: string[] = []): Promise<TypingHeatmapByCell> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_GET_MATRIX_HEATMAP_FOR_RANGE, uid, layer, sinceMs, untilMs, scope, appScopes),
+  typingAnalyticsGetMatrixHeatmapForRange: (uid: string, layer: number, sinceMs: number, untilMs: number, scope: DeviceScope, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingHeatmapByCell> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_GET_MATRIX_HEATMAP_FOR_RANGE, uid, layer, sinceMs, untilMs, scope, appScopes, typingTestScopes, runIdScopes),
   typingAnalyticsGetBigramAggregateForRange: (
     uid: string,
     sinceMs: number,
@@ -637,7 +692,7 @@ const vialAPI = {
     view: TypingBigramAggregateView,
     scope: DeviceScope,
     options?: TypingBigramAggregateOptions,
-    appScopes: string[] = [],
+    appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = [],
   ): Promise<TypingBigramAggregateResult> =>
     ipcRenderer.invoke(
       IpcChannels.TYPING_ANALYTICS_GET_BIGRAM_AGGREGATE_FOR_RANGE,
@@ -648,6 +703,42 @@ const vialAPI = {
       scope,
       options,
       appScopes,
+      typingTestScopes,
+      runIdScopes,
+    ),
+  typingAnalyticsListRolloverMinutes: (
+    uid: string,
+    scope: DeviceScope,
+    sinceMs: number,
+    untilMs: number,
+    appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = [],
+  ): Promise<TypingRolloverMinuteRow[]> =>
+    ipcRenderer.invoke(
+      IpcChannels.TYPING_ANALYTICS_LIST_ROLLOVER_MINUTES,
+      uid,
+      scope,
+      sinceMs,
+      untilMs,
+      appScopes,
+      typingTestScopes,
+      runIdScopes,
+    ),
+  typingAnalyticsListDurationCells: (
+    uid: string,
+    scope: DeviceScope,
+    sinceMs: number,
+    untilMs: number,
+    appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = [],
+  ): Promise<TypingDurationCell[]> =>
+    ipcRenderer.invoke(
+      IpcChannels.TYPING_ANALYTICS_LIST_DURATION_CELLS,
+      uid,
+      scope,
+      sinceMs,
+      untilMs,
+      appScopes,
+      typingTestScopes,
+      runIdScopes,
     ),
   typingAnalyticsGetLayoutComparisonForRange: (
     uid: string,
@@ -655,7 +746,7 @@ const vialAPI = {
     untilMs: number,
     scope: DeviceScope,
     options: LayoutComparisonOptions,
-    appScopes: string[] = [],
+    appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = [],
   ): Promise<LayoutComparisonResult | null> =>
     ipcRenderer.invoke(
       IpcChannels.TYPING_ANALYTICS_GET_LAYOUT_COMPARISON_FOR_RANGE,
@@ -665,6 +756,8 @@ const vialAPI = {
       scope,
       options,
       appScopes,
+      typingTestScopes,
+      runIdScopes,
     ),
   typingAnalyticsListLocalDeviceDays: (uid: string, machineHash: string): Promise<string[]> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_LOCAL_DEVICE_DAYS, uid, machineHash),
@@ -684,14 +777,22 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_IMPORT),
 
   // --- Language Store (IPC to main) ---
-  langList: (): Promise<LanguageListEntry[]> =>
-    ipcRenderer.invoke(IpcChannels.LANG_LIST),
-  langGet: (name: string): Promise<unknown> =>
-    ipcRenderer.invoke(IpcChannels.LANG_GET, name),
-  langDownload: (name: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke(IpcChannels.LANG_DOWNLOAD, name),
-  langDelete: (name: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke(IpcChannels.LANG_DELETE, name),
+  langList: (provider?: string): Promise<LanguageListEntry[]> =>
+    ipcRenderer.invoke(IpcChannels.LANG_LIST, provider),
+  langGet: (name: string, provider?: string): Promise<unknown> =>
+    ipcRenderer.invoke(IpcChannels.LANG_GET, name, provider),
+  langDownload: (name: string, provider?: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.LANG_DOWNLOAD, name, provider),
+  langDelete: (name: string, provider?: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.LANG_DELETE, name, provider),
+  checkTypingDatasetUpdate: (provider?: string): Promise<{ provider: string; updateAvailable: boolean }> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_DATASET_CHECK, provider),
+  updateTypingDataset: (provider?: string): Promise<{ provider: string; changed: boolean; fromVersion: string; toVersion?: string }> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_DATASET_UPDATE, provider),
+
+  // --- Aozora Bunko catalog import (IPC to main) ---
+  aozoraImport: (workId: string): Promise<AozoraImportResult> =>
+    ipcRenderer.invoke(IpcChannels.AOZORA_IMPORT, workId),
 
   // --- App Config ---
   appConfigGetAll: (): Promise<AppConfig> =>
@@ -750,6 +851,10 @@ const vialAPI = {
   // --- Hub ---
   hubUploadPost: (params: HubUploadPostParams): Promise<HubUploadResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_UPLOAD_POST, params),
+  hubUploadPrivatePost: (params: HubPrivateUploadPostParams): Promise<HubPrivateUploadResult> =>
+    ipcRenderer.invoke(IpcChannels.HUB_UPLOAD_PRIVATE_POST, params),
+  hubDeletePrivatePost: (kind: HubPrivateKind, id: string): Promise<HubDeleteResult> =>
+    ipcRenderer.invoke(IpcChannels.HUB_DELETE_PRIVATE_POST, kind, id),
   hubUpdatePost: (params: HubUpdatePostParams): Promise<HubUploadResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_UPDATE_POST, params),
   hubPatchPost: (params: HubPatchPostParams): Promise<HubDeleteResult> =>
@@ -776,16 +881,22 @@ const vialAPI = {
   // --- Hub Feature posts (favorites) ---
   hubUploadFavoritePost: (params: HubUploadFavoritePostParams): Promise<HubUploadResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_UPLOAD_FAVORITE_POST, params),
+  hubUploadPrivateFavoritePost: (params: HubPrivateUploadFavoritePostParams): Promise<HubPrivateUploadResult> =>
+    ipcRenderer.invoke(IpcChannels.HUB_UPLOAD_PRIVATE_FAVORITE_POST, params),
   hubUpdateFavoritePost: (params: HubUpdateFavoritePostParams): Promise<HubUploadResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_UPDATE_FAVORITE_POST, params),
 
   // --- Favorite Store extensions ---
   favoriteStoreSetHubPostId: (type: string, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.FAVORITE_STORE_SET_HUB_POST_ID, type, entryId, hubPostId),
+  favoriteStoreSetHubPrivate: (type: string, entryId: string, link: HubPrivateLink | null): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.FAVORITE_STORE_SET_HUB_PRIVATE, type, entryId, link),
 
   // --- Hub Analytics posts ---
   hubUploadAnalyticsPost: (params: HubUploadAnalyticsPostParams): Promise<HubUploadResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_UPLOAD_ANALYTICS_POST, params),
+  hubUploadPrivateAnalyticsPost: (params: HubPrivateUploadAnalyticsPostParams): Promise<HubPrivateUploadResult> =>
+    ipcRenderer.invoke(IpcChannels.HUB_UPLOAD_PRIVATE_ANALYTICS_POST, params),
   hubUpdateAnalyticsPost: (params: HubUpdateAnalyticsPostParams): Promise<HubUploadResult> =>
     ipcRenderer.invoke(IpcChannels.HUB_UPDATE_ANALYTICS_POST, params),
   hubPreviewAnalyticsPost: (params: HubPreviewAnalyticsPostParams): Promise<{ success: boolean; preview?: HubAnalyticsPreview; error?: string }> =>
@@ -794,10 +905,14 @@ const vialAPI = {
   // --- Analyze Filter Store extensions ---
   analyzeFilterStoreSetHubPostId: (uid: string, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.ANALYZE_FILTER_STORE_SET_HUB_POST_ID, uid, entryId, hubPostId),
+  analyzeFilterStoreSetHubPrivate: (uid: string, entryId: string, link: HubPrivateLink | null): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.ANALYZE_FILTER_STORE_SET_HUB_PRIVATE, uid, entryId, link),
 
   // --- Snapshot Store extensions ---
   snapshotStoreSetHubPostId: (uid: string, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_SET_HUB_POST_ID, uid, entryId, hubPostId),
+  snapshotStoreSetHubPrivate: (uid: string, entryId: string, link: HubPrivateLink | null): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_SET_HUB_PRIVATE, uid, entryId, link),
 
   // --- Shell ---
   openExternal: (url: string): Promise<void> =>
@@ -806,6 +921,8 @@ const vialAPI = {
   // --- Data Management ---
   listStoredKeyboards: (): Promise<StoredKeyboardInfo[]> =>
     ipcRenderer.invoke(IpcChannels.LIST_STORED_KEYBOARDS),
+  keyboardMetaNameIfMissing: (uid: string, name: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.KEYBOARD_META_NAME_IF_MISSING, uid, name),
   resetKeyboardData: (uid: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.RESET_KEYBOARD_DATA, uid),
   resetLocalTargets: (targets: LocalResetTargets): Promise<{ success: boolean; error?: string }> =>
@@ -832,7 +949,6 @@ const vialAPI = {
   },
 
   // --- Special Commands ---
-  jumpToBootloader: (): Promise<void> => protocol.jumpToBootloader(),
 
   // --- Window Management ---
   setWindowCompactMode: (enabled: boolean, compactSize?: { width: number; height: number }): Promise<{ width: number; height: number } | null> =>
@@ -847,6 +963,25 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.WINDOW_IS_ALWAYS_ON_TOP_SUPPORTED),
   setWindowZoom: (zoom: number): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.WINDOW_SET_ZOOM, zoom),
+  windowShow: (): Promise<boolean> =>
+    ipcRenderer.invoke(IpcChannels.WINDOW_SHOW),
+  windowHide: (): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.WINDOW_HIDE),
+  windowStartedHidden: (): Promise<boolean> =>
+    ipcRenderer.invoke(IpcChannels.WINDOW_STARTED_HIDDEN),
+  windowIsVisible: (): Promise<boolean> =>
+    ipcRenderer.invoke(IpcChannels.WINDOW_IS_VISIBLE),
+  onWindowVisibilityChanged: (callback: (visible: boolean) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, visible: boolean): void => {
+      callback(visible)
+    }
+    ipcRenderer.on(IpcChannels.WINDOW_VISIBILITY_CHANGED, handler)
+    return () => ipcRenderer.removeListener(IpcChannels.WINDOW_VISIBILITY_CHANGED, handler)
+  },
+
+  // --- Tray status ---
+  trayStatusUpdate: (status: TrayStatus): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.TRAY_STATUS_UPDATE, status),
 }
 
 contextBridge.exposeInMainWorld('vialAPI', vialAPI)

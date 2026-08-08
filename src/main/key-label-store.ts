@@ -2,11 +2,11 @@
 // Local store for Key Labels — mirrors favorite-store's index + per-entry layout.
 
 import { app, dialog, BrowserWindow } from 'electron'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { notifyChange } from './sync/sync-service'
-import { safeFilename } from './utils/safe-filename'
+import { safeFilename, isSafePathSegment, tsForFilename } from './utils/safe-filename'
 import type {
   KeyLabelMeta,
   KeyLabelIndex,
@@ -14,6 +14,9 @@ import type {
   KeyLabelRecord,
   KeyLabelStoreResult,
   KeyLabelStoreErrorCode,
+  KeyLabelImportBatchResult,
+  KeyLabelImportRejection,
+  KeyLabelImportSuccess,
 } from '../shared/types/key-label-store'
 
 export const KEY_LABEL_SYNC_UNIT = 'key-labels'
@@ -27,11 +30,6 @@ function getStoreDir(): string {
 
 function getIndexPath(): string {
   return join(getStoreDir(), 'index.json')
-}
-
-function isSafePathSegment(segment: string): boolean {
-  if (!segment || segment === '.' || segment === '..') return false
-  return !/[/\\]/.test(segment)
 }
 
 function getEntryPath(filename: string): string {
@@ -49,10 +47,6 @@ function ok<T>(data?: T): KeyLabelStoreResult<T> {
 
 function nowIso(): string {
   return new Date().toISOString()
-}
-
-function tsForFilename(now: Date = new Date()): string {
-  return now.toISOString().replace(/:/g, '-')
 }
 
 async function readIndex(): Promise<KeyLabelIndex> {
@@ -113,10 +107,24 @@ function normalizeFile(parsed: unknown): KeyLabelEntryFile | null {
     return null
   }
 
+  // Deliberately more lenient than `compositeLabels` above: a malformed
+  // `compositeLabels` rejects the whole file because there is no other
+  // validator downstream to catch a bad shape. `keymapApplicable` gets
+  // the opposite treatment — only a literal `true` is kept, anything
+  // else (missing, `false`, a stray string/number) quietly becomes
+  // absent — because `buildKeymapRewriteTable` (keymap-apply.ts) always
+  // re-derives applicability from the map itself before anything acts
+  // on the flag. A malformed flag can therefore fall back to "not
+  // applicable" instead of blocking import/download of an otherwise
+  // valid label set.
+  const keymapApplicableRaw = obj.keymapApplicable ?? obj.keymap_applicable
+  const keymapApplicable = keymapApplicableRaw === true ? true : undefined
+
   return {
     name: obj.name,
     map: obj.map,
     ...(compositeLabels ? { compositeLabels } : {}),
+    ...(keymapApplicable ? { keymapApplicable } : {}),
   }
 }
 
@@ -198,6 +206,9 @@ export interface SaveRecordInput {
   uploaderName?: string
   map: Record<string, string>
   compositeLabels?: Record<string, string>
+  /** Opt-in marker that this map is a pure QWERTY-keycode permutation
+   *  applicable to bulk keymap rewrite. See `KeyLabelEntryFile.keymapApplicable`. */
+  keymapApplicable?: boolean
   hubPostId?: string | null
   /** Hub-side `updated_at` cached for the Updated column. Optional. */
   hubUpdatedAt?: string
@@ -210,7 +221,9 @@ async function writeRecord(meta: KeyLabelMeta, data: KeyLabelEntryFile): Promise
 
 export async function saveRecord(input: SaveRecordInput): Promise<KeyLabelStoreResult<KeyLabelMeta>> {
   const validated = validateName(input.name)
-  if (!validated.success || validated.data === undefined) return validated as KeyLabelStoreResult<KeyLabelMeta>
+  if (!validated.success || validated.data === undefined) {
+    return fail(validated.errorCode ?? 'INVALID_NAME', validated.error ?? 'Invalid name')
+  }
   const name = validated.data
   if (!isLabelMap(input.map)) return fail('INVALID_FILE', 'map must be an object of strings')
   if (input.compositeLabels && !isLabelMap(input.compositeLabels)) {
@@ -230,6 +243,7 @@ export async function saveRecord(input: SaveRecordInput): Promise<KeyLabelStoreR
       name,
       map: input.map,
       ...(input.compositeLabels ? { compositeLabels: input.compositeLabels } : {}),
+      ...(input.keymapApplicable ? { keymapApplicable: true } : {}),
     }
 
     const meta: KeyLabelMeta = {
@@ -276,7 +290,9 @@ export async function saveRecord(input: SaveRecordInput): Promise<KeyLabelStoreR
 
 export async function renameRecord(id: string, newName: string): Promise<KeyLabelStoreResult<KeyLabelMeta>> {
   const validated = validateName(newName)
-  if (!validated.success || validated.data === undefined) return validated as KeyLabelStoreResult<KeyLabelMeta>
+  if (!validated.success || validated.data === undefined) {
+    return fail(validated.errorCode ?? 'INVALID_NAME', validated.error ?? 'Invalid name')
+  }
   const name = validated.data
 
   try {
@@ -377,9 +393,19 @@ export async function setHubPostId(
   }
 }
 
+/**
+ * Import every file selected via the multi-select dialog. Each path is
+ * processed independently — a bad file (unreadable / invalid JSON / fails
+ * `saveRecord` validation) is recorded in `rejections` rather than aborting
+ * the rest of the batch, mirroring `importTypingDataFiles`'s
+ * per-file-independent contract. Two same-named files within one batch
+ * resolve in file-list order: the second finds the first's just-saved
+ * entry via `findActiveByName` and overwrites it — acceptable, since the
+ * user picked both files together.
+ */
 export async function importFromDialog(
   win: BrowserWindow,
-): Promise<KeyLabelStoreResult<KeyLabelMeta>> {
+): Promise<KeyLabelStoreResult<KeyLabelImportBatchResult>> {
   try {
     const result = await dialog.showOpenDialog(win, {
       title: 'Import Key Label',
@@ -387,37 +413,65 @@ export async function importFromDialog(
         { name: 'JSON', extensions: ['json'] },
         { name: 'All Files', extensions: ['*'] },
       ],
-      properties: ['openFile'],
+      properties: ['openFile', 'multiSelections'],
     })
 
     if (result.canceled || result.filePaths.length === 0) {
       return fail('IO_ERROR', 'cancelled')
     }
 
-    const raw = await readFile(result.filePaths[0], 'utf-8')
-    const parsed = normalizeFile(JSON.parse(raw))
-    if (!parsed) return fail('INVALID_FILE', 'Invalid key label file')
+    const imported: KeyLabelImportSuccess[] = []
+    const rejections: KeyLabelImportRejection[] = []
 
-    // Treat re-import of an entry with an existing name as an
-    // overwrite: the user explicitly opted in by picking the same
-    // file name back. We carry the existing id, uploaderName and
-    // hubPostId across so the entry stays linked to its Hub post
-    // (the user can detach via Remove if they want a fresh post).
-    const index = await readIndex()
-    const existing = findActiveByName(index.entries, parsed.name)
-    return saveRecord({
-      ...(existing
-        ? {
-          id: existing.id,
-          ...(existing.uploaderName ? { uploaderName: existing.uploaderName } : {}),
-          ...(existing.hubPostId ? { hubPostId: existing.hubPostId } : {}),
-          ...(existing.hubUpdatedAt ? { hubUpdatedAt: existing.hubUpdatedAt } : {}),
+    for (const filePath of result.filePaths) {
+      const fileName = basename(filePath)
+      try {
+        const raw = await readFile(filePath, 'utf-8')
+        const parsed = normalizeFile(JSON.parse(raw))
+        if (!parsed) {
+          rejections.push({ fileName, errorCode: 'INVALID_FILE', error: 'Invalid key label file' })
+          continue
         }
-        : {}),
-      name: parsed.name,
-      map: parsed.map,
-      compositeLabels: parsed.compositeLabels,
-    })
+
+        // Treat re-import of an entry with an existing name as an
+        // overwrite: the user explicitly opted in by picking the same
+        // file name back. We carry the existing id, uploaderName and
+        // hubPostId across so the entry stays linked to its Hub post
+        // (the user can detach via Remove if they want a fresh post).
+        const index = await readIndex()
+        const existing = findActiveByName(index.entries, parsed.name)
+        const saved = await saveRecord({
+          ...(existing
+            ? {
+              id: existing.id,
+              ...(existing.uploaderName ? { uploaderName: existing.uploaderName } : {}),
+              ...(existing.hubPostId ? { hubPostId: existing.hubPostId } : {}),
+              ...(existing.hubUpdatedAt ? { hubUpdatedAt: existing.hubUpdatedAt } : {}),
+            }
+            : {}),
+          name: parsed.name,
+          map: parsed.map,
+          compositeLabels: parsed.compositeLabels,
+          keymapApplicable: parsed.keymapApplicable,
+        })
+        if (saved.success && saved.data) {
+          // Carries the originating filename alongside the saved meta —
+          // the renderer needs it to report e.g. a Hub-sync failure
+          // against the file the user picked, not the label's name.
+          imported.push({ fileName, meta: saved.data })
+        } else {
+          rejections.push({
+            fileName,
+            errorCode: saved.errorCode ?? 'IO_ERROR',
+            error: saved.error ?? 'Import failed',
+          })
+        }
+      } catch (err) {
+        rejections.push({ fileName, errorCode: 'IO_ERROR', error: String(err) })
+      }
+    }
+
+    return ok({ imported, rejections })
   } catch (err) {
     return fail('IO_ERROR', String(err))
   }
@@ -481,7 +535,9 @@ export async function exportToDialog(
 ): Promise<KeyLabelStoreResult<{ filePath: string }>> {
   try {
     const record = await getRecord(id)
-    if (!record.success || !record.data) return record as KeyLabelStoreResult<{ filePath: string }>
+    if (!record.success || !record.data) {
+      return { success: record.success, errorCode: record.errorCode, error: record.error }
+    }
 
     const { meta, data } = record.data
     const safeName = safeFilename(meta.name, 'key-label')
@@ -502,6 +558,7 @@ export async function exportToDialog(
       name: data.name,
       map: data.map,
       composite_labels: data.compositeLabels ?? null,
+      keymap_applicable: data.keymapApplicable ?? false,
     }
     await writeFile(result.filePath, JSON.stringify(body, null, 2), 'utf-8')
     return ok({ filePath: result.filePath })

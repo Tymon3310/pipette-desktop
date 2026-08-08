@@ -43,12 +43,13 @@ export function formatSharePercent(fraction: number): string {
 }
 
 /** Same `(v * 100).toFixed(1)%` shape as `formatSharePercent` but
- * tolerant of `undefined` and prints the `%` glyph itself, so a
- * single helper covers Layout Comparison cells and skip-rate banner
+ * tolerant of `undefined`/`null` and prints the `%` glyph itself, so a
+ * single helper covers Layout Comparison cells, the skip-rate banner,
+ * and every "unobserved ratio" stat (e.g. the Analyze rollover rate)
  * without forcing each call site to repeat the wrap. Renders `'—'`
  * when the value is missing or non-finite. */
-export function formatPercentLabel(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) return '—'
+export function formatPercentLabel(value: number | null | undefined): string {
+  if (value === undefined || value === null || !Number.isFinite(value)) return '—'
   return `${(value * 100).toFixed(1)}%`
 }
 
@@ -91,6 +92,23 @@ export function median(values: readonly number[]): number | null {
   const mid = sorted.length >> 1
   if (sorted.length % 2 === 1) return sorted[mid]
   return (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+/** `123 ms` for a finite value, `'—'` (em dash) for `null`. Shared by
+ * the Bigrams rankings and the Heatmap Speed ranking so the two
+ * null-handling paths can't drift. */
+export function fmtMs(value: number | null): string {
+  return value !== null ? `${Math.round(value)} ms` : '—'
+}
+
+/** `M:SS` run-duration formatter shared by the History table and the
+ * word-timeline modal's summary card, so the same run's duration reads
+ * identically in both places (e.g. `1:30`, never `90s` in one and `1:30`
+ * in the other). */
+export function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 /** Generic bucket-lookup for bin tables whose upper edge is `toMs`

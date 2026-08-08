@@ -14,6 +14,7 @@ import {
   isValidAnalyzeFilterSettings,
   normalizeDeviceScopes,
   parseDeviceScope,
+  parseFilterDimension,
   primaryDeviceScope,
   scopeFromSelectValue,
   scopeToSelectValue,
@@ -168,6 +169,25 @@ describe('isValidAnalyzeFilterSettings', () => {
     ).toBe(false)
   })
 
+  it('accepts a valid filterDimension and rejects unknown values', () => {
+    expect(isValidAnalyzeFilterSettings({ filterDimension: 'app' })).toBe(true)
+    expect(isValidAnalyzeFilterSettings({ filterDimension: 'typingTest' })).toBe(true)
+    expect(isValidAnalyzeFilterSettings({})).toBe(true)
+    expect(isValidAnalyzeFilterSettings({ filterDimension: 'bogus' })).toBe(false)
+    expect(isValidAnalyzeFilterSettings({ filterDimension: 1 })).toBe(false)
+  })
+
+  it('accepts heatmap.mode as count or speed, and absent (back-compat)', () => {
+    expect(isValidAnalyzeFilterSettings({ heatmap: { mode: 'count' } })).toBe(true)
+    expect(isValidAnalyzeFilterSettings({ heatmap: { mode: 'speed' } })).toBe(true)
+    expect(isValidAnalyzeFilterSettings({ heatmap: {} })).toBe(true)
+  })
+
+  it('rejects heatmap.mode values other than count or speed', () => {
+    expect(isValidAnalyzeFilterSettings({ heatmap: { mode: 'bogus' } })).toBe(false)
+    expect(isValidAnalyzeFilterSettings({ heatmap: { mode: 1 } })).toBe(false)
+  })
+
   it('accepts a valid bigrams slot', () => {
     expect(
       isValidAnalyzeFilterSettings({
@@ -224,6 +244,18 @@ describe('isValidAnalyzeFilterSettings', () => {
     expect(
       isValidAnalyzeFilterSettings({ bigrams: { pairIntervalThresholdMs: '200' } }),
     ).toBe(false)
+  })
+
+  it('accepts gram as 2 or 3, and absent (back-compat with pre-trigram settings)', () => {
+    expect(isValidAnalyzeFilterSettings({ bigrams: { gram: 2 } })).toBe(true)
+    expect(isValidAnalyzeFilterSettings({ bigrams: { gram: 3 } })).toBe(true)
+    expect(isValidAnalyzeFilterSettings({ bigrams: {} })).toBe(true)
+  })
+
+  it('rejects gram values other than 2 or 3', () => {
+    expect(isValidAnalyzeFilterSettings({ bigrams: { gram: 4 } })).toBe(false)
+    expect(isValidAnalyzeFilterSettings({ bigrams: { gram: 0 } })).toBe(false)
+    expect(isValidAnalyzeFilterSettings({ bigrams: { gram: '2' } })).toBe(false)
   })
 })
 
@@ -386,5 +418,19 @@ describe('isValidAnalyzeFilterSettings (activity view / display / calendar)', ()
   it('rejects an unknown activity metric (calendar is no longer a metric)', () => {
     expect(isValidAnalyzeFilterSettings({ activity: { metric: 'calendar' } })).toBe(false)
     expect(isValidAnalyzeFilterSettings({ activity: { metric: 'nonsense' } })).toBe(false)
+  })
+})
+
+describe('parseFilterDimension', () => {
+  it('passes through the two valid dimensions', () => {
+    expect(parseFilterDimension('app')).toBe('app')
+    expect(parseFilterDimension('typingTest')).toBe('typingTest')
+  })
+
+  it('defaults to app for absent or malformed input', () => {
+    expect(parseFilterDimension(undefined)).toBe('app')
+    expect(parseFilterDimension(null)).toBe('app')
+    expect(parseFilterDimension('bogus')).toBe('app')
+    expect(parseFilterDimension(42)).toBe('app')
   })
 })

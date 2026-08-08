@@ -51,6 +51,8 @@ export interface AnalogKeyConfig {
   actuationPoint: number
   sensitivity: number
   releaseSensitivity: number
+  advMode: number
+  advModeData: number
 }
 
 /** SOCD pair for HE keyboards. */

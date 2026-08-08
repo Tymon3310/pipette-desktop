@@ -7,11 +7,14 @@ import { setupSnapshotStore } from './snapshot-store'
 import { setupAnalyzeFilterStore } from './analyze-filter-store'
 import { setupFavoriteStore } from './favorite-store'
 import { setupKeyLabelStore } from './key-label-ipc'
+import { setupTypingTestTextStore } from './typing-test-text-ipc'
+import { setupTypingRunLogStore } from './typing-run-log-ipc'
 import { setupI18nPackStore } from './i18n-pack-ipc'
 import { setupThemePackStore } from './theme-pack-ipc'
 import { setupHidIpc } from './hid-ipc'
 import { setupPipetteSettingsStore } from './pipette-settings-store'
 import { setupLanguageStore } from './language-store'
+import { setupAozoraIpc } from './aozora/aozora-ipc'
 import { setupSyncIpc } from './sync/sync-ipc'
 import { setupHubIpc } from './hub/hub-ipc'
 import { startI18nStartupSync } from './hub/i18n-startup-sync'
@@ -24,6 +27,19 @@ import type { LogLevel } from './logger'
 import { loadWindowState, saveWindowState, setupAppConfigIpc, loadAppConfig, onAppConfigChange, MIN_WIDTH, MIN_HEIGHT } from './app-config'
 import { clampZoomFactor } from '../shared/types/app-config'
 import {
+  applyAutoLaunch,
+  setupTray,
+  destroyTray,
+  isTrayActive,
+  appIconPath,
+  showWindow,
+  hideWindow,
+  setWindowStartedHidden,
+  getWindowStartedHidden,
+  updateTrayStatus,
+} from './app-behavior'
+import type { TrayStatus } from '../shared/types/vial-api'
+import {
   setupTypingAnalytics,
   setupTypingAnalyticsIpc,
   hasTypingAnalyticsPendingWork,
@@ -32,10 +48,30 @@ import {
 } from './typing-analytics/typing-analytics-service'
 import { registerPreSyncQuitFinalizer, notifyChange } from './sync/sync-service'
 import { secureHandle, secureOn } from './ipc-guard'
+import { isVirtualDeviceEnabled, getVirtualDeviceController } from './virtual-device'
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL
 
 app.setDesktopName('pipette')
+
+// Single-instance guard: a second launch exits immediately and silently
+// (app.exit skips before-quit/will-quit — nothing is set up yet at this
+// point); the surviving instance reveals its window instead. Electron only
+// emits 'second-instance' on the lock holder and never before 'ready', so
+// registering at module top level is safe.
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0)
+} else {
+  app.on('second-instance', revealApp)
+}
+
+// Distinguishes a user-initiated quit from a plain window close so the
+// tray-resident close handler knows whether to hide the window instead of
+// letting it (and the app) close.
+let isQuitting = false
+app.on('before-quit', () => {
+  isQuitting = true
+})
 
 // Linux: disable GPU sandbox only when chrome-sandbox lacks SUID root.
 // Packaged builds with correct permissions keep the GPU sandbox enabled.
@@ -75,13 +111,14 @@ function hideMenuBar(): void {
 }
 
 function createWindow(): void {
+  const cfg = loadAppConfig()
   const saved = loadWindowState()
   const winOpts: Electron.BrowserWindowConstructorOptions = {
     width: saved.width,
     height: saved.height,
-    minWidth: 1320,
-    minHeight: 960,
-    icon: join(__dirname, '../../build/icon.png'),
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
+    icon: appIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
@@ -93,14 +130,42 @@ function createWindow(): void {
     winOpts.x = saved.x
     winOpts.y = saved.y
   }
+  // Only start hidden when the tray can actually reopen the window — a
+  // hidden window with no tray icon would be unreachable. The tray is
+  // set up from the same trayResident flag elsewhere in the startup
+  // sequence (app.whenReady()), so this stays in sync with it.
+  const startHidden = cfg.startInTray && cfg.trayResident
+  if (startHidden) {
+    winOpts.show = false
+  }
+  setWindowStartedHidden(startHidden)
   const win = new BrowserWindow(winOpts)
 
-  win.on('close', () => {
+  // document.visibilityState is unreliable for windows created with
+  // show: false (notably on Linux, it still reports 'visible'), so the
+  // renderer needs main-process visibility truth pushed to it directly.
+  win.on('show', () => {
+    win.webContents.send(IpcChannels.WINDOW_VISIBILITY_CHANGED, true)
+  })
+  win.on('hide', () => {
+    win.webContents.send(IpcChannels.WINDOW_VISIBILITY_CHANGED, false)
+  })
+
+  win.on('close', (e) => {
     if (normalWindowSize) {
       const bounds = win.getBounds()
       saveWindowState({ ...bounds, width: normalWindowSize.width, height: normalWindowSize.height })
     } else {
       saveWindowState(win.getBounds())
+    }
+    // Gate on the live tray resource, not the trayResident config flag:
+    // the config-change listener keeps the tray in sync (so mid-session
+    // toggles apply without a restart), and if Tray construction ever
+    // failed we must not hide the only window with nothing to restore it.
+    // Also avoids electron-store's per-access file read on every close.
+    if (isTrayActive() && !isQuitting) {
+      e.preventDefault()
+      win.hide()
     }
   })
 
@@ -135,8 +200,26 @@ function createWindow(): void {
   }
   if (isDev) win.webContents.openDevTools()
 
-  const cfg = loadAppConfig()
   win.webContents.setZoomFactor(clampZoomFactor(cfg.zoomFactor) / 100)
+}
+
+// Bring the app to the user's attention: reveal the existing window
+// (hidden tray-resident, or minimized) or create one when none exists.
+// Shared by both relaunch paths — 'second-instance' (Windows/Linux spawn
+// a second process that loses the lock) and macOS 'activate' (a Dock/
+// Finder relaunch re-activates the running process instead) — so every
+// platform gives the same visible feedback when the user launches the
+// app while it is already running.
+function revealApp(): void {
+  // A relaunch attempt racing this instance's own startup can arrive
+  // before 'ready'; creating a BrowserWindow then would throw, and the
+  // startup sequence is about to produce the window anyway.
+  if (!app.isReady()) return
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow()
+  } else {
+    showWindow(getFirstWindow)
+  }
 }
 
 interface WindowSize { width: number; height: number }
@@ -175,6 +258,13 @@ function animateBounds(
   tick()
 }
 let normalWindowSize: WindowSize | null = null
+
+/** The main window, shared by the tray (show-from-tray) and the
+ * show/hide IPC handlers. This app only ever has one top-level window,
+ * so "first" is unambiguous. */
+function getFirstWindow(): BrowserWindow | null {
+  return BrowserWindow.getAllWindows()[0] ?? null
+}
 
 function setupWindowIpc(): void {
   const COMPACT_MIN_WIDTH = 300
@@ -281,6 +371,36 @@ function setupWindowIpc(): void {
       win.webContents.setZoomFactor(clampZoomFactor(zoom) / 100)
     },
   )
+
+  secureHandle(IpcChannels.WINDOW_SHOW, (): boolean => {
+    return showWindow(getFirstWindow)
+  })
+
+  secureHandle(IpcChannels.WINDOW_HIDE, () => {
+    hideWindow(getFirstWindow)
+  })
+
+  secureHandle(IpcChannels.WINDOW_STARTED_HIDDEN, (): boolean => getWindowStartedHidden())
+
+  secureHandle(IpcChannels.WINDOW_IS_VISIBLE, (): boolean => getFirstWindow()?.isVisible() ?? false)
+
+  secureHandle(IpcChannels.TRAY_STATUS_UPDATE, (_event, status: unknown) => {
+    if (!isValidTrayStatus(status)) return
+    updateTrayStatus(status, getFirstWindow)
+  })
+}
+
+/** Minimal shape validation for a payload crossing the IPC boundary —
+ * the renderer is trusted but not the wire format, so a malformed call
+ * (stale renderer bundle, future field drift) is dropped instead of
+ * corrupting the tray's cached status. */
+function isValidTrayStatus(value: unknown): value is TrayStatus {
+  if (typeof value !== 'object' || value === null) return false
+  const v = value as Record<string, unknown>
+  return (v.keyboardName === null || typeof v.keyboardName === 'string') &&
+    typeof v.recording === 'boolean' &&
+    typeof v.count === 'number' &&
+    typeof v.kpm === 'number'
 }
 
 function setupShellIpc(): void {
@@ -320,15 +440,22 @@ app.whenReady().then(() => {
   log('info', 'Pipette starting')
   setupCsp()
   setupHidIpc()
+  if (isVirtualDeviceEnabled()) {
+    const globalWithVirtualDevice = globalThis as Record<string, unknown>
+    globalWithVirtualDevice.__pipetteVirtualDevice = getVirtualDeviceController()
+  }
   setupFileIO()
   setupSnapshotStore()
   setupAnalyzeFilterStore()
   setupFavoriteStore()
   setupKeyLabelStore()
+  setupTypingTestTextStore()
+  setupTypingRunLogStore()
   setupI18nPackStore()
   setupThemePackStore()
   setupPipetteSettingsStore()
   setupLanguageStore()
+  setupAozoraIpc()
   setupAppConfigIpc()
   setupSyncIpc()
   setupHubIpc()
@@ -353,11 +480,29 @@ app.whenReady().then(() => {
     }
   })
 
+  onAppConfigChange((key, value) => {
+    if (key === 'autoLaunch') {
+      applyAutoLaunch(Boolean(value))
+    } else if (key === 'trayResident') {
+      if (value) {
+        setupTray(getFirstWindow)
+      } else {
+        destroyTray()
+      }
+    }
+  })
+
   setupTypingAnalytics().catch((err: unknown) => {
     const detail = err instanceof Error ? (err.stack ?? err.message) : String(err)
     log('error', `Failed to initialize typing analytics: ${detail}`)
   })
   createWindow()
+
+  const behaviorConfig = loadAppConfig()
+  applyAutoLaunch(behaviorConfig.autoLaunch)
+  if (behaviorConfig.trayResident) {
+    setupTray(getFirstWindow)
+  }
 
   // Best-effort: refresh Hub-linked i18n packs in the background. This
   // never blocks startup — if Hub is unreachable or a single pack fails
@@ -366,15 +511,18 @@ app.whenReady().then(() => {
   // applied updates without a manual reload.
   startI18nStartupSync()
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    }
-  })
+  // The typing-test dataset is NOT auto-synced at startup. The Mode modal
+  // checks the Hub version when its tab is shown and surfaces a manual
+  // "Update" button (see TYPING_DATASET_CHECK / TYPING_DATASET_UPDATE).
+
+  app.on('activate', revealApp)
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  // With trayResident on, the close handler hides the window via
+  // preventDefault() instead of letting it close, so this rarely fires —
+  // isTrayActive() is a safety net in case a window closes some other way.
+  if (process.platform !== 'darwin' && !isTrayActive()) {
     app.quit()
   }
 })

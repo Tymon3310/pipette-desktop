@@ -145,6 +145,21 @@ describe('key-label-store', () => {
     })
   })
 
+  describe('path traversal prevention', () => {
+    it('rejects an entry whose stored filename escapes the key-labels directory', async () => {
+      const dir = join(mockUserDataPath, 'sync', 'key-labels')
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, 'index.json'), JSON.stringify({
+        entries: [{ id: 'evil-entry', name: 'Evil', filename: '../../etc/passwd', savedAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z' }],
+      }), 'utf-8')
+
+      const record = await getRecord('evil-entry')
+      expect(record.success).toBe(false)
+      expect(record.errorCode).toBe('IO_ERROR')
+      expect(record.error).toContain('Invalid filename')
+    })
+  })
+
   describe('renameRecord', () => {
     it('updates index + payload', async () => {
       const created = await saveRecord({ name: 'Old', uploaderName: 'me', map: { KC_A: '1' } })
@@ -210,7 +225,7 @@ describe('key-label-store', () => {
   })
 
   describe('importFromDialog', () => {
-    it('imports a valid .json and returns the saved meta', async () => {
+    it('imports a valid .json and returns the saved meta in `imported`', async () => {
       const dir = join(mockUserDataPath, 'tmp-import')
       await mkdir(dir, { recursive: true })
       const importPath = join(dir, 'sample.json')
@@ -235,10 +250,26 @@ describe('key-label-store', () => {
 
       const result = await importFromDialog(win)
       expect(result.success).toBe(true)
-      expect(result.data?.name).toBe('Hebrew')
+      expect(result.data?.imported).toHaveLength(1)
+      expect(result.data?.imported[0].fileName).toBe('sample.json')
+      expect(result.data?.imported[0].meta.name).toBe('Hebrew')
+      expect(result.data?.rejections).toEqual([])
     })
 
-    it('rejects an invalid file shape', async () => {
+    it('requests multiSelections from the open dialog', async () => {
+      vi.mocked(dialog.showOpenDialog).mockResolvedValue({
+        canceled: true,
+        filePaths: [],
+      })
+      const win = { id: 99 } as unknown as Electron.BrowserWindow
+      await importFromDialog(win)
+      expect(dialog.showOpenDialog).toHaveBeenCalledWith(
+        win,
+        expect.objectContaining({ properties: expect.arrayContaining(['multiSelections']) }),
+      )
+    })
+
+    it('rejects an invalid file shape without failing the batch', async () => {
       const dir = join(mockUserDataPath, 'tmp-import')
       await mkdir(dir, { recursive: true })
       const importPath = join(dir, 'bad.json')
@@ -251,8 +282,11 @@ describe('key-label-store', () => {
 
       const win = { id: 2 } as unknown as Electron.BrowserWindow
       const result = await importFromDialog(win)
-      expect(result.success).toBe(false)
-      expect(result.errorCode).toBe('INVALID_FILE')
+      expect(result.success).toBe(true)
+      expect(result.data?.imported).toEqual([])
+      expect(result.data?.rejections).toEqual([
+        { fileName: 'bad.json', errorCode: 'INVALID_FILE', error: 'Invalid key label file' },
+      ])
     })
 
     it('returns IO_ERROR on cancel', async () => {
@@ -265,6 +299,87 @@ describe('key-label-store', () => {
       const result = await importFromDialog(win)
       expect(result.success).toBe(false)
       expect(result.error).toBe('cancelled')
+    })
+
+    it('imports every file in a multi-select batch', async () => {
+      const dir = join(mockUserDataPath, 'tmp-import-multi')
+      await mkdir(dir, { recursive: true })
+      const pathA = join(dir, 'a.json')
+      const pathB = join(dir, 'b.json')
+      await writeFile(pathA, JSON.stringify({ name: 'Multi A', map: { KC_A: 'A' } }), 'utf-8')
+      await writeFile(pathB, JSON.stringify({ name: 'Multi B', map: { KC_B: 'B' } }), 'utf-8')
+
+      vi.mocked(dialog.showOpenDialog).mockResolvedValue({
+        canceled: false,
+        filePaths: [pathA, pathB],
+      })
+
+      const win = { id: 4 } as unknown as Electron.BrowserWindow
+      const result = await importFromDialog(win)
+
+      expect(result.success).toBe(true)
+      expect(result.data?.imported.map((s) => s.meta.name).sort()).toEqual(['Multi A', 'Multi B'])
+      expect(result.data?.imported.map((s) => s.fileName).sort()).toEqual(['a.json', 'b.json'])
+      expect(result.data?.rejections).toEqual([])
+    })
+
+    it('imports the good files and reports the bad ones in a mixed batch', async () => {
+      const dir = join(mockUserDataPath, 'tmp-import-mixed')
+      await mkdir(dir, { recursive: true })
+      const goodPath = join(dir, 'good.json')
+      const badPath = join(dir, 'bad.json')
+      await writeFile(goodPath, JSON.stringify({ name: 'Good Label', map: { KC_A: 'A' } }), 'utf-8')
+      await writeFile(badPath, JSON.stringify({ notAValidShape: true }), 'utf-8')
+
+      vi.mocked(dialog.showOpenDialog).mockResolvedValue({
+        canceled: false,
+        filePaths: [goodPath, badPath],
+      })
+
+      const win = { id: 5 } as unknown as Electron.BrowserWindow
+      const result = await importFromDialog(win)
+
+      expect(result.success).toBe(true)
+      expect(result.data?.imported).toHaveLength(1)
+      expect(result.data?.imported[0].fileName).toBe('good.json')
+      expect(result.data?.imported[0].meta.name).toBe('Good Label')
+      expect(result.data?.rejections).toEqual([
+        { fileName: 'bad.json', errorCode: 'INVALID_FILE', error: 'Invalid key label file' },
+      ])
+    })
+
+    it('overwrites the same entry when two files in one batch share a name', async () => {
+      const dir = join(mockUserDataPath, 'tmp-import-dup')
+      await mkdir(dir, { recursive: true })
+      const firstPath = join(dir, 'first.json')
+      const secondPath = join(dir, 'second.json')
+      await writeFile(firstPath, JSON.stringify({ name: 'Duplicate', map: { KC_A: 'A' } }), 'utf-8')
+      await writeFile(secondPath, JSON.stringify({ name: 'Duplicate', map: { KC_B: 'B' } }), 'utf-8')
+
+      vi.mocked(dialog.showOpenDialog).mockResolvedValue({
+        canceled: false,
+        filePaths: [firstPath, secondPath],
+      })
+
+      const win = { id: 6 } as unknown as Electron.BrowserWindow
+      const result = await importFromDialog(win)
+
+      expect(result.success).toBe(true)
+      expect(result.data?.imported).toHaveLength(2)
+      // Both entries resolve to the same id — the second overwrote the
+      // first in file-list order, which is the documented/acceptable
+      // behaviour for duplicate names within a single batch. Each still
+      // carries its own originating filename.
+      expect(result.data?.imported[0].meta.id).toBe(result.data?.imported[1].meta.id)
+      expect(result.data?.imported[0].fileName).toBe('first.json')
+      expect(result.data?.imported[1].fileName).toBe('second.json')
+
+      const metas = await listMetas()
+      const dup = metas.filter((m) => m.name === 'Duplicate')
+      expect(dup).toHaveLength(1)
+
+      const record = await getRecord(dup[0].id)
+      expect(record.data?.data.map).toEqual({ KC_B: 'B' })
     })
   })
 
@@ -317,9 +432,17 @@ describe('key-label-store', () => {
       const origA = a.data!.updatedAt
       const origB = b.data!.updatedAt
 
-      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000)
-      await reorderActive([b.data!.id, a.data!.id])
-      vi.mocked(Date.now).mockRestore()
+      // A Date.now spy never affects `new Date().toISOString()`, which is what the
+      // store actually calls, so freeze the clock and jump it forward instead.
+      // Freezing also removes the same-millisecond flake window when the real
+      // wall clock happens not to tick between saveRecord and reorderActive.
+      try {
+        vi.useFakeTimers()
+        vi.setSystemTime(Date.parse(origB) + 1000)
+        await reorderActive([b.data!.id, a.data!.id])
+      } finally {
+        vi.useRealTimers()
+      }
 
       const metas = await listMetas()
       const metaA = metas.find((m) => m.id === a.data!.id)!
@@ -335,6 +458,93 @@ describe('key-label-store', () => {
       await reorderActive([])
 
       expect(notifyChange).toHaveBeenCalledWith(KEY_LABEL_SYNC_UNIT)
+    })
+  })
+
+  describe('keymapApplicable flag', () => {
+    it('round-trips through save -> get -> export', async () => {
+      const created = await saveRecord({
+        name: 'Colemak',
+        uploaderName: 'me',
+        map: { KC_E: 'F' },
+        keymapApplicable: true,
+      })
+      expect(created.success).toBe(true)
+      expect(created.data?.name).toBe('Colemak')
+
+      const record = await getRecord(created.data!.id)
+      expect(record.success).toBe(true)
+      expect(record.data?.data.keymapApplicable).toBe(true)
+
+      const exportPath = join(mockUserDataPath, 'colemak-exported.json')
+      vi.mocked(dialog.showSaveDialog).mockResolvedValue({
+        canceled: false,
+        filePath: exportPath,
+      })
+      const win = { id: 20 } as unknown as Electron.BrowserWindow
+      const exported = await exportToDialog(win, created.data!.id)
+      expect(exported.success).toBe(true)
+
+      const raw = await readFile(exportPath, 'utf-8')
+      const parsed = JSON.parse(raw) as { keymap_applicable: boolean }
+      expect(parsed.keymap_applicable).toBe(true)
+    })
+
+    it('omits the flag by default', async () => {
+      const created = await saveRecord({ name: 'Plain', uploaderName: 'me', map: { KC_A: 'A' } })
+      const record = await getRecord(created.data!.id)
+      expect(record.data?.data.keymapApplicable).toBeUndefined()
+    })
+
+    it('accepts the snake_case alias on import', async () => {
+      const dir = join(mockUserDataPath, 'tmp-import-snake')
+      await mkdir(dir, { recursive: true })
+      const importPath = join(dir, 'snake.json')
+      await writeFile(
+        importPath,
+        JSON.stringify({
+          name: 'SnakeFlag',
+          map: { KC_E: 'F' },
+          keymap_applicable: true,
+        }),
+        'utf-8',
+      )
+
+      vi.mocked(dialog.showOpenDialog).mockResolvedValue({
+        canceled: false,
+        filePaths: [importPath],
+      })
+      const win = { id: 21 } as unknown as Electron.BrowserWindow
+      const result = await importFromDialog(win)
+      expect(result.success).toBe(true)
+
+      const record = await getRecord(result.data!.imported[0].meta.id)
+      expect(record.data?.data.keymapApplicable).toBe(true)
+    })
+
+    it.each([
+      ['non-boolean', 'yes', 'BadFlag'],
+      ['literal false', false, 'FalseFlag'],
+    ])('drops a %s value without failing the whole file', async (_label, rawValue, name) => {
+      const dir = join(mockUserDataPath, `tmp-import-${name}`)
+      await mkdir(dir, { recursive: true })
+      const importPath = join(dir, 'flag.json')
+      await writeFile(
+        importPath,
+        JSON.stringify({ name, map: { KC_E: 'F' }, keymapApplicable: rawValue }),
+        'utf-8',
+      )
+
+      vi.mocked(dialog.showOpenDialog).mockResolvedValue({
+        canceled: false,
+        filePaths: [importPath],
+      })
+      const win = { id: 22 } as unknown as Electron.BrowserWindow
+      const result = await importFromDialog(win)
+      expect(result.success).toBe(true)
+
+      const record = await getRecord(result.data!.imported[0].meta.id)
+      expect(record.data?.data.keymapApplicable).toBeUndefined()
     })
   })
 

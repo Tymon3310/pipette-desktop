@@ -23,10 +23,11 @@ import {
   invalidateCoverage,
   refreshCoverageFromIpc,
 } from '../i18n/coverage-cache'
-import type {
-  I18nPackImportApplyOptions,
-  I18nPackImportDialogResult,
-  I18nPackMeta,
+import {
+  BUILTIN_ENGLISH_PACK_ID,
+  type I18nPackImportApplyOptions,
+  type I18nPackImportDialogResult,
+  type I18nPackMeta,
 } from '../../shared/types/i18n-store'
 
 const I18N_CHANGED_EVENT = 'pipette:i18n-changed'
@@ -44,6 +45,9 @@ export interface UseI18nPackStoreReturn {
   setEnabled: (id: string, enabled: boolean) => Promise<{ success: boolean; error?: string }>
   rename: (id: string, newName: string) => Promise<{ success: boolean; meta?: I18nPackMeta; error?: string }>
   remove: (id: string) => Promise<{ success: boolean; error?: string }>
+  /** Persist a manual drag/sort order. Built-in English is never
+   *  included — it is synthesized in the renderer, not a store entry. */
+  reorder: (orderedIds: string[]) => Promise<{ success: boolean; error?: string }>
   importFromDialog: () => Promise<I18nPackImportDialogResult>
   applyImport: (raw: unknown, options?: I18nPackImportApplyOptions) => Promise<{ success: boolean; meta?: I18nPackMeta; error?: string }>
   packRemovedNotice: PackRemovalNotice | null
@@ -112,6 +116,12 @@ export function useI18nPackStore(): UseI18nPackStoreReturn {
           invalidateCoverage(meta.id)
           return false
         }
+        // Built-in English's coverage is trivially 100% by definition
+        // (it *is* the baseline) and its placeholder body carries no
+        // translation keys to diff — the modal hardcodes `isComplete:
+        // true` for its row rather than reading computed coverage, so
+        // recomputing here would only cost an unneeded IPC round trip.
+        if (meta.id === BUILTIN_ENGLISH_PACK_ID) return false
         return true
       })
       await Promise.all(refreshTargets.map((meta) => {
@@ -189,6 +199,20 @@ export function useI18nPackStore(): UseI18nPackStoreReturn {
     return { success: false, error: result.error }
   }, [])
 
+  // Matches rename/remove/applyImport: only `emitChanged()`, no
+  // explicit `await refresh()` here. `emitChanged()`'s own listener
+  // (registered below) already triggers a refresh — awaiting a second
+  // one here would race it (whichever `i18nPackList()` resolves last
+  // wins, and there is no guarantee it is the one with the fresh order).
+  const reorder = useCallback(async (orderedIds: string[]) => {
+    const result = await window.vialAPI.i18nPackReorder(orderedIds)
+    if (result.success) {
+      emitChanged()
+      return { success: true }
+    }
+    return { success: false, error: result.error }
+  }, [])
+
   const dismissPackRemovedNotice = useCallback(() => {
     setPackRemovedNotice(null)
   }, [])
@@ -213,6 +237,7 @@ export function useI18nPackStore(): UseI18nPackStoreReturn {
     setEnabled,
     rename,
     remove,
+    reorder,
     importFromDialog,
     applyImport,
     packRemovedNotice,

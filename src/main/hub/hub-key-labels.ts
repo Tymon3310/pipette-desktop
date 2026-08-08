@@ -11,10 +11,8 @@ import type {
   HubKeyLabelListParams,
   HubKeyLabelTimestampsResponse,
 } from '../../shared/types/hub-key-label'
+import { getHubApiBase } from './hub-base'
 
-const HUB_API_DEFAULT = 'https://pipette-hub-worker.keymaps.workers.dev'
-const isDev = !!process.env.ELECTRON_RENDERER_URL
-const HUB_API_BASE = (isDev && process.env.PIPETTE_HUB_URL) || HUB_API_DEFAULT
 const MAX_RETRY_AFTER_S = 60
 
 /** Body of `GET /api/key-labels/:id/download`. */
@@ -22,6 +20,8 @@ export interface HubKeyLabelDownload {
   name: string
   map: Record<string, string>
   composite_labels: Record<string, string> | null
+  /** Absent on posts uploaded before this field existed. */
+  keymap_applicable?: boolean
 }
 
 /** Request body for `POST /api/key-labels` and `PUT /api/key-labels/:id`. */
@@ -29,6 +29,7 @@ export interface HubKeyLabelInput {
   name: string
   map: Record<string, string>
   compositeLabels?: Record<string, string> | null
+  keymapApplicable?: boolean
 }
 
 interface HubApiResponse<T> {
@@ -88,13 +89,13 @@ export async function fetchKeyLabelList(query: HubKeyLabelListParams): Promise<H
   if (query.page != null) qs.set('page', String(query.page))
   if (query.perPage != null) qs.set('per_page', String(query.perPage))
   const tail = qs.toString()
-  const url = `${HUB_API_BASE}/api/key-labels${tail ? `?${tail}` : ''}`
+  const url = `${getHubApiBase()}/api/key-labels${tail ? `?${tail}` : ''}`
   return hubFetch<HubKeyLabelListResponse>(url, { method: 'GET' }, 'Hub key-label list failed')
 }
 
 export async function fetchKeyLabelDetail(hubPostId: string): Promise<HubKeyLabelItem> {
   return hubFetch<HubKeyLabelItem>(
-    `${HUB_API_BASE}/api/key-labels/${encodeURIComponent(hubPostId)}`,
+    `${getHubApiBase()}/api/key-labels/${encodeURIComponent(hubPostId)}`,
     { method: 'GET' },
     'Hub key-label fetch failed',
   )
@@ -108,7 +109,7 @@ export async function fetchKeyLabelDetail(hubPostId: string): Promise<HubKeyLabe
  */
 export async function fetchKeyLabelTimestamps(ids: string[]): Promise<HubKeyLabelTimestampsResponse> {
   return hubFetch<HubKeyLabelTimestampsResponse>(
-    `${HUB_API_BASE}/api/key-labels/timestamps`,
+    `${getHubApiBase()}/api/key-labels/timestamps`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -119,7 +120,7 @@ export async function fetchKeyLabelTimestamps(ids: string[]): Promise<HubKeyLabe
 }
 
 export async function downloadKeyLabel(hubPostId: string): Promise<HubKeyLabelDownload> {
-  const url = `${HUB_API_BASE}/api/key-labels/${encodeURIComponent(hubPostId)}/download`
+  const url = `${getHubApiBase()}/api/key-labels/${encodeURIComponent(hubPostId)}/download`
   const response = await fetch(url, { method: 'GET' })
   if (!response.ok) {
     const text = await response.text()
@@ -139,11 +140,16 @@ function buildBody(input: HubKeyLabelInput): string {
   if (input.compositeLabels !== undefined) {
     body.composite_labels = input.compositeLabels ?? null
   }
+  // Always sent (not conditional like compositeLabels above) — the
+  // current Hub server ignores unknown fields, so this is safe to
+  // ship ahead of the Hub-side schema update, and always sending
+  // `false` lets a re-upload clear a previously-true flag.
+  body.keymap_applicable = Boolean(input.keymapApplicable)
   return JSON.stringify(body)
 }
 
 export async function uploadKeyLabel(jwt: string, input: HubKeyLabelInput): Promise<HubKeyLabelItem> {
-  return hubFetch<HubKeyLabelItem>(`${HUB_API_BASE}/api/key-labels`, {
+  return hubFetch<HubKeyLabelItem>(`${getHubApiBase()}/api/key-labels`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${jwt}`,
@@ -159,7 +165,7 @@ export async function updateKeyLabel(
   input: HubKeyLabelInput,
 ): Promise<HubKeyLabelItem> {
   return hubFetch<HubKeyLabelItem>(
-    `${HUB_API_BASE}/api/key-labels/${encodeURIComponent(hubPostId)}`,
+    `${getHubApiBase()}/api/key-labels/${encodeURIComponent(hubPostId)}`,
     {
       method: 'PUT',
       headers: {
@@ -174,7 +180,7 @@ export async function updateKeyLabel(
 
 export async function deleteKeyLabel(jwt: string, hubPostId: string): Promise<void> {
   await hubFetch<unknown>(
-    `${HUB_API_BASE}/api/key-labels/${encodeURIComponent(hubPostId)}`,
+    `${getHubApiBase()}/api/key-labels/${encodeURIComponent(hubPostId)}`,
     {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${jwt}` },

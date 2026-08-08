@@ -61,6 +61,109 @@
   margin-left: 6px;
 }
 
+/* Imported-text typing display: font size + visible-line window driven by
+   --tt-font (px) and --tt-lines (count). Base window height = font × 1.5
+   (the leading-normal line box) × line count — kept as a MIN-HEIGHT (not a
+   fixed height) so it still guarantees the blank-window minimum for short
+   texts and is the exact fallback height when line rows can't be measured
+   (jsdom, or before first paint). TypingTestView measures actual rendered
+   `[data-line-row]` rows (see useLogicalWindowHeight) so displayLines counts
+   LOGICAL lines rather than visual rows, and sets an inline `height` that
+   overrides this min-height floor whenever the logical content is taller. */
+.typing-multiline-window {
+  font-size: calc(var(--tt-font) * 1px);
+  min-height: calc(var(--tt-font) * var(--tt-lines) * 1.5px);
+}
+
+/* Romaji guide line below the reading window tracks the same --tt-font
+   Font setting as the reading window itself (the IME hint next to it stays
+   a fixed small size — see TypingTestView.tsx). */
+.typing-romaji-guide-text {
+  font-size: calc(var(--tt-font) * 1px);
+}
+
+/* Line timeline keystroke label overlay (LineTimelineRow.tsx): each
+   keystroke bar's HTML label wrapper opts into a CSS container query
+   (`container-type: inline-size`) so its own rendered WIDTH — which
+   tracks the shared zoom-driven canvas width, not the line's fixed
+   duration — decides whether the label glyph shows. Hidden by default;
+   the @container rule below reveals it once the bar is wide enough to
+   hold roughly one glyph of the text-2xs (10px) font. This makes
+   per-bar label visibility a pure CSS function of zoom: the row itself
+   never re-renders when the shared canvas width changes (see
+   WordTimelineView's DOM-only zoom invariant), so this could not be
+   done with a JS-computed class instead. */
+.line-timeline-label-cell {
+  container-type: inline-size;
+}
+.line-timeline-label-text {
+  display: none;
+}
+@container (min-width: 12px) {
+  .line-timeline-label-text {
+    display: block;
+  }
+}
+
+/* Line timeline header pinning (KeystrokeTimelinePanel's scrollport +
+   LineTimelineRow.tsx): only the SVG bar strip below each row's header
+   should scroll/stretch with zoom — the header itself (index badge + line
+   text + right-aligned stats + optional romaji sub-line) must stay
+   pinned to the scrollport's own VISIBLE width at all times, even though
+   its row (a flex child stretched to the zoomed canvas's width) can be
+   far wider than the viewport. `.keystroke-timeline-scrollport` opts the
+   scrollport into `container-type: inline-size` so `100cqw` below
+   resolves to ITS width (the visible viewport, unaffected by zoom), not
+   the row's own zoomed width. `.line-timeline-header-sticky` then pins
+   the header horizontally (`position: sticky; left: 0`) within that
+   scrollport as the user scrolls right, and caps its own width to the
+   viewport so the header's `ml-auto` stats span lands at the visible
+   right edge, not the zoomed row's actual (offscreen) right edge. Applied
+   to the LINE view only — the word view's analogous per-word header (see
+   word-timeline-row.tsx) is a separate component with its own, shorter
+   stats string that hasn't been reported as scrolling out of view.
+
+   `scrollbar-gutter: stable` — measured (not guessed) root cause of the
+   header's right-aligned stats getting clipped whenever a classic
+   (non-overlay) vertical scrollbar actually appears: Chromium resolves
+   `100cqw` against this container's box as it would be with NO scrollbar,
+   and never re-measures it once a real scrollbar carves that width back
+   out of `clientWidth` — a DOM measurement in the built app showed the
+   SAME `100cqw` pixel value (and the same header/stats right edge) with
+   and without an active vertical scrollbar, while the scrollport's own
+   `clientWidth` dropped by the scrollbar's ~15-17px only in the
+   scrollbar-present case, clipping the stats span by that same amount.
+   `scrollbar-gutter: stable` reserves that gutter unconditionally — with
+   or without actual vertical overflow — so `clientWidth` (and therefore
+   what `100cqw` resolves against) is identical in both states and never
+   changes out from under the sticky header when scrolling starts/stops.
+   The tradeoff is a small permanent gap on the right in the
+   no-scrollbar case (the reserved-but-unused gutter) — accepted as
+   symmetric and preferable to intermittent clipping. */
+.keystroke-timeline-scrollport {
+  container-type: inline-size;
+  scrollbar-gutter: stable;
+}
+.line-timeline-header-sticky {
+  position: sticky;
+  left: 0;
+  width: 100cqw;
+}
+
+/* MissedTable's own scroll container (mistake-summary.tsx) — same
+   `scrollbar-gutter: stable` lesson as `.keystroke-timeline-scrollport`
+   above, applied to a VERTICAL scrollbar this time: the table's
+   right-aligned "Moved on" column must land at the same x position
+   whether or not a real scrollbar is currently showing, so the gutter is
+   reserved unconditionally rather than only once content actually
+   overflows (which would otherwise shift/clip that column's edge the
+   moment the row count crosses the scroll threshold). No
+   `container-type` needed here — MissedTable has no cqw-based sticky
+   horizontal header the way the line timeline's `100cqw` header does. */
+.missed-table-scrollport {
+  scrollbar-gutter: stable;
+}
+
 /* Interactive elements use pointer cursor */
 button:not(:disabled),
 a,
@@ -112,8 +215,15 @@ label:has(> input[type="radio"]:not(:disabled)) {
   --key-label: #1f2937;
   --key-sublabel: #7c8598;
   --key-label-remap: #0000ff;
+  /* Permutation-pack "Display Only" tint — distinct from the "actual"
+     remap tint above. Theme packs may omit this and fall back to an
+     automatic complement of key-label-remap (see simulated-color.ts). */
+  --key-label-simulated: #9333ea;
   --key-bg-multi-selected: #93bbfd;
   --key-mask-bg: color-mix(in srgb, var(--key-bg) 70%, var(--surface) 30%);
+  /* View Matrix's duplicate-position warning fill — derived from the
+     warning token rather than a new raw hue. */
+  --key-bg-duplicate: color-mix(in srgb, var(--warning) 45%, var(--key-bg) 55%);
 
   --tab-bg-active: #2563eb;
   --tab-text: #6b7280;
@@ -160,8 +270,10 @@ label:has(> input[type="radio"]:not(:disabled)) {
   --key-label: #d4d8e3;
   --key-sublabel: #7a839a;
   --key-label-remap: #f7a948;
+  --key-label-simulated: #c084fc;
   --key-bg-multi-selected: #3a6fcf;
   --key-mask-bg: color-mix(in srgb, var(--key-bg) 70%, var(--surface) 30%);
+  --key-bg-duplicate: color-mix(in srgb, var(--warning) 45%, var(--key-bg) 55%);
 
   --tab-bg-active: #4c8dff;
   --tab-text: #8892a8;
@@ -216,6 +328,18 @@ label:has(> input[type="radio"]:not(:disabled)) {
   --key-bg-multi-selected: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
+/* Permutation-pack Display Only keymap surface: every KeyWidget/EncoderWidget
+   underneath resolves its remap tint from `--key-label-remap` (see
+   constants.ts's KEY_REMAP_COLOR) — overriding that one custom property here
+   redirects the whole subtree to the "simulated" tint without threading a
+   remapKind prop through every intermediate component. Applied by
+   KeymapEditor on the single container that wraps the active keymap surface
+   (KeyboardPane or TypingTestPane) — never on the key picker or popover, so
+   their "actual" tint (JIS-type remaps, the key picker) is unaffected. */
+.remap-simulated {
+  --key-label-remap: var(--key-label-simulated);
+}
+
 @theme {
   /* Background */
   --color-surface: var(--surface);
@@ -253,7 +377,9 @@ label:has(> input[type="radio"]:not(:disabled)) {
   --color-key-label: var(--key-label);
   --color-key-sublabel: var(--key-sublabel);
   --color-key-label-remap: var(--key-label-remap);
+  --color-key-label-simulated: var(--key-label-simulated);
   --color-key-bg-multi-selected: var(--key-bg-multi-selected);
+  --color-key-bg-duplicate: var(--key-bg-duplicate);
 
   /* Tab */
   --color-tab-bg-active: var(--tab-bg-active);
@@ -281,15 +407,15 @@ label:has(> input[type="radio"]:not(:disabled)) {
   --width-modal-sm: 440px;     /* EditorSettingsModal, FavoriteStoreModal, LayoutStoreModal */
   --width-modal-md: 600px;     /* MissingKeyLabelDialog, UnlockDialog, QmkSettings, JsonEditor */
   --width-modal-notify: 560px; /* NotificationModal, AnalyzeExportModal */
-  --width-modal-typing: 480px; /* LanguageSelectorModal, TypingRecordingConsentModal */
-  --width-modal-lg: 760px;     /* ThemePacksModal, KeyLabelsModal, LanguagePacksModal, SettingsModal */
+  --width-modal-typing: 480px; /* TypingRecordingConsentModal */
+  --width-modal-lg: 760px;     /* ThemePacksModal, KeyLabelsModal, LanguagePacksModal, LanguageSelectorModal */
   --width-modal-data: 860px;   /* DataModal */
   --width-modal-goal: 720px;   /* GoalAchievementsModal */
   --width-modal-app: 500px;    /* App toast, MacroTextEditor */
-  --width-modal-xl: 960px;     /* FingerAssignmentModal */
-  --width-modal-wide: 900px;   /* HistoryToggle, TapDanceModal (dummy) */
+  --width-modal-xl: 960px;     /* FingerAssignmentModal, SettingsModal */
+  --width-modal-wide: 900px;   /* TapDanceModal (dummy) */
   --width-modal-editor: 1050px; /* KeycodeEntryModalShell, TapDanceModal */
-  --width-modal-2xl: 1200px;   /* MacroModal large */
+  --width-modal-2xl: 1200px;   /* MacroModal large, HistoryToggle */
   --width-modal-3xl: 1300px;   /* MacroModal recording */
   --width-macro-editor: 456px; /* MacroEditor / KeycodeEntryModalShell list panel */
   --width-data-sidebar: 220px; /* DataModal tree sidebar */
@@ -299,7 +425,7 @@ label:has(> input[type="radio"]:not(:disabled)) {
   --height-modal-70vh: 70vh; /* MissingKeysModal, TypingAnalyticsView */
   --height-modal-90vh: 90vh; /* MacroModal */
   --height-modal-data: min(720px, 80vh);     /* DataModal */
-  --height-modal-settings: min(840px, 85vh); /* SettingsModal */
+  --height-modal-settings: min(900px, 90vh); /* SettingsModal */
 
   /* Modal max-heights */
   --max-height-modal-80vh: 80vh; /* Various modals */
@@ -309,6 +435,9 @@ label:has(> input[type="radio"]:not(:disabled)) {
   /* Component sizing */
   --min-width-keycode: 60px;           /* PopoverTabKey, MacroActionItem */
   --min-width-dropdown: 200px;         /* AppSelect, AnalyzeExportModal dropdowns */
+  --max-width-dropdown: 320px;         /* MultiSelectPopover panel — long labels wrap instead of widening it */
+  --max-width-filter-trigger: 200px;   /* MultiSelectPopover trigger button (matches --min-width-dropdown) */
+  --max-width-filter-chip-segment: 240px; /* AnalyzeFilterSummaryChip per-segment truncation — chip owns the whole filter row now that the snapshot quick-select moved into the modal */
   --min-width-modifier: 140px;         /* AltRepeatKeyPanelModal, ModifierPicker, LayerPicker, TapDanceModal */
   --min-width-rgb-label: 100px;        /* RGBConfigurator form labels */
   --min-width-layout-label: 120px;     /* LayoutEditor form label */
@@ -320,7 +449,6 @@ label:has(> input[type="radio"]:not(:disabled)) {
   --min-height-device-list: 340px;     /* DeviceSelector, KeymapEditor device list */
   --max-height-device-list: 340px;     /* DeviceSelector, KeymapEditor device list */
   --min-height-word-list: 100px;       /* TypingTestPane word list */
-  --height-typing-display: 7.25rem;    /* TypingTestView word display area */
   --width-color-picker: 15rem;         /* HSVColorPicker container */
   --height-color-picker-sv: 180px;     /* HSVColorPicker saturation/value canvas */
   --spacing-scale-btn: 34px;           /* ScaleControl toolbar button (non-grid: between sm key and toolbar icon) */
@@ -347,6 +475,7 @@ label:has(> input[type="radio"]:not(:disabled)) {
 
   /* Z-index */
   --z-60: 60; /* AnalyzeExportModal dropdown overlay */
+  --z-70: 70; /* WordTimelineView hover tooltip, above its own z-60 modal */
 }
 
 @keyframes confirm-flash {
@@ -356,4 +485,19 @@ label:has(> input[type="radio"]:not(:disabled)) {
 
 .confirm-flash {
   animation: confirm-flash 1.2s ease-out;
+}
+
+/* Keymap Editor: post-rewrite key flash overlay (KeyWidget's `flashed`,
+   `.key-flash-overlay`). Holds full opacity for 500ms so the just-rewritten
+   keys register, then eases out over the last 200ms — expressed as
+   percentage stops over the 700ms total (`KEY_FLASH_DURATION_MS` in
+   `key-flash.ts`) so KeymapEditor's clear timer (same duration) never
+   unmounts the overlay mid-fade. */
+@keyframes key-flash {
+  0%, 71.4% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.key-flash-overlay {
+  animation: key-flash 700ms ease-out forwards;
 }

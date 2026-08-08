@@ -5,9 +5,11 @@
 // plus a single dynamic branch for heatmap HSL values: unknown fills are
 // returned as `false` so callers keep the default label color. This
 // matches the rule that new key colours must register themselves here
-// explicitly rather than relying on a generic luminance formula.
-//
-// See `.claude/rules/coding-ui.md` (Key fill palette) for the rule.
+// explicitly rather than relying on a generic luminance formula: every
+// new fill color must get an explicit `{ light, dark }` legibility
+// decision added to `FILL_INVERT_TABLE` below, decided per theme rather
+// than derived, so an untested fill silently keeps the default label
+// instead of guessing.
 
 import type { EffectiveTheme } from '../../hooks/useEffectiveTheme'
 
@@ -41,6 +43,12 @@ const FILL_INVERT_TABLE: Record<string, Record<EffectiveTheme, boolean>> = {
   // Ever-pressed is a fixed very-light green; same deal — dark theme's
   // light label disappears on it.
   '#ccffcc': { light: false, dark: true },
+
+  // View Matrix's duplicate-position warning fill (warning/key-bg mix).
+  // Light theme's mix stays bright enough for the default dark label;
+  // dark theme's mix lands at a medium brightness where the near-black
+  // inverse label reads with more contrast than the default light one.
+  'var(--key-bg-duplicate)': { light: false, dark: true },
 }
 
 /** Parse the hue + lightness components out of an `hsl(h, s%, l%)`

@@ -11,14 +11,38 @@ import {
   KEY_SELECTED_COLOR,
   KEY_TEXT_COLOR,
   KEY_INVERTED_TEXT_COLOR,
+  KEY_REMAP_COLOR,
   KEY_MASK_RECT_COLOR,
 } from './constants'
+import { flashAnimationDelayMs } from './key-flash'
 
 interface Props {
   kleKey: KleKey
   keycode: string
   selected?: boolean
   selectedMaskPart?: boolean
+  /** True for one beat right after a bulk keymap rewrite (Key Label
+   *  "apply to keymap") or an undo/redo lands on this encoder position.
+   *  Mirrors `KeyWidget`'s `flashed` — renders an extra overlay (same fill
+   *  as `selected`, `KEY_SELECTED_COLOR`) on top of the encoder's normal
+   *  fill, fading via the declarative `key-flash` CSS keyframe (style.css)
+   *  once the caller clears the flag. */
+  flashed?: boolean
+  /** Bumped by the caller on every successful apply (`KeyFlashState.generation`
+   *  in `KeyboardWidget`). Used as the overlay element's React `key` so a
+   *  re-apply mid-flash remounts (and thus restarts) the overlay. */
+  flashGeneration?: number
+  /** `Date.now()` at the apply that produced this flash (`KeyFlashState.startedAt`).
+   *  Used to compute a negative `animation-delay` so a late-mounted overlay
+   *  joins the same global fade timeline instead of restarting from full
+   *  opacity. */
+  flashStartedAt?: number
+  /** Active Key Label pack's remap-tint predicate result for this
+   *  direction's keycode (`isRemapped`, gated the same way as `KeyWidget`'s
+   *  `remapped` — see `use-layer-keycodes.ts`'s `buildEncoderRemappedForLayer`).
+   *  Colors the label only — encoders have no inner-remap label path like
+   *  masked `KeyWidget` keys, so this is intentionally minimal. */
+  remapped?: boolean
   onClick?: (key: KleKey, direction: number, maskClicked: boolean) => void
   onDoubleClick?: (key: KleKey, direction: number, rect: DOMRect, maskClicked: boolean) => void
   scale?: number
@@ -29,6 +53,10 @@ function EncoderWidgetInner({
   keycode,
   selected,
   selectedMaskPart,
+  flashed,
+  flashGeneration,
+  flashStartedAt,
+  remapped,
   onClick,
   onDoubleClick,
   scale = 1,
@@ -48,7 +76,9 @@ function EncoderWidgetInner({
   const masked = isMask(keycode)
   const innerSelected = selected && selectedMaskPart && masked
   const fillColor = selected && !innerSelected ? KEY_SELECTED_COLOR : KEY_BG_COLOR
-  const labelColor = selected && !innerSelected ? KEY_INVERTED_TEXT_COLOR : KEY_TEXT_COLOR
+  const labelColor = selected && !innerSelected
+    ? KEY_INVERTED_TEXT_COLOR
+    : remapped ? KEY_REMAP_COLOR : KEY_TEXT_COLOR
   const fontSize = Math.max(8, Math.min(12, 12 * scale))
   const outerBorderActive = selected && !innerSelected
 
@@ -68,12 +98,48 @@ function EncoderWidgetInner({
     if (onDoubleClick) { e.stopPropagation(); onDoubleClick(kleKey, kleKey.encoderDir, e.currentTarget.getBoundingClientRect(), false) }
   }
 
+  // How far into the shared `key-flash` timeline this overlay is joining —
+  // same negative `animation-delay` trick as `KeyWidget` (see there for
+  // the full rationale).
+  const flashElapsedMs = flashed && flashStartedAt !== undefined
+    ? flashAnimationDelayMs(flashStartedAt)
+    : 0
+
+  // Flash overlay + border redraw (Key Label "apply to keymap" rewrite /
+  // undo/redo): shared by both the masked and non-masked branches below —
+  // painted on top of the outer fill/stroke but below the label text /
+  // inner mask rect, mirroring `KeyWidget`'s `key-flash-overlay`. The
+  // second circle redraws a stroke-only border on top since the overlay's
+  // opaque fill paints over the outer stroke too, keeping the border crisp
+  // for the whole flash (mirrors `KeyWidget`'s `flash-overlay-border`).
+  const flashOverlay = flashed ? (
+    <>
+      <circle
+        key={flashGeneration}
+        cx={cx} cy={cy} r={r}
+        data-testid="flash-overlay"
+        className="key-flash-overlay"
+        fill={KEY_SELECTED_COLOR}
+        style={{ pointerEvents: 'none', animationDelay: `-${flashElapsedMs}ms` }}
+      />
+      <circle
+        cx={cx} cy={cy} r={r}
+        data-testid="flash-overlay-border"
+        fill="none"
+        stroke={outerBorderActive ? KEY_SELECTED_COLOR : KEY_BORDER_COLOR}
+        strokeWidth={outerBorderActive ? 2 : 1}
+        style={{ pointerEvents: 'none' }}
+      />
+    </>
+  ) : null
+
   if (!masked) {
     const labelLines = keycodeLabel(keycode).split('\n')
     return (
-      <g transform={groupTransform} onClick={handleClick} onDoubleClick={handleDoubleClick} style={{ cursor: handleClick ? 'pointer' : 'default' }}>
+      <g transform={groupTransform} onClick={handleClick} onDoubleClick={handleDoubleClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
         <circle cx={cx} cy={cy} r={r} fill={fillColor}
           stroke={outerBorderActive ? KEY_SELECTED_COLOR : KEY_BORDER_COLOR} strokeWidth={outerBorderActive ? 2 : 1} />
+        {flashOverlay}
         {labelLines.map((line, i) => (
           <text key={i} x={cx} y={cy + (i - (labelLines.length - 1) / 2) * (fontSize + 2)}
             textAnchor="middle" dominantBaseline="central" fill={labelColor} fontSize={fontSize} fontFamily="sans-serif">
@@ -112,7 +178,7 @@ function EncoderWidgetInner({
   }
 
   return (
-    <g transform={groupTransform} onClick={handleClick} onDoubleClick={handleDoubleClick} style={{ cursor: handleClick ? 'pointer' : 'default' }}>
+    <g transform={groupTransform} onClick={handleClick} onDoubleClick={handleDoubleClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
       <defs>
         <clipPath id={clipId}>
           <circle cx={cx} cy={cy} r={r - 1} />
@@ -121,13 +187,18 @@ function EncoderWidgetInner({
       {/* Outer circle */}
       <circle cx={cx} cy={cy} r={r} fill={fillColor}
         stroke={outerBorderActive ? KEY_SELECTED_COLOR : KEY_BORDER_COLOR} strokeWidth={outerBorderActive ? 2 : 1} />
+      {/* Flash overlay: painted above the outer circle but below the inner
+          mask rect and labels (both rendered below), same stacking as the
+          non-masked branch and `KeyWidget`'s masked keys — the inner rect
+          and its label stay visible on top of the overlay. */}
+      {flashOverlay}
       {/* Inner rect clipped to circle — same style as KeyWidget (stroke-only selection) */}
       <rect x={innerRectX} y={innerRectY} width={innerRectW} height={innerRectH}
         rx={innerCorner} ry={innerCorner}
         fill={KEY_MASK_RECT_COLOR}
         stroke={innerBorderActive ? KEY_SELECTED_COLOR : KEY_BORDER_COLOR} strokeWidth={innerBorderActive ? 2 : 1}
         clipPath={`url(#${clipId})`}
-        onClick={handleInnerClick} onDoubleClick={handleInnerDoubleClick} style={{ cursor: handleClick ? 'pointer' : 'default' }} />
+        onClick={handleInnerClick} onDoubleClick={handleInnerDoubleClick} style={{ cursor: onClick ? 'pointer' : 'default' }} />
       {/* Outer label (modifier) */}
       <text x={cx} y={outerLabelY} textAnchor="middle" dominantBaseline="central"
         fill={labelColor} fontSize={fontSize * 0.85} fontFamily="sans-serif" style={{ pointerEvents: 'none' }}>

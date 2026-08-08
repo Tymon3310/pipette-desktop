@@ -138,7 +138,7 @@ export function KeychronSocd({ keychron, keys, keymap, onSettingChanged, onClose
               multiSelectedKeys={new Set()}
               onKeyClick={handleKeyPick}
               scale={kbScale}
-              customLabels={(() => {
+              keyColors={(() => {
                 const labels = new Map<string, string>()
                 keys.forEach((k) => {
                   if (k.row !== undefined && k.col !== undefined) {

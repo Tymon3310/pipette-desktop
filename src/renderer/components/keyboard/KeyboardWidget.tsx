@@ -3,13 +3,14 @@
 import { useMemo, memo } from 'react'
 import type { KleKey } from '../../../shared/kle/types'
 import { filterVisibleKeys, repositionLayoutKeys } from '../../../shared/kle/filter-keys'
-import { posKey } from '../../../shared/kle/pos-key'
+import { posKey, encoderPosKey } from '../../../shared/kle/pos-key'
 import { KeyWidget } from './KeyWidget'
 import { EncoderWidget } from './EncoderWidget'
 import { KEY_UNIT, KEY_SPACING, KEYBOARD_PADDING } from './constants'
 import { innerHeatmapFillForCell, outerHeatmapFillForCell } from './heatmap-fill'
 import type { TypingHeatmapCell } from '../../../shared/types/typing-analytics'
 import { useEffectiveTheme } from '../../hooks/useEffectiveTheme'
+import { flashPropsFor, type KeyFlashState } from './key-flash'
 
 /** Rotate point (px, py) by `angle` degrees around center (cx, cy). */
 export function rotatePoint(
@@ -71,8 +72,17 @@ interface Props {
   selectedEncoder?: { idx: number; dir: 0 | 1 } | null
   pressedKeys?: Set<string>
   highlightedKeys?: Set<string>
+  /** Flash state after a Key Label "apply to keymap" bulk rewrite or a
+   *  successful undo/redo — threaded to both `KeyWidget` (`keys`) and
+   *  `EncoderWidget` (`encoders`). */
+  flash?: KeyFlashState
   everPressedKeys?: Set<string>
   remappedKeys?: Set<string>
+  /** Encoder analogue of `remappedKeys`, keyed by `encoderPosKey(idx, dir)` —
+   *  see `use-layer-keycodes.ts`'s `buildEncoderRemappedForLayer`. Colors
+   *  the CW/CCW legend the pack's Rewrite touched (`EncoderWidget`'s
+   *  `remapped` prop). */
+  remappedEncoders?: Set<string>
   multiSelectedKeys?: Set<string>
   layoutOptions?: Map<number, number>
   selectedMaskPart?: boolean
@@ -98,6 +108,12 @@ interface Props {
    *  still win. Used by the Finger Assignment modal to paint each key
    *  with its finger colour. */
   keyColors?: Map<string, string>
+  /** Active Key Label pack's per-key legend override — threaded straight
+   *  to `KeyWidget` for masked (composite) keys' inner label (issue
+   *  #295). The outer/plain label for non-masked keys is already
+   *  remapped upstream in the `keycodes` map itself (`use-layer-
+   *  keycodes.ts`), so this is only ever consulted for the inner path. */
+  remapLabel?: (qmkId: string) => string
   onKeyClick?: (key: KleKey, maskClicked: boolean, event?: { ctrlKey: boolean; shiftKey: boolean }) => void
   onKeyDoubleClick?: (key: KleKey, rect: DOMRect, maskClicked: boolean) => void
   onEncoderClick?: (key: KleKey, direction: number, maskClicked: boolean) => void
@@ -118,8 +134,10 @@ function KeyboardWidgetInner({
   selectedMaskPart,
   pressedKeys,
   highlightedKeys,
+  flash,
   everPressedKeys,
   remappedKeys,
+  remappedEncoders,
   multiSelectedKeys,
   layoutOptions,
   heatmapCells,
@@ -128,6 +146,7 @@ function KeyboardWidgetInner({
   heatmapMaxHold = 0,
   labelOverrides,
   keyColors,
+  remapLabel,
   onKeyClick,
   onKeyDoubleClick,
   onEncoderClick,
@@ -202,6 +221,8 @@ function KeyboardWidgetInner({
               kleKey={key}
               keycode={kc}
               selected={false}
+              remapped={remappedEncoders?.has(encoderPosKey(key.encoderIdx, key.encoderDir))}
+              {...flashPropsFor(flash, 'encoders', encoderPosKey(key.encoderIdx, key.encoderDir))}
               onClick={readOnly ? undefined : onEncoderClick}
               onDoubleClick={readOnly ? undefined : onEncoderDoubleClick}
               scale={scale}
@@ -220,6 +241,7 @@ function KeyboardWidgetInner({
             multiSelected={multiSelectedKeys?.has(pos)}
             pressed={pressedKeys?.has(pos)}
             highlighted={highlightedKeys?.has(pos)}
+            {...flashPropsFor(flash, 'keys', pos)}
             everPressed={everPressedKeys?.has(pos)}
             remapped={remappedKeys?.has(pos)}
             heatmapOuterFill={outerHeatmapFillForCell(heatmapCells, heatmapMaxHold, heatmapMaxTotal, pos, effectiveTheme)}
@@ -227,6 +249,7 @@ function KeyboardWidgetInner({
             effectiveTheme={effectiveTheme}
             customFill={keyColors?.get(pos) ?? null}
             labelOverride={labelOverrides?.get(pos)}
+            remapLabel={remapLabel}
             onClick={readOnly ? undefined : onKeyClick}
             onDoubleClick={readOnly ? undefined : onKeyDoubleClick}
             onHover={onKeyHover}
@@ -254,6 +277,8 @@ function KeyboardWidgetInner({
               keycode={kc}
               selected
               selectedMaskPart={selectedMaskPart}
+              remapped={remappedEncoders?.has(encoderPosKey(key.encoderIdx, key.encoderDir))}
+              {...flashPropsFor(flash, 'encoders', encoderPosKey(key.encoderIdx, key.encoderDir))}
               onClick={readOnly ? undefined : onEncoderClick}
               onDoubleClick={readOnly ? undefined : onEncoderDoubleClick}
               scale={scale}
@@ -273,6 +298,7 @@ function KeyboardWidgetInner({
             selectedMaskPart={selectedMaskPart}
             pressed={pressedKeys?.has(pos)}
             highlighted={highlightedKeys?.has(pos)}
+            {...flashPropsFor(flash, 'keys', pos)}
             everPressed={everPressedKeys?.has(pos)}
             remapped={remappedKeys?.has(pos)}
             heatmapOuterFill={outerHeatmapFillForCell(heatmapCells, heatmapMaxHold, heatmapMaxTotal, pos, effectiveTheme)}
@@ -280,6 +306,7 @@ function KeyboardWidgetInner({
             effectiveTheme={effectiveTheme}
             customFill={keyColors?.get(pos) ?? null}
             labelOverride={labelOverrides?.get(pos)}
+            remapLabel={remapLabel}
             onClick={readOnly ? undefined : onKeyClick}
             onDoubleClick={readOnly ? undefined : onKeyDoubleClick}
             onHover={onKeyHover}

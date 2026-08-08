@@ -3,17 +3,19 @@
 
 import { app } from 'electron'
 import { join } from 'node:path'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
 import { IpcChannels } from '../shared/ipc/channels'
 import { notifyChange } from './sync/sync-service'
 import { secureHandle } from './ipc-guard'
-import type { PipetteSettings, ViewMode } from '../shared/types/pipette-settings'
-import { VIEW_MODES, isTypingSyncSpanDays, isTypingViewMenuTab } from '../shared/types/pipette-settings'
+import { withWriteLock } from './per-uid-write-lock'
+import { isSafePathSegment } from './utils/safe-filename'
+import { isRecord } from '../shared/vil-file'
+import { getActiveKeyboardMetaMap, readKeyboardMetaIndex, resolveKeyboardDisplayName } from './sync/keyboard-meta'
+import { getTypingAnalyticsDB } from './typing-analytics/db/typing-analytics-db'
+import type { PipetteSettings, PipetteSettingsPatch, ViewMode, PooledTypingTestResult } from '../shared/types/pipette-settings'
+import { VIEW_MODES, DEFAULT_PIPETTE_SETTINGS, isTypingSyncSpanDays, isTypingTestComparisonBaselines } from '../shared/types/pipette-settings'
 import { isPositiveInt, isValidAnalyzeFilterSettings } from '../shared/types/analyze-filters'
-import { FINGER_LIST, type FingerType } from '../shared/kle/kle-ergonomics'
-
-const FINGER_SET = new Set<FingerType>(FINGER_LIST)
-const KEY_POS_RE = /^\d+,\d+$/
+import { isFingerType, isPosKey } from '../shared/kle/kle-ergonomics'
 
 function isValidIsoTimestamp(v: unknown): v is string {
   if (typeof v !== 'string' || v.length === 0) return false
@@ -38,8 +40,8 @@ function isValidAnalyzeSettings(value: unknown): boolean {
     const fa = obj.fingerAssignments
     if (typeof fa !== 'object' || Array.isArray(fa)) return false
     for (const [k, v] of Object.entries(fa as Record<string, unknown>)) {
-      if (!KEY_POS_RE.test(k)) return false
-      if (typeof v !== 'string' || !FINGER_SET.has(v as FingerType)) return false
+      if (!isPosKey(k)) return false
+      if (!isFingerType(v)) return false
     }
   }
   if ('goalDays' in obj && obj.goalDays != null && !isPositiveInt(obj.goalDays)) return false
@@ -49,12 +51,26 @@ function isValidAnalyzeSettings(value: unknown): boolean {
     if (!obj.goalHistory.every(isValidGoalHistoryEntry)) return false
   }
   if ('filters' in obj && obj.filters != null && !isValidAnalyzeFilterSettings(obj.filters)) return false
+  if ('compareFilters' in obj && obj.compareFilters != null && !isValidAnalyzeFilterSettings(obj.compareFilters)) return false
+  if ('showBenchmark' in obj && obj.showBenchmark != null && typeof obj.showBenchmark !== 'boolean') return false
   return true
 }
 
-function isSafePathSegment(segment: string): boolean {
-  if (!segment || segment === '.' || segment === '..') return false
-  return !/[/\\]/.test(segment)
+/** Validates `viewMatrix`: an object keyed by physical `"row,col"` mapping
+ *  to a `{ row, col }` logical override. Any malformed entry rejects the
+ *  whole map, matching the defensive style used for `typingTestMemory`
+ *  (an untrustworthy map is dropped entirely rather than partially kept). */
+function isValidViewMatrix(value: unknown): boolean {
+  if (value == null) return true
+  if (typeof value !== 'object' || Array.isArray(value)) return false
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (!isPosKey(k)) return false
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
+    const cell = v as Record<string, unknown>
+    if (!Number.isInteger(cell.row) || (cell.row as number) < 0) return false
+    if (!Number.isInteger(cell.col) || (cell.col as number) < 0) return false
+  }
+  return true
 }
 
 function validateUid(uid: string): void {
@@ -70,6 +86,7 @@ function isValidPrefs(value: unknown): value is PipetteSettings {
   if (Array.isArray(obj.layerNames) && (obj.layerNames as unknown[]).some((n) => typeof n !== 'string')) return false
   if ('typingTestResults' in obj && obj.typingTestResults != null && !Array.isArray(obj.typingTestResults)) return false
   if ('typingTestConfig' in obj && obj.typingTestConfig != null && (typeof obj.typingTestConfig !== 'object' || Array.isArray(obj.typingTestConfig))) return false
+  if ('typingTestMonkeytypeConfig' in obj && obj.typingTestMonkeytypeConfig != null && (typeof obj.typingTestMonkeytypeConfig !== 'object' || Array.isArray(obj.typingTestMonkeytypeConfig))) return false
   if ('typingTestLanguage' in obj && obj.typingTestLanguage != null && typeof obj.typingTestLanguage !== 'string') return false
   if ('layerPanelOpen' in obj && obj.layerPanelOpen != null && typeof obj.layerPanelOpen !== 'boolean') return false
   if ('basicViewType' in obj && obj.basicViewType != null && obj.basicViewType !== 'ansi' && obj.basicViewType !== 'iso' && obj.basicViewType !== 'jis' && obj.basicViewType !== 'list' && obj.basicViewType !== 'keyboard') return false
@@ -84,11 +101,20 @@ function isValidPrefs(value: unknown): value is PipetteSettings {
     if (typeof ws.width !== 'number' || typeof ws.height !== 'number') return false
   }
   if ('typingTestViewOnlyAlwaysOnTop' in obj && obj.typingTestViewOnlyAlwaysOnTop != null && typeof obj.typingTestViewOnlyAlwaysOnTop !== 'boolean') return false
+  if ('typingTestMemory' in obj && obj.typingTestMemory != null && (typeof obj.typingTestMemory !== 'object' || Array.isArray(obj.typingTestMemory))) return false
+  if ('typingTestDisplayLines' in obj && obj.typingTestDisplayLines != null && typeof obj.typingTestDisplayLines !== 'number') return false
+  if ('typingTestFontSize' in obj && obj.typingTestFontSize != null && typeof obj.typingTestFontSize !== 'number') return false
+  if ('typingTestHideKeymap' in obj && obj.typingTestHideKeymap != null && typeof obj.typingTestHideKeymap !== 'boolean') return false
+  if ('typingTestHideStatsRow' in obj && obj.typingTestHideStatsRow != null && typeof obj.typingTestHideStatsRow !== 'boolean') return false
+  if ('typingTestHideControls' in obj && obj.typingTestHideControls != null && typeof obj.typingTestHideControls !== 'boolean') return false
+  if ('typingTestSaveUnnamed' in obj && obj.typingTestSaveUnnamed != null && typeof obj.typingTestSaveUnnamed !== 'boolean') return false
+  if ('typingTestComparisonBaselines' in obj && obj.typingTestComparisonBaselines != null && !isTypingTestComparisonBaselines(obj.typingTestComparisonBaselines)) return false
+  if ('typingTestSettingsPanelOpen' in obj && obj.typingTestSettingsPanelOpen != null && typeof obj.typingTestSettingsPanelOpen !== 'boolean') return false
   if ('typingRecordEnabled' in obj && obj.typingRecordEnabled != null && typeof obj.typingRecordEnabled !== 'boolean') return false
   if ('typingSyncSpanDays' in obj && obj.typingSyncSpanDays != null && !isTypingSyncSpanDays(obj.typingSyncSpanDays)) return false
-  if ('typingViewMenuTab' in obj && obj.typingViewMenuTab != null && !isTypingViewMenuTab(obj.typingViewMenuTab)) return false
   if ('viewMode' in obj && obj.viewMode != null && !VIEW_MODES.includes(obj.viewMode as ViewMode)) return false
   if ('analyze' in obj && !isValidAnalyzeSettings(obj.analyze)) return false
+  if ('viewMatrix' in obj && !isValidViewMatrix(obj.viewMatrix)) return false
   if ('_rev' in obj && obj._rev !== 1) return false
   return true
 }
@@ -126,15 +152,25 @@ async function readData(uid: string): Promise<PipetteSettings | null> {
       layerNames: parsed.layerNames ?? [],
       typingTestResults: parsed.typingTestResults,
       typingTestConfig: parsed.typingTestConfig,
+      typingTestMonkeytypeConfig: parsed.typingTestMonkeytypeConfig,
       typingTestLanguage: parsed.typingTestLanguage,
       typingTestViewOnly: parsed.typingTestViewOnly,
       typingTestViewOnlyWindowSize: parsed.typingTestViewOnlyWindowSize,
       typingTestViewOnlyAlwaysOnTop: parsed.typingTestViewOnlyAlwaysOnTop,
+      typingTestMemory: parsed.typingTestMemory,
+      typingTestDisplayLines: parsed.typingTestDisplayLines,
+      typingTestFontSize: parsed.typingTestFontSize,
+      typingTestHideKeymap: parsed.typingTestHideKeymap,
+      typingTestHideStatsRow: parsed.typingTestHideStatsRow,
+      typingTestHideControls: parsed.typingTestHideControls,
+      typingTestSaveUnnamed: parsed.typingTestSaveUnnamed,
+      typingTestComparisonBaselines: parsed.typingTestComparisonBaselines,
+      typingTestSettingsPanelOpen: parsed.typingTestSettingsPanelOpen,
       typingRecordEnabled: parsed.typingRecordEnabled,
       typingSyncSpanDays: parsed.typingSyncSpanDays,
-      typingViewMenuTab: parsed.typingViewMenuTab,
       viewMode: parsed.viewMode,
       analyze: parsed.analyze,
+      viewMatrix: parsed.viewMatrix,
     }
   } catch {
     return null
@@ -156,6 +192,46 @@ async function writeData(uid: string, prefs: PipetteSettings): Promise<void> {
   notifyChange(`keyboards/${uid}/settings`)
 }
 
+/** Merge `base.analyze` with `partial.analyze` one level deep so the three
+ * analyze writers (filters / fingerAssignments / goal) only ever send their
+ * own sub-fields and never clobber each other's. `undefined` skips a
+ * sub-field (leave existing); an empty object/array clears that field's
+ * contents (e.g. fingerAssignments `{}` drops all overrides). */
+function mergeAnalyze(base: unknown, partial: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = isRecord(base) ? { ...base } : {}
+  for (const [k, v] of Object.entries(partial)) {
+    if (v === undefined) continue
+    merged[k] = v
+  }
+  return merged
+}
+
+/** Shallow-merge only the defined keys of `partial` onto `base` so a writer
+ * that omits (or leaves undefined) a field never erases the persisted value
+ * another writer owns. `undefined` skips a field; `null` clears it (removes
+ * the key, used by the full-prefs writer for owned fields like
+ * `typingTestMemory`). `analyze` is merged one level deeper (see
+ * {@link mergeAnalyze}) because three independent writers own disjoint
+ * sub-fields of it. */
+function mergeDefined(base: PipetteSettings, partial: PipetteSettingsPatch): PipetteSettings {
+  const merged: Record<string, unknown> = { ...base }
+  for (const [k, v] of Object.entries(partial)) {
+    if (v === undefined) continue
+    if (v === null) {
+      delete merged[k]
+    } else if (k === 'analyze' && isRecord(v)) {
+      merged.analyze = mergeAnalyze(base.analyze, v)
+    } else {
+      merged[k] = v
+    }
+  }
+  // merged is built up dynamically from PipetteSettings's own fields plus
+  // the patch, so it satisfies the shape at runtime; the untyped Record
+  // accumulator just doesn't retain enough literal-key info for `as` to
+  // see the overlap directly.
+  return merged as unknown as PipetteSettings
+}
+
 export function setupPipetteSettingsStore(): void {
   secureHandle(
     IpcChannels.PIPETTE_SETTINGS_GET,
@@ -169,17 +245,59 @@ export function setupPipetteSettingsStore(): void {
     },
   )
 
+  // Pool every locally-stored keyboard's saved typing-test results into one
+  // flat list for the Measurement-row comparison baseline (keyboard-agnostic).
+  // Reads are best-effort: a missing / invalid keyboard dir is skipped.
   secureHandle(
-    IpcChannels.PIPETTE_SETTINGS_SET,
+    IpcChannels.PIPETTE_SETTINGS_LIST_ALL_TYPING_RESULTS,
+    async (): Promise<PooledTypingTestResult[]> => {
+      const keyboardsDir = join(app.getPath('userData'), 'sync', 'keyboards')
+      const metaMap = getActiveKeyboardMetaMap(await readKeyboardMetaIndex())
+      // Analytics carries a product name even for keyboards with no saved
+      // keymap (meta / snapshot), so it names otherwise-uid-only keyboards.
+      let analyticsNames: Map<string, string> | undefined
+      try {
+        analyticsNames = new Map(
+          getTypingAnalyticsDB().listKeyboardsWithTypingData().map((k) => [k.uid, k.productName]),
+        )
+      } catch { /* analytics db unavailable */ }
+      const all: PooledTypingTestResult[] = []
+      try {
+        const entries = await readdir(keyboardsDir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (!entry.isDirectory() || !isSafePathSegment(entry.name)) continue
+          const prefs = await readData(entry.name)
+          if (!prefs?.typingTestResults?.length) continue
+          const keyboardName = await resolveKeyboardDisplayName(entry.name, metaMap, analyticsNames)
+          for (const r of prefs.typingTestResults) all.push({ ...r, keyboardName })
+        }
+      } catch { /* keyboards dir doesn't exist yet */ }
+      return all
+    },
+  )
+
+  // Field-level merge: each renderer writer PATCHes only the fields it owns,
+  // so concurrent writers (full prefs / analyze filters / goal / keymap
+  // scale) never clobber each other. The read-merge-write runs inside the
+  // per-uid queue so it's atomic against other writes.
+  secureHandle(
+    IpcChannels.PIPETTE_SETTINGS_PATCH,
     async (
       _event,
       uid: string,
-      prefs: PipetteSettings,
+      partial: PipetteSettingsPatch,
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         validateUid(uid)
-        validatePrefs(prefs)
-        await writeData(uid, prefs)
+        if (typeof partial !== 'object' || partial === null || Array.isArray(partial)) {
+          throw new Error('Invalid patch')
+        }
+        await withWriteLock(uid, async () => {
+          const existing = await readData(uid)
+          const merged = mergeDefined(existing ?? DEFAULT_PIPETTE_SETTINGS, partial)
+          validatePrefs(merged)
+          await writeData(uid, merged)
+        })
         return { success: true }
       } catch (err) {
         return { success: false, error: String(err) }

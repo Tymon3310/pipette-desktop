@@ -10,6 +10,7 @@ import {
   scopeRowId,
   serializeRow,
   sessionRowId,
+  trigramMinuteRowId,
   type JsonlRow,
 } from '../jsonl-row'
 
@@ -19,22 +20,36 @@ describe('composite id builders', () => {
   })
 
   it('distinguishes char rows that differ only by character', () => {
-    expect(charMinuteRowId('s', 60_000, 'a')).toBe('char|s|60000|a')
-    expect(charMinuteRowId('s', 60_000, '|')).toBe('char|s|60000|%7C')
-    expect(charMinuteRowId('s', 60_000, 'a')).not.toBe(charMinuteRowId('s', 60_000, 'b'))
+    expect(charMinuteRowId('s', 60_000, '', 'a')).toBe('char|s|60000||a')
+    expect(charMinuteRowId('s', 60_000, '', '|')).toBe('char|s|60000||%7C')
+    expect(charMinuteRowId('s', 60_000, '', 'a')).not.toBe(charMinuteRowId('s', 60_000, '', 'b'))
+  })
+
+  it('distinguishes char rows that differ only by run id', () => {
+    expect(charMinuteRowId('s', 60_000, 'run-1', 'a')).toBe('char|s|60000|run-1|a')
+    expect(charMinuteRowId('s', 60_000, 'run-1', 'a'))
+      .not.toBe(charMinuteRowId('s', 60_000, 'run-2', 'a'))
   })
 
   it('includes row/col/layer in matrix row ids', () => {
-    expect(matrixMinuteRowId('s', 60_000, 2, 3, 1)).toBe('matrix|s|60000|2|3|1')
+    expect(matrixMinuteRowId('s', 60_000, '', 2, 3, 1)).toBe('matrix|s|60000||2|3|1')
+    expect(matrixMinuteRowId('s', 60_000, 'run-1', 2, 3, 1)).toBe('matrix|s|60000|run-1|2|3|1')
   })
 
   it('builds stats and session row ids', () => {
-    expect(minuteStatsRowId('s', 60_000)).toBe('stats|s|60000')
+    expect(minuteStatsRowId('s', 60_000, '')).toBe('stats|s|60000|')
+    expect(minuteStatsRowId('s', 60_000, 'run-1')).toBe('stats|s|60000|run-1')
     expect(sessionRowId('uuid-123')).toBe('session|uuid-123')
   })
 
   it('builds bigram-minute row ids without per-pair suffix (one row per minute)', () => {
-    expect(bigramMinuteRowId('s', 60_000)).toBe('bigram|s|60000')
+    expect(bigramMinuteRowId('s', 60_000, '')).toBe('bigram|s|60000|')
+    expect(bigramMinuteRowId('s', 60_000, 'run-1')).toBe('bigram|s|60000|run-1')
+  })
+
+  it('builds trigram-minute row ids without per-triple suffix (one row per minute)', () => {
+    expect(trigramMinuteRowId('s', 60_000, '')).toBe('trigram|s|60000|')
+    expect(trigramMinuteRowId('s', 60_000, 'run-1')).toBe('trigram|s|60000|run-1')
   })
 })
 
@@ -66,13 +81,13 @@ describe('serializeRow / parseRow round-trip', () => {
     const rows: JsonlRow[] = [
       scope,
       {
-        id: charMinuteRowId('scope-1', 60_000, 'a'),
+        id: charMinuteRowId('scope-1', 60_000, '', 'a'),
         kind: 'char-minute',
         updated_at: 2_000,
         payload: { scopeId: 'scope-1', minuteTs: 60_000, char: 'a', count: 3 },
       },
       {
-        id: matrixMinuteRowId('scope-1', 60_000, 1, 2, 0),
+        id: matrixMinuteRowId('scope-1', 60_000, '', 1, 2, 0),
         kind: 'matrix-minute',
         updated_at: 2_000,
         payload: {
@@ -88,7 +103,7 @@ describe('serializeRow / parseRow round-trip', () => {
         },
       },
       {
-        id: minuteStatsRowId('scope-1', 60_000),
+        id: minuteStatsRowId('scope-1', 60_000, ''),
         kind: 'minute-stats',
         updated_at: 2_000,
         payload: {
@@ -111,15 +126,27 @@ describe('serializeRow / parseRow round-trip', () => {
         payload: { id: 'uuid-1', scopeId: 'scope-1', startMs: 1_000, endMs: 2_000 },
       },
       {
-        id: bigramMinuteRowId('scope-1', 60_000),
+        id: bigramMinuteRowId('scope-1', 60_000, ''),
         kind: 'bigram-minute',
         updated_at: 2_000,
         payload: {
           scopeId: 'scope-1',
           minuteTs: 60_000,
           bigrams: {
-            '4_11': { c: 10, h: [1, 0, 0, 2, 3, 1, 2, 1] },
+            '4_11': { c: 10, h: [1, 0, 0, 2, 3, 1, 2, 1], s: 1_200, sq: 180_000 },
             '22_22': { c: 20, h: [2, 3, 5, 4, 3, 2, 1, 0] },
+          },
+        },
+      },
+      {
+        id: trigramMinuteRowId('scope-1', 60_000, ''),
+        kind: 'trigram-minute',
+        updated_at: 2_000,
+        payload: {
+          scopeId: 'scope-1',
+          minuteTs: 60_000,
+          trigrams: {
+            '4_11_7': { c: 6, h: [0, 1, 2, 1, 1, 1, 0, 0], s: 720, sq: 96_000 },
           },
         },
       },
@@ -135,7 +162,7 @@ describe('serializeRow / parseRow round-trip', () => {
     // size === 0), but the parser must accept it cleanly so a manual
     // edit / migration tooling doesn't trip the validator.
     const empty: JsonlRow = {
-      id: bigramMinuteRowId('scope-1', 60_000),
+      id: bigramMinuteRowId('scope-1', 60_000, ''),
       kind: 'bigram-minute',
       updated_at: 1,
       payload: { scopeId: 'scope-1', minuteTs: 60_000, bigrams: {} },
@@ -145,7 +172,7 @@ describe('serializeRow / parseRow round-trip', () => {
 
   it('preserves is_deleted when set', () => {
     const tombstoned: JsonlRow = {
-      id: charMinuteRowId('scope-1', 60_000, 'a'),
+      id: charMinuteRowId('scope-1', 60_000, '', 'a'),
       kind: 'char-minute',
       updated_at: 9_000,
       is_deleted: true,
@@ -243,6 +270,154 @@ describe('parseRow rejections', () => {
     expect(parseRow(line)).toBeNull()
   })
 
+  it('accepts a bigram-minute entry with both s and sq present', () => {
+    const line = JSON.stringify({
+      id: 'bigram|s|60000',
+      kind: 'bigram-minute',
+      updated_at: 1,
+      payload: {
+        scopeId: 's',
+        minuteTs: 60_000,
+        bigrams: { '4_11': { c: 2, h: [0, 2, 0, 0, 0, 0, 0, 0], s: 240, sq: 28_800 } },
+      },
+    })
+    expect(parseRow(line)).not.toBeNull()
+  })
+
+  it('accepts a bigram-minute entry with s/sq entirely absent (legacy row)', () => {
+    const line = JSON.stringify({
+      id: 'bigram|s|60000',
+      kind: 'bigram-minute',
+      updated_at: 1,
+      payload: {
+        scopeId: 's',
+        minuteTs: 60_000,
+        bigrams: { '4_11': { c: 2, h: [0, 2, 0, 0, 0, 0, 0, 0] } },
+      },
+    })
+    expect(parseRow(line)).not.toBeNull()
+  })
+
+  it.each([
+    ['s only', { s: 240 }],
+    ['sq only', { sq: 28_800 }],
+    ['non-finite s', { s: Number.NaN, sq: 28_800 }],
+    ['non-finite sq', { s: 240, sq: Number.POSITIVE_INFINITY }],
+    ['non-numeric s', { s: '240', sq: 28_800 }],
+  ])('returns null for a bigram-minute entry with an incomplete/invalid sum pair (%s)', (_label, extra) => {
+    const line = JSON.stringify({
+      id: 'bigram|s|60000',
+      kind: 'bigram-minute',
+      updated_at: 1,
+      payload: {
+        scopeId: 's',
+        minuteTs: 60_000,
+        bigrams: { '4_11': { c: 2, h: [0, 2, 0, 0, 0, 0, 0, 0], ...extra } },
+      },
+    })
+    expect(parseRow(line)).toBeNull()
+  })
+
+  it('accepts a bigram-minute entry with both oc and on present', () => {
+    const line = JSON.stringify({
+      id: 'bigram|s|60000',
+      kind: 'bigram-minute',
+      updated_at: 1,
+      payload: {
+        scopeId: 's',
+        minuteTs: 60_000,
+        bigrams: { '4_11': { c: 2, h: [0, 2, 0, 0, 0, 0, 0, 0], oc: 1, on: 2 } },
+      },
+    })
+    expect(parseRow(line)).not.toBeNull()
+  })
+
+  it('accepts a bigram-minute entry with oc/on entirely absent (legacy row)', () => {
+    const line = JSON.stringify({
+      id: 'bigram|s|60000',
+      kind: 'bigram-minute',
+      updated_at: 1,
+      payload: {
+        scopeId: 's',
+        minuteTs: 60_000,
+        bigrams: { '4_11': { c: 2, h: [0, 2, 0, 0, 0, 0, 0, 0] } },
+      },
+    })
+    expect(parseRow(line)).not.toBeNull()
+  })
+
+  it.each([
+    ['oc only', { oc: 1 }],
+    ['on only', { on: 2 }],
+    ['non-integer oc', { oc: 1.5, on: 2 }],
+    ['negative on', { oc: 1, on: -1 }],
+    ['oc greater than on', { oc: 3, on: 2 }],
+    ['non-numeric oc', { oc: '1', on: 2 }],
+  ])('returns null for a bigram-minute entry with an incomplete/invalid overlap pair (%s)', (_label, extra) => {
+    const line = JSON.stringify({
+      id: 'bigram|s|60000',
+      kind: 'bigram-minute',
+      updated_at: 1,
+      payload: {
+        scopeId: 's',
+        minuteTs: 60_000,
+        bigrams: { '4_11': { c: 2, h: [0, 2, 0, 0, 0, 0, 0, 0], ...extra } },
+      },
+    })
+    expect(parseRow(line)).toBeNull()
+  })
+
+  it('round-trips a trigram-minute row with an empty triple set', () => {
+    const empty: JsonlRow = {
+      id: trigramMinuteRowId('scope-1', 60_000, ''),
+      kind: 'trigram-minute',
+      updated_at: 1,
+      payload: { scopeId: 'scope-1', minuteTs: 60_000, trigrams: {} },
+    }
+    expect(parseRow(serializeRow(empty).trimEnd())).toEqual(empty)
+  })
+
+  it('returns null for a trigram-minute row with a histogram of the wrong length', () => {
+    const line = JSON.stringify({
+      id: 'trigram|s|60000',
+      kind: 'trigram-minute',
+      updated_at: 1,
+      payload: {
+        scopeId: 's',
+        minuteTs: 60_000,
+        trigrams: { '4_11_7': { c: 1, h: [1, 0, 0] } }, // expected 8 buckets
+      },
+    })
+    expect(parseRow(line)).toBeNull()
+  })
+
+  it('returns null for a trigram-minute row missing scopeId', () => {
+    const line = JSON.stringify({
+      id: 'trigram|s|60000',
+      kind: 'trigram-minute',
+      updated_at: 1,
+      payload: {
+        minuteTs: 60_000,
+        trigrams: { '4_11_7': { c: 1, h: [1, 0, 0, 0, 0, 0, 0, 0] } },
+      },
+    })
+    expect(parseRow(line)).toBeNull()
+  })
+
+  it('returns null for a trigram-minute entry with an incomplete sum pair', () => {
+    const line = JSON.stringify({
+      id: 'trigram|s|60000',
+      kind: 'trigram-minute',
+      updated_at: 1,
+      payload: {
+        scopeId: 's',
+        minuteTs: 60_000,
+        trigrams: { '4_11_7': { c: 1, h: [1, 0, 0, 0, 0, 0, 0, 0], s: 150 } },
+      },
+    })
+    expect(parseRow(line)).toBeNull()
+  })
+
   it('accepts minute-stats with null interval fields', () => {
     const line = JSON.stringify({
       id: 'stats|s|60000',
@@ -262,5 +437,105 @@ describe('parseRow rejections', () => {
       },
     })
     expect(parseRow(line)).not.toBeNull()
+  })
+
+  const baseMinuteStats = {
+    scopeId: 's',
+    minuteTs: 60_000,
+    keystrokes: 1,
+    activeMs: 1,
+    intervalAvgMs: null,
+    intervalMinMs: null,
+    intervalP25Ms: null,
+    intervalP50Ms: null,
+    intervalP75Ms: null,
+    intervalMaxMs: null,
+  }
+
+  it('accepts minute-stats with pollP50Ms/pollP95Ms both present as numbers', () => {
+    const line = JSON.stringify({
+      id: 'stats|s|60000',
+      kind: 'minute-stats',
+      updated_at: 1,
+      payload: { ...baseMinuteStats, pollP50Ms: 20, pollP95Ms: 45 },
+    })
+    expect(parseRow(line)).not.toBeNull()
+  })
+
+  it('accepts minute-stats with pollP50Ms/pollP95Ms both null (no samples that minute)', () => {
+    const line = JSON.stringify({
+      id: 'stats|s|60000',
+      kind: 'minute-stats',
+      updated_at: 1,
+      payload: { ...baseMinuteStats, pollP50Ms: null, pollP95Ms: null },
+    })
+    expect(parseRow(line)).not.toBeNull()
+  })
+
+  it('accepts minute-stats with pollP50Ms/pollP95Ms entirely absent (pre-v8 row)', () => {
+    const line = JSON.stringify({
+      id: 'stats|s|60000',
+      kind: 'minute-stats',
+      updated_at: 1,
+      payload: baseMinuteStats,
+    })
+    expect(parseRow(line)).not.toBeNull()
+  })
+
+  it('returns null for minute-stats with only one of pollP50Ms/pollP95Ms present', () => {
+    const line = JSON.stringify({
+      id: 'stats|s|60000',
+      kind: 'minute-stats',
+      updated_at: 1,
+      payload: { ...baseMinuteStats, pollP50Ms: 20 },
+    })
+    expect(parseRow(line)).toBeNull()
+  })
+
+  const baseMatrixMinute = {
+    scopeId: 's',
+    minuteTs: 60_000,
+    row: 0,
+    col: 0,
+    layer: 0,
+    keycode: 4,
+    count: 1,
+    tapCount: 0,
+    holdCount: 0,
+  }
+
+  it('accepts a matrix-minute row with dh/ds/dq all present', () => {
+    const line = JSON.stringify({
+      id: 'matrix|s|60000|0|0|0',
+      kind: 'matrix-minute',
+      updated_at: 1,
+      payload: { ...baseMatrixMinute, dh: [0, 1, 0, 0, 0, 0, 0, 0], ds: 65, dq: 4_225 },
+    })
+    expect(parseRow(line)).not.toBeNull()
+  })
+
+  it('accepts a matrix-minute row with dh/ds/dq entirely absent (pre-v8 row)', () => {
+    const line = JSON.stringify({
+      id: 'matrix|s|60000|0|0|0',
+      kind: 'matrix-minute',
+      updated_at: 1,
+      payload: baseMatrixMinute,
+    })
+    expect(parseRow(line)).not.toBeNull()
+  })
+
+  it.each([
+    ['dh only', { dh: [0, 1, 0, 0, 0, 0, 0, 0] }],
+    ['ds/dq only', { ds: 65, dq: 4_225 }],
+    ['wrong-length dh', { dh: [0, 1, 0], ds: 65, dq: 4_225 }],
+    ['non-finite ds', { dh: [0, 1, 0, 0, 0, 0, 0, 0], ds: Number.NaN, dq: 4_225 }],
+  ])('returns null for a matrix-minute row with an incomplete/invalid duration triple (%s)', (_label, extra) => {
+    const line = JSON.stringify({
+      id: 'matrix|s|60000|0|0|0',
+      kind: 'matrix-minute',
+      updated_at: 1,
+      payload: { ...baseMatrixMinute, ...extra },
+    })
+    expect(parseRow(line)).toBeNull()
   })
 })

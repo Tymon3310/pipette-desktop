@@ -7,6 +7,11 @@ export interface ThemePackMeta {
   version: string
   hubPostId?: string
   hubUpdatedAt?: string
+  /** Hub-side `uploader_name` cached for the Author column and the
+   *  `isMine` check. See `I18nPackMeta.uploaderName` for the full
+   *  refresh-point contract (upload/download/sync, not Update). Absent
+   *  for never-uploaded local entries and legacy rows. */
+  uploaderName?: string
   savedAt: string
   updatedAt: string
   deletedAt?: string
@@ -29,7 +34,23 @@ export const THEME_COLOR_KEYS = [
 
 export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number]
 
-export type ThemePackColors = Record<ThemeColorKey, string>
+/** Optional color tokens: a theme pack may omit these entirely without
+ *  failing validation. `key-label-simulated` (the permutation-pack
+ *  "Display Only" tint, distinct from the `key-label-remap` "actual"
+ *  tint) falls back to an automatic complement of `key-label-remap` when
+ *  absent — see `deriveSimulatedColor` in `simulated-color.ts` and
+ *  `applyPackColors` in `useTheme.ts`. */
+export const OPTIONAL_THEME_COLOR_KEYS = ['key-label-simulated'] as const
+
+export type OptionalThemeColorKey = (typeof OPTIONAL_THEME_COLOR_KEYS)[number]
+
+/** Every color key a theme pack's `colors` object may contain, required
+ *  and optional combined — used for "unknown key" validation warnings. */
+export const ALL_THEME_COLOR_KEYS = [...THEME_COLOR_KEYS, ...OPTIONAL_THEME_COLOR_KEYS] as const
+
+export type AnyThemeColorKey = ThemeColorKey | OptionalThemeColorKey
+
+export type ThemePackColors = Record<ThemeColorKey, string> & Partial<Record<OptionalThemeColorKey, string>>
 
 export type ThemeColorScheme = 'light' | 'dark'
 
@@ -72,15 +93,20 @@ export interface ThemePackStoreResult<T> {
   error?: string
 }
 
-export interface ThemePackImportDialogResult {
-  canceled: boolean
-  raw?: unknown
-  fileSizeBytes?: number
-  filePath?: string
-  parseError?: string
-}
+/** Structurally identical to Language Packs' `I18nPackImportFile` /
+ *  `I18nPackImportDialogResult` — both alias the shared shape in
+ *  `pack-import.ts` (see `readSelectedImportFiles` in
+ *  `src/main/pack-import-dialog.ts`, which both IPC handlers call).
+ *  Aliased (not just re-exported) under the domain-specific name so
+ *  existing call sites don't need to change what they import. */
+export type { PackImportFile as ThemePackImportFile, PackImportDialogResult as ThemePackImportDialogResult } from './pack-import'
 
 export interface ThemePackImportApplyOptions {
   id?: string
   hubPostId?: string
+  /** Hub-side `updated_at` for the pack just downloaded/synced; see
+   *  `I18nPackImportApplyOptions.hubUpdatedAt`. */
+  hubUpdatedAt?: string
+  /** Hub-side `uploader_name`, forwarded the same way as `hubUpdatedAt`. */
+  uploaderName?: string
 }

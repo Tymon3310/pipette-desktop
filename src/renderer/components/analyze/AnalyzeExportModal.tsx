@@ -25,6 +25,7 @@ import {
   buildActivityCsv,
   buildBigramsCsv,
   buildByAppCsv,
+  buildDurationDistributionCsv,
   buildErgonomicsCsv,
   buildHeatmapCsv,
   buildIntervalCsv,
@@ -59,12 +60,15 @@ export interface AnalyzeExportContext {
    * the on-screen chart shows for the current selection. Empty array
    * = "All apps" — same row set as the pre-Monitor-App export. */
   appScopes: string[]
+  typingTestScopes: string[]
+  runIdScopes: string[]
   snapshot: TypingKeymapSnapshot | null
   heatmap: Required<HeatmapFilters>
   wpm: { granularity: GranularityChoice; viewMode: WpmViewMode; minActiveMs: number }
   interval: { viewMode: IntervalViewMode; granularity: GranularityChoice }
   activity: { metric: ActivityMetric; minActiveMs: number }
   layer: { baseLayer: number }
+  bigrams: { gram: 2 | 3 }
   // `Required<>` only strips the `?`, so `targetLayoutId` is still
   // `string | null`. The runtime guard in pickBuilders (and
   // isCategoryAvailable) narrows it before passing to the builder.
@@ -273,6 +277,8 @@ function pickBuilders(
     range: ctx.range,
     deviceScope: ctx.deviceScope,
     appScopes: ctx.appScopes,
+    typingTestScopes: ctx.typingTestScopes,
+    runIdScopes: ctx.runIdScopes,
   }
   if (selected.summary) {
     out.push(buildSummaryCsv(scope))
@@ -291,6 +297,13 @@ function pickBuilders(
       ...scope,
       granularity: ctx.interval.granularity, viewMode: ctx.interval.viewMode,
     }))
+    // Duration pairs with the distribution view only — DurationSection
+    // is likewise mounted only in `distribution` mode (see AnalyzePane).
+    // A separate builder/push (rather than buildIntervalCsv returning an
+    // array) keeps every builder in this list to the same one-entry shape.
+    if (ctx.interval.viewMode === 'distribution') {
+      out.push(buildDurationDistributionCsv(scope))
+    }
   }
   if (selected.activity) {
     out.push(buildActivityCsv({
@@ -314,13 +327,16 @@ function pickBuilders(
     out.push(buildByAppCsv(scope))
   }
   if (selected.bigrams) {
-    out.push(buildBigramsCsv(scope))
+    out.push(buildBigramsCsv({
+      ...scope, gram: ctx.bigrams.gram, snapshot: ctx.snapshot, fingerOverrides: ctx.fingerOverrides,
+    }))
   }
   if (selected.layoutComparison && ctx.snapshot !== null && ctx.layoutComparison.targetLayoutId !== null) {
     out.push(buildLayoutComparisonCsv({
       ...scope,
       sourceLayoutId: ctx.layoutComparison.sourceLayoutId,
       targetLayoutId: ctx.layoutComparison.targetLayoutId,
+      fingerOverrides: ctx.fingerOverrides,
       t,
     }))
   }

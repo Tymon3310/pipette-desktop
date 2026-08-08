@@ -5,10 +5,11 @@
 // and the main process treats pack JSON as opaque blobs that round-trip
 // via the dialog.
 
-import { BrowserWindow, dialog } from 'electron'
-import { readFile } from 'node:fs/promises'
+import { BrowserWindow } from 'electron'
 import { IpcChannels } from '../shared/ipc/channels'
 import { secureHandle } from './ipc-guard'
+import { broadcastToAllWindows } from './utils/broadcast'
+import { readSelectedImportFiles } from './pack-import-dialog'
 import {
   listMetas,
   getPack,
@@ -18,6 +19,7 @@ import {
   setHubPostId,
   hasActiveName,
   exportPackToDialog,
+  reorderActive,
 } from './theme-pack-store'
 import type {
   ThemePackMeta,
@@ -27,9 +29,7 @@ import type {
 } from '../shared/types/theme-store'
 
 function broadcastChanged(): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send(IpcChannels.THEME_PACK_CHANGED)
-  }
+  broadcastToAllWindows(IpcChannels.THEME_PACK_CHANGED)
 }
 
 export function setupThemePackStore(): void {
@@ -92,6 +92,18 @@ export function setupThemePackStore(): void {
   )
 
   secureHandle(
+    IpcChannels.THEME_PACK_STORE_REORDER,
+    async (_event, orderedIds: unknown): Promise<ThemePackStoreResult<void>> => {
+      if (!Array.isArray(orderedIds) || !orderedIds.every((id) => typeof id === 'string')) {
+        return { success: false, errorCode: 'INVALID_FILE', error: 'Invalid order list' }
+      }
+      const result = await reorderActive(orderedIds as string[])
+      if (result.success) broadcastChanged()
+      return result
+    },
+  )
+
+  secureHandle(
     IpcChannels.THEME_PACK_STORE_DELETE,
     async (_event, id: unknown): Promise<ThemePackStoreResult<void>> => {
       if (typeof id !== 'string') {
@@ -109,6 +121,8 @@ export function setupThemePackStore(): void {
       _event,
       id: unknown,
       hubPostId: unknown,
+      uploaderName: unknown,
+      hubUpdatedAt: unknown,
     ): Promise<ThemePackStoreResult<ThemePackMeta>> => {
       if (typeof id !== 'string') {
         return { success: false, errorCode: 'NOT_FOUND', error: 'Invalid id' }
@@ -116,7 +130,12 @@ export function setupThemePackStore(): void {
       const normalized = hubPostId == null
         ? null
         : (typeof hubPostId === 'string' ? hubPostId : null)
-      const result = await setHubPostId(id, normalized)
+      const result = await setHubPostId(
+        id,
+        normalized,
+        typeof uploaderName === 'string' ? uploaderName : undefined,
+        typeof hubUpdatedAt === 'string' ? hubUpdatedAt : undefined,
+      )
       if (result.success) broadcastChanged()
       return result
     },
@@ -126,41 +145,15 @@ export function setupThemePackStore(): void {
     IpcChannels.THEME_PACK_IMPORT,
     async (event): Promise<ThemePackImportDialogResult> => {
       const win = BrowserWindow.fromWebContents(event.sender)
-      if (!win) return { canceled: true }
-      const result = await dialog.showOpenDialog(win, {
+      const files = await readSelectedImportFiles(win, {
         title: 'Import Theme Pack',
         filters: [
           { name: 'JSON', extensions: ['json'] },
           { name: 'All Files', extensions: ['*'] },
         ],
-        properties: ['openFile'],
       })
-      if (result.canceled || result.filePaths.length === 0) {
-        return { canceled: true }
-      }
-      const filePath = result.filePaths[0]
-      try {
-        const raw = await readFile(filePath, 'utf-8')
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(raw)
-        } catch (err) {
-          return {
-            canceled: false,
-            filePath,
-            fileSizeBytes: Buffer.byteLength(raw, 'utf-8'),
-            parseError: String(err),
-          }
-        }
-        return {
-          canceled: false,
-          raw: parsed,
-          filePath,
-          fileSizeBytes: Buffer.byteLength(raw, 'utf-8'),
-        }
-      } catch (err) {
-        return { canceled: false, filePath, parseError: String(err) }
-      }
+      if (!files) return { canceled: true, files: [] }
+      return { canceled: false, files }
     },
   )
 
@@ -176,6 +169,8 @@ export function setupThemePackStore(): void {
         raw,
         id: typeof opts.id === 'string' ? opts.id : undefined,
         hubPostId: typeof opts.hubPostId === 'string' ? opts.hubPostId : undefined,
+        hubUpdatedAt: typeof opts.hubUpdatedAt === 'string' ? opts.hubUpdatedAt : undefined,
+        uploaderName: typeof opts.uploaderName === 'string' ? opts.uploaderName : undefined,
       })
       if (result.success) broadcastChanged()
       return result

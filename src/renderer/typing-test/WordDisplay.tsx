@@ -13,9 +13,21 @@ interface WordDisplayProps {
   wordResults: WordResult[]
   cursorBlink: boolean
   compositionText?: string
+  /** Keystroke-judging progress for this word (romajiInput/kana mode
+   *  only — RomajiGuide or KanaGuide, both of which carry a `kanaCompleted`
+   *  count with the identical meaning), or null/undefined for every other
+   *  word and every other mode. Narrowed to just that one field since it's
+   *  all this component reads. When set, the current word's confirmed
+   *  input is derived as `word.slice(0, kanaCompleted)` instead of using
+   *  `currentInput` directly — neither engine ever writes to `currentInput`
+   *  (see `handleRomajiChar`/`handleKanaStroke`), and composition is
+   *  treated as empty even if the OS IME fired a stray composition event
+   *  (rejected keystrokes never appear anywhere, so there is no per-char
+   *  error color either). */
+  guideProgress?: { kanaCompleted: number } | null
 }
 
-export function WordDisplay({ word, wordIndex, currentWordIndex, currentInput, wordResults, cursorBlink, compositionText = '' }: WordDisplayProps) {
+export function WordDisplay({ word, wordIndex, currentWordIndex, currentInput, wordResults, cursorBlink, compositionText = '', guideProgress = null }: WordDisplayProps) {
   const testId = `word-${wordIndex}`
 
   // Completed word — per-character coloring
@@ -24,13 +36,13 @@ export function WordDisplay({ word, wordIndex, currentWordIndex, currentInput, w
     if (!result) return null
     if (result.correct) {
       return (
-        <span data-testid={testId} className="text-success">
+        <span data-testid={testId} className="min-w-0 break-all text-success">
           {word}
         </span>
       )
     }
     return (
-      <span data-testid={testId}>
+      <span data-testid={testId} className="min-w-0 break-all">
         {word.split('').map((char, charIdx) => (
           <span key={charIdx} className={charClassName(char, charIdx, result.typed)}>
             {displayChar(char, charIdx, result.typed)}
@@ -40,21 +52,31 @@ export function WordDisplay({ word, wordIndex, currentWordIndex, currentInput, w
     )
   }
 
-  // Current word -- per-character coloring with cursor and composition text
+  // Current word -- per-character coloring with cursor and composition text.
+  // Romaji input mode reuses this same rendering rather than a parallel
+  // implementation: its confirmed input is exactly `word.slice(0,
+  // kanaCompleted)` (a committed segment always matches the kana it
+  // replaces one-for-one here), and composition is forced empty since
+  // romaji mode never feeds composition data into currentInput (see
+  // `processCompositionEnd`'s composition gate in useTypingTest) — so there
+  // is nothing to show and no per-char error color either, matching the
+  // dedicated romaji branch this replaced.
   if (wordIndex === currentWordIndex) {
-    const typedLength = currentInput.length
-    const compositionChars = Array.from(compositionText)
+    const effectiveInput = guideProgress ? word.slice(0, guideProgress.kanaCompleted) : currentInput
+    const effectiveComposition = guideProgress ? '' : compositionText
+    const typedLength = effectiveInput.length
+    const compositionChars = Array.from(effectiveComposition)
     const compositionLength = compositionChars.length
     const isComposing = compositionLength > 0
     const cursorBlinks = !isComposing && cursorBlink
     return (
-      <span data-testid={testId}>
+      <span data-testid={testId} className="min-w-0 break-all">
         {word.split('').map((char, charIdx) => {
           // Already typed characters
           if (charIdx < typedLength) {
             return (
-              <span key={charIdx} className={charClassName(char, charIdx, currentInput)}>
-                {displayChar(char, charIdx, currentInput)}
+              <span key={charIdx} className={charClassName(char, charIdx, effectiveInput)}>
+                {displayChar(char, charIdx, effectiveInput)}
               </span>
             )
           }
@@ -75,8 +97,8 @@ export function WordDisplay({ word, wordIndex, currentWordIndex, currentInput, w
             return (
               <span key={charIdx} className="relative">
                 <Cursor blink={cursorBlinks} />
-                <span className={charClassName(char, charIdx, currentInput)}>
-                  {displayChar(char, charIdx, currentInput)}
+                <span className={charClassName(char, charIdx, effectiveInput)}>
+                  {displayChar(char, charIdx, effectiveInput)}
                 </span>
               </span>
             )
@@ -91,8 +113,8 @@ export function WordDisplay({ word, wordIndex, currentWordIndex, currentInput, w
           }
           // Remaining untyped characters
           return (
-            <span key={charIdx} className={charClassName(char, charIdx, currentInput)}>
-              {displayChar(char, charIdx, currentInput)}
+            <span key={charIdx} className={charClassName(char, charIdx, effectiveInput)}>
+              {displayChar(char, charIdx, effectiveInput)}
             </span>
           )
         })}
@@ -107,7 +129,7 @@ export function WordDisplay({ word, wordIndex, currentWordIndex, currentInput, w
             ))}
         {/* Extra typed chars beyond word length */}
         {typedLength > word.length &&
-          currentInput
+          effectiveInput
             .slice(word.length)
             .split('')
             .map((char, i) => (
@@ -127,7 +149,7 @@ export function WordDisplay({ word, wordIndex, currentWordIndex, currentInput, w
 
   // Future word
   return (
-    <span data-testid={testId} className="text-content-muted">
+    <span data-testid={testId} className="min-w-0 break-all text-content-muted">
       {word}
     </span>
   )

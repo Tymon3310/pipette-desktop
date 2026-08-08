@@ -3,7 +3,12 @@
 
 import { describe, it, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { Tooltip } from '../Tooltip'
+import { Tooltip, computeBubblePosition } from '../Tooltip'
+
+const rect = (x: number, y: number, width: number, height: number): DOMRect => ({
+  x, y, width, height, top: y, left: x, right: x + width, bottom: y + height,
+  toJSON: () => ({}),
+})
 
 describe('Tooltip', () => {
   it('renders tooltip bubble (portaled to body) with role="tooltip" and auto-generated id', () => {
@@ -124,6 +129,26 @@ describe('Tooltip', () => {
     expect(bubble.className).toContain('opacity-0')
   })
 
+  it('defaults the bubble to max-w-sm so long dynamic content wraps instead of overflowing', () => {
+    render(
+      <Tooltip content="Help">
+        <button type="button">Trigger</button>
+      </Tooltip>,
+    )
+    const bubble = screen.getByRole('tooltip')
+    expect(bubble.className).toContain('max-w-sm')
+  })
+
+  it('lets an explicit max-w-xs className win over the default max-w-sm', () => {
+    render(
+      <Tooltip content="Help" className="max-w-xs">
+        <button type="button">Trigger</button>
+      </Tooltip>,
+    )
+    const bubble = screen.getByRole('tooltip')
+    expect(bubble.className).toContain('max-w-xs')
+  })
+
   it('merges additional className into bubble', () => {
     render(
       <Tooltip content="Help" className="custom-bubble">
@@ -217,6 +242,77 @@ describe('Tooltip', () => {
     const bubble = screen.getByRole('tooltip')
     expect(bubble.className).toContain('whitespace-pre-line')
     expect(bubble.textContent).toBe('first line\nsecond line')
+  })
+
+  it('recomputes position on a plain re-render while open, not just when open/content/updatePosition change', () => {
+    // Regression for: a consumer that reuses the same React key for a
+    // logically-identical item across two different layouts (e.g.
+    // AnalyzeStatGrid's "Longest session" card sharing labelKey between
+    // Interval's timeSeries and distribution summaries) keeps this
+    // exact Tooltip instance mounted — including `open` — across a
+    // layout change that moves the trigger to a new screen position.
+    // `open`/`content`/`updatePosition` all stay the same across that
+    // re-render, so a deps-gated effect would leave the bubble floating
+    // at the pre-move coordinates.
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+    let wrapperRect = rect(100, 300, 50, 20)
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (this.id === 'wrapper-under-test') return wrapperRect
+      return rect(0, 0, 100, 30) // bubble's own rect — stable throughout
+    }
+    try {
+      const { container, rerender } = render(
+        <Tooltip content="Help" wrapperProps={{ id: 'wrapper-under-test' }}>
+          <button type="button">Trigger</button>
+        </Tooltip>,
+      )
+      const wrapper = container.firstElementChild!
+      fireEvent.mouseEnter(wrapper)
+      const bubble = screen.getByRole('tooltip')
+      const topBeforeMove = bubble.style.top
+      expect(topBeforeMove).toBe('262px') // 300 - bubble.height(30) - offset(8)
+
+      // The trigger moves — no other prop on <Tooltip> changes, and
+      // `open` was already true (this is a re-render, not a fresh
+      // mouseEnter) — mirroring the key-reused reconciliation case.
+      wrapperRect = rect(100, 600, 50, 20)
+      rerender(
+        <Tooltip content="Help" wrapperProps={{ id: 'wrapper-under-test' }}>
+          <button type="button">Trigger</button>
+        </Tooltip>,
+      )
+
+      expect(bubble.style.top).toBe('562px') // 600 - 30 - 8
+      expect(bubble.style.top).not.toBe(topBeforeMove)
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect
+    }
+  })
+
+  describe('computeBubblePosition viewport clamping', () => {
+    const viewport = { width: 1000, height: 800 }
+
+    it('clamps a top/center bubble back inside the left edge for a near-edge trigger', () => {
+      // Trigger hugging the left edge: centered bubble would land at left = -80.
+      const { left } = computeBubblePosition(rect(10, 700, 20, 20), rect(0, 0, 200, 30), 'top', 'center', 8, viewport)
+      expect(left).toBe(8)
+    })
+
+    it('clamps against the right edge so a wide bubble stays fully visible', () => {
+      const { left } = computeBubblePosition(rect(960, 400, 20, 20), rect(0, 0, 200, 30), 'top', 'center', 8, viewport)
+      expect(left).toBe(viewport.width - 200 - 8)
+    })
+
+    it('clamps the top so a bubble above an edge trigger is not pushed off-screen', () => {
+      const { top } = computeBubblePosition(rect(500, 2, 20, 20), rect(0, 0, 100, 40), 'top', 'center', 8, viewport)
+      expect(top).toBe(8)
+    })
+
+    it('leaves a comfortably-placed bubble untouched', () => {
+      const { top, left } = computeBubblePosition(rect(490, 400, 20, 20), rect(0, 0, 100, 30), 'top', 'center', 8, viewport)
+      expect(left).toBe(450)
+      expect(top).toBe(362)
+    })
   })
 
   it('lets wrapperClassName override wrapperProps.className on the wrapper', () => {

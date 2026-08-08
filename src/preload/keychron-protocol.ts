@@ -1121,7 +1121,7 @@ function parseAnalogKeyConfig(
   globalConfig?: AnalogKeyConfig,
 ): AnalogKeyConfig {
   if (data.length < offset + 4) {
-    return { mode: 1, actuationPoint: 20, sensitivity: 3, releaseSensitivity: 3 }
+    return { mode: 1, actuationPoint: 20, sensitivity: 3, releaseSensitivity: 3, advMode: 0, advModeData: 0 }
   }
 
   const byte0 = data[offset]
@@ -1623,6 +1623,8 @@ export async function reloadKeychronAnalog(
             actuationPoint: 20, // 2.0mm
             sensitivity: 5, // 0.5mm
             releaseSensitivity: 5,
+            advMode: 0,
+            advModeData: 0,
           })
         }
       }

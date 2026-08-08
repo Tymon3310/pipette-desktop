@@ -3,12 +3,14 @@
 [日本語版はこちら](OPERATION-GUIDE.ja.md)
 
 This document explains how to use the Pipette desktop application.
-Screenshots were taken using a GPK60-63R keyboard unless otherwise noted.
+Screenshots were taken using the software-emulated GPK60-63R keyboard, displayed as "Virtual Keyboard", unless otherwise noted.
 
 ---
 
 ## Table of Contents
 
+- [System Requirements](#system-requirements)
+- [Feature Availability](#feature-availability)
 - [1. Device Connection](#1-device-connection)
   - [1.1 Device Selection Screen](#11-device-selection-screen)
   - [1.2 Connecting a Keyboard](#12-connecting-a-keyboard)
@@ -20,6 +22,7 @@ Screenshots were taken using a GPK60-63R keyboard unless otherwise noted.
   - [2.3 Layer Switching](#23-layer-switching)
   - [2.4 Key Popover](#24-key-popover)
   - [2.5 Layout Options](#25-layout-options)
+  - [2.6 View Matrix](#26-view-matrix)
 - [3. Keycode Palette](#3-keycode-palette)
   - [3.1 Basic](#31-basic)
   - [3.2 Layers](#32-layers)
@@ -52,6 +55,7 @@ Screenshots were taken using a GPK60-63R keyboard unless otherwise noted.
   - [6.3 Language Packs Manage](#63-language-packs-manage)
   - [6.4 Theme Packs Manage](#64-theme-packs-manage)
   - [6.5 Zoom (UI Scale)](#65-zoom-ui-scale)
+  - [6.6 Launch at Login / Stay in System Tray](#66-launch-at-login--stay-in-system-tray)
 - [7. Pipette Hub](#7-pipette-hub)
   - [7.1 Hub Setup](#71-hub-setup)
   - [7.2 Uploading a Keymap](#72-uploading-a-keymap)
@@ -63,6 +67,40 @@ Screenshots were taken using a GPK60-63R keyboard unless otherwise noted.
   - [Unlock Dialog Protection](#unlock-dialog-protection)
   - [Escape Suppression During Busy Flows](#escape-suppression-during-busy-flows)
 - [9. Status Bar](#9-status-bar)
+
+---
+
+## System Requirements
+
+Pipette's window has a minimum size of **1280×1024**, and defaults to **1440×1024** (or larger is recommended) on first launch.
+
+It might feel a bit large — but keyboards are wide, so this is what it takes to work with them comfortably. Sorry!
+
+---
+
+## Feature Availability
+
+What you can do depends on whether you connect a Google account. Editing and most local features work with no integration at all; signing in unlocks cross-device Cloud Sync, and connecting Pipette Hub additionally lets you share to the community.
+
+| Feature | No Integration | Google Account Integration |
+|---|:---:|:---:|
+| Keymap / macro / tap-dance / combo / key-override / alt-repeat editing | ✅ | ✅ |
+| RGB lighting · QMK settings · Matrix tester | ✅ | ✅ |
+| Snapshots & Favorites (local save / load) | ✅ | ✅ |
+| Import / Export (`.vil` · `.pipette` · `keymap.c` · PDF) | ✅ | ✅ |
+| Offline editing (`.pipette` without a keyboard) | ✅ | ✅ |
+| Typing Test & Typing View | ✅ | ✅ |
+| Analyze — typing analytics (heatmaps · ergonomics · bigrams · layout comparison · per-app) | ✅ | ✅ |
+| Download community language / theme / key-label packs from Hub | ✅ | ✅ |
+| Cloud Sync — snapshots / favorites / settings across devices | ❌ | ✅ |
+| Download remote-only keyboards on demand | ❌ | ✅ |
+| Sync typing analytics across devices | ❌ | ✅ |
+| Share keymaps to Hub | ❌ | ✅ (Hub) |
+| Share favorites (tap dance · macro · combo · …) to Hub | ❌ | ✅ (Hub) |
+| Share typing analytics to Hub | ❌ | ✅ (Hub) |
+| Publish your own language / theme / key-label packs | ❌ | ✅ (Hub) |
+
+> **Pipette Hub requires a connected Google account.** Rows marked **(Hub)** need Hub connected (set a Display Name in Settings → Data) in addition to Google sign-in. Cloud Sync also needs a sync encryption password. **Downloading community packs from Hub needs no sign-in at all.**
 
 ---
 
@@ -91,6 +129,8 @@ The File tab allows offline editing of `.pipette` files without a physical keybo
 
 > **Use case:** You want to tweak your keyboard's keymap, but the keyboard isn't with you right now. If you've previously saved its data, you can load it from the File tab, make your edits offline, and later connect the keyboard and load the modified data to apply your changes.
 
+> **Tip — Save a shared file under your own name:** Load a community or shared `.pipette` file (for example, one downloaded from Pipette Hub or sent by a friend), then open the Save panel (§3.14) and use **Save Current State** to store it under a name of your choice. It joins your saved keyboards and becomes selectable as a **File** source in the Keyboard tab (§3.13) — even for hardware you don't own.
+
 **Feature Availability: Device vs File Mode**
 
 | Feature | Device (USB) | File (.pipette) |
@@ -104,8 +144,8 @@ The File tab allows offline editing of `.pipette` files without a physical keybo
 | Lighting control | Yes | No |
 | Matrix Tester | Yes | No |
 | Lock / Unlock | Yes | No |
-| Snapshot save / load | Yes | No |
-| Hub upload | Yes | No |
+| Snapshot save / load | Yes | Yes |
+| Hub upload | Yes | Yes |
 | JSON sideload | Yes | No |
 | Device probe (Keyboard tab) | Yes | No |
 | Cloud Sync | Yes | No |
@@ -126,10 +166,14 @@ The left sidebar provides a **tree navigation** with the following structure:
 
 - **Local**
   - **Keyboards**: Browse saved keyboard snapshots. Click a keyboard to view, load, export, or delete entries
+  - **Typing**: Recorded typing-analytics data per keyboard — a per-day list (date, keystrokes, active time) with day selection for deleting, plus export / import of the recorded days
   - **Favorites**: Tap Dance, Macro, Combo, Key Override, Alt Repeat Key — each type shows its saved entries with rename, delete, export, and Hub actions
-  - **Application**: Import/export local data or reset selected targets (keyboard data, favorites, app settings)
-- **Sync** (when Cloud Sync is configured): Lists keyboards that exist only in Google Drive (not yet downloaded on this device). Each entry is labeled with the keyboard's real name, resolved from the synced name index rather than from the raw UID. Click a remote-only keyboard to download it on demand — a spinner is shown while fetching, and a failure message appears inline if the download cannot complete. Once downloaded, the keyboard moves into the **Local › Keyboards** branch. To clean up orphaned encrypted files that can no longer be decrypted, use **Undecryptable Files** in the Settings **Data** tab instead (see §6.1)
+  - **Application**: Import/export local data, or reset application settings
+- **Sync** (when Cloud Sync is configured): Lists keyboards that exist only in Google Drive (not yet downloaded on this device). Each entry is labeled with the keyboard's real name, resolved from the synced name index rather than from the raw UID. Click a remote-only keyboard to download it on demand — a spinner is shown while fetching, and a failure message appears inline if the download cannot complete. Once downloaded, the keyboard moves into the **Local › Keyboards** branch
+  - **Cloud Data**: Reset targets that aren't tied to one keyboard — Favorites, Language Packs, Theme Packs, Key Labels, and imported Typing Test Texts. Only the targets actually present on Google Drive are listed. Each row has its own **Reset** button with a two-step confirmation (click Reset, then confirm or cancel); resetting removes that target's data from Google Drive only — local copies on this device are untouched, and a local copy that still exists re-uploads on the next sync (the same behavior Favorites already has). This is also where **Undecryptable Files** are listed and cleaned up: files that cannot be decrypted with the current password (e.g. encrypted with a forgotten previous password) appear as their own rows with a filename and a **Delete** button (two-step confirmation, one file at a time)
 - **Hub** (when Hub is connected): Manage Hub posts grouped by keyboard name
+
+Keyboards are shown by display name everywhere in this panel: on connect, a keyboard that has no saved name yet is automatically named from its USB product name, so even keyboards that never saved anything show a real name instead of a raw uid — including in the **Sync** list. Every keyboard list is sorted A–Z by display name (case-insensitive).
 
 ![Data — Keyboard Saves](screenshots/data-sidebar-keyboard-saves.png)
 
@@ -137,25 +181,35 @@ The left sidebar provides a **tree navigation** with the following structure:
 
 Per-entry actions in the favorites list:
 - Click to rename, delete, or **Export** individual entries
-- **Hub actions**: When Hub is connected, each entry shows **Upload to Hub** / **Update on Hub** / **Remove from Hub** buttons
+- **Hub actions**: When Hub is connected, each entry shows **Upload to Hub** / **Update on Hub** / **Remove from Hub** buttons. Uploading opens a Public / Private confirmation dialog (§7.2)
 - **Import** / **Export All** buttons at the footer for bulk operations
 
 A **breadcrumb navigation** at the top of the content area shows the current path (e.g., "Local › Favorites › Tap Dance")
 
 ### 1.4 Analyze
 
-The Analyze page shows how you actually type — per-key heatmaps, WPM trends, inter-keystroke intervals, hour-by-day activity, per-finger load, key-pair (bigram) timing, and per-layer usage. Data is recorded while you are in Typing View (the compact window opened from the status bar) and the Record toggle in the typing-test pane is set to Start. Typing-test results are recorded in the same stream.
+The Analyze page shows how you actually type — per-key heatmaps, WPM trends, inter-keystroke intervals, hour-by-day activity, per-finger load, key-pair (bigram) timing, and per-layer usage. Data comes from two sources feeding the same stream: typing tests run in the editor are always recorded (each keystroke tagged with the test material and run), regardless of the Record toggle. Ambient (untagged) typing is recorded whenever the footer's **Record** control (§4.3) is set to Start and keystrokes are actually flowing through Typing View or Typing Test — Record is a keymap-editor footer button now, not something scoped to opening Typing View first, so it can be armed from the plain editor and then carried into either view.
 
 **Access**
 
 There are two entry points:
 
 - **Analyze tab** on the device selection screen — open the page without connecting a keyboard. Useful for reviewing data from keyboards that are currently unplugged
-- **View Analytics** button in the Typing Test pane — jumps to Analyze for the keyboard you are currently using, then returns to the typing view when you go back
+- **Analyze** button in the Typing Test pane — jumps to Analyze for the keyboard you are currently using, then returns to the typing view when you go back
 
 **Keyboard selector**
 
-The Keyboards select at the top of the filter row lists every keyboard that has recorded typing data — pick one to populate the charts. Keyboards with no data never appear in the list. The Back button at the bottom of the page returns to the previous view (e.g. the device selector).
+The **Keyboard** row inside the filter conditions modal (see **Filter conditions modal** below) lists every keyboard that has recorded typing data — pick one to populate the charts. Keyboards with no data never appear in the list. Switching keyboards there resets the Device / Source / Keymap / Period rows below it to that keyboard's own defaults, since a device or app picked for the previous keyboard may not even apply to the new one.
+
+**Footer bar**
+
+![Analyze — Footer](screenshots/analyze-footer.png)
+
+A docked footer bar (the same visual treatment as the keymap editor's status bar) sits below the page content, not inside its scroll area:
+
+- A truncating skip-warning message on the left, shown when part of the selected range had to be skipped
+- **Split View** — shows a second, fully independent Analyze pane side by side with the first, each with its own keyboard / filter / tab selection (only the fetched keyboard list is shared). The choice resets every time you reopen Analyze. The toggle is disabled below roughly 1280px of window width, with a tooltip explaining the window is too narrow
+- **Back** — returns to the previous view (e.g. the device selector)
 
 **Analysis tabs**
 
@@ -170,33 +224,43 @@ The tab bar above the chart groups ten analyses by intent — overview, performa
 | Behavior | **By App** | Active-application breakdown — App Usage Distribution donut and WPM by App horizontal bars. Requires Monitor App data |
 | Load | **Heatmap** | Press count per physical key, overlaid on the keymap (per layer). Requires a keymap snapshot in range |
 | Load | **Ergonomics** | Per-finger keystroke totals, with a manual finger-assignment editor and a Learning curve view. Requires a snapshot |
-| Load | **Bigrams** | Top key-pair counts, pair-interval ranking, and per-finger IKI bar chart |
+| Load | **Bigrams** | Top key-pair/triple counts, pair-interval ranking with SD, per-finger IKI bar chart, and a hand-usage / word-position breakdown (2/3-gram toggle) |
 | Load | **Layer** | Per-layer keystroke counts or layer-op activations |
 | Optimization | **Layout Comparison** | Simulate how your recorded typing would land on alternative layouts (Colemak / Dvorak / etc.). Requires a snapshot |
 
-The Heatmap, Ergonomics, Bigrams > Finger IKI, Layout Comparison, and Layer > Activations views need a keymap snapshot that overlaps the selected range. Pipette saves a snapshot automatically when typing recording is enabled on the keyboard; the empty state tells you when to start a recording session to capture one.
+The Heatmap, Ergonomics, Bigrams > Finger IKI, Bigrams > Bigram patterns' Hand usage rows, Layout Comparison, and Layer > Activations views need a keymap snapshot that overlaps the selected range. Pipette saves a snapshot automatically when typing recording is enabled on the keyboard; the empty state tells you when to start a recording session to capture one.
 
-**Common filters**
+**Filter summary chip**
 
-The following filters are always available:
+The filter row is a single collapsed chip — `keyboard · device · source · period`. Each segment truncates a long value with an ellipsis; hover the chip to see the full text. Click the chip to open the filter conditions modal — every common condition, including the keymap snapshot, is edited there (the modal's **Keymap** row is the only place to change snapshots).
 
-- **Keymap snapshots** — picks which recorded keymap to analyze against. Editing **From** / **To** stays inside the selected snapshot's active window so charts that need a snapshot (Heatmap / Ergonomics / Bigrams Finger IKI / Layer activations) never mix two layouts in one view. Snapshots are listed on the Keymap snapshot timeline so you can flip between recorded keymap revisions and "Current keymap" without leaving the page
-- **From** / **To** — the time range to analyze. Both inputs are clamped to the active snapshot's window (or to the most recent 7 days when the keyboard has no snapshot recorded yet)
-- **Device** — multi-select. Pick any combination of `This device` and remote-machine hashes to merge or isolate per-machine data. Hidden on the Interval tab when View is set to Distribution (distribution bins don't split by device)
-- **App** — multi-select dropdown listing every active application name observed during the range. Defaults to **All apps** (no filter); selecting one or more apps narrows every chart except **By App** to minutes tagged with one of the chosen apps. The dropdown only populates after Monitor App has been enabled and at least one minute has been tagged with an app name. Persisted per keyboard
+When the **Source** dimension is set to **TypingTest** and its **Results** drill-down narrows the selection to exactly one run for the currently-connected keyboard, an **Open timeline** button appears next to the chip. It leaves Analyze, re-enters the Typing Test view for that keyboard, and opens the **Keystroke Timeline** for the selected run — the same view a History row's **Timeline** link opens (see **Keystroke Timeline** under §4.3). The button is hidden whenever more than one run is selected, or when Analyze is showing a keyboard other than the one physically connected (there is no typing test view to jump back into for it).
 
-Individual tabs add their own filters above the chart (view mode, granularity, unit, etc.); those are described per tab in the sections below. The Heatmap tab keeps its **Normalize** / **Aggregate** / **Group** / **Top N** controls with the ranking row underneath the keyboard itself.
+**Filter conditions modal**
+
+The modal edits a draft copy of the filters — nothing on the page changes until you press **Save**. **Reset** returns the Device and Source rows (and the App/TypingTest toggle) to their defaults — the Keyboard, Keymap, and Period rows keep their current draft values. Pressing Esc, the close button, or clicking outside the modal discards the whole draft instead. Rows, top to bottom:
+
+- **Keyboard** — see **Keyboard selector** above
+- **Device** — multi-select. Pick any combination of `This device` and remote-machine hashes to merge or isolate per-machine data. Replaced with an explanatory note when the Interval tab's View is set to Distribution (distribution bins are always computed from this device alone)
+- **Source** — a segmented **App / TypingTest** toggle switches this row between two mutually exclusive dimensions (a typing test always runs inside some app, so only one dimension filters at a time). Replaced with an explanatory note on the **By App** tab, whose charts aggregate across every source regardless of the App or TypingTest selection:
+  - **App** — multi-select dropdown listing every active application name observed during the range. Defaults to **All apps** (no filter); selecting one or more apps narrows every chart to minutes tagged with one of the chosen apps. The dropdown only populates after Monitor App has been enabled and at least one minute has been tagged with an app name. Persisted per keyboard
+  - **TypingTest** — multi-select dropdown listing the typing tests that produced data in the selected range and device scope. File Import tests are listed by their text name; MonkeyType tests as "mode (language)". Picking one or more tests narrows every chart to those runs, and a second **Results** select appears beside it to drill down to individual runs
+  - Typing-test names and other long option labels are ellipsized in both selects (and in the chip); hover to see the full text
+- **Keymap** — the snapshot timeline, shown only when the selected keyboard has recorded snapshots. Editing Period below stays inside the chosen snapshot's active window so charts that need a snapshot (Heatmap / Ergonomics / Bigrams Finger IKI / Layer activations) never mix two layouts in one view
+- **Period** — the **From** / **To** range to analyze, clamped to the active snapshot's window (or to the most recent 7 days when the keyboard has no snapshot recorded yet)
+
+Individual tabs still add their own filters above the chart (view mode, granularity, unit, etc.), outside the modal; those are described per tab in the sections below. The Heatmap tab keeps its **Normalize** / **Aggregate** / **Group** / **Top N** controls with the ranking row underneath the keyboard itself.
 
 **Saved search conditions**
 
-The bookmark icon in the panel header opens the **Saved search conditions** side panel. Save the active filters under a label, restore a saved set later, rename / delete entries, or export the current condition's chart data as CSV. Each saved entry shows a one-line summary of the filters (devices, apps, snapshot, range) under its label.
+The bookmark icon in the panel header opens the **Saved search conditions** side panel. Save the active filters under a label, restore a saved set later, rename / delete entries, or export the current condition's chart data as CSV. Each saved entry shows a one-line summary of the filters (device, app, snapshot, range) under its label; the entry itself captures the full filter state — including the App / TypingTest dimension and its test / run selections — and restores all of it on Load.
 
 - Up to **50 entries per keyboard** — the panel surfaces a cap warning when you reach the limit; delete an existing entry to make room
 - Synced via Cloud Sync (when enabled) so the same set is available on other signed-in machines
 - Loading an entry written by a newer Pipette release shows an unsupported-version error rather than guessing at unknown fields
 - **Overwrite**: typing a label that already exists swaps the Save button to a danger-styled **Overwrite?** + Cancel pair. Editing the label clears the pending confirmation so you cannot overwrite a different entry by accident
 - **Load behavior**: loading a saved entry always opens on the **Summary** tab regardless of which tab was active when the condition was saved
-- **Hub actions**: when Pipette Hub is connected, each saved entry shows an additional Hub row with **Upload to Hub** / **Update on Hub** / **Remove from Hub** + **Open in Browser** — the same pattern as the keymap and favorites save panels (see §7.4)
+- **Hub actions**: when Pipette Hub is connected, each saved entry shows an additional Hub row with **Upload to Hub** / **Update on Hub** / **Remove from Hub** + **Open in Browser**. The row is labelled **Hub (Public)** or **Hub (Private)**, and uploading opens the Public / Private confirmation dialog — the same pattern as the keymap and favorites save panels (see §7.2, §7.4)
 
 #### Summary
 
@@ -206,24 +270,27 @@ The Summary tab is the default landing view. It collects four read-only cards bu
 
 - **Today** — Keystrokes, WPM, Typing duration for the current local day
 - **Last 7 days** — Keystrokes, WPM, Typing duration, Active days, each with a delta arrow comparing the prior 7 days. Insufficient prior data renders as `—`
-- **Typing profile (last N days)** — Four qualitative read-outs computed over the recent window:
-  - **Speed** — overall WPM bucketed into Slow (<30) / Medium (30–50) / Fast (≥50)
+- **Typing profile (last N days)** — Seven qualitative read-outs computed over the recent window:
+  - **Speed** — overall WPM bucketed into Slow (<30) / Medium (30–50) / Fast (≥50). A second line below the WPM figure shows the population average and a direction-neutral position label (Far below average / Below average / Average / Above average / Far above average) based on standard-deviation distance from that average — hidden whenever the bucket itself reads `Not enough data`
   - **Hand balance** — share of bigram keystrokes per hand. Within ±5% of 50/50 reads as Balanced
   - **SFB rate** — share of bigrams typed with the same finger. <4% Low / 4–8% Medium / ≥8% High
   - **Fatigue risk** — drop from peak hour to slowest hour WPM. Wider gap = higher risk
+  - **KSPC** — keystrokes per confirmed character (Backspace counts as a keystroke), char-weighted across every saved Typing Test result whose date falls in the window — never a plain average of each run's own ratio. A second line shows the population average and the same position label used by Speed. Reads `Not enough data` when no saved result in the window carries this figure (e.g. every run predates it, or hit an IME composition mid-run). Unlike this card's other five read-outs, KSPC is **not filtered by Device/App** — it always reads every locally saved Typing Test result for the keyboard within the window, since it comes from History rather than the recorded keystroke stream
+  - **Error mix** — substitution / omission / insertion rates (each a share of the target characters classified), char-weighted the same way as KSPC across every saved Typing Test result in the window. Each rate's population average is shown alongside as plain text — unlike Speed and KSPC, this card doesn't show a position label here: with three rates packed into one grid cell, three long labels (Far below average / Below average / Average / Above average / Far above average) would triple the cell's height, and there's no compact form to fall back on. Each rate's position label is shown instead in the Typing Test's own History → Error mix rows (see below). Reads `Not enough data` when no saved result in the window carries this figure. Like KSPC, it's **not filtered by Device/App**, and Romaji-input runs are excluded — a Romaji run's committed text is always one of the accepted spellings for its target, so there's no target/typed difference left to classify
+  - **Typing style** — the nearest population typing-style profile to your recent speed, rhythm, and error patterns (rollover is not part of the comparison). Shows one of a small set of named styles, `No match` (your typing doesn't closely resemble any reference profile) or `Between styles` (it sits about equally between two of them), or `Not enough data` when there isn't yet enough speed/rhythm data to compare. The tooltip notes when a match didn't use any error data (e.g. no qualifying saved Typing Test results in the window)
 - **Goal streak record** — Current cycle progress (`current / goalDays`), longest historical streak, and editable Goal settings (consecutive days × keystrokes/day). Changing the goal clears the current cycle counter. The **Achievement history** button opens a modal that lists every completed cycle with period, goal, days, total keystrokes, and average per day
 
-The Summary tab respects the App filter — selecting one or more apps narrows every card to minutes tagged with those apps.
+The Summary tab respects the App filter — selecting one or more apps narrows every card to minutes tagged with those apps (the Typing profile card's KSPC and Error mix read-outs are the exception — see above; Typing style sits in between, since its speed/rhythm inputs follow the App filter but its error-pattern input comes from the same unfiltered History source as Error mix).
 
 #### Heatmap
 
-The Heatmap tab counts every press per physical key and paints the result on the keymap layout, one layer at a time. It's useful for spotting over- or under-used keys per layer and for tuning the layout.
+The Heatmap tab paints per-physical-key data on the keymap layout, one layer at a time. A **Count / Speed / Duration** toggle above the keymap panel switches what's painted; Layer and Period filters apply to all three modes.
 
-**Keymap panel**
+**Count mode**
+
+The default mode counts every press per physical key. It's useful for spotting over- or under-used keys per layer and for tuning the layout.
 
 Keys are tinted by press count (dim = low, saturated accent = high). When a keyboard has more than one layer, a layer toggle bar appears above the panel (**Layer 0**, **Layer 1**, …) and each button shows the per-layer count. Hovering a key opens a tooltip inside the chart with the bound keycode and the count; the tooltip never spills outside the heatmap frame.
-
-**Ranking controls**
 
 Below the heatmap is a ranking table. Four filters control what it shows:
 
@@ -236,11 +303,29 @@ Columns are **Key**, **Layer** (only when the group spans multiple layers), **Ma
 
 ![Analyze — Heatmap](screenshots/analyze-heatmap.png)
 
+**Speed mode**
+
+Speed recolours the same keyboard by how slow the average reach into each key is, built from the same bigram data as the Bigrams tab: each key is tinted by the average interval (avg IKI) between the previous keystroke and a press landing on that key — cool (blue) keys are reached quickly, warm (red) keys are reached slowly. Keys reached fewer than 5 times in range stay uncoloured; a caption under the ranking table repeats that threshold. On very large ranges the same 5,000-pair fetch cap as the Bigrams tab applies — a caveat appears next to the threshold caption when the averages are computed from the most frequent pairs only.
+
+The **Normalize** and **Aggregate** controls disappear in Speed mode (both are count-specific); **Group** and **Top N** still apply. The ranking table's columns switch to **Key**, **Avg IKI**, **Count**, sorted slowest-reach-first.
+
+![Analyze — Heatmap (speed)](screenshots/analyze-heatmap-speed.png)
+
+**Duration mode**
+
+Duration recolours the same keyboard by average keypress duration — the time between pressing a key and releasing it — using the same per-cell capture the Interval tab's keypress-duration histogram (see below) is built from: cool (blue) keys are held briefly, warm (red) keys are held longer. Unlike Speed mode this data already carries a layer tag, so each layer panel paints from its own recorded cells rather than resolving through a shared keycode. Keys with fewer than 5 duration samples in range stay uncoloured, same threshold and caption convention as Speed mode.
+
+The **Normalize** and **Aggregate** controls disappear in Duration mode (both are count-specific); **Group** and **Top N** still apply. The ranking table's columns switch to **Key**, **Avg Duration**, **Count**, sorted longest-duration-first, scoped to whichever layers are currently selected.
+
+![Analyze — Heatmap (duration)](screenshots/analyze-heatmap-duration.png)
+
 **Empty states**
 
 - **No snapshot** — "No keymap snapshot recorded for this range. Start a record session to capture one."
 - **No layout** — "Layout data not available for this snapshot." The snapshot exists but lacks KLE geometry
-- **No activity** — "No key presses in this range." Ranking table only
+- **No activity** — "No key presses in this range." Ranking table only (Count mode)
+- **No reach-speed data** — "No reach-speed data in this range yet." Ranking table only (Speed mode)
+- **No keypress-duration data** — "No keypress-duration data in this range yet." Ranking table only (Duration mode); durations are only recorded while typing in matrix mode with the keyboard unlocked, so ranges predating that capture (or with recording off) show no data
 
 #### WPM
 
@@ -259,6 +344,10 @@ The WPM tab charts Words Per Minute — keystrokes per minute divided by 5 — e
 **Min sample** (both views)
 
 `30s`, `1 min`, `2 min`, `5 min`. Minutes with fewer keystrokes than the chosen WPM-worth-of-keys threshold are dropped from the chart so very light sessions don't skew the line.
+
+**Population avg** (Time series only)
+
+A checkbox next to Min sample toggles a dashed **Population avg** reference line drawn at the population-average WPM. The line's axis rescales automatically if your data sits entirely above or below it, so it never gets clipped out of the chart. The same checkbox controls the Interval tab's own reference line, and the choice is persisted per keyboard (defaults to on).
 
 **Granularity** (Time series only)
 
@@ -279,13 +368,17 @@ The Interval tab visualizes the time between consecutive keystrokes, either as p
 
   ![Analyze — Interval Time Series](screenshots/analyze-interval-time-series.png)
 
-- **Distribution** — Bar chart of nine fixed bins (`<50ms`, `50-100ms`, `100-200ms`, `200-500ms`, `500ms-1s`, `1-2s`, `2-5s`, `5-10s`, `>10s`). Bars are colored by band: **Fast** (green, <200ms), **Normal** (blue, 200–500ms), **Slow** (orange, 500ms–2s), **Pause** (red, ≥2s). The **Device** filter is hidden in Distribution mode because bins are always computed from this device alone
+- **Distribution** — a **Section** select appears in the controls row, right after View: **Interval distribution**, **Keypress duration**, or **Tapping Term diagnosis** (each described below). Only the picked section renders, instead of stacking all three. The **Device** filter is hidden in this mode because bins are always computed from this device alone
 
   ![Analyze — Interval Distribution](screenshots/analyze-interval-distribution.png)
 
 **Display** (both views)
 
 `Seconds` / `Milliseconds`. Switches the unit used in tooltips and on the Y axis. The distribution bin labels stay in their native unit.
+
+**Population avg** (Time series only)
+
+Same checkbox as the WPM tab (see WPM tab) — draws a dashed **Population avg** reference line at the population-average interval. The line always sits at the raw millisecond mean regardless of the Display unit: only the axis tick labels switch between seconds and milliseconds, the underlying chart data stays in ms.
 
 **Granularity** (Time series only)
 
@@ -294,7 +387,45 @@ Same options as WPM.
 **Summary cards**
 
 - **Time series** — Total keystrokes, Active typing time, Weighted median interval, Shortest interval (per min), Longest interval (per min)
-- **Distribution** — Total keystrokes, Median interval, Fast (<200ms) share, Normal (200–500ms) share, Slow (500ms–2s) share, Pause (≥2s) share, Longest interval (per min), Longest session
+- **Interval distribution** — Total keystrokes, Median interval, Fast (<200ms) share, Normal (200–500ms) share, Slow (500ms–2s) share, Pause (≥2s) share, Longest interval (per min), Longest session
+
+**Observed rollover rate** (Time series only)
+
+Below the percentile chart, a second subsection reports how often you pressed a key while the previous one was still held down — commonly called rollover, or n-key rollover.
+
+- **Trend chart** — the rate bucketed over the range on a fixed 0–100% Y axis. A bucket with no observed-overlap data shows as a gap in the line rather than a false 0%
+- **Population avg** — same checkbox as the WPM/Interval reference line above (see WPM tab); draws a dashed reference line at the population-average rollover rate when on
+- Because the underlying sampling can only detect overlaps at least as long as the polling period, the figure is a **structural undercount**. A persistent note under the chart reminds you that sitting below the population-average line does not mean you type slower — it more often reflects the sampling period than your technique
+- **Stat card** — "Observed rollover rate" shows the share of sampled key-pairs where the previous key was still down. Its caption reports the effective sampling period (median p50 / worst-case p95): the polling cadence that sets a floor on how short an overlap can be detected. Overlaps shorter than that period simply aren't observed
+
+Distribution mode's body is driven by the **Section** select named above, showing exactly one of the sections below at a time. The **Tapping Term diagnosis** option only appears when the current keymap has at least one Layer-Tap / Mod-Tap / Swap-Hands-Tap key, and picking a section that later becomes unavailable (e.g. switching to a keyboard without one) falls back to **Interval distribution**. The pick is remembered per keyboard, same persistence as this tab's other filters.
+
+**Interval distribution** (Distribution only)
+
+Bar chart of nine fixed bins (`<50ms`, `50-100ms`, `100-200ms`, `200-500ms`, `500ms-1s`, `1-2s`, `2-5s`, `5-10s`, `>10s`). Bars are colored by band: **Fast** (green, <200ms), **Normal** (blue, 200–500ms), **Slow** (orange, 500ms–2s), **Pause** (red, ≥2s). This is the default Distribution section, shown in the screenshot above.
+
+**Keypress duration** (Distribution only)
+
+Breaks down how long you hold each key down — press to release — independent of the interval-between-keys metric above.
+
+- **Histogram** — a bar chart of eight fixed buckets (`<50`, `50–79`, `80–109`, `110–139`, `140–179`, `180–249`, `250–399`, `≥400 ms`), tighter than the interval bins above since keypress durations cluster in a much narrower range
+- **Stat cards** — Mean duration, SD, Samples. The Mean card's caption always shows the population-average duration alongside a neutral position label (below / average / above); unlike the rollover section's reference line, this comparison has no sampling bias and is shown unconditionally — clustering close to "average" is itself the finding this metric surfaces
+- **Empty state** — "No keypress-duration data in this range." Durations are only recorded while typing in matrix mode with the keyboard unlocked, so ranges predating that capture (or with recording off) show no data — the message doesn't try to distinguish the two, since they're indistinguishable from the recorded data alone
+
+  ![Analyze — Interval Keypress Duration](screenshots/analyze-interval-duration.png)
+
+**Tapping Term diagnosis** (Distribution only, tap-hold keys only)
+
+Checks whether the connected keyboard's Tapping Term (the tap/hold decision window used by Layer-Tap, Mod-Tap and Swap-Hands-Tap keys) fits how you actually type. It's built entirely from the keypress-duration data above, split at the current Tapping Term, so the **Section** select only offers this option when the keymap on screen has at least one Layer-Tap / Mod-Tap / Swap-Hands-Tap key — a keymap with none omits it entirely.
+
+- **Current / Assumed term**, **Observed tap p95** (shown as a range, since the underlying histogram buckets can only bound a percentile, not pin it to one millisecond), **Samples**, and **Recorded tap / hold** (the press counts recorded for these keys — classified against whatever term was active when each press happened, not necessarily the current one, so this row is shown for context only and never drives the diagnosis)
+- One of four findings: the term looks well matched; a candidate lower value based on your own typing (never a guarantee — nothing here writes it back for you); "long taps and fast holds are hard to tell apart at this term" (mass sits close enough to the term on either side that the two can't be told apart); or "not enough data yet" — which covers three distinct causes rather than one generic message: too few tap-hold presses recorded so far, every recorded press on these keys already resolving as a hold at the current term (nothing to compare a tap length against), or the typical tap length happening to fall in the same measured bucket as the term itself, so the data can't tell which side of it your taps actually land on
+- **Connection states** — with the keyboard connected and reporting its Tapping Term, the card shows the live value plus a pointer to where to change it (the editor's **Tap-Hold / Tap Dance** tab → **Tap-Hold**). If the firmware doesn't report Tapping Term through QMK Settings at all, the diagnosis runs against the assumed QMK default (200ms) instead, with a note that changing it requires rebuilding the firmware. Without a matching connected keyboard, the card shows a prompt to connect one instead of a diagnosis
+- There is no button to apply a suggested value — every suggestion here is a read-only observation about your own recorded data, not a setting Pipette will write for you
+
+  ![Analyze — Interval Tapping Term Diagnosis](screenshots/analyze-interval-tapping-term.png)
+
+  This screenshot happens to show the connect-a-keyboard prompt rather than a live diagnosis, since Analyze can be opened straight from the device selection screen, before any keyboard is connected — the card's other two states look the same as described above, just with the prompt replaced by the stat cards and the finding.
 
 #### Activity
 
@@ -360,14 +491,14 @@ Three bar charts stack vertically:
 
 **Finger assignment**
 
-Each key is auto-assigned to a finger based on the layout's KLE metadata (column position and the standard column-to-finger mapping). Click the **Finger assignment** button at the top of the tab to override any key manually:
+Each key is auto-assigned to a finger based on the layout's KLE metadata (column position and the standard column-to-finger mapping). The **Finger assignment** button sits right-aligned in the tab's filter row on every finger-based tab — Summary, Ergonomics, Bigrams, and Layout Comparison — and shows whenever a keymap snapshot is available. Click it to override any key manually:
 
 ![Analyze — Finger Assignment](screenshots/analyze-finger-assignment-modal.png)
 
 - Each key shows a short finger code (`Lp`, `Lr`, `Lm`, `Li`, `Lt` / `Rt`, `Ri`, `Rm`, `Rr`, `Rp`). Manually overridden keys are prefixed with `*`
 - Click a key → popover to pick a finger
 - **Save** persists the overrides; **Reset all** clears every override (disabled when there are none). **Reset to estimate** in the per-key popover clears just that key
-- Overrides apply immediately once you close the modal — Finger Load, Hand Balance, and Row Usage all recompute
+- Overrides apply immediately once you close the modal. On this tab, Finger Load, Hand Balance, and Row Load (its per-hand split derives from the overridden finger) all recompute right away — only Row Usage stays unchanged, since row categories themselves are never overridden. The same overrides also feed the Summary tab's typing-profile cards, the Bigrams tab's finger classification, and Layout Comparison's simulations
 
 **Learning curve**
 
@@ -392,35 +523,57 @@ The bold line is the composite **Overall** score (weighted mean of the three sub
 
 #### Bigrams
 
-The Bigrams tab analyzes consecutive key-press pairs (bigrams) and the inter-key interval (IKI) between them. Bigrams are aggregated per minute as the typing happens, so the tab works over any selected range without re-scanning raw events.
+The Bigrams tab analyzes consecutive key-press sequences and the inter-key interval (IKI) between them. A toggle in the top-right corner switches the tab between **2-gram** (key pairs, the default) and **3-gram** (key triples) granularity. Both are aggregated per minute as the typing happens, so the tab works over any selected range without re-scanning raw events.
+
+An interval longer than **5 seconds** is not counted: a gap that long is a pause, not a typing interval, so the pair or triple spanning it is left out of the aggregate entirely. Keystrokes recorded before this rule took effect are not re-processed, so a range that straddles the change can show a small step in pair counts and averages.
 
 **Quadrant layout**
 
-The view is a 3-quadrant grid; each quadrant has its own list-size selector (10 / 20 / 30 / … / 100). Bars are rendered with recharts so tooltips track the cursor.
+At 2-gram the view is a 2×2 grid of four quadrants. **Top pairs**, **Pair interval**, and **Finger IKI** each have their own list-size selector (10 / 20 / 30 / … / 100); Top pairs and Pair interval render as plain tables, while Finger IKI's bars are rendered with recharts so its tooltips track the cursor. **Bigram patterns** has no list-size selector since it always folds every fetched pair into a fixed set of rows rather than a ranked list. At 3-gram both **Finger IKI** and **Bigram patterns** disappear — a finger-pair mapping and a hand-usage / word-position split aren't defined concepts for a 3-key sequence, and a trigram's own Avg IKI is already the average of its two internal transitions rather than a single one to classify — and **Top pairs** / **Pair interval** expand to fill the freed row instead of leaving an empty cell.
 
 | Quadrant | What it shows |
 |----------|---------------|
-| **Top pairs** | Pair ranking by total occurrence count. Click the **Count** or **Avg IKI** column to flip the sort |
-| **Pair interval** | Pair ranking by average IKI (slowest first). Click any of **Count**, **Avg IKI**, or **p95** to re-sort. The Avg interval threshold (see Common filters) hides faster-than-threshold pairs |
-| **Finger IKI** | Per-(from-finger → to-finger) average IKI bar chart. Bars are coloured blue for left-hand starts and red for right-hand starts. Same Avg interval threshold applies |
+| **Top pairs** | Ranking by total occurrence count. Click **Count**, **Avg IKI**, **SD**, or **Rollover** (2-gram only) to re-sort |
+| **Pair interval** | Ranking by average IKI (slowest first). Click any of **Count**, **Avg IKI**, **SD**, **p95**, or **Rollover** (2-gram only) to re-sort. The Avg interval threshold (see Common filters) hides faster-than-threshold rows |
+| **Finger IKI** (2-gram only) | Per-(from-finger → to-finger) average IKI bar chart. Bars are coloured blue for left-hand starts and red for right-hand starts. Same Avg interval threshold applies |
+| **Bigram patterns** (2-gram only) | One table, split into two independently-scoped row groups that classify the same pairs along two different axes — their row counts don't add up to a single total. See below |
+
+At 3-gram, **Avg IKI** is the average of the two intervals inside the triple (key1→key2 and key2→key3) — not the total elapsed time across all three keystrokes. Hover the column header for this reminder.
+
+The **SD** column is the standard deviation of the underlying IKI samples for that pair/triple — low SD means a consistent rhythm, high SD means erratic timing. It reads as "—" per row: a pair/triple shows "—" when it has fewer than 2 samples in the range, or when any of its data in the range was recorded before this column shipped — a true SD needs the raw sum/sum-of-squares that older rows don't carry, and mixing a partial sum in would silently understate the result. Other pairs in the same range keep their SD; pick a range recorded entirely after the update to see values on every row.
+
+The **Rollover** column (2-gram only) shows this pair's own observed rollover rate — the share of its recorded presses where the previous key was still held down when this one was pressed. It reads "—" when the pair has no determined-overlap sample in the range; a real 0% renders as `0.0%`, distinct from "—". Like the Interval tab's Observed rollover rate subsection, this is a sampled, structurally-undercounted figure rather than a precise measurement — see that subsection for the sampling-period caveat. The column doesn't appear at all at 3-gram: overlap sampling only has meaning for a key pair.
+
+**Bigram patterns rows**
+
+- **Hand usage** — **Left** / **Right** (both keys land on the same hand — including two different keys sharing one finger, e.g. a thumb cluster), **Alternation** (the two keys are on opposite hands), **Repetition** (the same key struck twice in a row). Needs a keymap snapshot because it has to resolve each key to a finger; a coverage line above the table ("N% of pairs classified") reports how much of the data resolved to one of the four classes
+- **Word position** — **Initiation** (the first pair typed right after a word-ending separator — Space or Enter) and **In-word** (every other pair). Bare Space/Enter always count as a separator; a dual-role key (Layer-Tap / Mod-Tap / Swap-Hands-Tap) that sends Space or Enter on tap counts too, but only when a keymap snapshot supplies the protocol info needed to resolve it — which is why this row group works without a snapshot (unlike Hand usage), just more precisely once one is available
+- **ΔLeft** / **ΔRight** / **ΔInitiation**, listed below the table — signed ms deltas: ΔLeft = Left − Alternation, ΔRight = Right − Alternation, ΔInitiation = Initiation − In-word. A positive value means the first-named class was slower
+- Pairs ending at a separator are excluded from both Word position rows — they're the end of a word, not its start or a continuation of it — and their count is reported instead as a footnote below the table
+- Not affected by the Avg interval threshold (Common filters below); that threshold only hides rows in Pair interval and Finger IKI
+- The bigram CSV export (see Export / Upload) carries this same classification as two extra columns
 
 ![Analyze — Bigrams](screenshots/analyze-bigrams.png)
 
+![Analyze — Bigrams (3-gram)](screenshots/analyze-bigrams-trigram.png)
+
 **Snapshot requirement**
 
-Only the **Finger IKI** quadrant needs a keymap snapshot — it has to map each numeric keycode in the bigram pairs to a finger, which depends on the snapshot's keymap and layout. The Top pairs and Pair interval quadrants both render directly from the recorded pair counts and work without a snapshot.
+The **Finger IKI** quadrant and **Bigram patterns**' Hand usage row group both need a keymap snapshot — each has to map a numeric keycode in the pair to a finger, which depends on the snapshot's keymap and layout. Bigram patterns' Word position row group needs no snapshot: it only compares keycodes against a small separator set. Since every snapshot-dependent piece only exists at 2-gram, the 3-gram view never needs a snapshot at all. The Top pairs and Pair interval quadrants both render directly from the recorded counts and work without a snapshot at either gram size.
 
 **Common filters**
 
 - **Range** — same `From` / `To` pickers as the rest of Analyze. The view re-aggregates over the chosen window
 - **Device** — `This device` only or all synced devices, identical to the other tabs
-- **Avg interval (ms or slower)** — minimum-IKI threshold rendered inline in both the Finger IKI and Slow pairs quadrant headers. Pairs whose average IKI is below the threshold are hidden in both quadrants at once (the input is shared, so editing it in one quadrant updates the other). `0` disables the filter; the value is persisted per keyboard via `PipetteSettings`. The IKI used for comparison is approximate (histogram bucket-center weighted average), so the cut-off is best treated as a coarse "ignore pairs faster than ~N ms" filter
+- **Avg interval (ms or slower)** — minimum-IKI threshold rendered inline in the Pair interval quadrant header, and also in the Finger IKI quadrant header at 2-gram. Rows whose average IKI is below the threshold are hidden from both of those quadrants at once (the input is shared, so editing it in one quadrant updates the other); Top pairs and Bigram patterns are never filtered by it. `0` disables the filter; the value is persisted per keyboard via `PipetteSettings`. The IKI used for comparison is approximate (histogram bucket-center weighted average), so the cut-off is best treated as a coarse "ignore rows faster than ~N ms" filter
 
 **Empty states**
 
-- **No bigram data** — "No bigram data in this range yet. Record some typing and try again." Shown when the range has no recorded pair activity
-- **No snapshot (Finger IKI quadrant only)** — "Finger heatmap needs a keymap snapshot. Start a record session or pick a range with one." The other three quadrants still render
-- **Threshold filtered everything out** — when **Avg interval** is set high enough that no pair survives, the Finger IKI and Pair interval quadrants both fall back to "No bigram data in this range yet." Lower the threshold to bring rows back
+- **No bigram data** — "No bigram data in this range yet. Record some typing and try again." Shown when the range has no recorded activity for the selected gram size
+- **No snapshot (Finger IKI quadrant only, 2-gram)** — "Finger interval needs a keymap snapshot. Start a record session or pick a range with one." The other quadrants still render
+- **No snapshot (Bigram patterns' Hand usage row group only, 2-gram)** — "Hand usage needs a keymap snapshot. Start a record session or pick a range with one." Word position still renders below it, and the rest of the tab is unaffected
+- **Threshold filtered everything out** — when **Avg interval** is set high enough that no row survives, Pair interval (and Finger IKI at 2-gram) fall back to "No bigram data in this range yet." Lower the threshold to bring rows back
+- **Very large ranges** — when the selected range holds more distinct pairs/triples than the single-fetch cap (5,000), Pair interval, Finger IKI, and Bigram patterns show "Computed from the 5000 most frequent pairs — rare pairs may be missing." Top pairs stays exact; narrow the range to bring rare rows back
 
 #### By App
 
@@ -459,6 +612,8 @@ Once a target is picked, all three panels render at once so you can read the spa
 | **Finger diff** (bottom-left) | Per-finger signed delta bar chart. Red bars mark fingers that take more load on the candidate, green bars mark fingers that take less |
 | **Metric table** (bottom-right) | Side-by-side share-of-events table with finger load (per finger), hand balance (left / right), row distribution, and home-row stay rate |
 
+Manual finger assignments (see **Finger assignment** under Ergonomics above) are honored here too — the Finger diff and the Metric table's finger load / hand balance use your overrides instead of the automatic column-based estimate. Row distribution is unaffected, since finger overrides don't change row categories.
+
 ![Analyze — Layout Comparison Heatmap Diff](screenshots/analyze-layout-comparison-heatmap-diff.png)
 
 ![Analyze — Layout Comparison Finger Diff](screenshots/analyze-layout-comparison-finger-diff.png)
@@ -474,6 +629,8 @@ Some events can't be mapped onto a candidate — for example, when the source ch
 - **No snapshot** — same empty state as the rest of the snapshot-bound tabs. Start a record session in the chosen range to capture one
 - **No target picked** — the empty hint stays until you pick a comparison layout from the dropdown
 - **Fetch error** — generic "failed to compute the layout comparison" message; reload or pick a smaller range and retry
+
+#### Layer
 
 The Layer tab breaks usage down by keyboard layer.
 
@@ -509,14 +666,14 @@ The **Export** button on the panel header opens a category-pick modal that write
 
 - **Summary** — today / last-7-days overview cards
 - **WPM** — per-bucket WPM time series
-- **Interval** — per-bucket interval percentiles
+- **Interval** — per-bucket interval percentiles. In Distribution mode this also writes a second file: the eight-bucket keypress-duration histogram (`bucket_id`, `upper_bound_ms`, `center_ms`, `count`, `share_percent`), matching the Interval tab's own keypress-duration subsection
 - **Activity** — hour × day-of-week or day-cell counts depending on the View setting
 - **By App** — per-application breakdown
-- **Heatmap** — per-cell press counts (snapshot-bound)
+- **Heatmap** — per-cell press counts (snapshot-bound). Every ranking row also carries `avg_duration_ms` / `duration_samples` columns regardless of which Count/Speed/Duration mode is active on screen — blank when the key has no duration data in range. A masked (tap-hold) key position exports as two rows (hold and tap split), and both repeat the same blended duration values — the recorded data can't be split by tap vs. hold
 - **Ergonomics** — per-finger / per-hand / per-row totals (snapshot-bound)
-- **Bigrams** — Top pairs / Pair interval / Finger IKI rows
+- **Bigrams** — Top pairs / Pair interval rows (Count, Avg IKI, SD, plus the Bigram patterns classification as `class` and `word_position` columns, and the per-pair observed rollover rate as `observed_rollover_percent`); Finger IKI has no CSV column. `class` is blank at 3-gram and whenever there's no keymap snapshot for the range; `word_position` is blank only at 3-gram; `observed_rollover_percent` is blank at 3-gram and whenever the pair has no determined-overlap sample in the range. Exports whichever gram size (2-gram or 3-gram) is currently selected in the tab — the id column is named `bigram_id` or `trigram_id` to match
 - **Layer** — per-layer keystroke or activation counts
-- **Layout Comparison** — per-finger / row / hand deltas (snapshot-bound)
+- **Layout Comparison** — per-finger / row / hand deltas (snapshot-bound; reflects manual finger overrides)
 
 The modal lists the active conditions (Device, App, Keymap, Period) above the category list so the file you save is unambiguous about which slice it captures. Heatmap, Ergonomics, and Layout Comparison entries are unavailable when the range has no overlapping snapshot — the modal shows a "snapshot missing" notice for those categories. Manual finger overrides are noted next to the Ergonomics row.
 
@@ -601,8 +758,9 @@ A vertical layer sidebar appears on the left side of the popover, matching the l
 
 - The search input is pre-filled with the current keycode name
 - Type to search by name, keycode name, or alias — results are ranked by relevance
+- With a Key Label pack active that doesn't qualify as a clean, closed QWERTY permutation — the same eligibility check that decides whether a pack can be Rewritten at all (JIS shift-pair legends, kana, and any partial/non-closed swap are common examples), a result whose legend the pack overrides shows that pack's text (colored the same as its remapped keycap in the grid) and is also searchable by it — e.g. searching a symbol the pack draws on a key finds that key even if its default keycode name doesn't contain it. A pack that does qualify as a clean closed permutation (Colemak, Dvorak, Eucalyn, …) leaves these results on their standard legends, same as the keycode grid
 - Click a result to assign it immediately
-- The popover also appears when double-clicking key fields in detail editors (Tap Dance, Combo, Key Override, etc.)
+- The popover also appears when double-clicking key fields in detail editors (Tap Dance, Combo, Key Override, etc.) — those pickers are not Key Label pack-aware
 
 **Code Tab**
 
@@ -656,6 +814,37 @@ Some keyboards support multiple physical layouts (e.g., split backspace, ISO ent
 - Click outside the panel or press Escape to close it
 
 > **Note**: The Layout Options button only appears for keyboards that define multiple layout variants. Most keyboards with a single fixed layout do not show this button. Screenshots in this section were taken using a dummy JSON definition loaded via "Load from JSON file".
+
+### 2.6 View Matrix
+
+When **Auto Move** is enabled (§3.14), assigning a keycode automatically advances the selection to the next key. Keys are visited in order of their matrix position (sorted by row, then by column) — by default the physical matrix defined by the keyboard, which gives a natural left-to-right, top-to-bottom walk even on keyboards whose definition lists keys in a scrambled order. The View Matrix lets you customize this order per keyboard by assigning each key a custom view position.
+
+To edit the View Matrix, open the Keycodes Overlay Panel (§3.14) and click **Edit** in the **View Matrix** row. While the mode is active:
+
+![View Matrix Mode](screenshots/view-matrix-mode.png)
+
+- The keymap display goes blank — instead of keycodes, each key shows its effective view position as two lines: `R` (row) and `C` (column)
+- All keymap operations are disabled: layer switching, key assignment, the key popover, and the Key Tester (turned off automatically on entry). The keycode picker area (tabs, tiles, and menu) is hidden entirely, leaving a two-pane view: the **View Matrix** panel on the left and the keymap on the right (zoom and scrolling keep working)
+- The layer panel is replaced by the **View Matrix** panel: the **Done** toggle, **Row** / **Col** selects for the currently selected key(s), and — at the bottom — the **Reset** button. Click Reset and confirm (**Reset?**) to delete all custom positions and return to the physical matrix order
+- Click a key to select it — it's highlighted on the keymap, and the **Row** / **Col** selects immediately show its effective position. Both selects offer the same range, `0` up to one less than the larger of the keyboard's matrix row/column counts — view positions are a logical ordering, not a readout of each axis's physical size, so direct-pin keyboards (whose physical matrix collapses to a single row or column) still get a full 2D range on both axes. Changing either select saves instantly; there is no separate Save step. Choosing the value equal to the key's own physical position removes its custom position instead
+- Ctrl-click (or Cmd-click on macOS) adds or removes a key from the selection; Shift-click selects a contiguous range. All selected keys stay highlighted. With 2 or more keys selected, the **Row** / **Col** selects show a blank placeholder — picking a value bulk-applies that row (or column) to every selected key in one step, each key keeping its own value on the other axis. A reminder of these Ctrl-click / Shift-click shortcuts is shown below the keymap, just above the relocated zoom controls
+- If two or more keys resolve to the same effective view position, those keys are flagged with a shared highlight color on the keymap until the collision is resolved. Editing isn't blocked, but the Auto Move order between those keys becomes ambiguous
+- The layer label normally shown below the keymap is hidden while the mode is active — the View Matrix has no layer concept
+- Click **Done** in the **View Matrix** panel to exit the mode (it also exits automatically when switching or disconnecting the keyboard)
+
+![View Matrix — Key Selected](screenshots/view-matrix-selected.png)
+
+- Clicking a key highlights it and populates the **Row** / **Col** selects with its effective position
+
+![View Matrix — Duplicate Positions](screenshots/view-matrix-duplicate.png)
+
+- Here two keys resolve to the same view position (`R 0` / `C 1`), so both are flagged with the shared highlight color
+
+![View Matrix on a Direct-Pin Keyboard](screenshots/view-matrix-direct-pin.png)
+
+- On a direct-pin keyboard the physical matrix is a single row or column (here 1×6), yet both axes still span the larger matrix dimension — the **Row** and **Col** selects each offer `0`–`5`
+
+Only keys you change are stored — every other key keeps its physical matrix position in the ordering. Encoders and decorative keys are not part of the Auto Move order and cannot be edited in this mode. The View Matrix is saved per keyboard and included in cloud sync (§6.1).
 
 ---
 
@@ -719,9 +908,10 @@ Keycodes for modifier key combinations and tap behavior settings.
 
 ![Modifiers Tab](screenshots/tab-modifiers.png)
 
-- **One-Shot Modifier (OSM)**: Activate modifier for the next keypress only
+- **One-Shot Modifiers (OSM)**: Activate modifier for the next keypress only
+- **One-Shot Control**: Turn the one-shot feature itself on / off / toggle (distinct from OSM, which triggers a one-shot modifier)
 - **Mod-Tap**: Modifier on hold, regular key on tap
-- **Mod Mask**: Modifier key combinations
+- **Modifier Masks**: Modifier key combinations
 
 ### 3.4 System
 
@@ -729,15 +919,13 @@ Keycodes for mouse control, media playback, system utilities, and audio/haptic f
 
 ![System Tab](screenshots/tab-system.png)
 
-- **Mouse**: buttons, movement, and scrolling
+Groups render as five rows, pairing related groups side by side:
+
+- **Mouse** (buttons, movement, scrolling) / **Boot** (enter bootloader mode, QK_BOOT)
 - **Joystick**: axis and button keycodes
-- **Audio**: audio toggle and control keycodes
-- **Haptic**: haptic feedback toggle and control keycodes
-- **Media Playback**: play/stop/volume/track controls
-- **Locking Keys**: Locking Caps Lock, Num Lock, Scroll Lock
-- **App / Browser**: application launcher and browser navigation keys
-- **System Control**: system power, sleep, wake
-- **Boot**: enter bootloader mode (QK_BOOT)
+- **Audio**: audio toggle and control keycodes / **Haptic**: haptic feedback toggle and control keycodes
+- **Media Playback**: play/stop/volume/track controls / **Browser**: browser navigation keys
+- **System Control**: system power, sleep, wake / **Locking Keys**: Locking Caps Lock, Num Lock, Scroll Lock / **App**: application launcher keys
 
 > **Note**: The MIDI tab is only displayed for MIDI-capable keyboards. When available, it appears between System and Lighting.
 
@@ -848,8 +1036,11 @@ Keycodes for advanced QMK behavior features.
 - **Magic**: Magic keycodes for swapping and toggling keyboard behaviors
 - **Mode**: NKRO toggle, mode switching keycodes
 - **Auto Shift**: Auto Shift toggle and configuration keycodes
+- **Autocorrect**: Autocorrect on / off / toggle
+- **Leader**: Begin a leader sequence (`QK_LEAD`)
 - **Swap Hands**: Swap Hands keycodes and Swap Hands Tap variants
 - **Caps Word**: Caps Word toggle
+- **Dynamic Tapping Term**: Print / increase / decrease the tapping term at runtime
 
 ### 3.12 User
 
@@ -888,6 +1079,8 @@ Click the **File** button at the bottom to switch to the file source. This shows
 
 > **Note**: Only V2 format (`.pipette`) files are supported in the key picker. If a legacy V1 format file is selected, a warning is displayed prompting you to connect the keyboard and open the keymap to migrate the data.
 
+> **Tip — Build from keyboards you don't own:** The reference keyboard doesn't have to be one you physically own. Save a shared `.pipette` file under a name (§1.1), pick it as the **File** source here, then Ctrl+click / Shift+click to multi-select keys on the reference keyboard and click a key on your own keymap to paste them in. This lets you copy assignments from other people's layouts — or any keyboard you've collected — straight into yours, with no hardware connected.
+
 **Composite Keycodes**
 
 When clicking a composite key (e.g., `LT1(KC_SPC)`) in the picker, the full keycode is assigned as-is. Inner/outer parts are not split — the complete keycode is copied to the target key.
@@ -898,12 +1091,13 @@ When clicking a composite key (e.g., `LT1(KC_SPC)`) in the picker, the full keyc
 
 The Keycodes Overlay Panel provides quick access to editor tools and save functions. Toggle it with the panel button at the right end of the keycode tab bar.
 
-**Settings Tab**
+**Settings / Import Tab**
 
-![Overlay Panel — Settings](screenshots/overlay-tools.png)
+![Overlay Panel — Settings / Import](screenshots/overlay-tools.png)
 
 - **Key Editor Zoom**: Set the UI zoom level (50–200%) applied while in key editor mode. Defaults to the global UI zoom (§6.5) when not configured. Saved and synced per keyboard
-- **Auto Advance**: Toggle automatic advancement to the next key after assigning a keycode
+- **Auto Move**: Toggle automatic advancement to the next key after assigning a keycode
+- **View Matrix**: Enter or leave View Matrix mode (**Edit** / **Done**) to customize the Auto Move key order (see §2.6)
 - **Instant Key Selection**: Toggle instant key selection mode (see §2.2 for behavior details)
 - **Separate Shift in Key Picker**: Toggle split display for combined keycodes (e.g., show Mod-Tap as two halves)
 - **Key Tester**: Toggle Matrix Tester mode (supported keyboards only)
@@ -953,7 +1147,7 @@ The keymap editor automatically records a history of keycode changes. You can na
 | **Toolbar buttons** | Full history | Undo / Redo buttons in the left toolbar |
 | **Popover buttons** | Last single change only (must match the open key) | Undo / Redo buttons in the popover footer (see §2.4) |
 
-- History is cleared when switching keyboards or disconnecting
+- History is cleared when switching keyboards, disconnecting, restoring a snapshot / loading a saved layout / importing a `.vil` file, or rewriting the keymap from a Key Label (see **Applying a Key Label to the Keymap** in §6.2) — each of these replaces some or all of the keymap, so there is nothing left in the old history that still applies. A keymap Rewrite is the one case where nothing is pushed back onto the (now-empty) stack afterward — see **Limitations** there
 - The maximum history size can be configured in Settings → Defaults → **Max Keymap History** (see §6.1)
 - All keymap mutation paths are tracked: single key edits, popover selections, mod-mask changes, paste, and copy-layer operations
 
@@ -963,9 +1157,79 @@ A typing practice feature. Test your typing with the current keymap while viewin
 
 Click the **Typing Test** button in the status bar to enter typing test mode.
 
-#### Modes
+#### Settings Panel
 
-Three test modes are available, selectable from the mode tabs at the top:
+The left side of the typing-test screen is a collapsible **Settings** panel. The chevron button at its bottom collapses it to a thin rail and expands it again; the state is saved per keyboard. The panel groups the test controls into three sections:
+
+- **Settings** — the **Data Source** row (see below); **Layer** (the base layer used by the on-screen keymap, shown when the keyboard has more than one layer); and **Lines** / **Font** (line count and font size of the reading window — these two apply in every mode). With a MonkeyType language active, the **Pattern** / **Units** / **Option** rows described under **MonkeyType** also appear here; with a Tatoeba pack active, Tatoeba's own **Pattern** / **Units** rows appear instead (see **Tatoeba** below)
+- **Data** — **History** opens the saved-results modal (see **History** below). **Compare** picks the comparison baseline — **Previous**, **Best**, **Average**, a pinned **Result**, or **Off**; while a baseline is set, colored ▲ / ▼ deltas appear next to WPM / KPM / Accuracy in the stats row, and the **Compare** button itself takes on an accent border and text whenever the baseline isn't Off. The baseline choice is remembered per test condition (mode + settings + language, or per imported text). **Weak Spot Training Mode** opens a settings modal, shown in every mode, for biasing word sampling toward your own detected weak spots — the modal's Enable toggle and tunable parameters only take effect in the words/time patterns; a status line below the button shows what's currently detected (see **Weak Spot Training Mode** below). **Save Unnamed** (default on) auto-saves finished results even without a name; switched off, only named results are kept
+- **View** — three switches: **Operation** (the controls row below the reading window), **Measurement** (the live stats row), and **Keymap** (the keyboard pane). Each hides its area when switched off; a finished test always shows the controls and the results regardless
+
+#### History
+
+![Typing Test — History (Results)](screenshots/typing-test-history-results.png)
+
+The History modal opens on a single header row: **Results** / **Analysis** tabs on the left, a small note next to the title stating the retention cap (see below), and a right-end group of selects — a source select (**MonkeyType** / **Tatoeba** / **Aozora** / **File Import**) that scopes every section in the modal to one source, then (only while **Analysis** is active) the Accuracy Trend's own condition select, then a **period filter** (always the rightmost select, in both tabs): **1 Week** / **1 Month** (default) / **3 Months** / **1 Year** / **All Time**. The period filter resets to 1 Month every time the modal reopens, and it scopes everything below the header row — the WPM Trend chart, the stats row, the Results table, **Export CSV**, and the entire Analysis tab. Runs from different sources aren't comparable to each other, so every stat, chart, and export in the modal stays scoped to whichever source is currently picked.
+
+Regardless of period filter or source, History itself keeps only the 500 most recent results overall — once that cap is reached, saving a new result silently drops the oldest one. This limit is independent of any filter above: it's not that older results are hidden from view, they're gone from storage entirely.
+
+**Results** tab — the run list:
+
+- A sub-filter row sits above the table for two of the four sources: a mode dropdown (All / Words / Time / Quote) for **MonkeyType**, a text dropdown for **Aozora** / **File Import**. **Tatoeba** has neither — its own Accuracy Trend condition selector (on the Analysis tab) already covers per-condition grouping
+- A titled **WPM Trend** chart aggregates the filtered runs **per calendar day**, plotting three lines — **Best** / **Worst** / **Avg** — with the exact value on hover; on a day with only one run, all three lines coincide at that point. It appears once there are 2 or more days with data
+- A stats row (Best / Avg / Last 10 / Tests / Avg Acc) follows, with **Export CSV** at its right end — the export always matches whatever the sub-filter, source select, and period filter currently show
+- The table lists up to 20 rows under whichever sort is active — click any column header to change it, defaulting to most recent first. Column widths are measured from the active language pack's own strings at runtime, so labels stay on one line regardless of locale. Besides Name / Date / Mode / PB, the table carries WPM, KPM, Accuracy, and an abbreviated **AKH** column (Avg Key Hold — the run's mean key press-to-release duration; hover the header for the full name). A run with a saved keystroke log shows a **Timeline** text link in its own column; clicking it opens the **Keystroke Timeline** (see below). A row shows nothing in that column instead — never a disabled link — when its run has no saved log at all: recorded before Recording Consent was ever accepted (see **Typing Record** below — the same app-wide consent flag also gates the raw log for an ordinary Typing Test run, not only for ambient recording), recorded before this feature existed, or paused/interrupted without finishing. Each row can also be renamed (same naming modal as the finished screen) or deleted
+
+![Typing Test — History (Analysis)](screenshots/typing-test-history-analysis.png)
+
+**Analysis** tab — three aggregate sections, all scoped to whichever source and period is picked in the header (not to the Results tab's own sub-filter):
+
+- **Accuracy Trend** plots accuracy over time for a single test condition, picked from the header's condition select (e.g. "50 words (english) +punct" or "30s (english)"; the label format varies by mode). It always lists every condition the active source has, defaults to the most recent run's condition, and the chart appears once the selected condition has 2 or more saved runs
+- **Most missed** lists every missed character (or, in Romaji mode, the missed kana's romaji, e.g. "shi") as a bar-graph row — key, the character(s) actually typed instead, a stacked bar, and the count — aggregated across every result in the active source rather than one condition, sorted by count and scrolling internally rather than capped at a fixed number. Each bar splits red (moved on to the next character without correcting the mistake) / gray (corrected with Backspace) whenever per-keystroke detail is available for the runs behind that key; hovering a bar shows the exact typed-instead characters and the corrected/moved-on counts. A legacy run with no per-keystroke detail renders its bar fully gray with a tooltip noting the detail isn't available, rather than guessing. Hidden when the source has no results at all; shows a brief empty message when there are results but none of them recorded a mistake
+- **Error mix** is a TYPE / YOU / POP. AVG table of substitution / omission / insertion rates (each a share of the target characters classified), char-weighted across every result in the active source. **YOU** is the aggregated rate and **POP. AVG** the population mean for context; a colored verdict pill (Far below average / Below average / Average / Above average / Far above average) reads the standard-deviation distance between the two, and hovering a row's label shows a tooltip explaining what that error class means and how to improve it. Hidden when the source has no results at all; shows a brief empty message when there are results but none of them qualify (e.g. every result predates error-class tracking, or the source is Romaji-only, whose runs never carry this figure)
+
+#### Keystroke Timeline
+
+![Typing Test — Keystroke Timeline](screenshots/typing-test-timeline.png)
+
+The same timeline panel appears in two places: opened from a **Timeline** link in the History Results table (see **History** above), in its own modal; and inline, as the main view of the completion screen itself, for a run that just finished with a saved keystroke log (see **During a Test** below). Both show identical content — only the surrounding chrome differs (a modal frame with a close button vs. embedded directly in the typing-test pane).
+
+A run saved with its typing-test line grouping renders one horizontal bar strip **per line**: a shared time axis for every word on that line, a subtle divider at each word boundary, and a per-line stat fragment in the row's own header — keystrokes/min, accuracy, and overlap rate where they can be computed, plus the line's own duration in seconds, always shown. A Romaji-input run also shows a second monospace row with the typed romaji beneath each line's kana. A run saved before line grouping existed (a legacy log) falls back to the original **per-word** view instead — one strip per word, with no per-line figures.
+
+Bar color reads the keystroke's outcome — normal, mistake, overlapped (pressed before the previous key was released), or unjudged (no correctness data, e.g. mid-IME-composition) — and a legend spells out each color plus the pause markers. The line view treats a gap of **250ms or longer** as a pause (shown compressed on the axis) and a pause crossing into a new line as a lead-in marker before that line; the per-word view uses a coarser **1000ms** cut and "before this word" wording instead, since one word's own axis is much shorter than a line's. Either way, every duration shown — in the row/line headers and in the hover tooltip over any bar or marker — is still the real, uncompressed value, never the compressed on-screen one.
+
+In the line view only, each keystroke bar also shows its own key label once the bar is wide enough to fit one, so zooming in on a fast-typed cluster reveals every key rather than just spacing the bars out — the per-word view has no such label overlay. A **Zoom** slider (fit → 10×) drives this.
+
+Above the rows, a stat grid shows eleven figures in a fixed order: **WPM**, **KPM**, **Accuracy**, **KSPC**, **Substitution**, **Omission**, **Insertion**, **Overlap**, **AKH** (Avg Key Hold — the run's mean key press-to-release duration, in ms; hover for the tooltip explaining it), **Time**, and **Words** (or **Lines**, for a line-based run — the same distinction the reading window itself uses). A card reads as empty (`—`) rather than being omitted when its figure can't be computed for that run (e.g. KPM/KSPC/the error-class trio on a run predating that tracking).
+
+Below the stat grid, a **Missed** box lists this run's mistakes as the same bar-graph rows described under History's **Most missed** above (key / typed-instead chars / red-gray bar / count), omitted entirely when the run had no mistakes.
+
+#### Data Source
+
+![Typing Test — Data Source Modal (MonkeyType)](screenshots/typing-test-mode-monkeytype.png)
+
+The **Data Source** row in the left Settings panel shows the active mode type and source (a MonkeyType language, a Tatoeba pack, or an imported text) — click the row to open the Data Source modal. Four tabs select what you type against:
+
+- **MonkeyType** — random words, timed word bursts, or real-world quotes generated from a downloaded language pack
+- **Tatoeba** — real sentences sampled from a downloaded Tatoeba language pack
+- **Aozora Bunko** — public-domain Japanese literary works imported from the Aozora Bunko catalog
+- **File Import** — a plain-text `.txt` file you import yourself
+
+The modal opens on the tab matching the currently active mode. An Aozora Bunko import technically plays back as a File Import text, so opening the modal while one is active jumps straight to the **Aozora Bunko** tab instead of **File Import** — matching where the text is actually managed. Picking a row switches mode immediately and closes the modal; closing without picking (Escape, the X button, or clicking outside) leaves the current mode unchanged.
+
+The **MonkeyType** and **Tatoeba** tabs share the same language-pack list:
+
+- A search box filters the list by name
+- Below the search box, a **Romaji** filter toggle narrows the list to Japanese-input-capable entries only (see **Japanese Input** under **MonkeyType** below). The **File Import** tab has the same toggle below its import button; the **Aozora Bunko** tab keeps its kana-row filter instead (see **Aozora Bunko** below)
+- Packs are split into **Downloaded** and **Available** sections
+- Each row shows the pack name and its word count; right-to-left languages also show an **RTL** badge, and kana packs (hiragana / katakana) that support Japanese input show a **Romaji** badge (see **Japanese Input** below)
+- Click the download icon on an Available row to download it. Rows you downloaded yourself show a trash icon to delete them; packs bundled with the app (such as MonkeyType's english) are also listed under Downloaded but cannot be deleted
+- If a newer dataset manifest is available, a banner reading "An update is available for the word lists." appears above the list with an **Update** button. This check runs automatically each time the tab is opened (a successful check is cached for the app session, so it won't repeatedly hit the network; a failed check — e.g. while offline — is not cached, and reopening the tab retries). Nothing downloads until you click **Update**
+- Applying an update replaces the pack manifest and also removes that provider's previously downloaded packs, since they belong to the old dataset version — download them again from the refreshed list as needed
+
+#### MonkeyType
+
+With a MonkeyType language selected, the Settings panel gains three rows: **Pattern** picks the test pattern (**words** / **time** / **quote**), **Units** picks the word count, duration, or quote length for it, and **Option** toggles Punctuation / Numbers (words and time patterns only). The three patterns:
 
 **Words Mode**
 
@@ -988,16 +1252,154 @@ Three test modes are available, selectable from the mode tabs at the top:
 - Type a real-world quote (short / medium / long / all)
 - The quote source is shown after completion
 
-#### Options
+**Options**
 
 ![Typing Test — With Options](screenshots/typing-test-words-options.png)
 
-In Words and Time modes, you can toggle additional options:
+In the words and time patterns, the Settings panel's **Option** row adds toggles:
 
 - **Punctuation**: Adds punctuation marks (commas, periods, etc.) to the word list
 - **Numbers**: Adds numbers to the word list
 
-These toggles are not available in Quote mode, which uses the original text as-is.
+The Option row is hidden in the quote pattern (which uses the original text as-is) and in the Tatoeba / Aozora Bunko / File Import modes.
+
+**Weak Spot Training Mode**
+
+![Typing Test — Weak Spot Training Mode button](screenshots/typing-test-weak-spot-toggle.png)
+
+A full-width **Weak Spot Training Mode** button sits in the Settings panel's **Data** section, below **Compare**, in every pattern — the button itself renders regardless of mode; only the setting it controls is words/time-only. It's a dialog trigger (not a toggle itself) — clicking it opens the **Weak Spot Training Mode** modal, where the feature is actually turned on/off and tuned. The button takes on the active (accent) styling whenever the setting is currently on, so its state is visible without opening the modal. Directly below the button, a status line reflects what's currently known (hidden entirely while History hasn't finished loading — nothing is claimed either way until it's ready):
+
+- **"No weak spots detected — nice!"** — History is loaded and no token crossed any of the detection thresholds (shown in the modal)
+- **"Weak spots detected (N): k, r, sha"** — at least one weak token was found; the modal's Enable toggle becomes clickable
+
+Opened from any other pattern, the modal shows the same shell but replaces the description/toggle/parameters with a short note explaining the feature only applies to words/time.
+
+Turning the setting on (inside the modal) biases word sampling toward tokens your own History shows you're weak at, scoped to the current language and effective input method (Direct / Romaji / Kana) — it doesn't change what words exist, only how often each one is picked.
+
+![Typing Test — Weak Spot Training Mode button, no weak spots detected below it](screenshots/typing-test-weak-spot-hint.png)
+
+The modal opens with the detection-signal explanation, then the **Enable** toggle below it, then the tunable parameters. The toggle can always be turned OFF, but turning it ON requires at least one weak spot to have actually been detected for the current language and input method — there's nothing to turn on ahead of time, and a parameter change that later drops detection back to nothing never leaves the toggle stuck on with no way to turn it off.
+
+A token counts as weak by any of three signals, each measured against your own typing rather than a fixed benchmark, and explained in the modal itself with your CURRENTLY configured threshold values filled in:
+
+- **Misses** — it's been recorded as a mistake enough times in History (default: 2+)
+- **Noticeably slower** — with a saved keystroke log available, your typical pace on it runs meaningfully behind your own overall median (default: 1.5× or slower, needs 15+ timed samples)
+- **Hesitation** — with a saved keystroke log available, it produces a long pause more often than the rest of your typing (default: over 2× your pace, on 20%+ of its timed samples)
+
+The two timing-based signals need a saved per-run keystroke log, which only exists for runs recorded after Recording Consent was turned on (see **Typing analytics recording** below — the same app-wide consent flag also gates the raw log for an ordinary Typing Test run, not only for REC). Without any saved logs, detection still works from the miss signal alone.
+
+![Typing Test — Weak Spot Training Mode modal (active, with parameters)](screenshots/typing-test-weak-spot-modal.png)
+
+Below the Enable toggle, the modal exposes every detection/sampling parameter as its own button row (two per line within each section), along with a **Reset to defaults** button:
+
+The button labels below are exactly what the modal renders — plain numbers, with no `×` / `%` / unit suffix on the button itself (the unit is named in the parameter row's own label instead):
+
+| Section | Parameter | Default | Choices |
+|---|---|---|---|
+| Detection thresholds | Miss threshold (times) | 2 | 1 / 2 / 3 / 5 / 10 |
+| Detection thresholds | Slowness ratio (×) | 1.5 | 1.2 / 1.5 / 2 / 2.5 / 3 |
+| Detection thresholds | Stall rate (%) | 20 | 10 / 20 / 30 / 40 / 50 |
+| Detection thresholds | Stall multiple (×) | 2 | 1.5 / 2 / 2.5 / 3 / 4 |
+| Detection thresholds | Min. timed samples | 15 | 5 / 10 / 15 / 25 / 50 |
+| Data window | Rolling window (runs) | 50 | 10 / 25 / 50 / 100 / All |
+| Data window | Time decay (half-life, days) | Off | Off / 7 / 14 / 30 |
+| Sampling | Weak spot word share (%) | 60 | 20 / 40 / 60 / 80 / 100 |
+
+**Rolling window** limits detection to only your N most recent matching runs (by both the miss and timing signals together) instead of your entire matching History — the default of 50 keeps a weak spot you've since overcome from lingering forever just because it still shows up somewhere far back in your history. **Time decay** additionally down-weights older misses within that window on a half-life curve (a miss recorded today always counts at full weight; one recorded one half-life ago counts at roughly half) — off by default, so every miss in the window counts equally unless you turn it on. **Weak spot word share** controls how large a fraction of sampled words are pulled from the biased pool once the setting is active, rather than uniformly — the default 60/40 split keeps a run representative of ordinary typing even while biased.
+
+None of the above changes what History itself retains: regardless of Rolling window or Time decay, History only ever keeps your 500 most recent results (see **History** above), so detection can never look further back than that — a run older than the 500-result cap is gone from consideration entirely, not just outside the configured window.
+
+Whether a parameter change reaches your CURRENT run depends on whether Weak Spot Training Mode is on. While it's off, a parameter change only takes effect on your next run (same as any other Settings-panel change) — it can't be sampling from a pool it isn't using yet, so the run in progress is unaffected. While it's on, a parameter change immediately restarts the current run under the new parameters, the same way switching Pattern or Units would. Changing parameters is always allowed, whether or not detection currently reads as active.
+
+Because it changes what you actually type, a run made with Weak Spot Training Mode active is tracked as its own test condition, separate from your ordinary runs of the same mode/settings — its Personal Best, Compare baseline, History filter, and Accuracy Trend entry are all their own. The condition label carries a `+weak spot` suffix (e.g. "50 words (english) +weak spot"), the same convention as the `+punct` / `+nums` / `+romaji` / `+kana` suffixes described elsewhere on this page. This grouping is by the on/off flag alone, not by the parameters used — a run biased at a 20% word share and one biased at 100% still share the same condition even though their word selection was meaningfully different; each saved result quietly keeps a record of the exact parameters it ran under, for reference, without splitting the grouping further.
+
+**Japanese Input**
+
+![Typing Test — Romaji input](screenshots/typing-test-romaji.png)
+
+Japanese input is not limited to the MonkeyType tab: with a romaji-capable source loaded — a **hiragana** or **katakana** MonkeyType language pack (words/time patterns), a kana **Tatoeba** pack, or a kana-only **File Import** / **Aozora Bunko** text — the Option row gains a full-width **Japanese Input** button. Capable language packs and imported texts are marked with a **Romaji** badge wherever they're listed (see the shared language-pack list above, and the File Import / Aozora Bunko sections below), so you can spot them before selecting one. For an imported text, capability is computed locally from the text's own content the moment it's listed — it is never stored or synced, so it can't drift from the content it describes. Clicking the button opens the **Japanese Input Settings** modal.
+
+Japanese punctuation is typeable alongside kana in every method: 。、？！ map to `.` `,` `?` `!`, and a kana text containing them is still counted as romaji-capable.
+
+![Typing Test — Japanese Input settings](screenshots/typing-test-romaji-settings.png)
+
+The modal opens on a 3-way **Input method** selector, in this order: **Romaji** (default), **Kana**, **Direct**. Selecting one applies it immediately — there is no separate master on/off switch; Direct is the functional equivalent of turning judging off entirely. Every setting below the selector shows only for the method(s) it applies to. The guide row's font size always tracks the shared **Settings > Font** size — there is no separate control for it.
+
+- **Romaji** — sequential romaji-keystroke matching: each keystroke is checked against the current kana as you type, and any of its currently-accepted spellings is accepted interchangeably (for example でぃ accepts `dhi`, `deli`, or `dexi`, whichever you type). The current word's kana are colored per confirmed segment, and a romaji guide row below the reading window mirrors the reading window's own line layout, re-anchoring on every keystroke.
+- **Kana** — types the physical JIS かな-layout key positions directly (`KeyboardEvent.code` + Shift state), matched against a fixed かな layout table rather than any spelling. A simpler one-current-line kana stroke guide replaces the romaji guide row; a character whose physical key needs Shift held for that stroke (the small-kana/dakuten row) is colored to flag it. Shift tolerance is per-key, not timing-based: a key with no shifted かな of its own ignores the actual Shift state entirely, so holding Shift across an unrelated stroke doesn't cost you anything — only keys that genuinely carry a shifted かな require Shift to match.
+- **Direct** — no judging engine at all: literal/verbatim matching against the displayed kana, the same as a non-Japanese text. Requires an OS IME or a kana-producing physical keyboard layout to actually type kana. None of the settings below apply to Direct.
+
+![Typing Test — Kana input](screenshots/typing-test-kana-input.png)
+
+Both Romaji and Kana show:
+
+- **Require Enter at line ends** (default **on**): when on, a line-end word (the **⏎** marker in Tatoeba / Aozora Bunko / File Import runs) holds once complete until you press **Enter**, same as non-Japanese mode. Turn it off to auto-advance a line-end word immediately on completion, like any other word — Space still does nothing in either method, since neither ever uses Space to submit.
+- **Lines shown**: how many guide lines are displayed, line-synchronized with the reading window's own word lines — the line the current word sits on, plus that many more lines below it. `0` hides the guide row entirely, `1` (default) shows only the current line, `2` adds the next line, and `3` adds the next two lines. Within the current line, words already typed render in a dimmer tone than the current word's own guide; words not yet reached — later on the current line, or on a following guide line — render fainter still.
+
+Romaji only shows three more settings, since かな has one fixed spelling and Direct has no guide at all:
+
+- **Displayed case**: how the guide row's romaji is rendered — **ROMAJI** (upper case), **Romaji** (capitalized), or **romaji** (lower case, default). Display only; it never changes which keystrokes are accepted.
+- **Guide spelling pattern**: split into two rows, mirroring Accepted input patterns below.
+  - **Base**: a single-select choice between **Hepburn** (shi/chi) and **Kunrei** (si/ti) — exactly one is always active, and it picks which base system's spelling the guide line shows for kana with multiple accepted spellings. **Hepburn is the default.**
+  - **Options**: **C** (ca), **Q** (qu), **Digraph** (jya), **Small x** (xa), **Small l** (la), **W** (wi), **V** (va), **F** (fa), **YE** (ye), **Nasal x** (xn), and **N separator** (n') — independent alternate-spelling preferences layered on top of the selected Base, off by default. Multiple can be selected at once — e.g. selecting both Small x and the Kunrei base applies each preference to whichever kana it matches, in the same guide. Each button's label shows one example spelling; hover it for the full spelling list it covers.
+  **Display only** — whichever accepted spelling you actually type is still correct, regardless of what the guide shows.
+- **Accepted input patterns**: split into two rows.
+  - **Base**: **Hepburn** (shi/chi) and **Kunrei** (si/ti), either of which can spell every kana on its own. Both are enabled by default. Clicks are selection-first: clicking an enabled base while both are on keeps **only** that base (one click switches to Kunrei alone), clicking a disabled base brings it back so both are accepted, and **at least one base always stays enabled** (clicking the sole enabled base does nothing).
+  - **Options**: the same eleven families as the guide row above — **C**, **Q**, **Digraph**, **Small x**, **Small l**, **W**, **V**, **F**, **YE**, **Nasal x**, and **N separator** — all enabled by default. Turning any of them off rejects that family's spellings as input; unlike the base row, every option can be turned off at once, since the enabled base(s) already cover every kana on their own. Disabling a whole loanword family (W/V/F/YE) still leaves its kana typable via the decomposed spelling — e.g. with F off, ふぁ still completes as `fu` + `xa`.
+
+Notes that apply to Romaji and Kana alike:
+
+- **Turn off your OS IME before typing.** Both engines judge direct keystrokes, and an active IME composition intercepts them before they ever reach the matcher. If a composition event is detected while either is active, a hint appears below the guide line reminding you to turn the IME off
+- A rejected keystroke does not advance the guide, and it stays counted against Accuracy — Backspace cannot undo it, so keep typing the current kana until it's accepted
+- Words advance automatically as soon as their kana are complete; Space is not needed — line-end behavior instead follows the **Require Enter at line ends** setting above
+- Because WPM tracks keystroke rate rather than confirmed word length in these methods, Romaji runs get their own personal best and history grouping (a `+romaji` suffix, e.g. "30 words (japanese_hiragana) +romaji") and Kana runs get their own (`+kana`), each tracked separately from plain/Direct runs of the same material
+- This grouping does not track which Accepted input patterns were enabled (Romaji only) — runs typed with different style restrictions still share the same personal best, Compare baseline, history filter, and Accuracy trend entries as long as everything else (mode, word count/duration, language, punctuation/numbers) matches
+
+#### Tatoeba
+
+![Typing Test — Data Source Modal (Tatoeba)](screenshots/typing-test-mode-tatoeba.png)
+
+Pick a downloaded language pack from the **Tatoeba** tab (download it first if needed — see **Data Source** above) to type real sentences sampled from the [Tatoeba Project](https://tatoeba.org). Like MonkeyType, Tatoeba gets its own **Pattern** and **Units** rows in the Settings panel: **Pattern** picks **Lines** or **Time**. **Lines** samples a fixed batch of sentences per run — **Units** picks 5 / 10 / 20 / 40 sentences. **Time** runs for a set duration instead — **Units** picks 15 / 30 / 60 / 120 seconds — resampling another batch of sentences as you go so the run never runs out of material before time is up.
+
+Personal bests, History, and the Accuracy Trend group Tatoeba runs by language + pattern + unit, so a 5-line run and a 30-second run of the same pack are tracked separately. The History condition label reflects this — e.g. **"Tatoeba 5 Lines (english)"** for a Lines run, **"Tatoeba 30s (english)"** for a Time run.
+
+![Typing Test — Tatoeba Running](screenshots/typing-test-tatoeba-running.png)
+
+- Each sampled sentence renders on its own line
+- A **⏎** marker appears at the end of every line except the last; press **Enter** (not Space) there to advance to the next sentence. Elsewhere, Space still advances between words as usual
+- Attribution and license details for the Tatoeba packs are shown on the About / legal screen
+- The **japanese_hiragana** and **japanese_katakana** Tatoeba packs are kana-pure and marked with a **Romaji** badge in the pack list — see **Japanese Input** under MonkeyType above for how it works
+
+#### Aozora Bunko
+
+![Typing Test — Data Source Modal (Aozora Bunko)](screenshots/typing-test-mode-aozora.png)
+
+Browse and import public-domain Japanese literary works from the [Aozora Bunko](https://www.aozora.gr.jp/) catalog (roughly 10,500 works, sourced via the aozorabunko GitHub mirror).
+
+- The search box filters by title or author
+- Below it, a two-tier gojūon (five-vowel kana) row filter narrows results by the first kana of the author's reading (ア / カ / サ / …); click a row to also reveal its column kana for a finer filter (e.g. the カ row → キ column). Click an active button again to clear it
+- Results are split into **Downloaded** and **Available** sections; the **Available** section renders 50 works at a time, revealing the next 50 automatically as you scroll (the catalog list is loaded once when the tab opens — scrolling does not hit the network)
+- Each row shows the title, author, and an estimated character count (`~N chars` — an estimate, not an exact figure)
+- Clicking the download icon on an Available row downloads the work's archive from the GitHub mirror, decodes it, and automatically strips Aozora-specific markup (ruby annotations, editorial notes, header/footer boilerplate) before saving it as a typing text — no manual cleanup needed. The newly imported work is selected immediately. A failed import shows an inline error under that row
+- A downloaded work is stored through the same normalization and 5,000-word cap as File Import texts (see below). Words are counted by whitespace, so in Japanese prose — which contains no spaces — each paragraph counts as one word, and the cap effectively allows around 5,000 paragraphs
+- A downloaded work plays back exactly like an imported File Import text, including the per-line Enter-to-advance behavior, but it is only listed and deleted from this **Aozora Bunko** tab — it does not appear in the **File Import** tab
+- Click the trash icon on a Downloaded row to remove it; it returns to Available and can be re-imported later
+- The dataset-update banner described under **Data Source** also applies here — updating refreshes the catalog listing itself, not any already-imported works
+- Once imported, a work whose content turns out to be pure kana (rare — most Aozora Bunko literature mixes kanji and kana) shows a **Romaji** badge in the Downloaded section, same as a kana File Import text — see **Japanese Input** under MonkeyType above
+
+#### File Import
+
+![Typing Test — Data Source Modal (File Import)](screenshots/typing-test-mode-import.png)
+
+Import your own plain-text `.txt` file (UTF-8 only) to type against it — useful for practicing code snippets, prose, or any custom text.
+
+- Click **Import UTF-8 text file** and choose a `.txt` file. Files must be UTF-8 encoded, no larger than 5 MB, and contain at least one typeable word — files that fail these checks are rejected with an inline error message
+- Text is capped at 5,000 words; anything beyond the cap is silently truncated on import
+- Non-empty line boundaries in the source file are preserved: a **⏎** marker appears at the end of every line except the last, and Enter (not Space) advances past it. Import normalizes the text — empty lines are dropped and runs of spaces or tabs within a line collapse to a single space. Leading indentation on each line is shown for reference but is not itself typed
+- Importing a file whose name matches an existing entry prompts for confirmation before overwriting it
+- Each row shows the text's name and length — **words** for space-separated text (e.g. English), or **lines** for text with no spaces to count words by (e.g. Japanese prose); click a row to select it, or click the trash icon to delete it
+- This list only shows texts you imported directly here — Aozora Bunko imports are managed from the **Aozora Bunko** tab instead
+- A text whose content is pure kana shows a **Romaji** badge and unlocks Japanese input for it — see **Japanese Input** under MonkeyType above. This is checked locally from the text's own content each time it's listed, not stored or synced
 
 #### During a Test
 
@@ -1006,13 +1408,30 @@ These toggles are not available in Quote mode, which uses the original text as-i
 While typing, the following stats are displayed in real time:
 
 - **WPM**: Words Per Minute (current typing speed)
+- **KPM**: Keystrokes Per Minute (correct characters per minute)
 - **Accuracy**: Percentage of correctly typed characters
-- **Time**: Elapsed time (or remaining time in Time mode)
-- **Words**: Current word / total words
+- **KSPC**: Keystrokes per confirmed character (Backspace counts as a keystroke). Reads `-` before anything is confirmed yet, or once an IME composition fires mid-run (that run's keystrokes can no longer be counted reliably)
+- **Time**: Elapsed time (or remaining time in the time pattern)
+- **Words**: Current word / total words. In File Import and Tatoeba modes this becomes **Chars** — character progress through the text instead of a word count
+
+While a comparison baseline is set (Settings panel → Data → **Compare**), a colored ▲ / ▼ delta next to the WPM, KPM, and Accuracy values shows the difference against the baseline.
 
 Correctly typed words turn green. Incorrect characters are highlighted in red with an underline. The cursor advances as you type, and words scroll automatically.
 
-- Press the restart button (↺) to restart the test at any time
+The controls row below the reading window changes with the test state:
+
+- **Before a run starts**: **Next Test** generates a fresh test. When a paused File Import run is saved, a **Resume** button appears beside it
+- **While running or paused**: **Restart** starts the test over. In File Import mode a **Pause** (running) or **Resume** (paused) button joins it — pausing saves the run, and resuming asks whether to continue from the saved position or start over
+- **When finished**: a result-name field opens the naming modal, with quick-insert chips for the keyboard name, the test material, a timestamp, and the run's WPM / KPM / Accuracy; **Next Test** starts the next run
+
+**Completion screen**
+
+![Typing Test — Completion Timeline](screenshots/typing-test-completion-timeline.png)
+
+Once a run finishes, if a keystroke log was saved for it (recording consent accepted — see **Typing Record** below), the reading window, the keyboard pane, and the Japanese-input guide row all hide, and the **Keystroke Timeline** panel (see below) becomes the main view instead: its stat grid, timeline rows, and (when the run had mistakes) **Missed** box, with the naming/Next Test controls now at the very bottom of the screen rather than directly under a compact stats row. The rows area is the only part that scrolls — the stat grid, legend, and controls stay in place. If no log was saved for the run (recording consent was never accepted, the run was in Typing View, or nothing was saveable), the completion screen falls back to a compact stats row instead, with a hint that enabling typing recording would show the timeline here next time. That fallback row still shows a **Missed** chip line — each missed character (or, in Romaji mode, each missed kana's romaji, e.g. "shi") with its count, counted when a wrong character is deleted with Backspace or left wrong when the word is submitted — and, below it, a **Substitution / Omission / Insertion** line with the run's error-class breakdown, computed by comparing each finished word's target text against what was actually typed. That line is omitted for a Romaji-input run (its committed text is always one of the accepted spellings for the target, so there's no difference left to classify) and for a run with no finished words at all.
+
+Additional notes:
+
 - Press Escape to exit typing test mode
 - The status bar's Disconnect button is hidden while Typing Test is active. To disconnect, first return to the editor with Escape or the Typing Test button
 - The keyboard layout below the test area shows key presses in real time via the Vial matrix tester protocol
@@ -1021,7 +1440,7 @@ Correctly typed words turn green. Incorrect characters are highlighted in red wi
 
 Typing View displays only the keyboard layout in a compact, resizable window — ideal for overlaying on top of other applications while practicing.
 
-Click the **Typing View** button in the status bar (visible when Typing Test is not active) to enter view-only mode.
+Click the **View** button in the status bar's **Typing:** group (visible when Typing Test is not active) to enter view-only mode.
 
 ![View-Only — Compact Window](screenshots/view-only-compact.png)
 
@@ -1033,36 +1452,30 @@ Click the **Typing View** button in the status bar (visible when Typing Test is 
 
 ![View-Only — Controls](screenshots/view-only-controls.png)
 
-Click anywhere on the keyboard area to toggle the menu pane (bottom-right popup). The pane is split into **Window** and **REC** tabs at the top, with a shared **Base** layer selector and **Exit Typing View** button at the bottom.
-
-**Window tab** (default)
+Click anywhere on the keyboard area to toggle the menu pane (bottom-right popup). It's a single flat panel — no tabs — since recording controls now live in the footer's **Record** button (§4.3) instead of here:
 
 - **Default Size**: Reset the window to its default calculated size
 - **Fit Size**: Adjust the window height to match the current width while preserving the aspect ratio
 - **Top**: Keep the window above other windows (always-on-top; not available on Wayland)
-
-**REC tab**
-
-Recording controls and the Monitor App toggle. Detailed in **Typing analytics recording** below.
-
-**Shared controls** (visible in both tabs)
-
 - **Base**: Select which layer to display (when the keyboard has multiple layers)
+- **Analyze**: Jumps directly to the Analyze page for this keyboard so you can review the stream you just recorded. Going back returns you to Typing View
 - **Exit Typing View**: Return to the full editor
 
-Press Escape or click the keyboard area again to close the pane. A hint text appears at the bottom when hovering over the window. The window size, always-on-top preference, and the active menu tab are saved per keyboard.
+> **Note**: The keyboard layout's live layer indicator follows momentary layer keys (`MO`, `LT`, `LM`) only, while they are held. Persistent layer switches (`TO`, `TG`, `DF`) are not tracked — the VIA/Vial protocol offers no way to read the keyboard's live layer state back, so a persistent switch triggered outside the app would silently desync from what's shown. Use **Base** above to tell the view which base layer the keyboard is actually on.
+
+Press Escape or click the keyboard area again to close the pane. A hint text appears at the bottom when hovering over the window. The window size and always-on-top preference are saved per keyboard.
 
 > **Note**: Auto-lock is suspended while in Typing View mode. If the keyboard is disconnected while in view-only mode, the window automatically restores to its normal size.
 
-#### Typing analytics recording
+#### Typing Record
 
-While Typing View is open, the **REC** tab in the Menu Pane records per-key and per-minute statistics that feed the Analyze page (§1.4). Recording stays off by default.
+Click **Record** in the status bar's **Typing:** group (alongside **View** and **Test** — visible whenever the keyboard has matrix tester support, in both the plain editor and Typing Test) to open the **Recording Settings** modal. It records per-key and per-minute statistics that feed the Analyze page (§1.4). Recording stays off by default, and — since the button lives in the shared footer rather than inside Typing View — it can now be armed from the plain editor and carried into either Typing View or Typing Test, instead of only being reachable from inside Typing View.
 
-![Typing Test — REC Tab](screenshots/typing-test-rec-tab.png)
+![Typing Test — Recording Settings](screenshots/typing-test-rec-tab.png)
 
 **Start / Stop**
 
-Press the toggle once to start recording — the button shows **Start** while idle and **Stop** while recording. The Recording indicator appears at the top of the Typing View window so you can tell at a glance whether data is being captured.
+Press the toggle once to start recording — the button shows **Start** while idle and **Stop** while recording. A **Recording** indicator then appears in the status bar's left-hand indicator group. While the compact Typing View window is open (which hides the main status bar entirely), its own bottom-of-window hint text doubles as the recording indicator there instead.
 
 The very first time you press Start, a consent dialog appears:
 
@@ -1075,19 +1488,29 @@ The very first time you press Start, a consent dialog appears:
 
 Click **Enable** to opt in — your consent is persisted in app settings (not synced) and the dialog never appears again. Click **Cancel** to back out without starting; you can press Start later to see the dialog again.
 
+This same consent flag also gates the per-run raw keystroke log behind History's **Keystroke Timeline** (§4.3) and the typing-test completion screen's own inline timeline, for an ordinary Typing Test run in the editor — not only this modal's own ambient recording. Until you've accepted it at least once, no Typing Test run saves a keystroke log at all, so no History row shows a **Timeline** link and the completion screen always falls back to its compact stats row, regardless of whether Record itself is on.
+
 **Monitor App**
 
-When the Monitor App toggle is on (and REC is in the Stop / recording state), Pipette resolves the foreground application name once per data flush so each minute can be tagged with the app that owned the keystrokes. Minutes that observed only one app carry that app's name; minutes that observed multiple apps are tagged as `Unknown / Mixed`. The tags drive the **App** filter and the **By App** tab in Analyze.
+When the Monitor App toggle is on (and recording is in the Stop / recording state), Pipette resolves the foreground application name once per data flush so each minute can be tagged with the app that owned the keystrokes. Minutes that observed only one app carry that app's name; minutes that observed multiple apps are tagged as `Unknown / Mixed`. The tags drive the **App** filter and the **By App** tab in Analyze.
 
-- The button is greyed out while REC is **Start** (not recording) state — turning it on without REC has no effect, so the UI funnels you through Start first
+- The button is greyed out while recording is in the **Start** (not recording) state — turning it on without recording active has no effect, so the UI funnels you through Start first
 - The on/off state is global (AppConfig), not per-keyboard, and is **not** synced to other machines
 - **Linux / Wayland**: requires the FocusedWindow GNOME Shell extension (see README). Without it, every minute is recorded as `null`
 - **macOS**: requires the Accessibility permission (see README). Without it, every minute is recorded as `null`
 - Turning Monitor App off keeps existing tags in the database; only newly recorded minutes go untagged
 
-**View Analytics**
+**Tray toggles**
 
-Jumps directly to the Analyze page for this keyboard so you can review the stream you just recorded. Going back returns you to Typing View.
+Directly below Monitor App, the modal also has **Stay in System Tray** and **Start Hidden in Tray** toggles — the same settings as Settings → Tools (§6.6), with the same linked-disable behavior (Start Hidden in Tray is disabled while Stay in System Tray is off, and turning Stay in System Tray off also turns Start Hidden in Tray off). They're surfaced here too since a recording session is often the reason to reach for the tray.
+
+**Heatmap window**
+
+A select at the bottom of the modal picks how many minutes of Typing View's live per-key heatmap overlay to show at once.
+
+**Analyze**
+
+While in Typing View, its own Menu Pane keeps a separate **Analyze** entry (§4.3) that jumps directly to the Analyze page for this keyboard — the footer's own Analyze/Record buttons are hidden while Typing View is open, so this stays the only way back to Analyze from there. Going back returns you to Typing View. Elsewhere, use the status bar's own **Analyze** button (§9).
 
 #### View Mode Memory and Auto-Restore
 
@@ -1197,8 +1620,8 @@ When Pipette Hub is connected, each saved entry also shows Hub actions:
 
 ![Inline Favorites — Hub Actions](screenshots/hub-fav-inline.png)
 
-- **Upload to Hub**: Upload the favorite entry to Pipette Hub as a feature post
-- **Update on Hub**: Re-upload the latest configuration to update the existing Hub post
+- **Upload to Hub**: Upload the favorite entry to Pipette Hub as a feature post — opens the Public / Private confirmation dialog (§7.2)
+- **Update on Hub**: Re-upload the latest configuration; the dialog can also switch the post between Public and Private
 - **Remove from Hub**: Delete the entry from Pipette Hub (two-step confirmation)
 - **Open in Browser**: Open the individual Hub post page in your browser
 
@@ -1279,7 +1702,7 @@ Operational errors (shown as the message directly, no reason code):
 |---------|---------|
 | "Cannot change password while sync is in progress." | A sync is already running — wait for it to finish |
 | "New password must be different from the current password." | The new password matches the existing one |
-| "Some files cannot be decrypted. Please scan and delete undecryptable files first." | Drive has files the current password cannot decrypt — use **Undecryptable Files** first |
+| "Some files cannot be decrypted. Please scan and delete undecryptable files first." | Drive has files the current password cannot decrypt — delete them first via the Data panel's **Sync › Cloud Data** (§1.3) |
 | "Sync password does not match. Please check your encryption password." | The current password fails to decrypt the remote password check — reconfirm the password you are providing |
 
 #### Sync Controls
@@ -1302,11 +1725,6 @@ If sync cannot run because the client is not ready, a specific readiness reason 
 | `noPasswordFile` | "Set a sync password to start syncing." |
 | `remoteCheckFailed` | "Couldn't reach Google Drive — sync is paused." |
 
-#### Undecryptable Files
-
-- Files that cannot be decrypted with the current password or are otherwise unreadable (e.g., encrypted with a forgotten previous password)
-- Click **Scan** to detect undecryptable files, select the ones to remove, then click **Delete Selected** to permanently delete them from Google Drive
-
 #### Sync Unavailable Alert
 
 - Displayed when the sync backend cannot be reached. Click **Retry** to attempt reconnection
@@ -1321,8 +1739,8 @@ See the [Data Guide](Data.md) for details on what is synced and how your data is
 
 Troubleshooting and data management functions are available in the **Data** panel (see §1.3):
 
-- **Local > Application**: Import/export local data or reset selected targets (keyboard data, favorites, app settings)
-- **Sync**: List remote-only keyboards by real name and download any one on demand (see §1.3). To delete encrypted files that cannot be decrypted, use the **Undecryptable Files** section above
+- **Local > Application**: Import/export local data, or reset application settings
+- **Sync**: List remote-only keyboards by real name and download any one on demand, plus reset global (non-keyboard) targets and delete undecryptable files under **Sync › Cloud Data** (see §1.3)
 
 #### Settings — Defaults
 
@@ -1330,8 +1748,8 @@ Troubleshooting and data management functions are available in the **Data** pane
 
 The Tools tab in the Settings modal includes a **Defaults** section for setting initial preferences for new keyboard connections:
 
-- **Keyboard Layout**: Default key labels for new keyboards. The dropdown lists every entry currently installed in the **Key Labels** store (see §6.2). QWERTY ships built-in; install more from Pipette Hub or import a `.json` via **Key Labels Manage**. The drop-down preserves the manual order set in the modal — drag a row up or down there and the dropdown follows
-- **Auto Advance**: Default auto-advance behavior
+- **Keyboard Layout**: Default key labels for new keyboards. The dropdown lists every entry currently installed in the **Key Labels** store (see §6.2). **QWERTY (Default)** ships built-in; install more from Pipette Hub or import a `.json` via **Key Labels Manage**. The drop-down preserves the manual order set in the modal — drag a row up or down there and the dropdown follows
+- **Auto Move**: Default auto-advance behavior
 - **Instant Key Selection**: Default instant key selection behavior (see §2.2)
 - **Layer Panel Open**: Whether the layer panel starts expanded or collapsed
 - **Basic View Type**: Default view type for the Basic tab (ANSI/ISO/JIS/List)
@@ -1344,14 +1762,21 @@ The Tools tab also exposes a **Key Labels Manage** row (next to the Language Pac
 
 QWERTY is built-in; every other label set (Dvorak, Colemak, French, Brazilian, …) is downloaded from Pipette Hub or imported from a local `.json` file. Installed entries sync across devices via Cloud Sync, so the same drag order and selection appear on every machine signed into the same account.
 
+**Delete removes the Hub post too, for entries you uploaded.** If the entry you delete is linked to a Hub post you own, Delete also takes that post down from Hub — the local copy and the shared upload disappear together, in one action. If the Hub side fails (for example, no network), the local entry is **not** deleted either — an error is shown under the row and the entry stays put so you can try Delete again. A **downloaded** entry (someone else's upload) deletes locally only, even though it still shows Author/Sync — there's no Hub post of yours to remove, so Delete never makes a Hub call for it. Use **Remove** (in the Hub actions row) instead if you only want to detach your own local copy from Hub while keeping both the local entry and the Hub post — Remove never touches the local copy.
+
 **Installed tab**
 
 ![Key Labels — Installed](screenshots/key-labels-installed.png)
 
-Lists every label set already on this device. Each row shows the label name, the uploader name (when the entry came from Hub), the Hub-side last-update time (`YYYY-MM-DD HH:mm`, mirrors what the Hub website displays), an `.json` export shortcut, and a Delete button. Drag the grip handle on the left to reorder rows — the order is propagated to the Settings dropdown and to every Key Labels picker in the editor.
+Lists every label set already on this device. Each row shows the label name, the uploader name (when the entry came from Hub), the Hub-side last-update time (`YYYY-MM-DD HH:mm`, mirrors what the Hub website displays), an `.json` export shortcut, and a Delete button. Drag the grip handle on the left to reorder rows — the order is propagated to the Settings dropdown and to every Key Labels picker in the editor. A **Name** button at the left of the toolbar (opposite Import) sorts the list alphabetically instead — click once for ascending, click again for descending; each click applies the new order immediately, the same way a manual drag would, so drag, dropdowns, and sync all stay consistent.
 
-A second line under each row exposes the Hub actions:
+The Name button has three states: ascending (▲) and descending (▼) each show a triangle for as long as that sort still matches the list's order, and a plain "Name" with no triangle once the order no longer matches either sort — which happens the moment you drag a row by hand. There is no button click that returns to a triangled state; only another click (re-applying asc/desc from scratch) or reopening the modal does.
 
+The **Import** button accepts **one or more** `.json` files at once (the system file picker's native multi-select). While an import is running, every list action — Delete, Sync/Update/Remove, rename, drag reorder, Name sort, and Import itself — locks, and the toolbar shows an **Importing…** indicator in place of the Name-button feedback. For a **single** file (or a Hub download): while a triangle is showing, the new entry is inserted at its correct alphabetical position instead of added to the bottom of the list; re-importing over an existing label (same name) is treated as an update and keeps that label's current position. Either way, a brief "Imported {name}" / "Updated {name}" message appears next to the Name button for a few seconds, and the affected row scrolls into view. For a **batch of two or more** files, the toolbar shows a summary instead once the batch finishes — "Imported N files (success N, failure N)" — with no per-name feedback and no row auto-scrolled or auto-selected.
+
+A second line under each row starts with a **Keymap Write** / **View Only** type label, then the Hub actions:
+
+- **Keymap Write** / **View Only**: whether this label set also qualifies to bulk-rewrite the keymap (see **Applying a Key Label to the Keymap** below) — the same eligibility check the footer's Keyboard Layout select tags each option with. QWERTY always shows **View Only**, since its map is never `keymapApplicable`
 - **Open**: open the entry's Hub page in the system browser (only when the row is linked to a Hub post)
 - **Upload**: publish a new Hub post from this local entry (only for entries that have not been uploaded yet)
 - **Update**: push the current local content to the existing Hub post (owner only)
@@ -1360,13 +1785,13 @@ A second line under each row exposes the Hub actions:
 
 If the Hub freshness check finds a row whose post has been deleted upstream, the Updated column reads **`(removed)`** in red instead of a timestamp; clicking Sync on such a row will fail because the Hub no longer serves it.
 
-QWERTY shows no Hub actions and cannot be deleted, but it can be reordered like any other row.
+QWERTY shows its **View Only** type label but no Hub actions, and cannot be deleted — though it can still be reordered like any other row.
 
 **Find on Hub tab**
 
 ![Key Labels — Find on Hub](screenshots/key-labels-hub.png)
 
-Searches Pipette Hub for label sets. Type 2 or more characters to start an automatic search (debounced); the **Search** button and **Enter** still work as manual triggers. Results show the label name, the uploader, and either a **Download** action or an **Installed** marker when the same name is already present locally. Re-importing a file with a name that already exists overwrites the local entry in place (`.json` content replaced, the Hub link is preserved).
+Searches Pipette Hub for label sets. Type 2 or more characters to start an automatic search (debounced); the **Search** button and **Enter** still work as manual triggers. Results are listed alphabetically by name. Results show the label name, the uploader, and either a **Download** action or an **Installed** marker when the same name is already present locally. Re-importing a file with a name that already exists overwrites the local entry in place (`.json` content replaced, the Hub link is preserved).
 
 **Authoring a Key Label**
 
@@ -1396,6 +1821,9 @@ In the example above, `"KC_GRAVE": "KC_LALT"` makes the editor render whichever 
 | `name` | Yes | Display name shown in the modal, in the Settings → Defaults dropdown, and in the Keycodes Overlay Panel |
 | `map` | Yes | `QMK keycode id → label string`. Used as the keycap legend in the Keymap Editor whenever this label set is active |
 | `compositeLabels` | No | Same shape as `map`, but for composite keycodes (e.g. `LSFT(KC_2)`, `LT(0,KC_A)`, `MT(MOD_LCTL,KC_ESC)`). Used to override the inner / outer text of the composite key. Omit the field if you don't need any composite override |
+| `keymapApplicable` | No | Optional boolean. Opt-in marker meaning this label set is a pure QWERTY-keycode permutation (e.g. Colemak, Dvorak) and can also be used to bulk-rewrite the actual keymap, not just the display legends — see **Applying a Key Label to the Keymap** below. Omit or set `false` for label sets that aren't a clean 1:1 character swap (multi-line shift/altgr legends, keycode-passthrough values, non-Latin layouts, …) |
+
+You don't need a `compositeLabels` entry just to have a composite key's inner (tap/base) symbol reflect your pack: a plain `map` entry for the inner basic keycode already applies there too — `"KC_8": "(\n8"` shows `(` over `8` both for a plain `KC_8` key **and** for the tap/base half of `LSFT(KC_8)`, `LT1(KC_8)`, etc. `compositeLabels` is only needed when the composite as a whole should show something different from that automatic inner substitution (e.g. a custom combined legend, or overriding just the outer/modifier half).
 
 A value can also be a plain QMK keycode id — the editor passes it through `keycodeLabel()` so something like `"LALT(KC_L)": "KC_LALT"` resolves to the canonical "LAlt" label without you having to spell the legend out by hand. The same shortcut works in `map`, so `"KC_8": "KC_LALT"` would render the cap as "LAlt".
 
@@ -1421,6 +1849,48 @@ Composite keycodes (LT, MT, modifier+key, …) render the inner key inside an in
 
 `name` is also the uniqueness key inside the local store: importing a `.json` whose name already exists overwrites the matching entry in place (the Hub post link, if any, is preserved). To start a brand-new entry, change the `name` before importing.
 
+**Applying a Key Label to the Keymap**
+
+Switching the **Keyboard Layout** dropdown in the footer never opens a dialog by itself — it always just changes the display. For a label set marked `keymapApplicable` whose map is a clean, closed QWERTY permutation (Colemak, Dvorak, Eucalyn, …), picking it also reveals two vertical index tabs attached to the right edge of the Keymap Editor:
+
+- **The pack's own name** (top) — a read-only *simulation* of that pack's legends, with the changed keys tinted the **simulated** colour (`key-label-simulated`). Nothing here is clickable: no key selection, no popover, no multi-select, no picker paste — this tab exists purely to preview what a Rewrite would produce
+- **QWERTY (Default)** (bottom) — the real keymap, unaffected by the selected pack, fully editable exactly as before
+
+The simulation tab is selected by default whenever the tabs appear. Switching keyboards resets the selection back to the simulation tab; switching only layers or picking a different pack does not.
+
+![Simulation and Default Tabs](screenshots/key-label-simulation-tabs.png)
+
+**The layer-indicator row reads "Preview - Layer N" while the simulation tab is active** (e.g. "Preview - Layer 0"), so it stays visually distinct from the plain "Layer N" label the Default tab and every other keymap view use. **Apply lives at the right end of that same row** — an **Apply** button that opens the Rewrite confirmation dialog:
+
+![Apply Key Label to Keymap](screenshots/key-label-keymap-apply-modal.png)
+
+- **Apply?** — a destructive one-shot: bulk-rewrites every layer's keycodes (and encoders, where applicable) to match the label set, then clears the undo/redo history outright. It is not recorded as an Undo step — there is nothing to revert afterward, on the same undo/redo stack or any other
+- **Cancel** — closes the dialog without changing anything; the simulation/QWERTY (Default) tabs stay exactly as they were
+
+The dialog also shows a save recommendation: back up the current keymap first, before confirming. Rewrite replaces keycodes on every layer and clears the undo/redo history in the same stroke, so a previously saved backup is the only way back to the pre-Rewrite keymap (see **Limitations** below).
+
+After a successful Rewrite, the keys that were actually changed briefly flash the same blue used for key selection before fading back, so you can see at a glance what changed.
+
+**A successful Rewrite (or one that finds nothing left to change) resets the Keyboard Layout dropdown back to QWERTY (Default), and the tabs disappear.** The keycap legends switch to the raw, untranslated keycode each key now actually sends, with no remap colouring — the same clean, undecorated state a snapshot / `.vil` restore leaves. Picking that same arrangement again afterward brings the tabs right back, since the dropdown no longer has any record of what was last rewritten.
+
+**The picker only follows the active label set for JIS-type/deviation packs.** A label set that qualifies as a clean, closed QWERTY permutation (the same eligibility check that gates the simulation tabs above) only swaps *which* key sends a given character, and every one of those characters already appears somewhere in the picker — so the picker intentionally keeps its standard legends regardless of which tab is active. A label set that doesn't qualify (JIS shift-pair legends, kana, any partial/non-closed swap) has no tabs at all: picking it converts both the Keymap Editor and the key picker's legends in place, tinted the **actual** colour (`key-label-remap`) — a truthful legend, since the key really does produce what's shown. A theme pack can define its own `key-label-simulated`; if it doesn't, Pipette derives one automatically from that pack's `key-label-remap` (see §6.4 below).
+
+**QWERTY (Default) is always display-only.** Selecting it from the dropdown never touches the keymap and never shows any tabs — it only switches which legends are shown, back to raw and uncoloured. There is no "restore rewrite" offered by picking it; once a Rewrite has landed, only a previously saved `.vil` file or snapshot can bring back the keymap it replaced (see **Limitations** below).
+
+**Rewriting directly from a keymap that already holds a different rewritten arrangement applies the newly picked table as-is, without composing against what came before.** Because a Rewrite always applies the target's own QWERTY-baseline table directly against whatever keycodes the keymap currently holds, rewriting a second time onto a keymap that isn't actually still QWERTY underneath (for example because an earlier Rewrite, or hand edits, already changed it) can produce the wrong result — and there is no Undo left to fall back on once it lands, since a Rewrite already clears the undo/redo history in the same step. **Reload a saved QWERTY backup before rewriting to a different arrangement**, so the target table is always applied against the QWERTY baseline it was designed for; this is exactly what the confirm dialog's save recommendation is for.
+
+The desktop app always re-validates the map itself before offering the tabs/Apply, even when `keymapApplicable` is set in the file — a label set with shift-pair legends, non-Latin characters, keycode-passthrough values (like the `"KC_GRAVE": "KC_LALT"` example above), or a map that isn't **closed** (every replacement character's key must itself remap somewhere, even if only back to itself — a map that sends key A's character to key B but never says what key B should now send would duplicate one character and lose another) fails validation, and picking it behaves exactly like a JIS-type deviation pack (or a plain unflagged label set): a truthful in-place conversion, no tabs, no Apply.
+
+**Selecting a different pack — or picking QWERTY (Default) — while the confirm dialog is open closes the dialog instead of letting it act on a keymap you've already moved away from.** The dialog always concerns the pack that was active when Apply was pressed; changing the selection underneath it discards the pending request.
+
+**Limitations**
+
+- **Rewrite cannot be undone.** The moment any key is actually rewritten, Pipette clears the undo/redo history instead of adding a revertible step — there is no Undo entry for a Rewrite, clean or partial, and manual edits made afterward simply start a fresh history from scratch. The only way back to the pre-Rewrite keymap is a previously saved `.vil` file or snapshot; this is exactly why the confirm dialog recommends saving one first.
+- Manual per-key edits made before a Rewrite are skipped by its safety check: it only touches a position whose keycode is still part of the arrangement's own QWERTY-baseline permutation, so a key you've already edited by hand to something outside that set is left alone.
+- If a Rewrite fails partway through (e.g. a device write error), the keymap is left in a mixed state — some positions rewritten, some not — and the Keyboard Layout dropdown's selection (and the tabs) are left exactly as they were (it does not reset to QWERTY (Default), since the keymap now matches neither arrangement). The undo/redo history is still cleared if any key was actually written before the failure, so recovery is again a previously saved backup, not Undo.
+
+On Pipette Hub, the flag round-trips as `keymap_applicable` in the upload / download body alongside `map` and `composite_labels`.
+
 ### 6.3 Language Packs Manage
 
 The Tools tab shows a **Language Packs** row displaying the currently active UI language. Click **Edit** to open the Language Packs modal.
@@ -1431,25 +1901,32 @@ English is built-in; every other language is imported from a local `.json` file 
 
 ![Language Packs — Installed](screenshots/language-packs-installed.png)
 
-Lists every language pack on this device. Each row has a **check circle** on the left — click it to switch the active UI language immediately. The active row is highlighted with an accent border.
+Lists every language pack on this device. Each row has a **check circle** on the left — click it to switch the active UI language immediately. The active row is highlighted with an accent border. A drag grip sits at the left edge of every row, including built-in English — it can be dragged and reordered like any imported pack (its translations still ship with the app; only its position in the list lives in the pack store).
 
 Each row shows:
 
 - **Name** (click to rename inline)
-- **Updated timestamp** (`YYYY-MM-DD HH:mm`)
+- **Author** — the uploader's name when the pack came from Hub, blank for local-only packs. Built-in English always shows "pipette"
+- **Updated timestamp** (`YYYY-MM-DD HH:mm`) — the Hub-side last-update time, mirroring what the Hub website displays; blank until the pack has been uploaded. Built-in English shows its own build date instead, since it isn't a Hub-linked pack
 - **Version** chip when the pack covers every key of the current English baseline, or a **not set keys** button that opens a modal listing the missing translation keys
 - **Export** / **Delete** actions on the first line
-- **Open** / **Upload** / **Update** / **Sync** / **Remove** Hub actions on the second line (same pattern as Key Labels §6.2)
+- **Open** / **Upload** / **Update** / **Sync** / **Remove** Hub actions on the second line (same pattern as Key Labels §6.2, including owner-only gating on Delete's Hub-post cascade as well as on Update/Remove)
 
 A **pulsing green dot** next to the Sync button indicates that the Hub-side post is newer than the local copy (freshness check runs once per 5 minutes when the modal is open).
 
-The **Import** button in the toolbar opens a file dialog to import a `.json` language pack. Re-importing a pack with the same `name` overwrites the existing entry.
+Drag the grip handle to reorder the list, including built-in English — the order syncs across devices and is reflected anywhere the pack list is used. A **Name** button at the left of the toolbar (opposite Import) sorts every row alphabetically instead, English included — click once for ascending, click again for descending.
+
+The Name button's three states (ascending/descending triangle, or a plain "Name" once you drag a row by hand) and what happens on a **single**-file import or Hub download — the new pack is inserted at its correct alphabetical position while a triangle is showing, an overwrite of an existing pack keeps its position, and a brief "Imported {name}" / "Updated {name}" message appears next to the Name button with the row scrolled into view — work exactly as described for Key Labels (§6.2); downloading from Hub follows the same placement rule.
+
+The **Import** button in the toolbar opens a file dialog that accepts **one or more** `.json` language packs at once. Re-importing a pack with the same `name` overwrites the existing entry. While the import runs, the list locks and the toolbar shows an **Importing…** indicator; a batch of two or more files shows a summary once it finishes — "Imported N files (success N, failure N)" — instead of the per-name feedback, and no row is auto-scrolled into view (see Key Labels §6.2 for the full behavior).
+
+A **Pull from Google Drive** button sits next to Import (installed tab only). It runs a one-off download of every language and theme pack from Google Drive, so a pack another device already synced but this device hasn't seen yet shows up immediately, without waiting for the periodic background sync — it fails with an error if Cloud Sync isn't configured. The button shows a **Pulling…** state while it runs and disables during an in-flight import. The app also runs this same pull automatically, once, the first time a keyboard connects after Cloud Sync credentials are ready — after that first successful pull it doesn't run again automatically (a failure is retried on the next connection). Either path only affects language/theme packs — favorites, keyboard data, and other synced content are unaffected.
 
 **Find on Hub tab**
 
 ![Language Packs — Find on Hub](screenshots/language-packs-hub.png)
 
-Searches Pipette Hub for language packs. Type 2 or more characters to start an automatic search (debounced). Results show the pack name, version, uploader, and either a **Download** action or an **Installed** marker.
+Searches Pipette Hub for language packs. Type 2 or more characters to start an automatic search (debounced). Results are listed alphabetically by name. Results show the pack name, version, uploader, and either a **Download** action or an **Installed** marker.
 
 **Authoring a Language Pack**
 
@@ -1477,7 +1954,7 @@ A language pack `.json` mirrors the structure of the built-in English pack. Expo
 | `version` | Yes | Semver string (e.g. `0.1.0`) |
 | (other keys) | Yes | Nested translation tree matching the English structure |
 
-Keys use dot-separated namespaces (e.g. `editor.keymap.title`). A pack that covers every key of the English baseline shows the version chip; partial packs show a "not set keys" link so translators can see what remains. Example language packs (including Japanese variants) are also available in the [`sample-packs/i18n/`](../sample-packs/i18n/) directory in the repository.
+Keys use dot-separated namespaces (e.g. `editor.keymap.title`). A pack that covers every key of the English baseline shows the version chip; partial packs show a "not set keys" link so translators can see what remains. A standard Japanese pack, plus several Japanese "persona" variants (different speaking styles, translated from the same baseline), are shipped as example packs in the [`sample-packs/i18n/`](../sample-packs/i18n/) directory in the repository.
 
 ### 6.4 Theme Packs Manage
 
@@ -1491,25 +1968,32 @@ Theme packs override the application's colour palette. The built-in Light / Dark
 
 ![Theme Packs — Installed](screenshots/theme-packs-installed.png)
 
-Lists every theme pack on this device. Each row has a **radio circle** on the left — click it to apply that theme pack immediately. Click the active row again to deselect it and revert to the built-in theme. The three built-in options (Light / Dark / System) appear at the top.
+Lists every theme pack on this device. Each row has a **radio circle** on the left — click it to apply that theme pack immediately. Click the active row again to deselect it and revert to the built-in theme. The three built-in options (Light / Dark / System) appear as a separate selector bar above the list, not as rows in it, so they have no drag grip of their own.
 
 Each row shows:
 
 - **Name** (click to rename inline)
-- **Updated timestamp** (`YYYY-MM-DD HH:mm`)
+- **Author** — the uploader's name when the pack came from Hub, blank for local-only packs
+- **Updated timestamp** (`YYYY-MM-DD HH:mm`) — the Hub-side last-update time, mirroring what the Hub website displays; blank until the pack has been uploaded
 - **Version** chip
 - **.json** export shortcut and **Delete** button on the first line
-- **Open** / **Upload** / **Update** / **Sync** / **Remove** Hub actions on the second line (same pattern as Key Labels §6.2)
+- **Open** / **Upload** / **Update** / **Sync** / **Remove** Hub actions on the second line (same pattern as Key Labels §6.2, including owner-only gating on Delete's Hub-post cascade as well as on Update/Remove)
 
 A **pulsing green dot** next to the Sync button indicates that the Hub-side post is newer than the local copy (freshness check runs once per 5 minutes when the modal is open).
 
-The **Import** button in the toolbar opens a file dialog to import a `.json` theme pack. Re-importing a pack with the same `name` overwrites the existing entry.
+Drag the grip handle on the left of each row to reorder theme packs — the order syncs across devices. A **Name** button at the left of the toolbar (opposite Import) sorts the list alphabetically instead — click once for ascending, click again for descending.
+
+The Name button's three states (ascending/descending triangle, or a plain "Name" once you drag a row by hand) and what happens on a **single**-file import or Hub download — the new pack is inserted at its correct alphabetical position while a triangle is showing, an overwrite of an existing pack keeps its position, and a brief "Imported {name}" / "Updated {name}" message appears next to the Name button with the row scrolled into view — work exactly as described for Key Labels (§6.2); downloading from Hub follows the same placement rule.
+
+The **Import** button in the toolbar opens a file dialog that accepts **one or more** `.json` theme packs at once. Re-importing a pack with the same `name` overwrites the existing entry. While the import runs, the list locks and the toolbar shows an **Importing…** indicator; a batch of two or more files shows a summary once it finishes — "Imported N files (success N, failure N)" — instead of the per-name feedback, and no row is auto-scrolled into view (see Key Labels §6.2 for the full behavior).
+
+A **Pull from Google Drive** button sits next to Import, with the same one-off download behavior (and the same automatic first-connection pull) described for Language Packs in §6.3 — a single pull refreshes both language and theme packs together.
 
 **Find on Hub tab**
 
 ![Theme Packs — Find on Hub](screenshots/theme-packs-hub.png)
 
-Searches Pipette Hub for theme packs. Type 2 or more characters to start an automatic search (debounced). Each result shows the pack name, version, uploader, a **Preview** button, and either a **Download** action or an **Installed** marker.
+Searches Pipette Hub for theme packs. Type 2 or more characters to start an automatic search (debounced). Results are listed alphabetically by name. Each result shows the pack name, version, uploader, a **Preview** button, and either a **Download** action or an **Installed** marker.
 
 Click **Preview** to temporarily apply the theme's colours without installing. The preview resets when you close the modal, switch to the Installed tab, or click **Preview** again to toggle it off.
 
@@ -1549,6 +2033,7 @@ A theme pack `.json` defines a `name`, `version`, and a `colors` object mapping 
     "key-label": "#eceff4",
     "key-sublabel": "#d8dee9",
     "key-label-remap": "#88c0d0",
+    "key-label-simulated": "#b48ead",
     "key-bg-multi-selected": "#434c5e",
     "tab-bg-active": "#3b4252",
     "tab-text": "#7b88a1",
@@ -1567,9 +2052,9 @@ A theme pack `.json` defines a `name`, `version`, and a `colors` object mapping 
 | `name` | Yes | Display name and uniqueness key for overwrite-on-import |
 | `version` | Yes | Semver string (e.g. `1.0.0`) |
 | `colorScheme` | Yes | `"light"` or `"dark"` — declares the intended brightness of the pack |
-| `colors` | Yes | Object mapping all 35 colour tokens to CSS colour values (`#hex`, `rgb()`, or `hsl()`) |
+| `colors` | Yes | Object mapping colour tokens to CSS colour values (`#hex`, `rgb()`, or `hsl()`) |
 
-All 35 colour tokens are required. Export any installed pack (row → `.json`) to get a complete template. Ready-to-use example theme packs (Kanagawa Wave / Dragon / Lotus and Solarized Light / Dark) are also available in the [`sample-packs/themes/`](../sample-packs/themes/) directory in the repository.
+35 colour tokens are required — export any installed pack (row → `.json`) to get a complete template. One additional token, `key-label-simulated` (the permutation-pack Display Only tint — see §6.2 above), is **optional**: if a pack omits it, Pipette automatically derives one from that pack's `key-label-remap` (a hue-rotated complement, clamped for readability against the pack's own `colorScheme`) so every pack still gets a distinct simulated tint even without authoring one by hand. Ready-to-use example theme packs (Kanagawa Wave / Dragon / Lotus and Solarized Light / Dark) are also available in the [`sample-packs/themes/`](../sample-packs/themes/) directory in the repository — every sample pack defines its own `key-label-simulated` explicitly.
 
 ### 6.5 Zoom (UI Scale)
 
@@ -1584,6 +2069,17 @@ The Tools tab shows a **Zoom** row below Theme Packs. This setting scales the en
 > **Note**: This is separate from the per-keyboard zoom in the toolbar (§4.1), which only scales the keymap editor display, and from the **Key Editor Zoom** in the Keycodes Overlay Panel (§3.14), which overrides the window zoom level while in key editor mode. The UI zoom here is the baseline applied on all other screens.
 
 > **Warning**: Changing the zoom level may cause layout issues at extreme values. Use at your own risk.
+
+### 6.6 Launch at Login / Stay in System Tray
+
+The Tools tab shows four toggles below the Theme Packs and Zoom rows:
+
+- **Launch at Login**: Start Pipette automatically when you sign in to the OS. On Windows and macOS this registers a login item; on Linux it manages an XDG autostart entry (`~/.config/autostart/pipette.desktop`). This works in installed (packaged) builds only — the toggle has no effect when running from source.
+- **Stay in System Tray**: While ON, closing the window hides Pipette to the system tray and the app keeps running. Click the tray icon, or choose **Show** from its menu, to bring the window back. Hovering the tray icon shows a live tooltip: just `Pipette` when idle, `Pipette — {keyboard name}` once a keyboard is connected, and `Pipette — {keyboard name} — Cnt: X · KPM: Y` while Typing Record (§4.3) is recording. The tray menu itself is **Show**, a separator, the connected keyboard's name (when one is connected) — with **Recording** / **Cnt: N** / **KPM: N** rows added while recording — another separator, then **Quit**. Menu and tooltip labels are fixed English text for now, not translated.
+- **Restore Last Session** (default ON): While ON, Pipette remembers the last keyboard you connected and automatically reconnects it the next time the app starts. Toggling this in Settings only affects the *next* launch — it never triggers a reconnect during the current session. Because the screen you were on is already remembered per keyboard, reconnecting also brings back the last screen you used with that keyboard. If the keyboard is not found within about 10 seconds of launch, Pipette gives up silently — no warning is shown, and the device selection screen stays as usual. Disconnecting a keyboard manually clears the remembered device.
+- **Start Hidden in Tray**: While ON, Pipette launches resident in the system tray without opening the window. This requires **Stay in System Tray** — the toggle is disabled while Stay in System Tray is OFF, and turning Stay in System Tray OFF also turns this toggle OFF. If a session restore (see above) needs the Unlock dialog, the window appears just for that dialog and hides again once it is resolved. Once you show the window yourself (e.g. from the tray icon), it stays open — Pipette never auto-hides a window you opened.
+
+All four are machine-local settings — they are not synced to other devices via Cloud Sync.
 
 ---
 
@@ -1611,13 +2107,26 @@ To upload a keymap to Hub:
 ![Upload Button](screenshots/hub-03-upload-button.png)
 
 4. Click the **Upload** button on the saved snapshot entry
-5. After uploading, the entry shows **Uploaded** status with **Open in Browser**, **Update**, and **Remove** buttons
+5. A confirmation dialog opens — choose **Public** or **Private** (see *Public vs Private* below), then click **Confirm**
+
+![Upload confirmation dialog](screenshots/hub-upload-confirm.png)
+
+6. After uploading, the entry's Hub row is labelled **Hub (Public)** or **Hub (Private)** and shows **Open in Browser**, **Update**, and **Remove** buttons
 
 ![Uploaded](screenshots/hub-04-uploaded.png)
 
-- **Open in Browser**: Opens the Hub page for this keymap
-- **Update**: Re-uploads the current keyboard state to update the existing Hub post
-- **Remove**: Removes the keymap from Hub
+- **Open in Browser**: For a public post, opens its Hub page. For a private post, copies/opens the secret share link.
+- **Update**: Opens the same confirmation dialog so you can re-upload **and** switch visibility (see below)
+- **Remove**: Removes the post from Hub (the private link stops working immediately)
+
+#### Public vs Private (Unlisted)
+
+Every upload (and every **Update**) opens a confirmation dialog with two choices:
+
+- **Public** — listed and searchable on Hub, just like before.
+- **Private (Unlisted)** — reachable only by a secret link; never listed or searchable. When you pick Private you also choose a **link expiry** (1 / 3 / 7 / 30 / 60 / 90 / 180 days; default 7 days). Private links always expire — the maximum is 180 days. The dialog previews the exact expiry date. The private link is stored locally and synced across your devices, so **Open in Browser** can hand it out at any time.
+
+**Switching visibility with Update.** Because a private post has no public page (and vice-versa), switching between Public and Private — or re-uploading a Private post — is performed as *delete + recreate*. This produces a **new share link and expiry**, so the dialog warns you before continuing. A plain Public → Public update keeps the same URL.
 
 > **Note**: Hub uploads include a `.pipette` file alongside the standard export formats, allowing other users to load the full keyboard state directly.
 
@@ -1629,9 +2138,9 @@ Individual favorite entries (Tap Dance, Macro, Combo, Key Override, Alt Repeat K
 
 1. Open any editor modal with the inline favorites panel, or use the Data modal from the device selection screen
 2. In the favorites list, each entry shows an **Upload to Hub** button when Hub is connected
-3. Click **Upload to Hub** to share the configuration
-4. After uploading, **Open in Browser**, **Update on Hub**, and **Remove from Hub** buttons appear
-5. Renaming a favorite that is uploaded to Hub also updates the title on Hub automatically
+3. Click **Upload to Hub** — the Public / Private confirmation dialog opens (see §7.2 *Public vs Private*)
+4. After uploading, the row is labelled **Hub (Public)** or **Hub (Private)** with **Open in Browser**, **Update on Hub**, and **Remove from Hub** buttons (Update re-opens the dialog and can switch visibility)
+5. Renaming a favorite that is uploaded to a public Hub post also updates the title on Hub automatically
 
 > **Note**: A Display Name must be set before uploading. If no Display Name is configured, a warning is shown instead of the Upload button.
 
@@ -1646,7 +2155,8 @@ Saved Analyze conditions can be uploaded to Hub, sharing your typing analytics c
 3. When Hub is connected, a **Hub** action row appears under each saved entry with an **Upload to Hub** button
 4. Click **Upload to Hub** — the category-picker modal opens in upload mode (see §1.4 Export / Upload)
 5. Select which chart categories to include, pick Layout Comparison targets and Per-app data if desired, then click **Upload**
-6. After uploading, the entry shows **Open in Browser**, **Update on Hub**, and **Remove from Hub** buttons
+6. The Public / Private confirmation dialog opens (see §7.2 *Public vs Private*); choose visibility (and, for Private, an expiry) and **Confirm**
+7. After uploading, the entry's Hub row is labelled **Hub (Public)** or **Hub (Private)** with **Open in Browser**, **Update on Hub**, and **Remove from Hub** buttons
 
 **Validation rules**
 
@@ -1732,10 +2242,11 @@ The status bar at the bottom of the screen shows connection information and acti
 
 - **Device name**: Shows the name of the connected keyboard
 - **Loaded label**: The label of the loaded snapshot (shown only when a snapshot is loaded)
-- **Auto Advance**: Status of automatic key advancement after assigning a keycode (shown only when enabled)
+- **Auto Move**: Status of automatic key advancement after assigning a keycode (shown only when enabled)
 - **Locked / Unlocked**: Keyboard lock status (prevents accidental changes to dangerous keycodes)
 - **Sync status**: Cloud sync status (shown only when sync is configured)
 - **Hub connection**: Pipette Hub connection status (shown only when Hub is configured)
+- **Recording**: Shown while Typing Record (§4.3) is active
 
 **Quick Settings** (right side, shown when a keyboard is connected)
 
@@ -1743,12 +2254,15 @@ Inline selectors for common per-session preferences. A `|` separator divides the
 
 - **Language**: Switch the UI language. Opens a dropdown of built-in languages and installed language packs (see §6.3)
 - **Theme**: Switch the color theme. Options include System, Light, Dark, and any installed theme packs (see §6.4)
-- **Key Labels**: Switch the key label set for the current keyboard. Options reflect the installed Key Labels store in drag order (see §6.2)
+- **Key Labels**: Switch the key label set for the current keyboard. Options reflect the installed Key Labels store in drag order (see §6.2). Each option in the open dropdown carries a trailing **Write** / **View** tag — the short form of the Key Labels modal's **Keymap Write** / **View Only** type label — so you can tell which sets can bulk-rewrite the keymap before picking one
 - **Edit / Done**: Toggle edit mode. Replaces the selectors with **Language Packs**, **Theme Packs**, and **Key Labels** management modal buttons for installing, syncing, or reordering entries
 
 **Action buttons** (right side)
 
 - **Key Tester**: Toggle button for Matrix Tester mode (requires matrix tester support; hidden when Typing Test is active)
-- **Typing View**: Toggle button to enter view-only mode — a compact window showing only the keyboard layout (see §4.3). Requires matrix tester support; hidden when Typing Test is active
-- **Typing Test**: Toggle button for Typing Test mode (requires matrix tester support)
+- **Analyze**: Jumps straight to the Analyze page (§1.4) for the connected keyboard; hidden when Typing Test is active. Back returns to the editor
+- **Typing:** — a labeled group of three buttons (requires matrix tester support):
+  - **View**: Toggle button to enter view-only mode — a compact window showing only the keyboard layout (see §4.3). Hidden while Typing Test is active
+  - **Test**: Toggle button for Typing Test mode
+  - **Record**: Opens the **Recording Settings** modal (see **Typing Record**, §4.3)
 - **Disconnect button**: Disconnects from the keyboard and returns to the device selection screen (hidden while Typing Test is active)

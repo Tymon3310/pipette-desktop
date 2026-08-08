@@ -31,8 +31,29 @@ export const KEY_MULTI_SELECTED_COLOR = 'var(--key-bg-multi-selected)'
 export const KEY_PRESSED_COLOR = 'var(--success)'
 export const KEY_EVER_PRESSED_COLOR = '#ccffcc'
 export const KEY_HIGHLIGHT_COLOR = 'var(--accent-alt)'
+// View Matrix mode's duplicate-effective-position warning fill.
+export const KEY_DUPLICATE_COLOR = 'var(--key-bg-duplicate)'
 export const KEY_TEXT_COLOR = 'var(--key-label)'
 export const KEY_INVERTED_TEXT_COLOR = 'var(--content-inverse)'
 export const KEY_REMAP_COLOR = 'var(--key-label-remap)'
 export const KEY_MASK_RECT_COLOR = 'var(--key-mask-bg)'
 export const KEY_HOVER_COLOR = 'var(--key-bg-hover)'
+
+/** Which remap tint the active keymap surface uses. `'actual'` (the
+ *  default) is the existing `key-label-remap` tint — JIS-type display
+ *  remaps and the key picker: the shown legend is truthful, the physical
+ *  key really produces that character.
+ *  `'simulated'` is a permutation pack's Display Only legend on the
+ *  keymap surface: the label shows what a Rewrite WOULD produce, but
+ *  pressing the key still types the pre-Rewrite character.
+ *
+ *  This is NOT threaded as a prop down to KeyWidget/EncoderWidget — every
+ *  key/encoder always resolves its tint from `KEY_REMAP_COLOR` (`--key-
+ *  label-remap`) unconditionally. `'simulated'` mode is applied as a pure
+ *  CSS cascade override instead: `KeymapEditor` puts the `remap-simulated`
+ *  class (style.css) on the single container wrapping the active keymap
+ *  surface, which redefines `--key-label-remap` to `--key-label-simulated`
+ *  for every descendant — the picker/popover render outside that
+ *  container and are unaffected. See `useDevicePrefs.ts`'s `remapKind`
+ *  for the simulated/actual decision itself. */
+export type RemapKind = 'actual' | 'simulated'

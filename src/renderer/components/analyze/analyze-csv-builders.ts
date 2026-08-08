@@ -14,15 +14,24 @@
 
 import type { TFunction } from 'i18next'
 import type {
+  TypingDurationCell,
   TypingHeatmapByCell,
   TypingHeatmapCell,
   TypingKeymapSnapshot,
 } from '../../../shared/types/typing-analytics'
-import type { KeyboardLayout } from '../../../shared/kle/types'
+import type { KeyboardLayout, KleKey } from '../../../shared/kle/types'
 import type { HeatmapFilters } from '../../../shared/types/analyze-filters'
-import { isHashScope, isOwnScope, scopeToSelectValue } from '../../../shared/types/analyze-filters'
+import { distributionForcesOwnDevice, isHashScope, isOwnScope, scopeToSelectValue } from '../../../shared/types/analyze-filters'
 import { buildCsv } from '../../../shared/csv-export'
 import { LAYOUT_BY_ID } from '../../data/keyboard-layouts'
+
+/** Pulls the snapshot's KLE key list, or `[]` when there's no layout
+ * (or the layout has no keys). Shared by every builder that needs the
+ * raw key positions rather than `layoutPositions`'s matrix-label form. */
+function layoutKeysFromSnapshot(snapshot: TypingKeymapSnapshot): KleKey[] {
+  const layout = snapshot.layout as KeyboardLayout | null
+  return layout?.keys ?? []
+}
 
 /**
  * Async resolver that prefers the built-in `KEYBOARD_LAYOUTS` map and
@@ -57,6 +66,7 @@ async function resolveLayoutLabel(id: string): Promise<string> {
 import { toLocalDate } from './analyze-streak-goal'
 import {
   fetchBigramAggregateForRange,
+  fetchDurationCellsForRange,
   fetchLayoutComparisonForRange,
   fetchMatrixHeatmapAllLayers,
   listBksMinuteForScope,
@@ -65,10 +75,19 @@ import {
   listMatrixCellsForScope,
   listMinuteStatsForScope,
 } from './analyze-fetch'
+import { classifyBigram } from './analyze-bigram-classes'
+import { classifyWordPosition } from './analyze-bigram-word-position'
+import { buildKeycodeFingerMap, resolvePairFingers } from './analyze-bigram-finger'
+import { parseBigramId } from './analyze-bigram-heatmap'
+import { rolloverRatioFromEntry } from './analyze-bigram-format'
+import { formatSharePercent } from './analyze-format'
+import { withDeserializeProtocol } from '../../../shared/keycodes/with-protocol'
 import { bucketMinuteStats, pickBucketMs } from './analyze-bucket'
 import { buildBksRateBuckets } from './analyze-error-proxy'
 import { buildHourOfDayWpm, computeWpm } from './analyze-wpm'
 import { buildIntervalHistogram } from './analyze-histogram'
+import { sumDurationTotals } from './analyze-duration'
+import { DURATION_BUCKET_CENTERS_MS, DURATION_BUCKET_UPPER_BOUNDS_MS } from '../../../shared/duration-buckets'
 import { buildActivityGrid } from './analyze-activity'
 import { buildSessionHistogram } from './analyze-sessions'
 import {
@@ -82,9 +101,11 @@ import type { FingerType } from '../../../shared/kle/kle-ergonomics'
 import {
   buildGroupRankings,
   buildLayerKeycodes,
+  durationCellKey,
   layoutPositions,
   type LayerKeycodes,
 } from './key-heatmap-helpers'
+import { posKey } from '../../../shared/kle/pos-key'
 import type {
   ActivityMetric,
   DeviceScope,
@@ -110,6 +131,7 @@ const SLUG = {
   wpmTimeOfDay: 'analyze-wpm-time-of-day',
   interval: 'analyze-interval',
   intervalDistribution: 'analyze-interval-distribution',
+  durationDistribution: 'analyze-duration-distribution',
   activityKeystrokes: 'analyze-activity-keystrokes',
   activityWpm: 'analyze-activity-wpm',
   activitySessions: 'analyze-activity-sessions',
@@ -117,6 +139,7 @@ const SLUG = {
   layer: 'analyze-layer',
   ergonomics: 'analyze-ergonomics',
   bigrams: 'analyze-bigrams',
+  trigrams: 'analyze-trigrams',
   layoutComparison: 'analyze-layout-comparison',
 } as const
 
@@ -128,27 +151,70 @@ interface ScopeArgs {
    * matching this name. `null` (or absent) means "no app filter" so
    * the existing all-apps export shape is preserved. */
   appScopes?: string[]
+  /** TypingTest filter — same contract as appScopes. */
+  typingTestScopes?: string[]
+  /** Run-id filter (second-level under typingTestScopes) — same contract. */
+  runIdScopes?: string[]
 }
 
 // --- Heatmap ranking ---------------------------------------------
+
+/** Folds a ranking entry's `cellsByLayer` (the same per-layer position
+ * set the Count ranking already tracks for hover-highlight) against
+ * the fetched duration cells, keyed via the shared `durationCellKey`
+ * helper — the same key format key-heatmap-helpers.ts's Duration mode
+ * uses, so the two can't silently drift apart. Handles both
+ * aggregateMode `'cell'` (one physical cell per entry) and `'char'`
+ * (several cells folded into one row) identically — summing whatever
+ * cells the entry covers and deriving one mean from the total, rather
+ * than averaging per-cell means. */
+function sumEntryDuration(
+  cellsByLayer: ReadonlyMap<number, ReadonlySet<string>>,
+  durationByCellKey: ReadonlyMap<string, TypingDurationCell>,
+): { avgMs: number | null; samples: number } {
+  let samples = 0
+  let sum = 0
+  for (const [layer, positions] of cellsByLayer) {
+    for (const pos of positions) {
+      const cell = durationByCellKey.get(durationCellKey(layer, pos))
+      if (!cell) continue
+      samples += cell.durationSamples
+      sum += cell.sum
+    }
+  }
+  return { avgMs: samples > 0 ? sum / samples : null, samples }
+}
 
 export async function buildHeatmapCsv(args: ScopeArgs & {
   snapshot: TypingKeymapSnapshot
   heatmap: Required<HeatmapFilters>
   t: TFunction
 }): Promise<CsvBundleEntry> {
-  const { uid, range, deviceScope, appScopes = [], snapshot, heatmap, t } = args
+  const { uid, range, deviceScope, appScopes = [], typingTestScopes = [], runIdScopes = [], snapshot, heatmap, t } = args
   const { selectedLayers, groups, frequentUsedN, aggregateMode, normalization, keyGroupFilter } = heatmap
 
+  // Per-layer heatmap cells and the duration cells below are
+  // independent fetches (different IPC channels, no shared input), so
+  // they run inside one `Promise.all` rather than the duration fetch
+  // waiting behind the whole per-layer batch.
   const layerCells = new Map<number, TypingHeatmapByCell>()
-  await Promise.all(selectedLayers.map(async (layer) => {
-    try {
-      const cells = await window.vialAPI.typingAnalyticsGetMatrixHeatmapForRange(uid, layer, range.fromMs, range.toMs, deviceScope, appScopes)
-      layerCells.set(layer, cells)
-    } catch {
-      layerCells.set(layer, {})
-    }
-  }))
+  const [, durationCells] = await Promise.all([
+    Promise.all(selectedLayers.map(async (layer) => {
+      try {
+        const cells = await window.vialAPI.typingAnalyticsGetMatrixHeatmapForRange(uid, layer, range.fromMs, range.toMs, deviceScope, appScopes, typingTestScopes, runIdScopes)
+        layerCells.set(layer, cells)
+      } catch {
+        layerCells.set(layer, {})
+      }
+    })),
+    // Duration columns are appended to every ranking row regardless of
+    // the live chart's Count/Speed/Duration mode toggle — same
+    // "count always exported" convention this CSV already follows for
+    // the press-count column. Fetched once (not per layer/group) since
+    // TypingDurationCell already carries its own layer tag.
+    fetchDurationCellsForRange(uid, deviceScope, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes).catch(() => [] as TypingDurationCell[]),
+  ])
+  const durationByCellKey = new Map(durationCells.map((c) => [durationCellKey(c.layer, posKey(c.row, c.col)), c]))
 
   const layerKeycodes = new Map<number, LayerKeycodes>()
   for (const layer of selectedLayers) layerKeycodes.set(layer, buildLayerKeycodes(snapshot, layer))
@@ -168,14 +234,19 @@ export async function buildHeatmapCsv(args: ScopeArgs & {
       : t('analyze.keyHeatmap.layerOptionMulti', { layers: group.join(', ') })
     const entries = groupRankings[gIdx] ?? []
     entries.forEach((entry, rankIdx) => {
-      rows.push([gIdx, groupLabel, rankIdx + 1, entry.keyLabel, entry.layerLabel, entry.matrixLabel, entry.count])
+      const duration = sumEntryDuration(entry.cellsByLayer, durationByCellKey)
+      rows.push([
+        gIdx, groupLabel, rankIdx + 1, entry.keyLabel, entry.layerLabel, entry.matrixLabel, entry.count,
+        duration.avgMs === null ? '' : Math.round(duration.avgMs),
+        duration.samples === 0 ? '' : duration.samples,
+      ])
     })
   })
 
   return {
     slug: SLUG.heatmapRanking,
     content: buildCsv(
-      ['group_idx', 'group_label', 'rank', 'key_label', 'layer_label', 'matrix_label', 'count'],
+      ['group_idx', 'group_label', 'rank', 'key_label', 'layer_label', 'matrix_label', 'count', 'avg_duration_ms', 'duration_samples'],
       rows,
     ),
   }
@@ -188,8 +259,8 @@ export async function buildWpmCsv(args: ScopeArgs & {
   viewMode: WpmViewMode
   minActiveMs: number
 }): Promise<CsvBundleEntry> {
-  const { uid, range, deviceScope, appScopes = [], granularity, viewMode, minActiveMs } = args
-  const rows = await listMinuteStatsForScope(uid, deviceScope, range.fromMs, range.toMs, appScopes).catch(() => [])
+  const { uid, range, deviceScope, appScopes = [], typingTestScopes = [], runIdScopes = [], granularity, viewMode, minActiveMs } = args
+  const rows = await listMinuteStatsForScope(uid, deviceScope, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes).catch(() => [])
 
   if (viewMode === 'timeOfDay') {
     const hourOfDay = buildHourOfDayWpm({ rows, range, minActiveMs })
@@ -208,7 +279,7 @@ export async function buildWpmCsv(args: ScopeArgs & {
 
   const bucketMs = granularity === 'auto' ? pickBucketMs(range) : granularity
   const buckets = bucketMinuteStats(rows, range, bucketMs)
-  const bksRows = await listBksMinuteForScope(uid, deviceScope, range.fromMs, range.toMs, appScopes).catch(() => [])
+  const bksRows = await listBksMinuteForScope(uid, deviceScope, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes).catch(() => [])
   const bksRate = buildBksRateBuckets({ bksRows, minuteRows: rows, range, bucketMs })
   const bksByBucket = new Map<number, number | null>()
   for (const b of bksRate.buckets) bksByBucket.set(b.bucketStartMs, b.bksPercent)
@@ -235,15 +306,47 @@ export async function buildWpmCsv(args: ScopeArgs & {
 
 // --- Interval (timeSeries / distribution) ------------------------
 
+/** Builds the keypress-duration distribution bundle entry that pairs
+ * with the interval histogram in `distribution` viewMode — a distinct
+ * slug (not appended as extra columns to the interval bundle) since
+ * it's a different sample universe (matrix-release durations, not
+ * minute-stats quartiles) with its own row shape. Bucket bounds/centers
+ * come from the SHARED duration grid (shared/duration-buckets.ts) so
+ * this can never disagree with the live DurationSection chart. Forces
+ * `own` scope itself (same anti-meta-aggregate rule as the interval
+ * histogram it pairs with — see `distributionForcesOwnDevice`) since
+ * this is only ever called for the distribution view. */
+export async function buildDurationDistributionCsv(args: ScopeArgs): Promise<CsvBundleEntry> {
+  const { uid, range, appScopes = [], typingTestScopes = [], runIdScopes = [] } = args
+  // Unconditionally `own`: this builder only ever backs the distribution
+  // view, which forces own-device scope the same way the interval
+  // histogram it pairs with does (see `distributionForcesOwnDevice`) —
+  // there is no other viewMode this could be called for.
+  const effectiveScope: DeviceScope = 'own'
+  const cells = await fetchDurationCellsForRange(uid, effectiveScope, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes).catch(() => [])
+  const totals = sumDurationTotals(cells)
+  const csvRows = totals.hist.map((count, i) => [
+    i,
+    DURATION_BUCKET_UPPER_BOUNDS_MS[i],
+    DURATION_BUCKET_CENTERS_MS[i],
+    count,
+    totals.samples > 0 ? Math.round((count / totals.samples) * 1000) / 10 : 0,
+  ])
+  return {
+    slug: SLUG.durationDistribution,
+    content: buildCsv(['bucket_id', 'upper_bound_ms', 'center_ms', 'count', 'share_percent'], csvRows),
+  }
+}
+
 export async function buildIntervalCsv(args: ScopeArgs & {
   granularity: GranularityChoice
   viewMode: IntervalViewMode
 }): Promise<CsvBundleEntry> {
-  const { uid, range, deviceScope, appScopes = [], granularity, viewMode } = args
+  const { uid, range, deviceScope, appScopes = [], typingTestScopes = [], runIdScopes = [], granularity, viewMode } = args
   // Distribution forces own scope to match the live chart's
-  // anti-meta-aggregate rule (see IntervalChart.tsx).
-  const effectiveScope: DeviceScope = viewMode === 'distribution' ? 'own' : deviceScope
-  const rows = await listMinuteStatsForScope(uid, effectiveScope, range.fromMs, range.toMs, appScopes).catch(() => [])
+  // anti-meta-aggregate rule (see `distributionForcesOwnDevice`).
+  const effectiveScope: DeviceScope = distributionForcesOwnDevice(viewMode) ? 'own' : deviceScope
+  const rows = await listMinuteStatsForScope(uid, effectiveScope, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes).catch(() => [])
 
   if (viewMode === 'distribution') {
     const histogram = buildIntervalHistogram(rows, range)
@@ -280,7 +383,7 @@ export async function buildActivityCsv(args: ScopeArgs & {
   metric: ActivityMetric
   minActiveMs: number
 }): Promise<CsvBundleEntry> {
-  const { uid, range, deviceScope, appScopes = [], metric, minActiveMs } = args
+  const { uid, range, deviceScope, appScopes = [], typingTestScopes = [], runIdScopes = [], metric, minActiveMs } = args
 
   if (metric === 'sessions') {
     // Sessions stay un-filtered by app: the typing_sessions table
@@ -301,7 +404,7 @@ export async function buildActivityCsv(args: ScopeArgs & {
     }
   }
 
-  const rows = await listMinuteStatsForScope(uid, deviceScope, range.fromMs, range.toMs, appScopes).catch(() => [])
+  const rows = await listMinuteStatsForScope(uid, deviceScope, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes).catch(() => [])
   const grid = buildActivityGrid({ rows, range, minActiveMs })
   const csvRows = grid.cells.map((c) => [c.dow, c.hour, c.keystrokes, c.activeMs, c.wpm, c.qualified ? 1 : 0])
   return {
@@ -317,11 +420,11 @@ export async function buildLayerCsv(args: ScopeArgs & {
   baseLayer: number
   t: TFunction
 }): Promise<CsvBundleEntry> {
-  const { uid, range, deviceScope, appScopes = [], snapshot, baseLayer, t } = args
+  const { uid, range, deviceScope, appScopes = [], typingTestScopes = [], runIdScopes = [], snapshot, baseLayer, t } = args
 
   const [keystrokeRows, activationCells, prefs] = await Promise.all([
-    listLayerUsageForScope(uid, deviceScope, range.fromMs, range.toMs, appScopes).catch(() => []),
-    listMatrixCellsForScope(uid, deviceScope, range.fromMs, range.toMs, appScopes).catch(() => []),
+    listLayerUsageForScope(uid, deviceScope, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes).catch(() => []),
+    listMatrixCellsForScope(uid, deviceScope, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes).catch(() => []),
     window.vialAPI.pipetteSettingsGet(uid).catch(() => null),
   ])
   const layerNames = Array.isArray(prefs?.layerNames) ? prefs.layerNames : []
@@ -369,10 +472,9 @@ export async function buildErgonomicsCsv(args: ScopeArgs & {
   fingerOverrides: Record<string, FingerType>
   t: TFunction
 }): Promise<CsvBundleEntry> {
-  const { uid, range, deviceScope, appScopes = [], snapshot, fingerOverrides, t } = args
-  const layout = snapshot.layout as KeyboardLayout | null
-  const keys = layout?.keys ?? []
-  const layerCells = await fetchMatrixHeatmapAllLayers(uid, snapshot, range.fromMs, range.toMs, deviceScope, appScopes)
+  const { uid, range, deviceScope, appScopes = [], typingTestScopes = [], runIdScopes = [], snapshot, fingerOverrides, t } = args
+  const keys = layoutKeysFromSnapshot(snapshot)
+  const layerCells = await fetchMatrixHeatmapAllLayers(uid, snapshot, range.fromMs, range.toMs, deviceScope, appScopes, typingTestScopes, runIdScopes)
   const merged = mergeLayerHeatmaps(layerCells)
   const aggregation = aggregateErgonomics(merged, keys, fingerOverrides)
 
@@ -399,20 +501,91 @@ export async function buildErgonomicsCsv(args: ScopeArgs & {
 // user sees on screen instead of cutting off at the 30-row default.
 const BIGRAMS_EXPORT_LIMIT = 5000
 
-export async function buildBigramsCsv(args: ScopeArgs): Promise<CsvBundleEntry> {
-  const { uid, range, deviceScope, appScopes = [] } = args
+export async function buildBigramsCsv(args: ScopeArgs & {
+  /** 2 = bigram (default, matches the historical export shape), 3 =
+   * trigram. Only changes the id column header and output filename —
+   * the row shape (id, count, avg, sd, class) is the same for both,
+   * since `ngramId` already carries however many `_`-joined key codes
+   * the selected gram produces. */
+  gram?: 2 | 3
+  /** Needed to resolve each pair's finger classification (see
+   * `class` column below). `null`/absent leaves every row's `class`
+   * blank rather than guessing. */
+  snapshot?: TypingKeymapSnapshot | null
+  fingerOverrides?: Record<string, FingerType>
+}): Promise<CsvBundleEntry> {
+  const {
+    uid, range, deviceScope, appScopes = [], typingTestScopes = [], runIdScopes = [],
+    gram = 2, snapshot = null, fingerOverrides = {},
+  } = args
   const result = await fetchBigramAggregateForRange(
-    uid, deviceScope, range.fromMs, range.toMs, 'top', { limit: BIGRAMS_EXPORT_LIMIT }, appScopes,
-  ).catch(() => ({ view: 'top' as const, entries: [] }))
+    uid, deviceScope, range.fromMs, range.toMs, 'top', { limit: BIGRAMS_EXPORT_LIMIT, gram }, appScopes, typingTestScopes, runIdScopes,
+  ).catch(() => ({ view: 'top' as const, entries: [], truncated: false }))
   const entries = result.view === 'top' ? result.entries : []
-  const rows = entries.map((e) => [
-    e.bigramId,
-    e.count,
-    e.avgIki === null ? '' : Math.round(e.avgIki),
-  ])
+
+  // The Left/Right/Alternation/Repetition classification (CHI 2018
+  // Table 3) is only defined for 2-key pairs; trigram ids have no
+  // hand-usage class, so `class` stays blank for gram === 3 rather
+  // than reporting a resolved-vs-unresolved `unknown` that would imply
+  // the concept applies.
+  let keycodeFinger: ReadonlyMap<number, FingerType> = new Map()
+  if (gram === 2 && snapshot) {
+    const keys = layoutKeysFromSnapshot(snapshot)
+    if (keys.length > 0) {
+      keycodeFinger = buildKeycodeFingerMap(snapshot, keys, fingerOverrides, snapshot.vialProtocol)
+    }
+  }
+
+  // Only attempt classification when a snapshot was actually supplied —
+  // without one there's no keymap to resolve fingers from, so `class`
+  // stays blank (no classification attempted) rather than `unknown`
+  // (classification attempted, finger unresolved). See the `snapshot`
+  // param doc above.
+  const canClassify = gram === 2 && snapshot !== null
+  // Word position, unlike `class`, needs no snapshot to be computable —
+  // it's keycode equality against a fixed separator set — so it's gated
+  // on `gram` alone, never on `canClassify`. Trigram ids fail
+  // `parseBigramId` (which only accepts a `_`-joined pair) and so fall
+  // through to the blank default just like `class` does.
+  //
+  // The snapshot's protocol is still used when present: it's what makes
+  // unwrapping a dual-role (LT/MT/SH_T) space key safe, since those
+  // ranges move between v5 and v6. Without it the column falls back to
+  // bare separator codes rather than guessing — see `tapKeycodeOf`.
+  const unwrapTaps = snapshot?.vialProtocol !== undefined
+  const rows = withDeserializeProtocol(snapshot?.vialProtocol, () => entries.map((e) => {
+    let cls = ''
+    if (canClassify) {
+      const { prevFinger, currFinger, sameKeycode } = resolvePairFingers(e.ngramId, keycodeFinger)
+      cls = classifyBigram(prevFinger, currFinger, sameKeycode)
+    }
+    let wordPosition = ''
+    if (gram === 2) {
+      const pair = parseBigramId(e.ngramId)
+      if (pair) wordPosition = classifyWordPosition(pair.prev, pair.curr, unwrapTaps)
+    }
+    // Trigram entries always resolve to null here (aggregatePairTotals
+    // never populates overlap accumulators for trigram rows), so the
+    // column comes out blank for gram === 3 without a separate gate —
+    // matching `class`/`word_position`'s "not applicable to trigrams"
+    // treatment above.
+    const rollover = rolloverRatioFromEntry(e)
+    return [
+      e.ngramId,
+      e.count,
+      e.avgIki === null ? '' : Math.round(e.avgIki),
+      e.sd === null ? '' : Math.round(e.sd),
+      cls,
+      wordPosition,
+      rollover === null ? '' : formatSharePercent(rollover),
+    ]
+  }))
   return {
-    slug: SLUG.bigrams,
-    content: buildCsv(['bigram_id', 'count', 'avg_iki_ms'], rows),
+    slug: gram === 3 ? SLUG.trigrams : SLUG.bigrams,
+    content: buildCsv(
+      [gram === 3 ? 'trigram_id' : 'bigram_id', 'count', 'avg_iki_ms', 'sd_iki_ms', 'class', 'word_position', 'observed_rollover_percent'],
+      rows,
+    ),
   }
 }
 
@@ -421,9 +594,10 @@ export async function buildBigramsCsv(args: ScopeArgs): Promise<CsvBundleEntry> 
 export async function buildLayoutComparisonCsv(args: ScopeArgs & {
   sourceLayoutId: string
   targetLayoutId: string
+  fingerOverrides: Record<string, FingerType>
   t: TFunction
 }): Promise<CsvBundleEntry> {
-  const { uid, range, deviceScope, appScopes = [], sourceLayoutId, targetLayoutId, t } = args
+  const { uid, range, deviceScope, appScopes = [], typingTestScopes = [], runIdScopes = [], sourceLayoutId, targetLayoutId, fingerOverrides, t } = args
   const header = ['layout_id', 'layout_label', 'metric', 'key', 'label', 'value']
   const [source, target] = await Promise.all([
     resolveComparisonInput(sourceLayoutId),
@@ -433,8 +607,8 @@ export async function buildLayoutComparisonCsv(args: ScopeArgs & {
     return { slug: SLUG.layoutComparison, content: buildCsv(header, []) }
   }
   const result = await fetchLayoutComparisonForRange(uid, deviceScope, range.fromMs, range.toMs, {
-    source, targets: [source, target], metrics: [...LAYOUT_COMPARISON_PHASE_1_METRICS],
-  }, appScopes).catch(() => null)
+    source, targets: [source, target], metrics: [...LAYOUT_COMPARISON_PHASE_1_METRICS], fingerOverrides,
+  }, appScopes, typingTestScopes, runIdScopes).catch(() => null)
 
   const rows: unknown[][] = []
   // Resolve display labels up front; downloaded entries hit the
@@ -484,8 +658,8 @@ export async function buildLayoutComparisonCsv(args: ScopeArgs & {
 // --- Summary (daily summary within range) --------------------------
 
 export async function buildSummaryCsv(args: ScopeArgs): Promise<CsvBundleEntry> {
-  const { uid, range, deviceScope, appScopes = [] } = args
-  const allDaily = await listDailyForScope(uid, deviceScope, appScopes).catch(() => [])
+  const { uid, range, deviceScope, appScopes = [], typingTestScopes = [], runIdScopes = [] } = args
+  const allDaily = await listDailyForScope(uid, deviceScope, appScopes, typingTestScopes, runIdScopes).catch(() => [])
 
   const fromDate = toLocalDate(range.fromMs)
   const toDate = toLocalDate(range.toMs)

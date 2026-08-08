@@ -614,11 +614,11 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap }: Props) {
 
       {/* Actuation Tab */}
       {activeTab === 'actuation' && (() => {
-        const bottomLabels = new Map<string, string>()
+        const actuationLabels = new Map<string, string>()
         keys.forEach((key) => {
           const cfg = analog.profiles[currentProfile]?.keyConfigs.get(`${key.row},${key.col}`)
           if (cfg) {
-            bottomLabels.set(`${key.row},${key.col}`, `${(cfg.actuationPoint / 10).toFixed(1)}mm`)
+            actuationLabels.set(`${key.row},${key.col}`, `${(cfg.actuationPoint / 10).toFixed(1)}mm`)
           }
         })
         return (
@@ -631,7 +631,7 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap }: Props) {
                   keycodes={new Map()}
                   multiSelectedKeys={selectedKeys}
                   onKeyClick={handleKeyClick}
-                  bottomLabels={bottomLabels}
+                  keyColors={actuationLabels}
                   scale={kbScale}
                 />
               </div>
@@ -1004,13 +1004,13 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap }: Props) {
                   keycodes={new Map()}
                   multiSelectedKeys={new Set()}
                   onKeyClick={(key) => handleSocdKeyPick(key)}
-                  customLabels={(() => {
+                  keyColors={(() => {
                     const labels = new Map<string, string>()
                     keys.forEach((k) => {
                       if (k.row !== undefined && k.col !== undefined) {
                         const posKey = `0,${k.row},${k.col}`
                         const code = keymap.get(posKey) ?? 0
-                        
+
                         if (code) {
                           labels.set(`${k.row},${k.col}`, codeToLabel(code))
                         }

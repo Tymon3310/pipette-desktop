@@ -82,8 +82,9 @@ export function extractLMLayer(code: number): number | null {
 
 /** Check whether a code falls in the LT or MT keycode ranges (v5 & v6).
  * Exported so the typing-view tap/hold detector can distinguish LT/MT
- * presses (which need release-edge timing) from non-tap masked keys
- * like LSFT(kc) that fire together without a tap/hold ambiguity. */
+ * presses (which need release-edge-or-deadline timing to classify as
+ * tap vs hold) from non-tap masked keys like LSFT(kc) that fire together
+ * without a tap/hold ambiguity. */
 export function isTapKeycode(code: number): boolean {
   // LT (Layer Tap): 0x4000–0x4FFF (both v5 and v6)
   if ((code & 0xf000) === 0x4000) return true
@@ -92,6 +93,66 @@ export function isTapKeycode(code: number): boolean {
   // MT (Mod Tap) v5: 0x6000–0x7FFF
   if ((code & 0xe000) === 0x6000) return true
   return false
+}
+
+const ENTER_QMKIDS = new Set(['KC_ENTER', 'KC_ENT'])
+
+/** Shared resolution cascade for both `resolveCharFromMatrix` (a live
+ * row/col + keymap lookup) and `producesChar` (an already-resolved
+ * keycode, e.g. off a queued/emitted analytics event): try the code
+ * directly first (handles basic keycodes), then — for LT/MT tap-hold
+ * ranges only, to avoid false positives for TD/TT/LM/etc — fall back to
+ * the inner keycode extracted from the low byte. */
+function resolveCodeWithTapFallback(code: number, shifted: boolean): CharResult {
+  const direct = resolveCode(code, shifted)
+  if (direct) return direct
+  if (isTapKeycode(code)) {
+    const inner = code & 0xff
+    if (inner !== 0) return resolveCode(inner, shifted)
+  }
+  return null
+}
+
+/** Whether a resolved keycode can ever produce a character — the same
+ * resolution `resolveCharFromMatrix` performs internally, exposed for a
+ * caller that already has the effective keycode rather than a live
+ * row/col + keymap to look it up from. Used by run-log-recorder.ts to
+ * decide whether a matrix keystroke can ever be joined against a later
+ * DOM `char` event, so a key that will never produce one (a bare
+ * modifier, a layer key) isn't left permanently queued for a
+ * confirmation that will never arrive.
+ *
+ * Enter is deliberately excluded even though `SPECIAL_ACTIONS` maps it
+ * to the same 'space' action as literal Space: Space's DOM `key` is
+ * `' '` (length 1, passes the char-event gate in
+ * useTypingTest.processKeyEvent), but Enter's DOM `key` is `'Enter'`
+ * (length 5, never passes it) — so Enter never actually produces a
+ * `char` event despite resolving to an action here. Unshifted only —
+ * its only caller (the run-log recorder) has no notion of shift state
+ * for a matrix press and only ever needs the yes/no answer.
+ *
+ * Mode-agnostic by design: kana mode ADDITIONALLY treats a handful of
+ * JIS-specific keycodes as char-producing while it's active, but that is
+ * a kana-input.ts concern (see `isKanaPhysicalPositionKeycode` there) —
+ * this function doesn't know about input methods, only about whether
+ * `resolveCode`'s printable-character domain covers `code`. */
+export function producesChar(code: number): boolean {
+  const qmkId = serialize(code)
+  if (qmkId && ENTER_QMKIDS.has(qmkId)) return false
+  return resolveCodeWithTapFallback(code, false) !== null
+}
+
+/** Resolve a char/action directly from an already-effective keycode,
+ * without a live row/col + keymap + layer lookup — used by
+ * word-timeline.ts, whose `RunKeystroke.keycode` is already the resolved
+ * matrix keycode captured at press time (see `RunKeystrokeLog`'s module
+ * doc comment), so there is no keymap/layer to look it up from. Same
+ * resolution cascade as `resolveCharFromMatrix`, minus the keymap step.
+ * Unshifted only — its only caller has no notion of shift state for a
+ * captured matrix keystroke (the run log never records one), so a
+ * `shifted` parameter would be permanently unreachable dead code. */
+export function resolveCharFromKeycode(code: number): CharResult {
+  return resolveCodeWithTapFallback(code, false)
 }
 
 export function resolveCharFromMatrix(
@@ -103,20 +164,5 @@ export function resolveCharFromMatrix(
 ): CharResult {
   const code = keymap.get(`${layer},${row},${col}`)
   if (code == null) return null
-
-  // Try resolving the full keycode first (handles basic keycodes)
-  const result = resolveCode(code, shifted)
-  if (result) return result
-
-  // For LT/MT keycodes, extract the inner keycode from the low byte
-  // and try again. Only apply to known tap-key ranges to avoid
-  // false positives for TD, TT, LM, etc.
-  if (isTapKeycode(code)) {
-    const inner = code & 0xff
-    if (inner !== 0) {
-      return resolveCode(inner, shifted)
-    }
-  }
-
-  return null
+  return resolveCodeWithTapFallback(code, shifted)
 }

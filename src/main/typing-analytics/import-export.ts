@@ -93,7 +93,7 @@ export async function exportTypingDataForKeyboard(
       return 0
     }
   })))
-  return { written: results.reduce((sum, n) => sum + n, 0), destinationDir }
+  return { written: results.reduce<number>((sum, n) => sum + n, 0), destinationDir }
 }
 
 export type ImportRejectReason =
@@ -243,6 +243,8 @@ function rowTimestamp(row: JsonlRow): number | null {
     case 'char-minute':
     case 'matrix-minute':
     case 'minute-stats':
+    case 'bigram-minute':
+    case 'trigram-minute':
       return row.payload.minuteTs
     case 'session':
       return row.payload.startMs

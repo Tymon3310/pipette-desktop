@@ -92,10 +92,26 @@ vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
 }))
 
-// Mock keycodes serialize
-vi.mock('../../shared/keycodes/keycodes', () => ({
-  serialize: vi.fn((code: number) => `KC_${code}`),
-}))
+// Mock keycodes serialize. `serialize`'s output depends on a mutable
+// `mockProtocol` so tests can prove `withSerializeProtocol` actually
+// switches protocol around the serialize call (header/body agreement)
+// instead of always running at main's global v6 — without this,
+// `getProtocol` / `setProtocol` / `recreateKeycodes` would be undefined
+// and `withSerializeProtocol` (imported from the real
+// `../../shared/keycodes/with-protocol` module) would throw. Default
+// output format (`KC_${code}`) is unchanged from the original stub so
+// every existing protocol-6 assertion in this file keeps passing
+// untouched.
+vi.mock('../../shared/keycodes/keycodes', () => {
+  let mockProtocol = 6
+  return {
+    serialize: vi.fn((code: number) => (mockProtocol === 6 ? `KC_${code}` : `KC_${code}_p${mockProtocol}`)),
+    getProtocol: vi.fn(() => mockProtocol),
+    getRawcodesProtocol: vi.fn(() => mockProtocol),
+    setProtocol: vi.fn((p: number) => { mockProtocol = p }),
+    recreateKeycodes: vi.fn(),
+  }
+})
 
 import { ipcMain } from 'electron'
 import { getIdToken } from '../sync/google-auth'
@@ -156,7 +172,7 @@ describe('hub-ipc favorite handlers', () => {
     vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
     vi.mocked(authenticateWithHub).mockResolvedValueOnce({
       token: 'hub-jwt',
-      user: { id: 'u1', email: 'test@example.com', display_name: null },
+      user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
     })
   }
 
@@ -169,7 +185,7 @@ describe('hub-ipc favorite handlers', () => {
     index: FavoriteIndex = MOCK_INDEX,
     data: unknown = MOCK_TAP_DANCE_DATA,
   ): void {
-    vi.mocked(readFile).mockImplementation(async (path: string | URL) => {
+    vi.mocked(readFile).mockImplementation(async (path: Parameters<typeof readFile>[0]) => {
       const p = String(path)
       if (p.endsWith(`/${type}/index.json`)) return JSON.stringify(index)
       if (p.includes(`/${type}/`)) return JSON.stringify(data)
@@ -231,6 +247,24 @@ describe('hub-ipc favorite handlers', () => {
 
       expect(result).toEqual({ success: false, error: 'Invalid favorite type' })
       expect(getIdToken).not.toHaveBeenCalled()
+    })
+
+    // Regression: the Data modal (no keyboard connected) used to forward
+    // the emptyState sentinel -1 straight through to this handler, which
+    // reached the Hub server as `vial_protocol: -1` and got a confusing
+    // 400. It must now fail fast locally instead.
+    it('returns a local error for vialProtocol -1 instead of reaching the Hub', async () => {
+      const handler = getHandler()
+      const result = await handler({}, {
+        type: 'tapDance',
+        entryId: 'entry-1',
+        vialProtocol: -1,
+        title: 'Test',
+      })
+
+      expect(result).toEqual({ success: false, error: 'Invalid vialProtocol' })
+      expect(getIdToken).not.toHaveBeenCalled()
+      expect(uploadFeaturePostToHub).not.toHaveBeenCalled()
     })
 
     it('returns error for missing title', async () => {
@@ -327,6 +361,37 @@ describe('hub-ipc favorite handlers', () => {
       // Non-keycode field should remain as-is
       expect(entry.data.tappingTerm).toBe(200)
     })
+
+    // Regression: the export body used to always serialize at main's
+    // global protocol (always 6) while the header stamped whatever
+    // `vialProtocol` was requested — a protocol-5 upload got header 5,
+    // body v6. Assert header and body now agree.
+    it('serializes keycode fields at the requested protocol (header/body agreement)', async () => {
+      mockHubAuth()
+      mockFavoriteFs()
+      vi.mocked(uploadFeaturePostToHub).mockResolvedValueOnce({
+        id: 'fav-post-3',
+        title: 'My Tap Dance',
+      })
+
+      const handler = getHandler()
+      await handler({}, {
+        type: 'tapDance',
+        entryId: 'entry-1',
+        vialProtocol: 5,
+        title: 'My Tap Dance',
+      })
+
+      const call = vi.mocked(uploadFeaturePostToHub).mock.calls[0]
+      const jsonFile = call[3] as { name: string; data: Buffer }
+      const parsed = JSON.parse(jsonFile.data.toString('utf-8'))
+      expect(parsed.vial_protocol).toBe(5)
+      const entry = parsed.categories.td[0]
+      // Body must reflect protocol 5 too, not main's global v6 default
+      // ('KC_4' would mean the body silently stayed at v6).
+      expect(entry.data.onTap).toBe('KC_4_p5')
+      expect(entry.data.onHold).toBe('KC_5_p5')
+    })
   })
 
   // ----------------------------------------------------------------
@@ -349,7 +414,6 @@ describe('hub-ipc favorite handlers', () => {
       mockFavoriteFs()
       vi.mocked(updateFeaturePostOnHub).mockResolvedValueOnce({
         id: 'fav-post-1',
-        vialProtocol: 6,
         title: 'Updated Tap Dance',
       })
 
@@ -373,6 +437,21 @@ describe('hub-ipc favorite handlers', () => {
           data: expect.any(Buffer),
         }),
       )
+    })
+
+    it('returns a local error for vialProtocol -1 instead of reaching the Hub', async () => {
+      const handler = getHandler()
+      const result = await handler({}, {
+        type: 'tapDance',
+        entryId: 'entry-1',
+        vialProtocol: -1,
+        title: 'Test',
+        postId: 'fav-post-1',
+      })
+
+      expect(result).toEqual({ success: false, error: 'Invalid vialProtocol' })
+      expect(getIdToken).not.toHaveBeenCalled()
+      expect(updateFeaturePostOnHub).not.toHaveBeenCalled()
     })
 
     it('returns error for invalid favorite type', async () => {

@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest'
 import {
   BIGRAM_BUCKET_UPPER_BOUNDS_MS,
   bucketizeIki,
+  bucketizeDurations,
 } from '../bigram-bucket'
 import { BIGRAM_HIST_BUCKETS } from '../jsonl/jsonl-row'
 
@@ -49,4 +50,37 @@ describe('bucketizeIki', () => {
       expect(BIGRAM_BUCKET_UPPER_BOUNDS_MS[i]).toBeGreaterThan(BIGRAM_BUCKET_UPPER_BOUNDS_MS[i - 1])
     }
   })
+})
+
+describe('bucketizeDurations', () => {
+  it('returns an all-zero histogram for an empty array', () => {
+    const hist = bucketizeDurations([])
+    expect(hist).toHaveLength(BIGRAM_HIST_BUCKETS)
+    expect(hist.every((n) => n === 0)).toBe(true)
+  })
+
+  it('uses the tighter duration grid, not the IKI grid', () => {
+    // 120ms would land in IKI bucket 2 (100-150) but duration bucket 3
+    // (110-140) — the two grids must not be interchangeable.
+    expect(bucketizeDurations([120])).toEqual([0, 0, 0, 1, 0, 0, 0, 0])
+  })
+
+  it('places boundary values into the bucket whose lower edge they sit on', () => {
+    expect(bucketizeDurations([50])).toEqual([0, 1, 0, 0, 0, 0, 0, 0])
+    expect(bucketizeDurations([80])).toEqual([0, 0, 1, 0, 0, 0, 0, 0])
+    expect(bucketizeDurations([110])).toEqual([0, 0, 0, 1, 0, 0, 0, 0])
+    expect(bucketizeDurations([140])).toEqual([0, 0, 0, 0, 1, 0, 0, 0])
+    expect(bucketizeDurations([180])).toEqual([0, 0, 0, 0, 0, 1, 0, 0])
+    expect(bucketizeDurations([250])).toEqual([0, 0, 0, 0, 0, 0, 1, 0])
+    expect(bucketizeDurations([400])).toEqual([0, 0, 0, 0, 0, 0, 0, 1])
+  })
+
+  it('places values above the last boundary into the final bucket', () => {
+    expect(bucketizeDurations([1000, 60_000])).toEqual([0, 0, 0, 0, 0, 0, 0, 2])
+  })
+
+  // Grid shape/ordering (length, POSITIVE_INFINITY tail, strictly
+  // ascending) is covered by shared/__tests__/duration-buckets.test.ts,
+  // which owns the grid now that it lives in shared/duration-buckets.ts
+  // — no need to duplicate that assertion against the re-imported value.
 })

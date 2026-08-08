@@ -5,9 +5,10 @@
 // switching, and the datetime/device selects without dragging recharts
 // or real DB data into jsdom.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import type { TypingKeyboardSummary, TypingKeymapSnapshot, TypingKeymapSnapshotSummary } from '../../../../shared/types/typing-analytics'
+import { formatRunDateLabel } from '../../../hooks/useRunLabels'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -53,24 +54,32 @@ function mockSummary(testId: string) {
 
 vi.mock('../WpmChart', () => ({ WpmChart: mockSummary('mock-wpm') }))
 vi.mock('../IntervalChart', () => ({ IntervalChart: mockSummary('mock-interval') }))
+// Mounted below IntervalChart in timeSeries mode — mocked shallow like
+// every other chart here so its own IPC fetch (not stubbed on this
+// file's vialAPI object) never runs during these shell-level tests.
+vi.mock('../RolloverSection', () => ({ RolloverSection: mockSummary('mock-rollover') }))
+// Mounted below IntervalChart in distribution mode instead of
+// RolloverSection — mocked shallow for the same reason.
+vi.mock('../DurationSection', () => ({ DurationSection: mockSummary('mock-duration') }))
+// Also distribution-mode-only. The mock renders `connectedTappingTerm`
+// so the AnalyzePane-uid-matching wiring (App -> AnalyzePage ->
+// TypingAnalyticsView -> AnalyzePane -> here) has something to assert on.
+vi.mock('../TappingTermCard', () => ({
+  TappingTermCard: (props: { uid: string; connectedTappingTerm: { uid: string; termMs: number; reported: boolean } | null }) => (
+    <div data-testid="mock-tapping-term">
+      {`${props.uid}:${props.connectedTappingTerm ? `${props.connectedTappingTerm.uid}:${props.connectedTappingTerm.termMs}:${props.connectedTappingTerm.reported}` : 'null'}`}
+    </div>
+  ),
+}))
 vi.mock('../ActivityChart', () => ({ ActivityChart: mockSummary('mock-activity') }))
 vi.mock('../KeyHeatmapChart', () => ({ KeyHeatmapChart: mockSummary('mock-keyheatmap') }))
 vi.mock('../ErgonomicsChart', () => ({
-  // Surface the finger-assignment open callback as a button so the
-  // modal-open test can drive it; the button now lives inside the real
-  // chart's title row instead of the AnalyzePane filter bar.
-  ErgonomicsChart: (props: MockChartProps & { onOpenFingerAssignment?: () => void }) => (
+  // The finger-assignment button now renders in AnalyzePane's Row 2
+  // filter row (not inside the chart), so the mock only needs the
+  // usual identity/range probe — no callback forwarding here.
+  ErgonomicsChart: (props: MockChartProps) => (
     <div data-testid="mock-ergonomics">
       {`${props.uid}:${scopeText(primaryScope(props))}:range=${props.range.fromMs}-${props.range.toMs}`}
-      {props.onOpenFingerAssignment ? (
-        <button
-          type="button"
-          data-testid="analyze-finger-assignment-open"
-          onClick={props.onOpenFingerAssignment}
-        >
-          open
-        </button>
-      ) : null}
     </div>
   ),
 }))
@@ -93,8 +102,8 @@ vi.mock('../SummaryView', () => ({
 
 const mockListKeyboards = vi.fn<() => Promise<TypingKeyboardSummary[]>>()
 const mockGetSnapshot = vi.fn<() => Promise<TypingKeymapSnapshot | null>>()
-let typingAnalyticsListKeyboardsSpy: ReturnType<typeof vi.spyOn>
-let typingAnalyticsGetSnapshotSpy: ReturnType<typeof vi.spyOn>
+let typingAnalyticsListKeyboardsSpy: MockInstance<typeof window.vialAPI.typingAnalyticsListKeyboards>
+let typingAnalyticsGetSnapshotSpy: MockInstance<typeof window.vialAPI.typingAnalyticsGetKeymapSnapshotForRange>
 
 const emptyPeakRecords = {
   peakWpm: null,
@@ -131,11 +140,14 @@ Object.defineProperty(window, 'vialAPI', {
     // the dropdown showing only "All apps" — fine for these tests
     // since they don't exercise the app filter.
     typingAnalyticsListAppsForRange: () => Promise.resolve([]),
+    // Run rows for the chip's run labels / the modal's Results select.
+    // Empty by default; the history-less-run chip test overrides it.
+    typingAnalyticsListTypingTestRunsForRange: () => Promise.resolve([]),
     pipetteSettingsGet: () => Promise.resolve(null),
-    // `useAnalyzeFilters` debounces filter writes through this setter.
+    // `useAnalyzeFilters` debounces filter writes through this patcher.
     // Stubbing it with a no-op keeps the tests focused on prop
     // propagation without waiting on the 300 ms flush timer.
-    pipetteSettingsSet: () => Promise.resolve({ success: true as const }),
+    pipetteSettingsPatch: () => Promise.resolve({ success: true as const }),
     // Analyze mount pulls analytics via this IPC. Resolving `false`
     // keeps the rate-limit ref unset so nothing leaks across tests.
     syncAnalyticsNow: () => Promise.resolve(false),
@@ -175,6 +187,36 @@ function text(testId: string): string {
   return screen.getByTestId(testId).textContent ?? ''
 }
 
+// Filter interactions now go chip -> staged modal -> control -> Apply
+// (Plan-analyze-filter-modal). `openFilterModal` opens pane A's modal;
+// callers then change a control and click `analyze-filter-modal-apply`
+// to commit — nothing reaches the chart props before Apply.
+function openFilterModal(): void {
+  fireEvent.click(screen.getByTestId('analyze-filter-chip'))
+}
+
+function applyFilterModal(): void {
+  fireEvent.click(screen.getByTestId('analyze-filter-modal-apply'))
+}
+
+// Shared by the "open timeline" action's single-run/multi-run cases below
+// — the two only ever differ in which runIds are persisted.
+function mockFiltersWithRuns(runIds: string[]) {
+  return vi.spyOn(window.vialAPI, 'pipetteSettingsGet').mockResolvedValue({
+    _rev: 1,
+    keyboardLayout: 'qwerty',
+    autoAdvance: true,
+    layerNames: [],
+    analyze: {
+      filters: {
+        filterDimension: 'typingTest',
+        typingTestScopes: ['words'],
+        runIdScopes: runIds,
+      },
+    },
+  })
+}
+
 describe('TypingAnalyticsView', () => {
   beforeEach(async () => {
     // The pane's syncAnalyticsNow rate-limit map lives at module scope
@@ -201,6 +243,8 @@ describe('TypingAnalyticsView', () => {
     mockListKeyboards.mockResolvedValue([])
     const { TypingAnalyticsView } = await importView()
     render(<TypingAnalyticsView />)
+    await waitFor(() => expect(screen.getByTestId('analyze-filter-chip')).toBeInTheDocument())
+    openFilterModal()
     await waitFor(() => expect(screen.getByTestId('analyze-no-keyboards')).toBeInTheDocument())
     expect(typingAnalyticsListKeyboardsSpy).toHaveBeenCalledTimes(1)
     expect(screen.queryByTestId('mock-wpm')).toBeNull()
@@ -210,11 +254,39 @@ describe('TypingAnalyticsView', () => {
     mockListKeyboards.mockResolvedValue(SAMPLE)
     const { TypingAnalyticsView } = await importView()
     render(<TypingAnalyticsView />)
-    await waitFor(() => expect(screen.getByTestId('analyze-kb-uid-a')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('analyze-filter-chip-keyboard')).toHaveTextContent('KB A'))
     await waitFor(() => expect(screen.getByTestId('mock-summary')).toBeInTheDocument())
     expect(text('mock-summary')).toBe('uid-a:own')
     expect(screen.queryByTestId('mock-wpm')).toBeNull()
     expect(screen.queryByTestId('analyze-keyheatmap-empty')).toBeNull()
+  })
+
+  it('renders Split View / Back inside a docked footer bar, not the scrollable content', async () => {
+    mockListKeyboards.mockResolvedValue(SAMPLE)
+    const onBack = vi.fn()
+    const { TypingAnalyticsView } = await importView()
+    render(<TypingAnalyticsView onBack={onBack} />)
+    await waitFor(() => expect(screen.getByTestId('mock-summary')).toBeInTheDocument())
+
+    const footer = screen.getByTestId('analyze-footer')
+    expect(footer.tagName).toBe('FOOTER')
+    // Styled like the keymap editor's StatusBar (border-t + bg-surface-alt
+    // bar) rather than a bare border-t row floating in the scroll content.
+    expect(footer.className).toContain('border-t')
+    expect(footer.className).toContain('border-edge')
+    expect(footer.className).toContain('bg-surface-alt')
+
+    const splitToggle = screen.getByTestId('analyze-split-toggle')
+    const backButton = screen.getByTestId('analyze-back')
+    expect(footer.contains(splitToggle)).toBe(true)
+    expect(footer.contains(backButton)).toBe(true)
+
+    // Content (the panes) renders in a separate container, not inside footer.
+    const content = screen.getByTestId('mock-summary')
+    expect(footer.contains(content)).toBe(false)
+
+    fireEvent.click(backButton)
+    expect(onBack).toHaveBeenCalledTimes(1)
   })
 
   it('renders the mocked KeyHeatmapChart after switching to the Heatmap tab when a snapshot is available', async () => {
@@ -251,8 +323,12 @@ describe('TypingAnalyticsView', () => {
     mockListKeyboards.mockResolvedValue(SAMPLE)
     const { TypingAnalyticsView } = await importView()
     render(<TypingAnalyticsView />)
-    await waitFor(() => expect(screen.getByTestId('analyze-kb-uid-b')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('analyze-filter-chip-keyboard')).toHaveTextContent('KB A'))
+    openFilterModal()
+    await screen.findByTestId('analyze-kb-uid-b')
     fireEvent.change(screen.getByTestId('analyze-filter-keyboard'), { target: { value: 'uid-b' } })
+    applyFilterModal()
+    await waitFor(() => expect(screen.getByTestId('analyze-filter-chip-keyboard')).toHaveTextContent('KB B'))
     fireEvent.click(screen.getByTestId('analyze-tab-wpm'))
     expect(text('mock-wpm')).toMatch(/^uid-b:own:range=/)
   })
@@ -261,7 +337,7 @@ describe('TypingAnalyticsView', () => {
     mockListKeyboards.mockResolvedValue(SAMPLE)
     const { TypingAnalyticsView } = await importView()
     render(<TypingAnalyticsView initialUid="uid-b" />)
-    await waitFor(() => expect(screen.getByTestId('analyze-kb-uid-b')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('analyze-filter-chip-keyboard')).toHaveTextContent('KB B'))
     fireEvent.click(screen.getByTestId('analyze-tab-wpm'))
     expect(text('mock-wpm')).toMatch(/^uid-b:own:range=/)
   })
@@ -270,7 +346,7 @@ describe('TypingAnalyticsView', () => {
     mockListKeyboards.mockResolvedValue(SAMPLE)
     const { TypingAnalyticsView } = await importView()
     render(<TypingAnalyticsView initialUid="uid-unknown" />)
-    await waitFor(() => expect(screen.getByTestId('analyze-kb-uid-a')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('analyze-filter-chip-keyboard')).toHaveTextContent('KB A'))
     fireEvent.click(screen.getByTestId('analyze-tab-wpm'))
     expect(text('mock-wpm')).toMatch(/^uid-a:own:range=/)
   })
@@ -282,13 +358,19 @@ describe('TypingAnalyticsView', () => {
     await waitFor(() => expect(screen.getByTestId('mock-summary')).toBeInTheDocument())
     fireEvent.click(screen.getByTestId('analyze-tab-wpm'))
     await waitFor(() => expect(screen.getByTestId('mock-wpm')).toBeInTheDocument())
-
-    // Open the range popover, then change the from-time input.
-    // DayPicker drives the date portion; we cover the time-input wiring
-    // here with HH:mm changes, which fire onChange immediately.
-    fireEvent.click(screen.getByTestId('analyze-filter-range'))
     const initialFromMs = Number.parseInt(text('mock-wpm').match(/range=(\d+)-/)?.[1] ?? '0', 10)
+
+    // Open the staged modal, edit both Period and Device, then Apply —
+    // draft edits don't reach the chart until the single Apply commit.
+    openFilterModal()
+    await screen.findByTestId('analyze-filter-device')
+    fireEvent.click(screen.getByTestId('analyze-filter-range'))
+    // DayPicker drives the date portion; we cover the time-input wiring
+    // here with HH:mm changes, which update the draft range immediately.
     fireEvent.change(screen.getByTestId('analyze-filter-range-from'), { target: { value: '09:30' } })
+    fireEvent.change(screen.getByTestId('analyze-filter-device'), { target: { value: 'all' } })
+    applyFilterModal()
+
     await waitFor(() => {
       const fromMs = Number.parseInt(text('mock-wpm').match(/range=(\d+)-/)?.[1] ?? '0', 10)
       const d = new Date(fromMs)
@@ -296,8 +378,6 @@ describe('TypingAnalyticsView', () => {
       expect(d.getMinutes()).toBe(30)
       expect(fromMs).not.toBe(initialFromMs)
     })
-
-    fireEvent.change(screen.getByTestId('analyze-filter-device'), { target: { value: 'all' } })
     expect(text('mock-wpm')).toMatch(/^uid-a:all:range=/)
   })
 
@@ -309,7 +389,8 @@ describe('TypingAnalyticsView', () => {
     expect(screen.getByText('analyze.loading.keyboards')).toBeInTheDocument()
     resolveKb([])
     await waitFor(() => expect(screen.queryByText('analyze.loading.keyboards')).toBeNull())
-    expect(screen.getByTestId('analyze-no-keyboards')).toBeInTheDocument()
+    openFilterModal()
+    await waitFor(() => expect(screen.getByTestId('analyze-no-keyboards')).toBeInTheDocument())
   })
 
   it('flips to the syncing phase while syncAnalyticsNow is in flight', async () => {
@@ -411,18 +492,22 @@ describe('TypingAnalyticsView', () => {
     const { TypingAnalyticsView } = await importView()
     render(<TypingAnalyticsView />)
     await waitFor(() => expect(hashSpy).toHaveBeenCalledWith('uid-a'))
-    fireEvent.click(screen.getByTestId('analyze-tab-wpm'))
+    openFilterModal()
     await screen.findByTestId('analyze-filter-device')
     // Each option renders as `analyze-filter-device-option-${key}` —
-    // a missing entry would throw inside the assertion below.
-    expect(screen.getByTestId('analyze-filter-device-option-own')).toBeInTheDocument()
-    expect(screen.getByTestId('analyze-filter-device-option-all')).toBeInTheDocument()
-    expect(
-      screen.getByTestId('analyze-filter-device-option-hash:hashone12345678901234'),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByTestId('analyze-filter-device-option-hash:hashtwo12345678901234'),
-    ).toBeInTheDocument()
+    // a missing entry would throw inside the assertion below. The
+    // modal's own `useAnalyzeScopeOptions(draftUid)` fetch resolves
+    // asynchronously, so wait for the remote options to land.
+    await waitFor(() => {
+      expect(screen.getByTestId('analyze-filter-device-option-own')).toBeInTheDocument()
+      expect(screen.getByTestId('analyze-filter-device-option-all')).toBeInTheDocument()
+      expect(
+        screen.getByTestId('analyze-filter-device-option-hash:hashone12345678901234'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByTestId('analyze-filter-device-option-hash:hashtwo12345678901234'),
+      ).toBeInTheDocument()
+    })
     hashSpy.mockRestore()
   })
 
@@ -440,16 +525,26 @@ describe('TypingAnalyticsView', () => {
     render(<TypingAnalyticsView />)
     await waitFor(() => expect(hashSpy).toHaveBeenCalledWith('uid-a'))
     fireEvent.click(screen.getByTestId('analyze-tab-wpm'))
+
     // Single-select <select>: changing to the hash replaces the
     // selection outright, so the chart's only scope flips to the hash.
+    // Staged via the modal — nothing reaches the chart until Apply.
+    openFilterModal()
+    await waitFor(() => expect(
+      screen.getByTestId('analyze-filter-device-option-hash:hashone12345678901234'),
+    ).toBeInTheDocument())
     fireEvent.change(screen.getByTestId('analyze-filter-device'), {
       target: { value: 'hash:hashone12345678901234' },
     })
+    applyFilterModal()
     await waitFor(() => {
       expect(text('mock-wpm')).toMatch(/^uid-a:hash:hashone12345678901234:range=/)
     })
+
     // Switching back to `'own'` replaces the selection with the local device.
-    fireEvent.change(screen.getByTestId('analyze-filter-device'), { target: { value: 'own' } })
+    openFilterModal()
+    fireEvent.change(await screen.findByTestId('analyze-filter-device'), { target: { value: 'own' } })
+    applyFilterModal()
     await waitFor(() => {
       expect(text('mock-wpm')).toMatch(/^uid-a:own:range=/)
     })
@@ -480,12 +575,48 @@ describe('TypingAnalyticsView', () => {
     fireEvent.click(openButton)
     await waitFor(() => expect(screen.getByTestId('finger-assignment-modal')).toBeInTheDocument())
     // Single-select: picking the remote hash replaces the scope so
-    // `effectiveSnapshot` drops to null and the modal closes.
+    // `effectiveSnapshot` drops to null and the modal closes. Staged
+    // via the filter modal, applied on Apply.
+    openFilterModal()
+    await waitFor(() => expect(
+      screen.getByTestId('analyze-filter-device-option-hash:remote12345678901234'),
+    ).toBeInTheDocument())
     fireEvent.change(screen.getByTestId('analyze-filter-device'), {
       target: { value: 'hash:remote12345678901234' },
     })
+    applyFilterModal()
     await waitFor(() => expect(screen.queryByTestId('finger-assignment-modal')).toBeNull())
     hashSpy.mockRestore()
+  })
+
+  it('gives split-view panes distinct finger-assignment button testids', async () => {
+    // Split view needs a wide-enough viewport for the toggle to be
+    // enabled (SPLIT_MIN_WIDTH_PX in TypingAnalyticsView.tsx); jsdom's
+    // default width is narrower than that.
+    const originalInnerWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 })
+    try {
+      mockListKeyboards.mockResolvedValue(SAMPLE)
+      mockGetSnapshot.mockResolvedValue(SNAPSHOT)
+      const { TypingAnalyticsView } = await importView()
+      render(<TypingAnalyticsView />)
+      await waitFor(() => expect(screen.getByTestId('analyze-filter-chip')).toBeInTheDocument())
+      fireEvent.click(screen.getByTestId('analyze-split-toggle'))
+      await waitFor(() => expect(screen.getByTestId('analyze-filter-chip-b')).toBeInTheDocument())
+      // Move both panes to a tab that renders the finger-assignment
+      // button (Ergonomics is one of FINGER_ASSIGNMENT_TABS).
+      fireEvent.click(screen.getByTestId('analyze-tab-ergonomics'))
+      fireEvent.click(screen.getByTestId('analyze-tab-ergonomics-b'))
+      // Pane A keeps the historical unsuffixed testid (the three
+      // external consumers — TypingAnalyticsView.test.tsx itself,
+      // e2e/analyze.test.ts, doc-capture.ts — all target it
+      // unsuffixed), so exactly one element should carry it; pane B's
+      // must be disambiguated with the `-b` suffix.
+      await waitFor(() => expect(screen.getAllByTestId('analyze-finger-assignment-open')).toHaveLength(1))
+      expect(screen.getByTestId('analyze-finger-assignment-open-b')).toBeInTheDocument()
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth })
+    }
   })
 
   it('falls back to own when a persisted hash is missing from the remote list', async () => {
@@ -543,7 +674,9 @@ describe('TypingAnalyticsView', () => {
     await waitFor(() => expect(screen.getByTestId('mock-summary')).toBeInTheDocument())
     fireEvent.click(screen.getByTestId('analyze-tab-keyHeatmap'))
     await waitFor(() => expect(screen.getByTestId('mock-keyheatmap')).toBeInTheDocument())
-    fireEvent.change(screen.getByTestId('analyze-filter-device'), { target: { value: 'all' } })
+    openFilterModal()
+    fireEvent.change(await screen.findByTestId('analyze-filter-device'), { target: { value: 'all' } })
+    applyFilterModal()
     await waitFor(() => expect(text('mock-keyheatmap')).toMatch(/^uid-a:all:range=/))
     fireEvent.click(screen.getByTestId('analyze-tab-ergonomics'))
     await waitFor(() => expect(screen.getByTestId('mock-ergonomics')).toBeInTheDocument())
@@ -555,16 +688,20 @@ describe('TypingAnalyticsView', () => {
     const { TypingAnalyticsView } = await importView()
     render(<TypingAnalyticsView />)
     await waitFor(() => expect(syncSpy).toHaveBeenCalledWith('uid-a'))
-    fireEvent.change(screen.getByTestId('analyze-filter-keyboard'), { target: { value: 'uid-b' } })
+    openFilterModal()
+    fireEvent.change(await screen.findByTestId('analyze-filter-keyboard'), { target: { value: 'uid-b' } })
+    applyFilterModal()
     await waitFor(() => expect(syncSpy).toHaveBeenCalledWith('uid-b'))
     syncSpy.mockRestore()
   })
 
-  it('clamps the range to the snapshot active window when an older snapshot is picked', async () => {
+  it('clamps the range to the snapshot active window when an older snapshot is picked in the modal', async () => {
     // Range integrity check: selecting snapshot 1000 from
     // [1000, 2000] should set toMs = 2000 (the next snapshot's
     // savedAt). Backend's selector reads `[fromMs, toMs)` so picking
     // savedAt = 1000 stays correct even though toMs touches 2000.
+    // The snapshot pick lives in the modal's Keymap row now — the
+    // committed range only moves on Apply.
     mockListKeyboards.mockResolvedValue(SAMPLE)
     const summaries: TypingKeymapSnapshotSummary[] = [
       { uid: 'uid-a', machineHash: 'm1', productName: 'KB A', savedAt: 1000, layers: 1, matrix: { rows: 1, cols: 1 } },
@@ -576,17 +713,22 @@ describe('TypingAnalyticsView', () => {
     await waitFor(() => expect(summariesSpy).toHaveBeenCalledWith('uid-a'))
     fireEvent.click(screen.getByTestId('analyze-tab-wpm'))
     await waitFor(() => expect(screen.getByTestId('mock-wpm')).toBeInTheDocument())
-    fireEvent.change(screen.getByTestId('analyze-snapshot-timeline-select'), { target: { value: '1000' } })
+    openFilterModal()
+    const select = await screen.findByTestId('analyze-snapshot-timeline-select')
+    fireEvent.change(select, { target: { value: '1000' } })
+    // Draft-only until Apply — the chart keeps the committed range.
+    expect(text('mock-wpm')).not.toContain('range=1000-2000')
+    applyFilterModal()
     await waitFor(() => {
       expect(text('mock-wpm')).toContain('range=1000-2000')
     })
     summariesSpy.mockRestore()
   })
 
-  it('clears the snapshot timeline state on keyboard switch', async () => {
-    // Stale-state guard: the previous keyboard's timeline must not
-    // briefly render under the new keyboard while its summaries are
-    // still in flight or after they resolve to an empty list.
+  it('omits the Keymap row for a keyboard without snapshots after a switch', async () => {
+    // The previous keyboard's snapshot list must not leak into the next
+    // keyboard's modal: uid-b has no snapshots, so its Keymap row is
+    // absent entirely.
     mockListKeyboards.mockResolvedValue(SAMPLE)
     const summariesSpy = vi
       .spyOn(window.vialAPI, 'typingAnalyticsListKeymapSnapshots')
@@ -598,13 +740,206 @@ describe('TypingAnalyticsView', () => {
       })
     const { TypingAnalyticsView } = await importView()
     render(<TypingAnalyticsView />)
-    await waitFor(() => expect(screen.getByTestId('analyze-snapshot-timeline-select')).toBeInTheDocument())
+    await waitFor(() => expect(summariesSpy).toHaveBeenCalledWith('uid-a'))
+    // uid-a has a snapshot — its modal shows the Keymap row.
+    openFilterModal()
+    await screen.findByTestId('analyze-snapshot-timeline-select')
     fireEvent.change(screen.getByTestId('analyze-filter-keyboard'), { target: { value: 'uid-b' } })
-    await waitFor(() => expect(screen.queryByTestId('analyze-snapshot-timeline-select')).toBeNull())
+    applyFilterModal()
+    await waitFor(() => expect(summariesSpy).toHaveBeenCalledWith('uid-b'))
+    // uid-b has none — reopening the modal renders no Keymap row.
+    openFilterModal()
+    await screen.findByTestId('analyze-filter-device')
+    expect(screen.queryByTestId('analyze-filter-modal-keymap-row')).toBeNull()
+    expect(screen.queryByTestId('analyze-snapshot-timeline-select')).toBeNull()
     summariesSpy.mockRestore()
   })
 
-  it('clears the snapshot timeline state when listKeymapSnapshots rejects', async () => {
+  it('labels a history-less run with its date stamp in the chip Source segment', async () => {
+    // Regression: a run filtered in Analyze that never recorded a
+    // History entry (unnamed run with Save Unnamed off) used to render
+    // as its raw runId UUID in the chip, while the modal's Results
+    // dropdown showed the date — both now resolve through
+    // useRunLabels.labelFor, so the chip gets the same date stamp.
+    mockListKeyboards.mockResolvedValue(SAMPLE)
+    const firstMs = Date.UTC(2026, 3, 1, 9, 30)
+    const getSpy = vi.spyOn(window.vialAPI, 'pipetteSettingsGet').mockResolvedValue({
+      _rev: 1,
+      keyboardLayout: 'qwerty',
+      autoAdvance: true,
+      layerNames: [],
+      // No typingTestResults — the run has no History entry.
+      analyze: {
+        filters: {
+          filterDimension: 'typingTest',
+          typingTestScopes: ['tatoeba-japanese'],
+          runIdScopes: ['acb0f4e9-0000-4000-8000-000000000000'],
+        },
+      },
+    })
+    const runsSpy = vi
+      .spyOn(window.vialAPI, 'typingAnalyticsListTypingTestRunsForRange')
+      .mockResolvedValue([{ runId: 'acb0f4e9-0000-4000-8000-000000000000', keystrokes: 100, firstMs }])
+    const { TypingAnalyticsView } = await importView()
+    render(<TypingAnalyticsView />)
+    await waitFor(() => {
+      expect(text('analyze-filter-chip-source')).toContain(formatRunDateLabel(firstMs))
+    })
+    expect(text('analyze-filter-chip-source')).toContain('tatoeba-japanese')
+    expect(text('analyze-filter-chip-source')).not.toContain('acb0f4e9')
+    runsSpy.mockRestore()
+    getSpy.mockRestore()
+  })
+
+  it('forwards connectedTappingTerm to the pane and matches it against the selected uid only', async () => {
+    mockListKeyboards.mockResolvedValue(SAMPLE)
+    // The distribution-section select only offers 'Tapping Term
+    // diagnosis' when the snapshot has at least one tap-hold key (same
+    // gate as TappingTermCard's own hidden rule) — give it one so the
+    // option (and thus the mock) is reachable, for both keyboards used
+    // below.
+    mockGetSnapshot.mockResolvedValue({ ...SNAPSHOT, keymap: [[['LT(1,KC_SPC)']]] })
+    // uid-b's own persisted filters already point at the Tapping Term
+    // section: the modal's Apply patch only carries scope/dimension
+    // fields (not `interval`), so a plain `pipetteSettingsGet` default
+    // of `null` would reload uid-b onto `viewMode: 'timeSeries'` the
+    // instant its own load resolves — racing against this test's
+    // `waitFor` below instead of deterministically staying on the
+    // Tapping Term section, which is the only thing this assertion
+    // means to exercise (connectedTappingTerm's uid guard, not the
+    // section-persistence contract covered elsewhere).
+    const getSpy = vi.spyOn(window.vialAPI, 'pipetteSettingsGet').mockImplementation((uid: string) =>
+      Promise.resolve(uid === 'uid-b'
+        ? {
+          _rev: 1,
+          keyboardLayout: 'qwerty',
+          autoAdvance: true,
+          layerNames: [],
+          analyze: { filters: { interval: { viewMode: 'distribution', distributionSection: 'tappingTerm' } } },
+        }
+        : null),
+    )
+    const { TypingAnalyticsView } = await importView()
+    render(
+      <TypingAnalyticsView connectedTappingTerm={{ uid: 'uid-a', termMs: 250, reported: true }} />,
+    )
+    await waitFor(() => expect(screen.getByTestId('mock-summary')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('analyze-tab-interval'))
+    fireEvent.change(screen.getByTestId('analyze-filter-interval-view-mode'), { target: { value: 'distribution' } })
+    fireEvent.change(await screen.findByTestId('analyze-filter-interval-distribution-section'), { target: { value: 'tappingTerm' } })
+    // Selected keyboard (uid-a) matches the connected keyboard's uid —
+    // the pane forwards the real term.
+    await waitFor(() => expect(text('mock-tapping-term')).toBe('uid-a:uid-a:250:true'))
+
+    // Switch to uid-b: the connected term is still for uid-a, so the
+    // pane must null it out rather than diagnosing the wrong keyboard.
+    openFilterModal()
+    fireEvent.change(await screen.findByTestId('analyze-filter-keyboard'), { target: { value: 'uid-b' } })
+    applyFilterModal()
+    await waitFor(() => expect(text('mock-tapping-term')).toBe('uid-b:null'))
+    getSpy.mockRestore()
+  })
+
+  it('shows the Analyze -> Typing Test "open timeline" action only when exactly one run is selected for the connected keyboard', async () => {
+    mockListKeyboards.mockResolvedValue(SAMPLE)
+    const getSpy = mockFiltersWithRuns(['run-123'])
+    const onOpenRunTimeline = vi.fn()
+    const { TypingAnalyticsView } = await importView()
+    const { rerender } = render(
+      <TypingAnalyticsView
+        connectedTappingTerm={{ uid: 'uid-a', termMs: 250, reported: true }}
+        onOpenRunTimeline={onOpenRunTimeline}
+      />,
+    )
+    await waitFor(() => expect(screen.getByTestId('analyze-open-run-timeline')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('analyze-open-run-timeline'))
+    expect(onOpenRunTimeline).toHaveBeenCalledWith('run-123')
+
+    // The connected keyboard no longer matches the pane's selected uid
+    // (Analyze may be showing a different, possibly disconnected,
+    // keyboard's data) — there is no typing test view to re-enter for it.
+    rerender(
+      <TypingAnalyticsView
+        connectedTappingTerm={{ uid: 'uid-b', termMs: 250, reported: true }}
+        onOpenRunTimeline={onOpenRunTimeline}
+      />,
+    )
+    await waitFor(() => expect(screen.queryByTestId('analyze-open-run-timeline')).toBeNull())
+    getSpy.mockRestore()
+  })
+
+  it('hides the "open timeline" action when more than one run is selected', async () => {
+    mockListKeyboards.mockResolvedValue(SAMPLE)
+    const getSpy = mockFiltersWithRuns(['run-123', 'run-456'])
+    const { TypingAnalyticsView } = await importView()
+    render(
+      <TypingAnalyticsView
+        connectedTappingTerm={{ uid: 'uid-a', termMs: 250, reported: true }}
+        onOpenRunTimeline={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(screen.getByTestId('analyze-filter-chip')).toBeInTheDocument())
+    expect(screen.queryByTestId('analyze-open-run-timeline')).toBeNull()
+    getSpy.mockRestore()
+  })
+
+  it('shows all three distribution-section options when the snapshot has tap-hold keys, one section at a time', async () => {
+    mockListKeyboards.mockResolvedValue(SAMPLE)
+    mockGetSnapshot.mockResolvedValue({ ...SNAPSHOT, keymap: [[['LT(1,KC_SPC)']]] })
+    const { TypingAnalyticsView } = await importView()
+    render(<TypingAnalyticsView />)
+    await waitFor(() => expect(screen.getByTestId('mock-summary')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('analyze-tab-interval'))
+    fireEvent.change(screen.getByTestId('analyze-filter-interval-view-mode'), { target: { value: 'distribution' } })
+
+    const sectionSelect = await screen.findByTestId('analyze-filter-interval-distribution-section')
+    const optionValues = () => Array.from(sectionSelect.querySelectorAll('option')).map((o) => o.getAttribute('value'))
+    await waitFor(() => expect(optionValues()).toEqual(['interval', 'duration', 'tappingTerm']))
+
+    // 'interval' is the default section — only its mock is mounted.
+    expect(screen.getByTestId('mock-interval')).toBeInTheDocument()
+    expect(screen.queryByTestId('mock-duration')).toBeNull()
+    expect(screen.queryByTestId('mock-tapping-term')).toBeNull()
+
+    fireEvent.change(sectionSelect, { target: { value: 'duration' } })
+    await waitFor(() => expect(screen.getByTestId('mock-duration')).toBeInTheDocument())
+    expect(screen.queryByTestId('mock-interval')).toBeNull()
+    expect(screen.queryByTestId('mock-tapping-term')).toBeNull()
+
+    fireEvent.change(sectionSelect, { target: { value: 'tappingTerm' } })
+    await waitFor(() => expect(screen.getByTestId('mock-tapping-term')).toBeInTheDocument())
+    expect(screen.queryByTestId('mock-interval')).toBeNull()
+    expect(screen.queryByTestId('mock-duration')).toBeNull()
+  })
+
+  it('omits the Tapping Term option and falls back to Interval distribution when the snapshot has no tap-hold keys', async () => {
+    mockListKeyboards.mockResolvedValue(SAMPLE)
+    // Default snapshot (`KC_NO` only) has no tap-hold keys.
+    mockGetSnapshot.mockResolvedValue(SNAPSHOT)
+    const getSpy = vi.spyOn(window.vialAPI, 'pipetteSettingsGet').mockResolvedValue({
+      _rev: 1,
+      keyboardLayout: 'qwerty',
+      autoAdvance: true,
+      layerNames: [],
+      // Persisted pick points at a section that isn't available for
+      // this keymap (e.g. saved on a keyboard that used to have
+      // tap-hold keys) — must fall back to 'interval' rather than
+      // rendering nothing.
+      analyze: { filters: { interval: { viewMode: 'distribution', distributionSection: 'tappingTerm' } } },
+    })
+    const { TypingAnalyticsView } = await importView()
+    render(<TypingAnalyticsView />)
+    await waitFor(() => expect(screen.getByTestId('mock-summary')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('analyze-tab-interval'))
+
+    const sectionSelect = await screen.findByTestId('analyze-filter-interval-distribution-section')
+    const optionValues = Array.from(sectionSelect.querySelectorAll('option')).map((o) => o.getAttribute('value'))
+    expect(optionValues).toEqual(['interval', 'duration'])
+    expect(screen.getByTestId('mock-interval')).toBeInTheDocument()
+    getSpy.mockRestore()
+  })
+
+  it('omits the Keymap row when listKeymapSnapshots rejects', async () => {
     mockListKeyboards.mockResolvedValue(SAMPLE)
     const summariesSpy = vi
       .spyOn(window.vialAPI, 'typingAnalyticsListKeymapSnapshots')
@@ -612,6 +947,9 @@ describe('TypingAnalyticsView', () => {
     const { TypingAnalyticsView } = await importView()
     render(<TypingAnalyticsView />)
     await waitFor(() => expect(summariesSpy).toHaveBeenCalledWith('uid-a'))
+    openFilterModal()
+    await screen.findByTestId('analyze-filter-device')
+    expect(screen.queryByTestId('analyze-filter-modal-keymap-row')).toBeNull()
     expect(screen.queryByTestId('analyze-snapshot-timeline-select')).toBeNull()
     summariesSpy.mockRestore()
   })

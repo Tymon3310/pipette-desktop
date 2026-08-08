@@ -15,6 +15,14 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   } as unknown as typeof ResizeObserver
 }
 
+// jsdom doesn't implement Element.scrollIntoView either — needed by the
+// pack modals' post-import/download auto-scroll (useImportPlacement).
+// Tests that want to assert it was called override it per-element with
+// their own vi.fn(), same pattern as elsewhere in this file.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = function scrollIntoView(): void {}
+}
+
 // Default vialAPI shim so renderer tests that mount components which
 // call into the Key Label store (Settings → Tools, KeymapEditor toolbox,
 // LayoutComparisonView, …) do not need to repeat the mock per file.
@@ -22,7 +30,7 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 // Object.defineProperty(window, 'vialAPI', { value: ..., writable: true }).
 if (typeof window !== 'undefined') {
   const noopOk = async <T>(value?: T): Promise<{ success: true; data?: T }> => ({ success: true, data: value })
-  const existing = (window as { vialAPI?: Record<string, unknown> }).vialAPI ?? {}
+  const existing = (window as unknown as { vialAPI?: Record<string, unknown> }).vialAPI ?? {}
   const stub = {
     hubGetOrigin: async () => 'https://pipette-hub-test.example',
     openExternal: async () => undefined,
@@ -54,6 +62,13 @@ if (typeof window !== 'undefined') {
     keyLabelHubUpdate: noopOk,
     keyLabelHubDelete: noopOk,
     typingAnalyticsListAppsForRange: async () => [],
+    // Comparison baseline pool — TypingTestPane fetches this on mount.
+    pipetteSettingsListAllTypingResults: async () => [],
+    // Connect-time keyboard naming — fire-and-forget in useDeviceLifecycle.
+    keyboardMetaNameIfMissing: async () => undefined,
+    // Typing-dataset version check — LanguageSelectorModal calls this on mount.
+    checkTypingDatasetUpdate: async () => ({ provider: 'monkeytype', updateAvailable: false }),
+    updateTypingDataset: async () => ({ provider: 'monkeytype', changed: false, fromVersion: '' }),
     // i18n pack store: every renderer that mounts SettingsModal pulls in
     // LanguagePacksModal → useI18nPackStore, which calls i18nPackList on
     // mount. Stub the read paths to an empty list and the change-notifier

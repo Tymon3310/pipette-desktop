@@ -1,0 +1,98 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+import { describe, it, expect } from 'vitest'
+import { formatConditionLabel } from '../condition-label'
+import type { TypingTestResult } from '../../../shared/types/pipette-settings'
+
+const identityT = (key: string): string => key
+
+function makeResult(overrides: Partial<TypingTestResult> = {}): TypingTestResult {
+  return {
+    date: '2026-06-20T00:00:00.000Z',
+    wpm: 60,
+    accuracy: 95,
+    wordCount: 30,
+    correctChars: 300,
+    incorrectChars: 5,
+    durationSeconds: 30,
+    mode: 'words',
+    mode2: 30,
+    language: 'english',
+    punctuation: false,
+    numbers: false,
+    ...overrides,
+  }
+}
+
+describe('formatConditionLabel', () => {
+  it('formats words with the toggle suffix', () => {
+    expect(formatConditionLabel(makeResult({ mode2: 50 }), identityT))
+      .toBe('50 editor.typingTest.mode.words (english)')
+    expect(formatConditionLabel(makeResult({ mode2: 50, punctuation: true, numbers: true }), identityT))
+      .toBe('50 editor.typingTest.mode.words (english) editor.typingTest.history.conditionPunctuation editor.typingTest.history.conditionNumbers')
+  })
+
+  it('formats time as duration + s', () => {
+    expect(formatConditionLabel(makeResult({ mode: 'time', mode2: 30, punctuation: true }), identityT))
+      .toBe('30s (english) editor.typingTest.history.conditionPunctuation')
+  })
+
+  it('appends the romaji suffix for a romajiInput run', () => {
+    expect(formatConditionLabel(makeResult({ mode2: 30, language: 'japanese_hiragana', romajiInput: true }), identityT))
+      .toBe('30 editor.typingTest.mode.words (japanese_hiragana) editor.typingTest.history.conditionRomaji')
+  })
+
+  it('combines the romaji suffix with punctuation/numbers, in order', () => {
+    expect(formatConditionLabel(makeResult({ mode2: 30, punctuation: true, numbers: true, romajiInput: true }), identityT))
+      .toBe('30 editor.typingTest.mode.words (english) editor.typingTest.history.conditionPunctuation editor.typingTest.history.conditionNumbers editor.typingTest.history.conditionRomaji')
+  })
+
+  it('appends the kana suffix for a kanaInput run, never alongside the romaji suffix', () => {
+    expect(formatConditionLabel(makeResult({ mode2: 30, language: 'japanese_hiragana', kanaInput: true }), identityT))
+      .toBe('30 editor.typingTest.mode.words (japanese_hiragana) editor.typingTest.history.conditionKana')
+  })
+
+  it('appends the weak-spot suffix for a weakSpotTrainingMode run', () => {
+    expect(formatConditionLabel(makeResult({ mode2: 30, weakSpotTrainingMode: true }), identityT))
+      .toBe('30 editor.typingTest.mode.words (english) editor.typingTest.history.conditionWeakSpot')
+  })
+
+  it('combines the weak-spot suffix with punctuation/numbers/romaji, in order', () => {
+    expect(formatConditionLabel(
+      makeResult({ mode2: 30, punctuation: true, numbers: true, romajiInput: true, weakSpotTrainingMode: true }),
+      identityT,
+    )).toBe(
+      '30 editor.typingTest.mode.words (english) editor.typingTest.history.conditionPunctuation '
+      + 'editor.typingTest.history.conditionNumbers editor.typingTest.history.conditionRomaji '
+      + 'editor.typingTest.history.conditionWeakSpot',
+    )
+  })
+
+  it('formats quote with the length label and no toggle suffix', () => {
+    expect(formatConditionLabel(makeResult({ mode: 'quote', mode2: 'medium', punctuation: undefined, numbers: undefined }), identityT))
+      .toBe('editor.typingTest.quoteLength.medium editor.typingTest.mode.quote (english)')
+  })
+
+  it('prefers the imported text name over the raw id', () => {
+    expect(formatConditionLabel(makeResult({ mode: 'fileImport', mode2: 't1', fileImportTextName: 'novel.txt' }), identityT))
+      .toBe('novel.txt')
+    // Legacy rows without a captured name fall back to the stable id.
+    expect(formatConditionLabel(makeResult({ mode: 'fileImport', mode2: 't1', fileImportTextName: undefined }), identityT))
+      .toBe('t1')
+  })
+
+  it('formats tatoeba with the pack language + line count', () => {
+    expect(formatConditionLabel(makeResult({ mode: 'tatoeba', mode2: 'japanese|lines|5', language: 'japanese' }), identityT))
+      .toBe('editor.typingTest.history.conditionTatoeba 5 editor.typingTest.mode.lines (japanese)')
+  })
+
+  it('formats tatoeba with the pack language + duration', () => {
+    expect(formatConditionLabel(makeResult({ mode: 'tatoeba', mode2: 'japanese|time|30', language: 'japanese' }), identityT))
+      .toBe('editor.typingTest.history.conditionTatoeba 30s (japanese)')
+  })
+
+  it('falls back to the legacy bare-language label for rows saved before the composite mode2', () => {
+    expect(formatConditionLabel(makeResult({ mode: 'tatoeba', mode2: 'japanese', language: 'japanese' }), identityT))
+      .toBe('editor.typingTest.history.conditionTatoeba (japanese)')
+  })
+})

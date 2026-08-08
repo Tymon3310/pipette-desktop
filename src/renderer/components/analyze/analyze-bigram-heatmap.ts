@@ -7,12 +7,57 @@
 
 import type { TypingBigramTopEntry } from '../../../shared/types/typing-analytics'
 
-const HIST_BUCKETS = 8
+/** Histogram bucket count carried by every bigram/trigram wire entry
+ * (`TypingBigramTopEntry.hist`) — always length 8. Exported so the
+ * other renderer-side bigram helpers (finger pairs, Heatmap Speed
+ * mode) share one source instead of re-declaring the constant. */
+export const HIST_BUCKETS = 8
 
-export interface BigramHeatmapCell {
+/** Parses a `_`-joined 2-part ngram id ("prevCode_currCode") into its
+ * numeric halves, or `null` when the id is malformed (wrong part
+ * count, non-numeric). Shared by every renderer helper that folds
+ * bigram entries by their from/to keycode. */
+export function parseBigramId(ngramId: string): { prev: number; curr: number } | null {
+  const parts = ngramId.split('_')
+  if (parts.length !== 2) return null
+  const prev = Number(parts[0])
+  const curr = Number(parts[1])
+  if (!Number.isFinite(prev) || !Number.isFinite(curr)) return null
+  return { prev, curr }
+}
+
+/** Adds `src` onto `target` element-wise across `HIST_BUCKETS`
+ * buckets, treating a short/missing `src` bucket as 0. Shared by every
+ * renderer helper that accumulates bigram histograms into a coarser
+ * bucket (key, finger pair, or keycode). */
+export function foldHist(target: number[], src: readonly number[]): void {
+  for (let i = 0; i < HIST_BUCKETS; i += 1) target[i] += src[i] ?? 0
+}
+
+/** Running `{count, hist}` accumulator shared by every renderer
+ * aggregator that folds bigram entries into a bucket — finger pairs
+ * (`FingerPairTotal`), hand-usage classes (`BigramClassTotal`), and
+ * heatmap grid cells (`BigramHeatmapCell`) all use exactly this shape,
+ * just keyed differently (finger-pair string, class name, grid
+ * position). */
+export interface HistTotal {
   count: number
   hist: number[]
 }
+
+/** A fresh zero-valued `HistTotal`, `hist` sized to `HIST_BUCKETS`.
+ * Shared so every bucket-total aggregator below seeds identically
+ * instead of repeating the `new Array<number>(HIST_BUCKETS).fill(0)`
+ * literal. */
+export function emptyHistTotal(): HistTotal {
+  return { count: 0, hist: new Array<number>(HIST_BUCKETS).fill(0) }
+}
+
+/** Per-cell total in the heatmap's N × N grid. Kept as its own name
+ * (rather than exporting `HistTotal` directly) since callers address a
+ * cell by grid position, not by a class/finger-pair key — but the
+ * shape is identical, so it's an alias, not a re-declaration. */
+export type BigramHeatmapCell = HistTotal
 
 export interface BigramHeatmapResult {
   keys: number[]
@@ -34,14 +79,11 @@ export function aggregateKeyHeatmap(
   const totals = new Map<number, number>()
   const parsed: { prev: number; curr: number; entry: TypingBigramTopEntry }[] = []
   for (const entry of entries) {
-    const parts = entry.bigramId.split('_')
-    if (parts.length !== 2) continue
-    const prev = Number(parts[0])
-    const curr = Number(parts[1])
-    if (!Number.isFinite(prev) || !Number.isFinite(curr)) continue
-    parsed.push({ prev, curr, entry })
-    totals.set(prev, (totals.get(prev) ?? 0) + entry.count)
-    totals.set(curr, (totals.get(curr) ?? 0) + entry.count)
+    const pair = parseBigramId(entry.ngramId)
+    if (!pair) continue
+    parsed.push({ ...pair, entry })
+    totals.set(pair.prev, (totals.get(pair.prev) ?? 0) + entry.count)
+    totals.set(pair.curr, (totals.get(pair.curr) ?? 0) + entry.count)
   }
 
   const keys = [...totals.entries()]
@@ -62,13 +104,11 @@ export function aggregateKeyHeatmap(
     if (i === undefined || j === undefined) continue
     let cell = cells[i][j]
     if (!cell) {
-      cell = { count: 0, hist: new Array<number>(HIST_BUCKETS).fill(0) }
+      cell = emptyHistTotal()
       cells[i][j] = cell
     }
     cell.count += entry.count
-    for (let h = 0; h < HIST_BUCKETS; h += 1) {
-      cell.hist[h] += entry.hist[h] ?? 0
-    }
+    foldHist(cell.hist, entry.hist)
   }
 
   return { keys, cells }

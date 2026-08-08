@@ -7,6 +7,7 @@
 // 30-day-windowed and not reused by the other cards.
 
 import type { TypingKeymapSnapshot } from '../../../shared/types/typing-analytics'
+import type { TypingTestResult } from '../../../shared/types/pipette-settings'
 import type { FingerType } from '../../../shared/kle/kle-ergonomics'
 import { StreakGoalCard } from './StreakGoalCard'
 import { TodaySummaryCard } from './TodaySummaryCard'
@@ -22,16 +23,22 @@ interface Props {
    * daily-summary fetch and to TypingProfileCard so every per-app
    * subview re-aggregates from the same single-app minute set. */
   appScopes: string[]
+  /** TypingTest filter — same contract as appScopes, forwarded alongside. */
+  typingTestScopes: string[]
+  runIdScopes: string[]
   /** Snapshot the parent already resolved for the current scope —
    * Profile uses it to map bigram keycodes to fingers / hands. */
   snapshot: TypingKeymapSnapshot | null
   /** Per-position finger overrides loaded by the parent's
    * pipetteSettings effect. */
   fingerOverrides: Record<string, FingerType>
+  /** Saved Typing Test History, loaded by the same parent effect — passed
+   * straight through to TypingProfileCard's KSPC cell. */
+  typingTestResults: TypingTestResult[]
 }
 
-export function SummaryView({ uid, deviceScope, appScopes, snapshot, fingerOverrides }: Props) {
-  const { daily } = useDailySummary(uid, deviceScope, appScopes)
+export function SummaryView({ uid, deviceScope, appScopes, typingTestScopes, runIdScopes, snapshot, fingerOverrides, typingTestResults }: Props) {
+  const { daily } = useDailySummary(uid, deviceScope, appScopes, typingTestScopes, runIdScopes)
   const today = useLocalToday()
   return (
     <div className="flex h-full w-full flex-col gap-3">
@@ -41,10 +48,13 @@ export function SummaryView({ uid, deviceScope, appScopes, snapshot, fingerOverr
         uid={uid}
         deviceScope={deviceScope}
         appScopes={appScopes}
+        typingTestScopes={typingTestScopes}
+        runIdScopes={runIdScopes}
         daily={daily}
         today={today}
         snapshot={snapshot}
         fingerOverrides={fingerOverrides}
+        typingTestResults={typingTestResults}
       />
       {/* The streak counter is a long-running motivator and reads as
           a single timeline of "kept typing every day". Filtering it

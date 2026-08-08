@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 
 vi.mock('react-i18next', () => ({
@@ -35,6 +35,12 @@ const mockKeycodes = [
   { qmkId: 'KC_B', label: 'B', tooltip: 'b', hidden: false, alias: ['KC_B'], masked: false },
   { qmkId: 'KC_ENTER', label: 'Enter', tooltip: 'Return', hidden: false, alias: ['KC_ENTER', 'KC_ENT'], masked: false },
   { qmkId: 'KC_SPACE', label: 'Space', tooltip: 'space', hidden: false, alias: ['KC_SPACE', 'KC_SPC'], masked: false },
+  // Mirrors the real KC_8/KC_9 default legends (issue #294 repro): KC_9's
+  // *unrelated* default label already contains "(", which is exactly the
+  // substring collision a Key Label pack remapping KC_8 -> "(\n8" must
+  // not be shadowed by.
+  { qmkId: 'KC_8', label: '*\n8', tooltip: '8 and *', hidden: false, alias: ['KC_8'], masked: false },
+  { qmkId: 'KC_9', label: '(\n9', tooltip: '9 and (', hidden: false, alias: ['KC_9'], masked: false },
 ]
 
 const mockLayerKeycodes = [
@@ -127,6 +133,11 @@ vi.mock('../../../../shared/keycodes/keycodes', () => ({
   extractBasicKey: (code: number) => code & 0xff,
   buildModMaskKeycode: (mask: number, key: number) => (mask === 0 ? key & 0xff : ((mask & 0x1f) << 8) | (key & 0xff)),
   buildModTapKeycode: (mask: number, key: number) => (mask === 0 ? key & 0xff : 0x6000 | ((mask & 0x1f) << 8) | (key & 0xff)),
+  // Mirrors the real `keycodeLabel`: resolves a remap value that is
+  // itself another keycode id to that keycode's own label, otherwise
+  // returns the input unchanged (arbitrary pack text like "(\n8" passes
+  // straight through, same as the real implementation).
+  keycodeLabel: (qmkId: string) => mockKeycodes.find((kc) => kc.qmkId === qmkId)?.label ?? qmkId,
 }))
 
 vi.mock('../ModifierCheckboxStrip', () => ({
@@ -331,6 +342,93 @@ describe('PopoverTabKey — search', () => {
   })
 })
 
+describe('PopoverTabKey — Key Label pack remap in search (issue #294)', () => {
+  const onSelect = vi.fn()
+  // Mirrors the reported bug: a Japanese (QWERTY)-style pack remaps
+  // KC_8's legend to "(\n8". KC_9's own *unrelated* default label is
+  // "(\n9" — before the fix, searching "(" only ever matched KC_9 (the
+  // remapped KC_8 was invisible to search and rendered its stale
+  // default legend), so the wrong keycode got applied.
+  const remapLabel = (qmkId: string) => (qmkId === 'KC_8' ? '(\n8' : qmkId)
+
+  beforeEach(() => { onSelect.mockClear() })
+
+  it('without a pack (no remapLabel), searching "(" only finds KC_9 via its own default label', () => {
+    render(<PopoverTabKey currentKeycode={4} onKeycodeSelect={onSelect} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: '(' } })
+    expect(screen.getByTestId('popover-result-KC_9')).toBeInTheDocument()
+    expect(screen.queryByTestId('popover-result-KC_8')).not.toBeInTheDocument()
+  })
+
+  it('with the pack active, searching "(" also finds the remapped KC_8, displaying its remapped label', () => {
+    render(<PopoverTabKey currentKeycode={4} remapLabel={remapLabel} onKeycodeSelect={onSelect} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: '(' } })
+    const kc8Row = screen.getByTestId('popover-result-KC_8')
+    expect(kc8Row).toBeInTheDocument()
+    expect(kc8Row).toHaveTextContent('( 8')
+    // KC_9's own unrelated default-label match is unaffected.
+    expect(screen.getByTestId('popover-result-KC_9')).toBeInTheDocument()
+  })
+
+  it('searching "8" (the remap\'s second line) also finds the remapped KC_8', () => {
+    render(<PopoverTabKey currentKeycode={4} remapLabel={remapLabel} onKeycodeSelect={onSelect} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: '8' } })
+    expect(screen.getByTestId('popover-result-KC_8')).toBeInTheDocument()
+  })
+
+  it('searching the default qmkId alias ("KC_9") still finds KC_9 while the pack is active', () => {
+    render(<PopoverTabKey currentKeycode={4} remapLabel={remapLabel} onKeycodeSelect={onSelect} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: '9' } })
+    expect(screen.getByTestId('popover-result-KC_9')).toBeInTheDocument()
+  })
+
+  it('applies the same remap color styling as the keymap grid (text-key-label-remap) to a remapped result row only', () => {
+    render(<PopoverTabKey currentKeycode={4} remapLabel={remapLabel} onKeycodeSelect={onSelect} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: '(' } })
+    const kc8Label = screen.getByTestId('popover-result-KC_8').querySelector('span')
+    expect(kc8Label?.className).toContain('text-key-label-remap')
+    const kc9Label = screen.getByTestId('popover-result-KC_9').querySelector('span')
+    expect(kc9Label?.className).not.toContain('text-key-label-remap')
+  })
+
+  it('appends the default label to the detail line for a remapped entry so the underlying key stays identifiable', () => {
+    render(<PopoverTabKey currentKeycode={4} remapLabel={remapLabel} onKeycodeSelect={onSelect} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: '(' } })
+    const kc8Row = screen.getByTestId('popover-result-KC_8')
+    expect(kc8Row).toHaveTextContent('KC_8')
+    expect(kc8Row).toHaveTextContent('* 8')
+  })
+
+  it('without a pack, an unmapped key never gets the remap color or a displayLabel', () => {
+    render(<PopoverTabKey currentKeycode={4} onKeycodeSelect={onSelect} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: '(' } })
+    const kc9Label = screen.getByTestId('popover-result-KC_9').querySelector('span')
+    expect(kc9Label?.className).not.toContain('text-key-label-remap')
+  })
+
+  it('KeyPopover forwards remapLabel through to the Key tab search results (wiring)', () => {
+    render(<KeyPopover {...defaultProps} remapLabel={remapLabel} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: '(' } })
+    expect(screen.getByTestId('popover-result-KC_8')).toBeInTheDocument()
+    expect(screen.getByTestId('popover-result-KC_8')).toHaveTextContent('( 8')
+  })
+
+  // The picker's search results treat an identity `remapLabel` (one that
+  // returns its input unchanged, e.g. QWERTY's always-empty map) exactly
+  // like having no pack at all — raw label, no remap styling — without a
+  // separate "no pack" branch of its own.
+  it('an identity remapLabel behaves exactly like no pack — raw label, no remap styling', () => {
+    const identityRemapLabel = (qmkId: string) => qmkId
+    render(<PopoverTabKey currentKeycode={4} remapLabel={identityRemapLabel} onKeycodeSelect={onSelect} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: '(' } })
+    expect(screen.getByTestId('popover-result-KC_9')).toBeInTheDocument()
+    expect(screen.queryByTestId('popover-result-KC_8')).not.toBeInTheDocument()
+    const kc9Label = screen.getByTestId('popover-result-KC_9').querySelector('span')
+    expect(kc9Label?.className).not.toContain('text-key-label-remap')
+  })
+
+})
+
 describe('PopoverTabCode — hex input', () => {
   function renderCodeTab(hexValue?: string): void {
     render(<KeyPopover {...defaultProps} />)
@@ -356,7 +454,7 @@ describe('PopoverTabCode — hex input', () => {
   it('calls onRawKeycodeSelect when apply is clicked (popover stays open)', () => {
     renderCodeTab('0005')
     fireEvent.click(screen.getByTestId('popover-code-apply'))
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(5)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(5, true)
     expect(onClose).not.toHaveBeenCalled()
   })
 
@@ -418,7 +516,7 @@ describe('KeyPopover — maskOnly mode', () => {
     })
     fireEvent.click(screen.getByTestId('popover-code-apply'))
     // Should apply full code: 0x5100 | 0x2C = 0x512C (LT0(KC_SPACE))
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x512c)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x512c, true)
     expect(onClose).not.toHaveBeenCalled()
   })
 
@@ -439,7 +537,7 @@ describe('KeyPopover — maskOnly mode', () => {
       target: { value: '2c' },
     })
     fireEvent.click(screen.getByTestId('popover-code-apply'))
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x512c)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x512c, true)
   })
 })
 
@@ -582,7 +680,7 @@ describe('KeyPopover — LT/SH_T/LM wrapper modes', () => {
     // Switch to LM mode
     fireEvent.click(screen.getByTestId('popover-mode-lm'))
     // buildLMKeycode(0, 0) = 0x7000
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x7000)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x7000, false)
     // Search should be hidden, layer selector should appear
     expect(screen.queryByTestId('popover-search-input')).not.toBeInTheDocument()
     expect(screen.getByTestId('layer-selector')).toBeInTheDocument()
@@ -594,7 +692,7 @@ describe('KeyPopover — LT/SH_T/LM wrapper modes', () => {
     fireEvent.click(screen.getByTestId('popover-mode-lm'))
     // LM keycodes store modifiers in lower bits, not basic keys.
     // Toggling off should produce KC_NO (0), not the modifier value.
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0, false)
   })
 
   it('clears search when switching from LM to another mode', () => {
@@ -611,28 +709,28 @@ describe('KeyPopover — LT/SH_T/LM wrapper modes', () => {
     render(<KeyPopover {...defaultProps} currentKeycode={0x7002} layers={4} />)
     fireEvent.click(screen.getByTestId('popover-mode-lt'))
     // buildLTKeycode(0, 0) = 0x4000 — basicKey must be 0, not the modifier mask
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x4000)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x4000, false)
   })
 
   it('does not leak LM modifier bits as basic key when switching to SH_T', () => {
     render(<KeyPopover {...defaultProps} currentKeycode={0x7002} />)
     fireEvent.click(screen.getByTestId('popover-mode-sh-t'))
     // buildSHTKeycode(0) = 0x5600
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x5600)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x5600, false)
   })
 
   it('does not leak LM modifier bits as basic key when switching to modTap', () => {
     render(<KeyPopover {...defaultProps} currentKeycode={0x7002} />)
     fireEvent.click(screen.getByTestId('popover-mode-mod-tap'))
     // buildModTapKeycode(0, 0) = 0 (mask 0 returns basic key in mock)
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0, false)
   })
 
   it('does not leak LM modifier bits as basic key when switching to modMask', () => {
     render(<KeyPopover {...defaultProps} currentKeycode={0x7002} />)
     fireEvent.click(screen.getByTestId('popover-mode-mod-mask'))
     // buildModMaskKeycode(0, 0) = 0 (mask 0 returns basic key in mock)
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0, false)
   })
 
   it('builds LT keycode when selecting a key in LT mode', () => {
@@ -641,7 +739,7 @@ describe('KeyPopover — LT/SH_T/LM wrapper modes', () => {
     fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: 'B' } })
     fireEvent.click(screen.getByTestId('popover-result-KC_B'))
     // buildLTKeycode(0, 5) = 0x4000 | (0 << 8) | 5 = 0x4005
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x4005)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x4005, true)
   })
 
   it('changes layer in LT mode and rebuilds keycode', () => {
@@ -649,7 +747,7 @@ describe('KeyPopover — LT/SH_T/LM wrapper modes', () => {
     // Click layer 2 button
     fireEvent.click(screen.getByTestId('layer-btn-2'))
     // buildLTKeycode(2, 4) = 0x4000 | (2 << 8) | 4 = 0x4204
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x4204)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x4204, false)
   })
 
   it('builds SH_T keycode when selecting a key in SH_T mode', () => {
@@ -657,7 +755,7 @@ describe('KeyPopover — LT/SH_T/LM wrapper modes', () => {
     render(<KeyPopover {...defaultProps} currentKeycode={4} />)
     fireEvent.click(screen.getByTestId('popover-mode-sh-t'))
     // Switching to SH_T mode: buildSHTKeycode(4) = 0x5600 | 4 = 0x5604
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x5604)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(0x5604, false)
   })
 
   it('reverts to basic key when toggling mode off', () => {
@@ -665,7 +763,7 @@ describe('KeyPopover — LT/SH_T/LM wrapper modes', () => {
     // LT mode is auto-detected. Click LT button to toggle off
     fireEvent.click(screen.getByTestId('popover-mode-lt'))
     // Should revert to basic key: extractBasicKey(0x4004) = 4
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(4)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(4, false)
   })
 
   it('resets modifier mask to 0 when switching from LT to modTap', () => {
@@ -675,7 +773,7 @@ describe('KeyPopover — LT/SH_T/LM wrapper modes', () => {
     fireEvent.click(screen.getByTestId('popover-mode-mod-tap'))
     // Should build modTap with mask=0 (not extracting layer bits as mods)
     // buildModTapKeycode(0, 4) = 4 (mask 0 returns basic key)
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(4)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(4, false)
   })
 
   it('resets modifier mask to 0 when switching from SH_T to modMask', () => {
@@ -685,6 +783,167 @@ describe('KeyPopover — LT/SH_T/LM wrapper modes', () => {
     fireEvent.click(screen.getByTestId('popover-mode-mod-mask'))
     // Should build modMask with mask=0 (not extracting SH_T prefix as mods)
     // buildModMaskKeycode(0, 4) = 4 (mask 0 returns basic key)
-    expect(onRawKeycodeSelect).toHaveBeenCalledWith(4)
+    expect(onRawKeycodeSelect).toHaveBeenCalledWith(4, false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Auto Move advance: KeymapEditor keeps the same call site but changes the
+// `key` it hands `<KeyPopover>` (via `popoverInstanceKey`) as the edit target
+// moves — layer is *not* part of that key (see the next describe block for
+// that case). These tests simulate the same `key` change directly on
+// `KeyPopover` and check the popover's own internal state — the regression
+// this closes left `wrapperMode`/`selectedLayer`/`pendingAction`/`activeTab`/
+// the search box behind on the previous target.
+// ---------------------------------------------------------------------------
+
+describe('KeyPopover — remount on Auto Move advance (key prop change)', () => {
+  it('shows the moved-to key\'s current value, not the previous key\'s — matches closing and reopening', () => {
+    const { rerender } = render(<KeyPopover key="0,0" {...defaultProps} currentKeycode={4} />)
+    expect((screen.getByTestId('popover-search-input') as HTMLInputElement).value).toBe('A')
+
+    // Auto Move advances to a key currently holding KC_B.
+    rerender(<KeyPopover key="0,1" {...defaultProps} currentKeycode={5} />)
+    expect((screen.getByTestId('popover-search-input') as HTMLInputElement).value).toBe('B')
+  })
+
+  it('re-detects wrapper mode for the moved-to key instead of keeping the previous key\'s mode', () => {
+    // Start on a plain basic key — no wrapper mode, no layer selector.
+    const { rerender } = render(<KeyPopover key="0,0" {...defaultProps} currentKeycode={4} layers={4} />)
+    expect(screen.queryByTestId('layer-selector')).not.toBeInTheDocument()
+
+    // Auto Move advances to a key that already holds an LT-wrapped keycode —
+    // LT mode must be auto-detected for it, not left at the previous key's 'none'.
+    rerender(<KeyPopover key="0,1" {...defaultProps} currentKeycode={0x4104} layers={4} />)
+    expect(screen.getByTestId('layer-selector')).toBeInTheDocument()
+  })
+
+  it('does not carry over a buffered pending action from the previous key', () => {
+    const { rerender } = render(<KeyPopover key="0,0" {...defaultProps} currentKeycode={4} quickSelect={false} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: 'B' } })
+    fireEvent.click(screen.getByTestId('popover-result-KC_B'))
+    // Buffered (quickSelect off), not applied yet.
+    expect(onKeycodeSelect).not.toHaveBeenCalled()
+
+    // Advance to the next key without confirming — the old key's buffered
+    // pick must not survive into the new instance.
+    rerender(<KeyPopover key="0,1" {...defaultProps} currentKeycode={4} quickSelect={false} />)
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+    // Enter at the new key, with nothing picked there yet, must not apply
+    // the stale KC_B pick from the previous key.
+    expect(onKeycodeSelect).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('resets the active tab to Key after advance even if the Code tab was left open on the previous key', () => {
+    const { rerender } = render(<KeyPopover key="0,0" {...defaultProps} currentKeycode={4} />)
+    fireEvent.click(screen.getByTestId('popover-tab-code'))
+    expect(screen.getByTestId('popover-hex-input')).toBeInTheDocument()
+
+    rerender(<KeyPopover key="0,1" {...defaultProps} currentKeycode={5} />)
+    expect(screen.queryByTestId('popover-hex-input')).not.toBeInTheDocument()
+    expect(screen.getByTestId('popover-search-input')).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Layer sidebar click (`currentLayer` prop change, same `key` — no remount):
+// this is the existing "view another layer's value while the popover stays
+// open" workflow. Unlike an Auto Move advance, this must NOT reset
+// `activeTab` — that's the whole point of the layer sidebar. It still must
+// re-derive wrapper mode / selected layer / any buffered pick for the new
+// layer's keycode, via `usePopoverKeycodeWorkflow`'s own `currentLayer` effect.
+// ---------------------------------------------------------------------------
+
+describe('PopoverTabKey — truncated detail hover tooltip (canonicalized shared bubble)', () => {
+  // jsdom never computes real layout, so `scrollWidth`/`clientWidth` both
+  // default to 0 — force a "truncated" reading (scrollWidth > clientWidth)
+  // on the hovered detail span so `handleDetailMouseEnter`'s early-return
+  // guard doesn't skip the tooltip.
+  function markTruncated(el: Element): void {
+    Object.defineProperty(el, 'scrollWidth', { configurable: true, value: 200 })
+    Object.defineProperty(el, 'clientWidth', { configurable: true, value: 100 })
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('does not show a tooltip for a non-truncated detail span', () => {
+    render(<PopoverTabKey currentKeycode={4} onKeycodeSelect={vi.fn()} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: 'enter' } })
+    const detail = screen.getByTestId('popover-result-KC_ENTER').querySelector('span:last-child')!
+    fireEvent.mouseEnter(detail)
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+
+  it('shows a role="tooltip" bubble with the full detail text after the 300ms open delay', () => {
+    render(<PopoverTabKey currentKeycode={4} onKeycodeSelect={vi.fn()} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: 'enter' } })
+    const detail = screen.getByTestId('popover-result-KC_ENTER').querySelector('span:last-child')!
+    markTruncated(detail)
+    fireEvent.mouseEnter(detail)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    act(() => { vi.advanceTimersByTime(300) })
+    const bubble = screen.getByRole('tooltip')
+    expect(bubble).toHaveTextContent('Return')
+  })
+
+  it('closes instantly on mouse leave, even mid-delay', () => {
+    render(<PopoverTabKey currentKeycode={4} onKeycodeSelect={vi.fn()} />)
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: 'enter' } })
+    const detail = screen.getByTestId('popover-result-KC_ENTER').querySelector('span:last-child')!
+    markTruncated(detail)
+    fireEvent.mouseEnter(detail)
+    act(() => { vi.advanceTimersByTime(150) })
+    fireEvent.mouseLeave(detail)
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+})
+
+describe('KeyPopover — layer sidebar change (currentLayer prop, same instance)', () => {
+  it('keeps the active tab on Code across a layer change', () => {
+    const { rerender } = render(
+      <KeyPopover {...defaultProps} currentKeycode={4} layers={4} currentLayer={0} onLayerChange={() => {}} />,
+    )
+    fireEvent.click(screen.getByTestId('popover-tab-code'))
+    expect(screen.getByTestId('popover-hex-input')).toBeInTheDocument()
+
+    // Same instance (no `key` change) — only `currentLayer` changes.
+    rerender(
+      <KeyPopover {...defaultProps} currentKeycode={5} layers={4} currentLayer={1} onLayerChange={() => {}} />,
+    )
+    expect(screen.getByTestId('popover-hex-input')).toBeInTheDocument()
+  })
+
+  it('re-detects wrapper mode and clears any buffered pick for the new layer\'s keycode', () => {
+    // LT1(KC_A) auto-detects LT mode with the layer selector shown.
+    const { rerender } = render(
+      <KeyPopover {...defaultProps} currentKeycode={0x4104} layers={4} currentLayer={0} onLayerChange={() => {}} quickSelect={false} />,
+    )
+    expect(screen.getByTestId('layer-selector')).toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('popover-search-input'), { target: { value: 'B' } })
+    fireEvent.click(screen.getByTestId('popover-result-KC_B'))
+    expect(onKeycodeSelect).not.toHaveBeenCalled()
+
+    // Switch layer sidebar to a layer whose same position holds a plain
+    // basic key — wrapper mode must reset to 'none', not keep 'lt', and the
+    // buffered KC_B pick from the previous layer must not survive.
+    rerender(
+      <KeyPopover {...defaultProps} currentKeycode={4} layers={4} currentLayer={1} onLayerChange={() => {}} quickSelect={false} />,
+    )
+    expect(screen.queryByTestId('layer-selector')).not.toBeInTheDocument()
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+    expect(onKeycodeSelect).not.toHaveBeenCalled()
   })
 })

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useAutoLock } from './useAutoLock'
 import { isKeyboardDefinition, isVilFile, isVilFileV1, VILFILE_CURRENT_VERSION } from '../../shared/vil-file'
 import type { DeviceInfo, VilFile, KeyboardDefinition } from '../../shared/types/protocol'
-import type { SyncScope } from '../../shared/types/sync'
+import type { SyncScope, SyncOperationResult } from '../../shared/types/sync'
 import type { PipetteFileKeyboard, PipetteFileEntry } from '../app-types'
 
 interface Options {
@@ -17,7 +17,7 @@ interface Options {
   isPipetteFile: boolean
   // Keyboard
   keyboardUid: string | undefined
-  keyboardReload: () => Promise<string | undefined>
+  keyboardReload: () => Promise<string | null>
   keyboardReset: () => void
   keyboardLoadDummy: (def: KeyboardDefinition) => void
   keyboardLoadPipetteFile: (vil: VilFile) => void
@@ -31,8 +31,16 @@ interface Options {
   autoSync: boolean
   authenticated: boolean
   hasPassword: boolean
-  syncNow: (direction: 'download' | 'upload', scope?: SyncScope) => Promise<void>
+  syncNow: (direction: 'download' | 'upload', scope?: SyncScope) => Promise<SyncOperationResult>
   deviceSyncing: boolean
+  // First-sync auto-fire (i18n/theme pack discovery — see
+  // matchesScope's doc in sync-service.ts for why the 3-minute poll
+  // alone cannot discover a pack that predates this machine's first
+  // poll). `packsPulledOnce` is read from AppConfig; `markPacksPulledOnce`
+  // persists it back — called only after a successful pull, so a
+  // failure retries on the next connect.
+  packsPulledOnce: boolean
+  markPacksPulledOnce: () => void
   // Cross-cutting callbacks
   resetUIState: () => void
   clearFileStatus: () => void
@@ -40,6 +48,12 @@ interface Options {
   matrixMode: boolean
   typingTestMode: boolean
   typingTestViewOnly: boolean
+  // Last-device persistence (restoreLastSession). Called on a genuine
+  // real-device connect success / user-initiated disconnect only — the
+  // dummy and pipette-file paths never call handleConnect/handleDisconnect
+  // with a real device, so they never touch this.
+  saveLastDevice: (device: DeviceInfo) => void
+  clearLastDevice: () => void
 }
 
 export function useDeviceLifecycle(options: Options) {
@@ -64,12 +78,16 @@ export function useDeviceLifecycle(options: Options) {
     hasPassword,
     syncNow,
     deviceSyncing,
+    packsPulledOnce,
+    markPacksPulledOnce,
     resetUIState,
     clearFileStatus,
     resetHubState,
     matrixMode,
     typingTestMode,
     typingTestViewOnly,
+    saveLastDevice,
+    clearLastDevice,
   } = options
 
   const { t } = useTranslation()
@@ -81,7 +99,6 @@ export function useDeviceLifecycle(options: Options) {
   const [lastLoadedLabel, setLastLoadedLabel] = useState('')
   const [pipetteFileKeyboards, setPipetteFileKeyboards] = useState<PipetteFileKeyboard[]>([])
   const [pipetteFileEntries, setPipetteFileEntries] = useState<PipetteFileEntry[]>([])
-  const [resettingData, setResettingData] = useState(false)
   const pipetteFileSavedActivityRef = useRef(0)
   const hasFavSyncedForDataRef = useRef(false)
 
@@ -90,7 +107,7 @@ export function useDeviceLifecycle(options: Options) {
     if (!isPipetteFile) setLastLoadedLabel('')
   }, [keyboardUid, isPipetteFile])
 
-  const handleDisconnect = useCallback(async () => {
+  const handleDisconnect = useCallback(async (opts?: { keepLastDevice?: boolean }) => {
     try {
       await window.vialAPI.lock().catch(() => {})
       await disconnectDevice()
@@ -101,8 +118,13 @@ export function useDeviceLifecycle(options: Options) {
       setLastLoadedLabel('')
       setDeviceLoadError(null)
       resetHubState()
+      // Only a user-intended disconnect forgets the remembered device;
+      // internal cleanup disconnects (the not-Vial-compatible bailout in
+      // handleConnect) keep it, so a transient reload failure can't
+      // silently disable restoreLastSession.
+      if (!opts?.keepLastDevice) clearLastDevice()
     }
-  }, [disconnectDevice, keyboardReset, resetUIState, clearFileStatus, resetHubState])
+  }, [disconnectDevice, keyboardReset, resetUIState, clearFileStatus, resetHubState, clearLastDevice])
 
   const handleConnect = useCallback(
     async (dev: DeviceInfo) => {
@@ -112,6 +134,14 @@ export function useDeviceLifecycle(options: Options) {
       if (success) {
         const uid = await keyboardReload()
         if (uid) {
+          // Name the keyboard from its USB product name on connect, so a board
+          // that never saves a keymap still shows a name instead of its uid.
+          // Fire-and-forget; the handler no-ops when a name already exists.
+          void window.vialAPI.keyboardMetaNameIfMissing(uid, dev.productName).catch(() => { /* best-effort */ })
+          // Record this as the last-connected device for restoreLastSession,
+          // once we know the connect is genuine (uid resolved, not a
+          // "not Vial compatible" bailout below).
+          saveLastDevice(dev)
           // Pull the cloud copies of keyboards/{uid}/* (and favorites) BEFORE
           // applying local prefs. Otherwise applyDevicePrefs sees a missing
           // local file, writes defaults with a fresh _updatedAt, and the
@@ -126,16 +156,36 @@ export function useDeviceLifecycle(options: Options) {
             } catch {
               // Non-fatal — fall through to apply whatever local data we have.
             }
+            // First-sync auto-fire: a once-only 'packs' pull (i18n +
+            // theme packs), sequenced strictly after the favorites +
+            // keyboard sync above so it never delays or races it.
+            // Error-tolerant like the sync above — failure leaves
+            // packsPulledOnce false so the next connect retries. Gated on
+            // status === 'completed' (not just "didn't throw" — syncNow
+            // never throws for a busy race or missing credentials, it
+            // just returns status: 'skipped'/'partial'): a race with
+            // useDeviceAutoSync's own parallel syncNow call, or a
+            // sync-unit failure mid-pass, must also retry next connect
+            // rather than being marked done on a no-op or partial pull.
+            if (!packsPulledOnce) {
+              try {
+                const result = await syncNow('download', 'packs')
+                if (result.status === 'completed') markPacksPulledOnce()
+              } catch {
+                // Non-fatal — retried on the next connect.
+              }
+            }
           }
           await applyDevicePrefs(uid)
         } else {
-          try { await handleDisconnect() } catch { /* cleanup best-effort */ }
+          try { await handleDisconnect({ keepLastDevice: true }) } catch { /* cleanup best-effort */ }
           setDeviceLoadError(t('error.notVialCompatible'))
         }
       }
     },
     [connectDevice, keyboardReload, applyDevicePrefs, handleDisconnect, t,
-     autoSync, authenticated, hasPassword, syncNow],
+     autoSync, authenticated, hasPassword, syncNow, saveLastDevice,
+     packsPulledOnce, markPacksPulledOnce],
   )
 
   const handleLock = useCallback(async () => {
@@ -280,8 +330,6 @@ export function useDeviceLifecycle(options: Options) {
     setLastLoadedLabel,
     pipetteFileKeyboards,
     pipetteFileEntries,
-    resettingData,
-    setResettingData,
     pipetteFileSavedActivityRef,
     handleConnect,
     handleDisconnect,

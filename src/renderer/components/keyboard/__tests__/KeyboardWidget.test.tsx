@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { describe, it, expect, vi } from 'vitest'
 import { render } from '@testing-library/react'
 import { rotatePoint, KeyboardWidget } from '../KeyboardWidget'
-import { KEY_UNIT, KEY_SPACING, KEY_SIZE_RATIO, KEY_SPACING_RATIO, KEYBOARD_PADDING } from '../constants'
+import { KEY_UNIT, KEY_SPACING, KEY_SIZE_RATIO, KEY_SPACING_RATIO, KEYBOARD_PADDING, KEY_TEXT_COLOR, KEY_REMAP_COLOR } from '../constants'
 import { parseKle } from '../../../../shared/kle/kle-parser'
 import type { KleKey } from '../../../../shared/kle/types'
 
@@ -209,4 +209,82 @@ it('KEY_SPACING matches Python vial-gui ratio', () => {
   const expected = KEY_UNIT * KEY_SPACING_RATIO / (KEY_SIZE_RATIO + KEY_SPACING_RATIO)
   expect(KEY_SPACING).toBeCloseTo(expected)
   expect(KEY_SPACING / KEY_UNIT).toBeCloseTo(0.0588, 3)
+})
+
+describe('KeyboardWidget flash threading', () => {
+  const keys: KleKey[] = [
+    makeKey({ x: 0, y: 0, row: 0, col: 0 }),
+    makeKey({ x: 1, y: 0, row: -1, col: -1, encoderIdx: 0, encoderDir: 0 }),
+  ]
+  const keycodes = new Map([['0,0', 'KC_A']])
+  const encoderKeycodes = new Map<string, [string, string]>([['0', ['KC_B', 'KC_NO']]])
+
+  it('flashes the encoder when its "idx,dir" position is in flash.encoders', () => {
+    const { container } = render(
+      <KeyboardWidget
+        keys={keys}
+        keycodes={keycodes}
+        encoderKeycodes={encoderKeycodes}
+        flash={{ keys: new Set(), encoders: new Set(['0,0']), generation: 1, startedAt: Date.now() }}
+      />,
+    )
+    expect(container.querySelector('[data-testid="flash-overlay"]')).not.toBeNull()
+  })
+
+  it('does not flash the encoder when its position is absent from flash.encoders', () => {
+    const { container } = render(
+      <KeyboardWidget
+        keys={keys}
+        keycodes={keycodes}
+        encoderKeycodes={encoderKeycodes}
+        // `1,0` doesn't match the rendered encoder's own `idx=0,dir=0` —
+        // a non-empty `encoders` set that just doesn't cover this position.
+        flash={{ keys: new Set(), encoders: new Set(['1,0']), generation: 1, startedAt: Date.now() }}
+      />,
+    )
+    expect(container.querySelector('[data-testid="flash-overlay"]')).toBeNull()
+  })
+})
+
+// Plan-qwerty-select-no-rewrite "also" follow-up: encoder CW/CCW legends
+// gained the same remap tint keymap keys already have.
+describe('KeyboardWidget remappedEncoders threading', () => {
+  const keys: KleKey[] = [
+    makeKey({ x: 0, y: 0, row: -1, col: -1, encoderIdx: 0, encoderDir: 0 }),
+  ]
+  const encoderKeycodes = new Map<string, [string, string]>([['0', ['KC_B', 'KC_NO']]])
+
+  it('tints the encoder label when its "idx,dir" position is in remappedEncoders', () => {
+    const { container } = render(
+      <KeyboardWidget
+        keys={keys}
+        keycodes={new Map()}
+        encoderKeycodes={encoderKeycodes}
+        remappedEncoders={new Set(['0,0'])}
+      />,
+    )
+    const text = container.querySelector('text')!
+    expect(text.getAttribute('fill')).toBe(KEY_REMAP_COLOR)
+  })
+
+  it('does not tint the encoder label when its position is absent from remappedEncoders', () => {
+    const { container } = render(
+      <KeyboardWidget
+        keys={keys}
+        keycodes={new Map()}
+        encoderKeycodes={encoderKeycodes}
+        remappedEncoders={new Set(['1,0'])}
+      />,
+    )
+    const text = container.querySelector('text')!
+    expect(text.getAttribute('fill')).toBe(KEY_TEXT_COLOR)
+  })
+
+  it('does not tint when remappedEncoders is absent', () => {
+    const { container } = render(
+      <KeyboardWidget keys={keys} keycodes={new Map()} encoderKeycodes={encoderKeycodes} />,
+    )
+    const text = container.querySelector('text')!
+    expect(text.getAttribute('fill')).toBe(KEY_TEXT_COLOR)
+  })
 })

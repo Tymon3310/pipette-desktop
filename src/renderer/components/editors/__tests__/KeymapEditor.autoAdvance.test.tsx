@@ -61,7 +61,7 @@ vi.mock('../../keycodes/TabbedKeycodes', () => ({
 vi.mock('../../keycodes/KeyPopover', () => ({
   KeyPopover: (props: {
     onKeycodeSelect?: (kc: { qmkId: string }) => void
-    onRawKeycodeSelect?: (code: number) => void
+    onRawKeycodeSelect?: (code: number, advance: boolean) => void
     onClose?: () => void
   }) => {
     return (
@@ -74,7 +74,10 @@ vi.mock('../../keycodes/KeyPopover', () => ({
         </button>
         <button
           data-testid="popover-raw-5"
-          onClick={() => props.onRawKeycodeSelect?.(5)}
+          // `advance: true` mirrors a genuine confirm (Code tab Apply, or
+          // a wrapped inner-key pick) — see `KeyPopover`'s `onRawKeycodeSelect`
+          // prop doc.
+          onClick={() => props.onRawKeycodeSelect?.(5, true)}
         >
           Popover Raw 5
         </button>
@@ -108,6 +111,7 @@ vi.mock('../../../../shared/keycodes/keycodes', () => ({
   extractBasicKey: (code: number) => code & 0xff,
   buildModMaskKeycode: (mask: number, key: number) => (mask << 8) | key,
   findKeycode: (qmkId: string) => ({ qmkId, label: qmkId }),
+  findInnerKeycode: () => undefined,
 }))
 
 vi.mock('../../keycodes/ModifierCheckboxStrip', () => ({
@@ -122,14 +126,41 @@ vi.mock('../TapDanceModal', () => ({ TapDanceModal: () => null }))
 vi.mock('../MacroModal', () => ({ MacroModal: () => null }))
 
 import { KeymapEditor } from '../KeymapEditor'
+import type { KleKey } from '../../../../shared/kle/types'
+
+const KEY_DEFAULTS: KleKey = {
+  x: 0, y: 0, width: 1, height: 1, row: 0, col: 0,
+  encoderIdx: -1, encoderDir: -1, layoutIndex: -1, layoutOption: -1,
+  decal: false, labels: [], x2: 0, y2: 0, width2: 1, height2: 1,
+  rotation: 0, rotationX: 0, rotationY: 0, color: '',
+  textColor: [], textSize: [], nub: false, stepped: false, ghost: false,
+}
+
+const makeKey = (x: number, col: number): KleKey => ({ ...KEY_DEFAULTS, x, col })
 
 const makeLayout = () => ({
-  keys: [
-    { x: 0, y: 0, w: 1, h: 1, row: 0, col: 0, encoderIdx: -1, decal: false, labels: [] },
-    { x: 1, y: 0, w: 1, h: 1, row: 0, col: 1, encoderIdx: -1, decal: false, labels: [] },
-    { x: 2, y: 0, w: 1, h: 1, row: 0, col: 2, encoderIdx: -1, decal: false, labels: [] },
-  ],
+  keys: [makeKey(0, 0), makeKey(1, 1), makeKey(2, 2)],
 })
+
+// A layout option at layoutIndex 0 with two choices (0/1), each providing a
+// distinct key at col 1 — only one of the pair is ever visible at a time,
+// mirroring an ISO/ANSI-style split key. Col 0/2 keys have no layoutIndex
+// and are always shown.
+const makeVariantKey = (col: number, layoutOption: number): KleKey => ({
+  ...KEY_DEFAULTS, x: col, col, layoutIndex: 0, layoutOption,
+})
+
+const makeLayoutWithVariant = () => ({
+  keys: [makeKey(0, 0), makeVariantKey(1, 0), makeVariantKey(2, 1), makeKey(3, 3)],
+})
+
+const LAYOUT_LABELS = [['Split', 'Regular', 'Split']]
+
+// Column order a(0,0) < b(0,1) < c(0,2). Overriding c to logical (0,0) ties
+// it with a; the physical (row, col) tiebreak in sortKeysByViewMatrix then
+// keeps a first, pulling c ahead of the untouched b — see
+// view-matrix.test.ts's identical scenario for the ordering rationale.
+const REORDERING_VIEW_MATRIX = { '0,2': { row: 0, col: 0 } }
 
 describe('KeymapEditor — auto advance', () => {
   const onSetKey = vi.fn().mockResolvedValue(undefined)
@@ -211,7 +242,16 @@ describe('KeymapEditor — auto advance', () => {
     expect(screen.getByText('[0,1]')).toBeInTheDocument()
   })
 
-  it('does NOT advance when keycode is selected via popover (onKeycodeSelect)', async () => {
+  it('closes the popover instead of advancing past a key with no on-screen element (onKeycodeSelect)', async () => {
+    // `KeyboardWidget` is mocked out above (a plain placeholder div), so no
+    // real `data-key-pos` element ever exists under `keyboardContentRef` in
+    // this file — the popover follow-along's next-key rect lookup always
+    // comes up empty here, which is exactly the "next key has no on-screen
+    // element" case: a genuine confirm that can't advance closes the
+    // popover instead of leaving it stranded open. `selectedKey` itself is
+    // untouched by that close. See
+    // `useKeymapSelectionHandlers.popoverAdvance.test.ts` for the real
+    // advance-with-a-live-DOM behavior.
     render(<KeymapEditor {...defaultProps} autoAdvance={true} />)
 
     // Double-click to open popover
@@ -224,11 +264,16 @@ describe('KeymapEditor — auto advance', () => {
       fireEvent.click(screen.getByTestId('popover-kc-a'))
     })
 
-    // Should NOT advance — popover is an intentional edit mode
+    // selectedKey never moves off [0,0] — there's no next-key element to
+    // measure a rect from — and the popover closes rather than staying open.
     expect(screen.getByText('[0,0]')).toBeInTheDocument()
+    expect(screen.queryByTestId('key-popover')).not.toBeInTheDocument()
   })
 
-  it('does NOT advance when raw keycode is selected via popover (onRawKeycodeSelect)', async () => {
+  it('closes the popover instead of advancing past a key with no on-screen element (onRawKeycodeSelect)', async () => {
+    // Same DOM-less setup as the onKeycodeSelect case above — a raw confirm
+    // (advance=true) also closes instead of advancing when the next key
+    // has no element to anchor to.
     render(<KeymapEditor {...defaultProps} autoAdvance={true} />)
 
     // Double-click to open popover
@@ -240,8 +285,9 @@ describe('KeymapEditor — auto advance', () => {
       fireEvent.click(screen.getByTestId('popover-raw-5'))
     })
 
-    // Should NOT advance
+    // Should NOT advance, and the popover should close.
     expect(screen.getByText('[0,0]')).toBeInTheDocument()
+    expect(screen.queryByTestId('key-popover')).not.toBeInTheDocument()
   })
 
   it('does NOT advance to next key when masked keycode is assigned with autoAdvance', async () => {
@@ -328,5 +374,96 @@ describe('KeymapEditor — auto advance', () => {
     })
 
     expect(onSetKey).toHaveBeenCalledWith(0, 0, 0, 5)
+  })
+
+  it('advances following the view matrix order when a viewMatrix override is set', async () => {
+    render(<KeymapEditor {...defaultProps} autoAdvance={true} viewMatrix={REORDERING_VIEW_MATRIX} />)
+
+    // Select first key (0,0) — its effective position is unaffected by the
+    // override (only (0,2) is overridden), so the walk still starts here.
+    act(() => capturedOnKeyClick?.({ row: 0, col: 0 }))
+    expect(screen.getByText('[0,0]')).toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('kc-a'))
+    })
+
+    // Physical order would advance to (0,1); the view matrix override pulls
+    // (0,2) ahead of it, so the walk lands there instead.
+    expect(screen.getByText('[0,2]')).toBeInTheDocument()
+  })
+
+  it('skips a layout-option variant hidden by the current selection', async () => {
+    render(
+      <KeymapEditor
+        {...defaultProps}
+        layout={makeLayoutWithVariant()}
+        layoutLabels={LAYOUT_LABELS}
+        packedLayoutOptions={1}
+        autoAdvance={true}
+      />,
+    )
+
+    // Select the always-visible key at (0,0)
+    act(() => capturedOnKeyClick?.({ row: 0, col: 0 }))
+    expect(screen.getByText('[0,0]')).toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('kc-a'))
+    })
+
+    // Option 1 is selected, so the variant at col 1 (option 0) is not
+    // rendered; Auto Move must skip it and land on the variant at col 2
+    // (option 1) instead.
+    expect(screen.getByText('[0,2]')).toBeInTheDocument()
+    expect(screen.queryByText('[0,1]')).not.toBeInTheDocument()
+  })
+
+  it('includes the currently visible layout-option variant in the walk', async () => {
+    render(
+      <KeymapEditor
+        {...defaultProps}
+        layout={makeLayoutWithVariant()}
+        layoutLabels={LAYOUT_LABELS}
+        packedLayoutOptions={0}
+        autoAdvance={true}
+      />,
+    )
+
+    // Select the always-visible key at (0,0)
+    act(() => capturedOnKeyClick?.({ row: 0, col: 0 }))
+    expect(screen.getByText('[0,0]')).toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('kc-a'))
+    })
+
+    // Option 0 is selected, so the variant at col 1 is the visible one and
+    // is the very next key in the walk.
+    expect(screen.getByText('[0,1]')).toBeInTheDocument()
+  })
+
+  it('keeps decal and encoder keys excluded from the walk', async () => {
+    const layout = {
+      keys: [
+        makeKey(0, 0),
+        { ...KEY_DEFAULTS, x: 1, col: 1, decal: true },
+        { ...KEY_DEFAULTS, x: 2, col: 2, encoderIdx: 0 },
+        makeKey(3, 3),
+      ],
+    }
+
+    render(<KeymapEditor {...defaultProps} layout={layout} autoAdvance={true} />)
+
+    act(() => capturedOnKeyClick?.({ row: 0, col: 0 }))
+    expect(screen.getByText('[0,0]')).toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('kc-a'))
+    })
+
+    // The decal (col 1) and encoder (col 2) keys are never selectable — the
+    // walk jumps straight to the next real key at col 3.
+    expect(screen.getByText('[0,3]')).toBeInTheDocument()
   })
 })

@@ -18,6 +18,7 @@ const mockFavoriteStoreLoad = vi.fn()
 const mockFavoriteStoreRename = vi.fn()
 const mockFavoriteStoreDelete = vi.fn()
 const mockFavoriteStoreExport = vi.fn()
+const mockFavoriteStoreExportCurrent = vi.fn()
 const mockFavoriteStoreImport = vi.fn()
 
 const MOCK_ENTRY: SavedFavoriteMeta = {
@@ -47,6 +48,7 @@ beforeEach(() => {
     favoriteStoreRename: mockFavoriteStoreRename,
     favoriteStoreDelete: mockFavoriteStoreDelete,
     favoriteStoreExport: mockFavoriteStoreExport,
+    favoriteStoreExportCurrent: mockFavoriteStoreExportCurrent,
     favoriteStoreImport: mockFavoriteStoreImport,
   } as unknown as typeof window.vialAPI
 })
@@ -336,6 +338,19 @@ describe('useFavoriteStore – loadFavorite', () => {
     })
     expect(result.current.loading).toBe(false)
   })
+
+  it('returns false without IPC call when enabled is false', async () => {
+    const { result } = renderHook(() => useFavoriteStore(hookOpts({ enabled: false })))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.loadFavorite('fav-1')
+    })
+
+    expect(ok).toBe(false)
+    expect(mockFavoriteStoreLoad).not.toHaveBeenCalled()
+    expect(mockApply).not.toHaveBeenCalled()
+  })
 })
 
 describe('useFavoriteStore – renameEntry', () => {
@@ -367,6 +382,18 @@ describe('useFavoriteStore – renameEntry', () => {
 
     expect(ok).toBe(false)
   })
+
+  it('returns false without IPC call when enabled is false', async () => {
+    const { result } = renderHook(() => useFavoriteStore(hookOpts({ enabled: false })))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.renameEntry('fav-1', 'New')
+    })
+
+    expect(ok).toBe(false)
+    expect(mockFavoriteStoreRename).not.toHaveBeenCalled()
+  })
 })
 
 describe('useFavoriteStore – deleteEntry', () => {
@@ -394,6 +421,18 @@ describe('useFavoriteStore – deleteEntry', () => {
     })
 
     expect(ok).toBe(false)
+  })
+
+  it('returns false without IPC call when enabled is false', async () => {
+    const { result } = renderHook(() => useFavoriteStore(hookOpts({ enabled: false })))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.deleteEntry('fav-1')
+    })
+
+    expect(ok).toBe(false)
+    expect(mockFavoriteStoreDelete).not.toHaveBeenCalled()
   })
 })
 
@@ -467,6 +506,51 @@ describe('useFavoriteStore – exportFavorites', () => {
       await promise!
     })
     expect(result.current.exporting).toBe(false)
+  })
+
+  it('returns false without IPC call when enabled is false', async () => {
+    const { result } = renderHook(() => useFavoriteStore(hookOpts({ enabled: false })))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.exportFavorites()
+    })
+
+    expect(ok).toBe(false)
+    expect(mockFavoriteStoreExport).not.toHaveBeenCalled()
+  })
+})
+
+describe('useFavoriteStore – exportCurrent', () => {
+  it('calls serialize and favoriteStoreExportCurrent with favoriteType, vialProtocol, and serialized json', async () => {
+    mockFavoriteStoreExportCurrent.mockResolvedValueOnce({ success: true })
+    const { result } = renderHook(() => useFavoriteStore(hookOpts()))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.exportCurrent()
+    })
+
+    expect(ok).toBe(true)
+    expect(mockSerialize).toHaveBeenCalled()
+    expect(mockFavoriteStoreExportCurrent).toHaveBeenCalledWith(
+      'tapDance',
+      6,
+      JSON.stringify({ type: 'tapDance', data: MOCK_TAP_DANCE_DATA }),
+    )
+  })
+
+  it('returns false without IPC call when enabled is false', async () => {
+    const { result } = renderHook(() => useFavoriteStore(hookOpts({ enabled: false })))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.exportCurrent()
+    })
+
+    expect(ok).toBe(false)
+    expect(mockSerialize).not.toHaveBeenCalled()
+    expect(mockFavoriteStoreExportCurrent).not.toHaveBeenCalled()
   })
 })
 
@@ -545,6 +629,56 @@ describe('useFavoriteStore – importFavorites', () => {
     })
     expect(result.current.importing).toBe(false)
   })
+
+  it('returns false without IPC call when enabled is false', async () => {
+    const { result } = renderHook(() => useFavoriteStore(hookOpts({ enabled: false })))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.importFavorites()
+    })
+
+    expect(ok).toBe(false)
+    expect(mockFavoriteStoreImport).not.toHaveBeenCalled()
+  })
+})
+
+describe('useFavoriteStore – importCurrent', () => {
+  it('calls favoriteStoreImportToCurrent and applies the result on success', async () => {
+    const mockFavoriteStoreImportToCurrent = vi.fn().mockResolvedValueOnce({ success: true, data: MOCK_TAP_DANCE_DATA })
+    window.vialAPI = {
+      ...window.vialAPI,
+      favoriteStoreImportToCurrent: mockFavoriteStoreImportToCurrent,
+    } as unknown as typeof window.vialAPI
+    const { result } = renderHook(() => useFavoriteStore(hookOpts()))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.importCurrent()
+    })
+
+    expect(ok).toBe(true)
+    expect(mockFavoriteStoreImportToCurrent).toHaveBeenCalledWith('tapDance')
+    expect(mockApply).toHaveBeenCalledWith(MOCK_TAP_DANCE_DATA)
+  })
+
+  it('returns false without IPC call when enabled is false', async () => {
+    const mockFavoriteStoreImportToCurrent = vi.fn()
+    window.vialAPI = {
+      ...window.vialAPI,
+      favoriteStoreImportToCurrent: mockFavoriteStoreImportToCurrent,
+    } as unknown as typeof window.vialAPI
+    const { result } = renderHook(() => useFavoriteStore(hookOpts({ enabled: false })))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.importCurrent()
+    })
+
+    expect(ok).toBe(false)
+    expect(mockFavoriteStoreImportToCurrent).not.toHaveBeenCalled()
+    expect(mockApply).not.toHaveBeenCalled()
+  })
 })
 
 describe('useFavoriteStore – exportEntry', () => {
@@ -595,5 +729,17 @@ describe('useFavoriteStore – exportEntry', () => {
 
     expect(ok).toBe(false)
     expect(result.current.error).toBeNull()
+  })
+
+  it('returns false without IPC call when enabled is false', async () => {
+    const { result } = renderHook(() => useFavoriteStore(hookOpts({ enabled: false })))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.exportEntry('entry-123')
+    })
+
+    expect(ok).toBe(false)
+    expect(mockFavoriteStoreExport).not.toHaveBeenCalled()
   })
 })

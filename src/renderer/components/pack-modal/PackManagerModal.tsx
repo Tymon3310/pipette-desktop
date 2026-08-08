@@ -1,0 +1,234 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
+// Shared modal frame for the three pack-management modals: portal +
+// backdrop, header (title + close), Installed/Find-on-Hub tabs, the
+// Hub tab's search bar, the Installed tab's Import toolbar, the error
+// banner, and the scrollable body. Every feature-specific bit (row
+// rendering, per-op error copy, hub search fetch, etc.) stays in the
+// calling modal and is threaded in via props/children.
+
+import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { BTN_PRIMARY, PACK_TOOLBAR_BTN } from '../../constants/ui-tokens'
+import { ModalCloseButton } from '../editors/ModalCloseButton'
+import { PackTabButton } from './PackTabButton'
+import type { PackManagerTabId } from './pack-modal-types'
+
+export interface PackManagerModalTestIds {
+  backdrop: string
+  modal: string
+  closeButton: string
+  tabsContainer: string
+  tabInstalled: string
+  tabHub: string
+  searchInput: string
+  searchButton: string
+  importButton: string
+  /** Key Labels' error banner does not carry a testid; the other two do. */
+  errorBanner?: string
+  /** Toolbar "Imported {{name}}" / "Updated {{name}}" feedback, shown
+   *  next to the Name sort button. All three modals set this. */
+  importFeedback: string
+  /** "Pull from Cloud" button, rendered next to Import — omit for a
+   *  pack modal with no cloud-pull affordance (Key Labels). */
+  pullButton?: string
+}
+
+export interface PackManagerModalProps {
+  open: boolean
+  onClose: () => void
+  title: ReactNode
+  testids: PackManagerModalTestIds
+  activeTab: PackManagerTabId
+  onTabChange: (tab: PackManagerTabId) => void
+  installedLabel: string
+  hubLabel: string
+  search: string
+  onSearchChange: (value: string) => void
+  /** Fired on Enter inside the search box — each feature decides
+   * whether to trim the query first (i18n/theme don't, Key Labels does). */
+  onSearchEnter: () => void
+  onSearchClick: () => void
+  searchPlaceholder: string
+  searchButtonLabel: ReactNode
+  searchDisabled: boolean
+  importLabel: string
+  onImport: () => void
+  /** Disables the Import button while a batch import is already in
+   *  flight — every modal passes its own `importing` state so a
+   *  double-click can't queue a second concurrent batch. */
+  importDisabled?: boolean
+  /** Label for the "Pull from Cloud" toolbar button, rendered next to
+   *  Import in the Installed tab toolbar. Omit (along with `onPull`)
+   *  for a pack modal with no cloud-pull affordance (Key Labels) — the
+   *  shell renders the button itself so both Language Packs and Theme
+   *  Packs share one implementation instead of each building their own
+   *  `<button>`. Callers swap this between "Pull from Cloud" and
+   *  "Pulling…" themselves (same convention as `searchButtonLabel`). */
+  pullLabel?: string
+  onPull?: () => void
+  /** External lock on the Pull button — each modal passes its own
+   *  `importing` state so a batch import can't run concurrently with a
+   *  pull. ORed with `pulling` below for the button's actual disabled
+   *  state, so callers don't have to combine the two themselves. */
+  pullDisabled?: boolean
+  /** This pull's own in-flight state (from `usePackCloudPull`). */
+  pulling?: boolean
+  /** "Name" sort toggle rendered at the left end of the Installed
+   *  toolbar, opposite Import. Required — all three modals have one. */
+  sortButton: ReactNode
+  /** "Imported {{name}}" / "Updated {{name}}" text rendered next to
+   *  `sortButton`, or `null` when there is nothing to show. Every modal
+   *  supersedes this with "Importing..." for the duration of a batch
+   *  (`importing ? t('common.importing') : ...`), so the slot always
+   *  reflects an in-flight import before falling back to the
+   *  post-batch summary or per-name feedback. */
+  importFeedback: string | null
+  actionError: string | null
+  children: ReactNode
+  /** Language Packs renders MissingKeysModal as a portal sibling after
+   * the modal box; unused by Theme Packs / Key Labels. */
+  afterContent?: ReactNode
+}
+
+export function PackManagerModal({
+  open,
+  onClose,
+  title,
+  testids,
+  activeTab,
+  onTabChange,
+  installedLabel,
+  hubLabel,
+  search,
+  onSearchChange,
+  onSearchEnter,
+  onSearchClick,
+  searchPlaceholder,
+  searchButtonLabel,
+  searchDisabled,
+  importLabel,
+  onImport,
+  importDisabled,
+  pullLabel,
+  onPull,
+  pullDisabled,
+  pulling,
+  sortButton,
+  importFeedback,
+  actionError,
+  children,
+  afterContent,
+}: PackManagerModalProps): JSX.Element | null {
+  if (!open) return null
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      data-testid={testids.backdrop}
+      onClick={onClose}
+    >
+      <div
+        className="w-modal-lg max-w-modal-vw h-modal-80vh flex flex-col rounded-lg bg-surface shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+        data-testid={testids.modal}
+      >
+        <div className="flex items-center justify-between border-b border-edge px-4 py-3">
+          <h2 className="text-base font-semibold text-content">{title}</h2>
+          <ModalCloseButton testid={testids.closeButton} onClick={onClose} />
+        </div>
+
+        <div className="flex border-b border-edge" data-testid={testids.tabsContainer}>
+          <PackTabButton
+            label={installedLabel}
+            active={activeTab === 'installed'}
+            onClick={() => onTabChange('installed')}
+            testid={testids.tabInstalled}
+          />
+          <PackTabButton
+            label={hubLabel}
+            active={activeTab === 'hub'}
+            onClick={() => onTabChange('hub')}
+            testid={testids.tabHub}
+          />
+        </div>
+
+        {activeTab === 'hub' && (
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-edge">
+            <input
+              type="text"
+              value={search}
+              placeholder={searchPlaceholder}
+              onChange={(e) => onSearchChange(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') onSearchEnter() }}
+              className="flex-1 rounded border border-edge bg-surface px-3 py-1.5 text-sm text-content focus:border-accent focus:outline-none"
+              data-testid={testids.searchInput}
+            />
+            <button
+              type="button"
+              disabled={searchDisabled}
+              onClick={onSearchClick}
+              className={BTN_PRIMARY}
+              data-testid={testids.searchButton}
+            >
+              {searchButtonLabel}
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'installed' && (
+          <div className="flex items-center justify-between px-4 py-3 border-b border-edge">
+            <div className="flex items-center gap-3 min-w-0">
+              {sortButton}
+              {importFeedback && (
+                <span
+                  className="truncate text-xs font-medium text-accent"
+                  data-testid={testids.importFeedback}
+                >
+                  {importFeedback}
+                </span>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {onPull && (
+                <button
+                  type="button"
+                  onClick={onPull}
+                  disabled={pulling || pullDisabled}
+                  className={PACK_TOOLBAR_BTN}
+                  data-testid={testids.pullButton}
+                >
+                  {pullLabel}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onImport}
+                disabled={importDisabled}
+                className={PACK_TOOLBAR_BTN}
+                data-testid={testids.importButton}
+              >
+                {importLabel}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {actionError && (
+          <div
+            className="mx-4 my-2 whitespace-pre-wrap rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-700"
+            data-testid={testids.errorBanner}
+          >
+            {actionError}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto px-4 py-2">
+          {children}
+        </div>
+      </div>
+      {afterContent}
+    </div>,
+    document.body,
+  )
+}

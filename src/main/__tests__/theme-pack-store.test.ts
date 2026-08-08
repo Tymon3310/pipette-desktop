@@ -2,8 +2,19 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { join } from 'node:path'
-import { mkdtemp, rm, readFile, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+
+// Real fs/promises for every export except `utimes`, which is wrapped in a
+// `vi.fn` so individual tests can force it to reject (simulating a utimes
+// failure) — `vi.spyOn` cannot patch a real ESM module's export (Node's
+// `node:fs/promises` namespace is non-configurable), so the override has to
+// happen at mock-definition time instead.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return { ...actual, utimes: vi.fn(actual.utimes) }
+})
+
+import { mkdtemp, rm, readFile, readdir, writeFile, mkdir, stat, utimes } from 'node:fs/promises'
 
 let mockUserDataPath = ''
 
@@ -23,7 +34,15 @@ vi.mock('../sync/sync-service', () => ({
   notifyChange: vi.fn(),
 }))
 
+// The real logger is a module-level singleton (cached log directory) that
+// doesn't play well with a fresh mkdtemp'd userData per test — mock it out,
+// same as sync-bundle.run-log.test.ts does.
+vi.mock('../logger', () => ({
+  log: vi.fn(),
+}))
+
 import { notifyChange } from '../sync/sync-service'
+import { log } from '../logger'
 import {
   savePack,
   getPack,
@@ -33,7 +52,12 @@ import {
   deletePack,
   setHubPostId,
   hasActiveName,
-  purgeExpiredTombstones,
+  runGcUnderLock,
+  reorderActive,
+  mergeSyncedIndex,
+  applySyncedPackBody,
+  pinPackBodyMtime,
+  statLocalPackMtime,
   __testing,
 } from '../theme-pack-store'
 import {
@@ -464,6 +488,43 @@ describe('theme-pack-store', () => {
     })
   })
 
+  describe('uploaderName (Phase 3)', () => {
+    it('savePack persists uploaderName on the meta', async () => {
+      const saved = await savePack({ raw: makeValidPack({ name: 'Authored' }), uploaderName: 'alice' })
+      expect(saved.data!.uploaderName).toBe('alice')
+    })
+
+    it('legacy metas (saved before this field existed) have no uploaderName', async () => {
+      const saved = await savePack({ raw: makeValidPack({ name: 'Legacy' }) })
+      expect(saved.data!.uploaderName).toBeUndefined()
+    })
+
+    it('setHubPostId sets uploaderName and hubUpdatedAt when both are provided (Upload)', async () => {
+      const saved = await savePack({ raw: makeValidPack({ name: 'Upload Me' }) })
+      const result = await setHubPostId(saved.data!.id, 'hub-1', 'alice', '2026-05-01T00:00:00.000Z')
+      expect(result.data!.hubPostId).toBe('hub-1')
+      expect(result.data!.uploaderName).toBe('alice')
+      expect(result.data!.hubUpdatedAt).toBe('2026-05-01T00:00:00.000Z')
+    })
+
+    it('setHubPostId leaves uploaderName untouched when omitted (Update)', async () => {
+      const saved = await savePack({ raw: makeValidPack({ name: 'Update Me' }) })
+      await setHubPostId(saved.data!.id, 'hub-2', 'alice', '2026-05-01T00:00:00.000Z')
+      const updated = await setHubPostId(saved.data!.id, 'hub-2', undefined, '2026-06-01T00:00:00.000Z')
+      expect(updated.data!.uploaderName).toBe('alice')
+      expect(updated.data!.hubUpdatedAt).toBe('2026-06-01T00:00:00.000Z')
+    })
+
+    it('detaching (hubPostId: null) drops hubUpdatedAt but keeps uploaderName', async () => {
+      const saved = await savePack({ raw: makeValidPack({ name: 'Detach Me' }) })
+      await setHubPostId(saved.data!.id, 'hub-3', 'alice', '2026-05-01T00:00:00.000Z')
+      const detached = await setHubPostId(saved.data!.id, null)
+      expect(detached.data!.hubPostId).toBeUndefined()
+      expect(detached.data!.hubUpdatedAt).toBeUndefined()
+      expect(detached.data!.uploaderName).toBe('alice')
+    })
+  })
+
   describe('hasActiveName', () => {
     it('returns true for existing active name (case-insensitive)', async () => {
       await savePack({ raw: makeValidPack({ name: 'Monokai' }) })
@@ -506,7 +567,82 @@ describe('theme-pack-store', () => {
     })
   })
 
-  describe('purgeExpiredTombstones', () => {
+  describe('reorderActive', () => {
+    it('reorders active metas by the given ID array', async () => {
+      const a = await savePack({ raw: makeValidPack({ name: 'Alpha' }) })
+      const b = await savePack({ raw: makeValidPack({ name: 'Beta' }) })
+      const c = await savePack({ raw: makeValidPack({ name: 'Gamma' }) })
+
+      await reorderActive([c.data!.id, a.data!.id, b.data!.id])
+
+      const metas = await listMetas()
+      const names = metas.map((m) => m.name)
+      expect(names.indexOf('Gamma')).toBeLessThan(names.indexOf('Alpha'))
+      expect(names.indexOf('Alpha')).toBeLessThan(names.indexOf('Beta'))
+    })
+
+    it('keeps tombstones in the tail after reordered active metas', async () => {
+      const a = await savePack({ raw: makeValidPack({ name: 'Keep' }) })
+      const b = await savePack({ raw: makeValidPack({ name: 'Remove' }) })
+      await deletePack(b.data!.id)
+
+      await reorderActive([a.data!.id])
+
+      const all = await listAllMetas()
+      const tombstoned = all.find((m) => m.id === b.data!.id)
+      expect(tombstoned).toBeDefined()
+      expect(tombstoned!.deletedAt).toBeTruthy()
+
+      const activeIds = all.filter((m) => !m.deletedAt).map((m) => m.id)
+      const tombIdx = all.findIndex((m) => m.id === b.data!.id)
+      const lastActiveIdx = all.findIndex((m) => m.id === activeIds[activeIds.length - 1])
+      expect(tombIdx).toBeGreaterThan(lastActiveIdx)
+    })
+
+    it('appends unlisted active IDs at the end', async () => {
+      const a = await savePack({ raw: makeValidPack({ name: 'Listed' }) })
+      await savePack({ raw: makeValidPack({ name: 'Unlisted' }) })
+
+      await reorderActive([a.data!.id])
+
+      const metas = await listMetas()
+      const names = metas.map((m) => m.name)
+      expect(names.indexOf('Listed')).toBeLessThan(names.indexOf('Unlisted'))
+    })
+
+    it('bumps updatedAt on all reordered metas', async () => {
+      const a = await savePack({ raw: makeValidPack({ name: 'TimestampA' }) })
+      const b = await savePack({ raw: makeValidPack({ name: 'TimestampB' }) })
+      const origA = a.data!.updatedAt
+      const origB = b.data!.updatedAt
+
+      try {
+        vi.useFakeTimers()
+        vi.setSystemTime(Date.parse(origB) + 1000)
+        await reorderActive([b.data!.id, a.data!.id])
+      } finally {
+        vi.useRealTimers()
+      }
+
+      const metas = await listMetas()
+      const metaA = metas.find((m) => m.id === a.data!.id)!
+      const metaB = metas.find((m) => m.id === b.data!.id)!
+      expect(metaA.updatedAt).not.toBe(origA)
+      expect(metaB.updatedAt).not.toBe(origB)
+    })
+
+    it('only bumps THEME_INDEX_SYNC_UNIT — pack bodies are untouched', async () => {
+      await savePack({ raw: makeValidPack({ name: 'Notify' }) })
+      vi.mocked(notifyChange).mockClear()
+
+      await reorderActive([])
+
+      expect(notifyChange).toHaveBeenCalledWith(THEME_INDEX_SYNC_UNIT)
+      expect(notifyChange).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('runGcUnderLock (purge tombstones + sweep orphans, single lock)', () => {
     it('removes tombstones older than TTL and deletes pack body', async () => {
       const saved = await savePack({ raw: makeValidPack({ name: 'Expired' }) })
       const packPath = __testing.getPackPath(saved.data!.id)
@@ -520,7 +656,7 @@ describe('theme-pack-store', () => {
 
       vi.mocked(notifyChange).mockClear()
 
-      await purgeExpiredTombstones()
+      await runGcUnderLock()
 
       const afterIndex = await __testing.readIndex()
       expect(afterIndex.metas.find((m) => m.id === saved.data!.id)).toBeUndefined()
@@ -536,7 +672,7 @@ describe('theme-pack-store', () => {
 
       vi.mocked(notifyChange).mockClear()
 
-      await purgeExpiredTombstones()
+      await runGcUnderLock()
 
       const afterIndex = await __testing.readIndex()
       const meta = afterIndex.metas.find((m) => m.id === saved.data!.id)
@@ -551,7 +687,7 @@ describe('theme-pack-store', () => {
 
       vi.mocked(notifyChange).mockClear()
 
-      await purgeExpiredTombstones()
+      await runGcUnderLock()
 
       expect(notifyChange).not.toHaveBeenCalled()
     })
@@ -565,11 +701,58 @@ describe('theme-pack-store', () => {
       meta.deletedAt = new Date(Date.now() - THEME_PACK_TOMBSTONE_TTL_MS - 1000).toISOString()
       await __testing.writeIndex(index)
 
-      await purgeExpiredTombstones()
+      await runGcUnderLock()
 
       const afterIndex = await __testing.readIndex()
       expect(afterIndex.metas).toHaveLength(1)
       expect(afterIndex.metas[0].name).toBe('Keeper')
+    })
+
+    // M4: a corrupt/missing index must not be treated as "legitimately
+    // empty" when pack bodies still exist — an empty-roster fallback
+    // there would make the sweep delete every one of them.
+    it('skips both purge and sweep when index.json is truncated/unparseable, keeping every pack body intact', async () => {
+      const saved = await savePack({ raw: makeValidPack({ name: 'Survivor' }) })
+      await writeFile(__testing.getIndexPath(), '{ "metas": [ not valid json', 'utf-8')
+
+      const result = await runGcUnderLock()
+
+      expect(result).toEqual({ purged: 0, swept: 0 })
+      const remaining = await readdir(__testing.getPacksDir())
+      expect(remaining).toContain(`${saved.data!.id}.json`)
+      expect(log).toHaveBeenCalledWith('warn', expect.stringContaining(THEME_INDEX_SYNC_UNIT))
+    })
+
+    it('skips both purge and sweep when index.json is missing but pack bodies exist', async () => {
+      const saved = await savePack({ raw: makeValidPack({ name: 'Orphaned-by-missing-index' }) })
+      await rm(__testing.getIndexPath(), { force: true })
+
+      const result = await runGcUnderLock()
+
+      expect(result).toEqual({ purged: 0, swept: 0 })
+      const remaining = await readdir(__testing.getPacksDir())
+      expect(remaining).toContain(`${saved.data!.id}.json`)
+    })
+
+    it('treats a missing index as legitimately empty when the packs dir is also empty/missing', async () => {
+      const result = await runGcUnderLock()
+
+      expect(result).toEqual({ purged: 0, swept: 0 })
+    })
+
+    // M3: options.skipSweep — set by pack-gc.ts when a sibling sync unit
+    // for this store failed to merge this pass. Purge still runs; only
+    // the sweep is withheld.
+    it('skips only the sweep (not purge) when options.skipSweep is set, index-fails-body-succeeds scenario', async () => {
+      const kept = await savePack({ raw: makeValidPack({ name: 'Kept' }) })
+      await writeFile(join(__testing.getPacksDir(), 'in-flight-body.json'), JSON.stringify(makeValidPack()), 'utf-8')
+
+      const result = await runGcUnderLock({ skipSweep: true })
+
+      expect(result.swept).toBe(0)
+      const remaining = await readdir(__testing.getPacksDir())
+      expect(remaining).toContain(`${kept.data!.id}.json`)
+      expect(remaining).toContain('in-flight-body.json')
     })
   })
 
@@ -589,6 +772,149 @@ describe('theme-pack-store', () => {
     it('accepts valid pack ids', () => {
       expect(() => __testing.getPackPath('valid-id-123')).not.toThrow()
       expect(() => __testing.getPackPath('abc_def')).not.toThrow()
+    })
+  })
+
+  // --- Task-sync-unit-discovery bugfix plan: fixes 1-3 ----------------------
+
+  describe('sync robustness fixes (utimes degrade / pin CAS / malformed metas)', () => {
+    // --- Fix 1: utimes failure degrades to accept-with-warn -----------------
+
+    it('applySyncedPackBody: a utimes failure after a successful write still reports "applied" (never io-error)', async () => {
+      vi.mocked(utimes).mockRejectedValueOnce(new Error('EPERM: operation not permitted'))
+
+      const outcome = await applySyncedPackBody(
+        'utimes-fail-pack',
+        JSON.stringify(makeValidPack({ name: 'UtimesFail' })),
+        '2026-01-01T00:00:00.000Z',
+      )
+
+      expect(outcome).toBe('applied')
+      expect(utimes).toHaveBeenCalledTimes(1)
+      expect(log).toHaveBeenCalledWith('warn', expect.stringContaining('themes/packs/utimes-fail-pack'))
+
+      // The body write itself must have landed despite the pin failure.
+      // (applySyncedPackBody only writes the body file — no index entry
+      // exists for this id, so read the file directly rather than via
+      // getPack, which requires an index meta.)
+      const body = await readFile(__testing.getPackPath('utimes-fail-pack'), 'utf-8')
+      expect(JSON.parse(body)).toEqual(makeValidPack({ name: 'UtimesFail' }))
+    })
+
+    it('pinPackBodyMtime: a utimes failure is swallowed (warn), never thrown', async () => {
+      const saved = await savePack({ raw: makeValidPack({ name: 'PinFail' }) })
+      const id = saved.data!.id
+      const mtime = await statLocalPackMtime(id)
+
+      vi.mocked(utimes).mockRejectedValueOnce(new Error('EPERM'))
+      await expect(pinPackBodyMtime(id, '2026-01-01T00:00:00.000Z', mtime)).resolves.toBeUndefined()
+      expect(log).toHaveBeenCalledWith('warn', expect.stringContaining(`themes/packs/${id}`))
+    })
+
+    // --- Fix 2: post-upload pin is CAS-guarded -------------------------------
+
+    it('pinPackBodyMtime: skips the pin (no utimes call) when the local mtime no longer matches the upload snapshot', async () => {
+      const saved = await savePack({ raw: makeValidPack({ name: 'Racer' }) })
+      const id = saved.data!.id
+      const path = __testing.getPackPath(id)
+
+      // Snapshot mtime as it was when uploadSyncUnit bundled the (old) content.
+      const snapshotDate = new Date('2020-01-01T00:00:00.000Z')
+      await utimes(path, snapshotDate, snapshotDate)
+      const snapshot = snapshotDate.getTime()
+
+      // A concurrent local save lands after the snapshot but before the pin
+      // takes the store's write lock — simulated by advancing the file's
+      // mtime well past both the snapshot and the (old) upload's Drive time.
+      const raceDate = new Date('2026-06-01T00:00:00.000Z')
+      await utimes(path, raceDate, raceDate)
+
+      vi.mocked(utimes).mockClear() // discard the setup calls above
+      await pinPackBodyMtime(id, '2020-01-01T00:00:05.000Z', snapshot)
+      expect(utimes).not.toHaveBeenCalled()
+
+      // The newer (raced) edit's mtime survives untouched, so it still wins
+      // the next LWW comparison against the stale upload's Drive time.
+      const finalMtime = (await statLocalPackMtime(id))!
+      expect(finalMtime).toBe(raceDate.getTime())
+      expect(finalMtime).toBeGreaterThan(new Date('2020-01-01T00:00:05.000Z').getTime())
+    })
+
+    it('pinPackBodyMtime: pins when the local mtime still matches the snapshot (no race)', async () => {
+      const saved = await savePack({ raw: makeValidPack({ name: 'NoRace' }) })
+      const id = saved.data!.id
+      const snapshot = await statLocalPackMtime(id)
+
+      const remoteModifiedTime = '2026-07-01T00:00:00.000Z'
+      await pinPackBodyMtime(id, remoteModifiedTime, snapshot)
+
+      const path = __testing.getPackPath(id)
+      const finalStat = await stat(path)
+      expect(finalStat.mtime.getTime()).toBe(new Date(remoteModifiedTime).getTime())
+    })
+
+    it('pinPackBodyMtime: skips the pin when given no snapshot to compare (null)', async () => {
+      const saved = await savePack({ raw: makeValidPack({ name: 'NoSnapshot' }) })
+      const id = saved.data!.id
+      const before = await statLocalPackMtime(id)
+
+      vi.mocked(utimes).mockClear()
+      await pinPackBodyMtime(id, '2026-07-01T00:00:00.000Z', null)
+      expect(utimes).not.toHaveBeenCalled()
+
+      const after = await statLocalPackMtime(id)
+      expect(after).toBe(before)
+    })
+
+    // --- Fix 3: meta validation must not crash on non-object entries --------
+
+    it('mergeSyncedIndex drops non-object entries (e.g. null) instead of crashing, keeping valid siblings', async () => {
+      const goodMeta = {
+        id: 'good-1',
+        filename: 'packs/good-1.json',
+        name: 'Good',
+        version: '1.0.0',
+        savedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }
+
+      const result = await mergeSyncedIndex([null, goodMeta])
+
+      expect(result.applied).toBe(true)
+      expect(log).toHaveBeenCalledWith('warn', expect.stringContaining('dropped 1 unsafe remote meta id'))
+      const all = await listAllMetas()
+      expect(all.some((m) => m.id === 'good-1')).toBe(true)
+    })
+  })
+
+  // Orphan-file removal itself is now shared body (sweepOrphanFiles,
+  // tested directly in sweep-orphan-pack-bodies.test.ts) — this file
+  // keeps only a thin lock-behavior test: runGcUnderLock's sweep must
+  // not be able to race a concurrent save/rename/delete's own
+  // read-modify-write of the index.
+  describe('runGcUnderLock sweep (single-lock GC)', () => {
+    it('sweeps an orphaned pack body file with no matching index entry', async () => {
+      const kept = await savePack({ raw: makeValidPack({ name: 'Kept' }) })
+      await writeFile(join(__testing.getPacksDir(), 'orphan-id.json'), JSON.stringify(makeValidPack()), 'utf-8')
+
+      const result = await runGcUnderLock()
+
+      expect(result.swept).toBe(1)
+      const remaining = await readdir(__testing.getPacksDir())
+      expect(remaining).toContain(`${kept.data!.id}.json`)
+      expect(remaining).not.toContain('orphan-id.json')
+    })
+
+    it('serializes against a concurrent savePack instead of racing it (locked via withIndexWriteLock)', async () => {
+      const [saveResult] = await Promise.all([
+        savePack({ raw: makeValidPack({ name: 'Racer' }) }),
+        runGcUnderLock(),
+      ])
+
+      const all = await listAllMetas()
+      expect(all.some((m) => m.id === saveResult.data!.id)).toBe(true)
+      const files = await readdir(__testing.getPacksDir())
+      expect(files).toContain(`${saveResult.data!.id}.json`)
     })
   })
 })

@@ -19,13 +19,21 @@ export interface I18nPackMeta {
   /** Whether the pack is registered as an i18next resource bundle.
    * Disabled packs are kept on disk but not loaded. */
   enabled: boolean
-  /** When set, the pack is mirrored to a Pipette Hub post. */
+  /** When set, the pack is mirrored to a public Pipette Hub post. */
   hubPostId?: string
   /** Hub-side `updated_at` cached locally so the startup auto-update
    *  can detect remote changes by comparing this against
    *  `POST /api/i18n-packs/timestamps`. Absent for never-uploaded
    *  local entries and legacy rows that predate this field. */
   hubUpdatedAt?: string
+  /** Hub-side `uploader_name` cached for the Author column and the
+   *  `isMine` check (Update/Remove only shown when this equals the
+   *  signed-in user's display name). Refreshed on upload/download/sync
+   *  (mirrors `KeyLabelMeta.uploaderName`); intentionally *not*
+   *  refreshed on Update, matching Key Labels' assumption that the
+   *  owner does not change between updates. Absent for never-uploaded
+   *  local entries and legacy rows that predate this field. */
+  uploaderName?: string
   /** ISO 8601 timestamp of the first import. */
   savedAt: string
   /** ISO 8601 timestamp of the most recent enable / rename / overwrite. */
@@ -53,6 +61,20 @@ export interface I18nPackMeta {
 export interface I18nPackIndex {
   metas: I18nPackMeta[]
 }
+
+/**
+ * Stable id for the built-in English entry so drag/sort order and rename
+ * history survive sync — mirrors `key-label-store.ts`'s
+ * `QWERTY_ENTRY_ID` precedent, promoted from a renderer-synthesized row
+ * to a real store entry (`ensureBuiltinEnglishEntry` in
+ * `main/i18n-pack-store.ts`) so English can participate in drag reorder
+ * and Name sort like any imported pack. Its on-disk pack body is a
+ * trivial placeholder (`{ name, version }`, no translation keys) —
+ * unlike an imported pack, the renderer always renders English from the
+ * bundled `src/renderer/i18n/locales/english.json`, never from this
+ * entry's body, so the placeholder is never actually read.
+ */
+export const BUILTIN_ENGLISH_PACK_ID = 'builtin-english' as const
 
 /** On-disk representation of a single pack file. The translations live
  * alongside `name` / `version` at the top level — these
@@ -106,19 +128,25 @@ export interface I18nPackRecord {
   pack: unknown
 }
 
-/** Shape returned by the I18N_PACK_IMPORT IPC handler. */
-export interface I18nPackImportDialogResult {
-  canceled: boolean
-  raw?: unknown
-  fileSizeBytes?: number
-  filePath?: string
-  parseError?: string
-}
+/** Structurally identical to Theme Packs' `ThemePackImportFile` /
+ *  `ThemePackImportDialogResult` — both alias the shared shape in
+ *  `pack-import.ts` (see `readSelectedImportFiles` in
+ *  `src/main/pack-import-dialog.ts`, which both IPC handlers call).
+ *  Aliased (not just re-exported) under the domain-specific name so
+ *  existing call sites don't need to change what they import. */
+export type { PackImportFile as I18nPackImportFile, PackImportDialogResult as I18nPackImportDialogResult } from './pack-import'
 
 /** Optional flags forwarded with I18N_PACK_IMPORT_APPLY. */
 export interface I18nPackImportApplyOptions {
   enabled?: boolean
   hubPostId?: string
+  /** Hub-side `updated_at` for the pack just downloaded/synced. Renderer
+   *  fetches this via a name-matched Hub list lookup (the download body
+   *  itself carries no metadata) and forwards it here so the Updated
+   *  column reflects Hub's own timestamp. */
+  hubUpdatedAt?: string
+  /** Hub-side `uploader_name`, forwarded the same way as `hubUpdatedAt`. */
+  uploaderName?: string
   appVersionAtImport?: string
   id?: string
   /** English version the renderer measured the pack against. Set

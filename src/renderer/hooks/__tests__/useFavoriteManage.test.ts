@@ -83,7 +83,9 @@ describe('useFavoriteManage', () => {
       await result.current.exportAll()
     })
 
-    expect(mockFavoriteStoreExport).toHaveBeenCalledWith('tapDance')
+    // The hook always passes the shared fallback vial protocol (6 — see
+    // FALLBACK_VIAL_PROTOCOL in shared/favorite-data.ts).
+    expect(mockFavoriteStoreExport).toHaveBeenCalledWith('tapDance', 6)
   })
 
   it('exportEntry calls favoriteStoreExport with entryId', async () => {
@@ -93,7 +95,7 @@ describe('useFavoriteManage', () => {
       await result.current.exportEntry('e1')
     })
 
-    expect(mockFavoriteStoreExport).toHaveBeenCalledWith('tapDance', 'e1')
+    expect(mockFavoriteStoreExport).toHaveBeenCalledWith('tapDance', 6, 'e1')
   })
 
   it('importFavorites calls favoriteStoreImport and sets result', async () => {

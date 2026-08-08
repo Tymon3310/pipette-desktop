@@ -1,12 +1,138 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-export type TypingTestMode = 'words' | 'time' | 'quote'
+import type { RomajiStyle } from './romaji-engine'
+
+export type TypingTestMode = 'words' | 'time' | 'quote' | 'fileImport' | 'tatoeba'
 export type QuoteLength = 'short' | 'medium' | 'long' | 'all'
 
+// Display-only case transform for the romaji guide row (Romaji Settings
+// modal). Never affects acceptance — see `applyRomajiCaseStyle`.
+export type RomajiCaseStyle = 'lower' | 'capital' | 'upper'
+
+/** Romaji Settings modal fields (words/time modes only, kana packs only).
+ *  Every field is optional and undefined means "default behaviour" — the
+ *  modal omits a field entirely rather than persisting an explicit default
+ *  value, so a stored config always shows exactly what the user changed. */
+export interface RomajiDetailSettings {
+  /** Display-only case transform for the guide row. Default: 'lower'. */
+  caseStyle?: RomajiCaseStyle
+  /** Preferred spelling styles for the guide's displayed representative —
+   *  any combination may be selected at once. Empty/undefined shows the
+   *  canonical Hepburn-based spelling. Passed straight through to
+   *  `createRomajiMatcher`'s `guideStyles` opt. */
+  guideStyles?: RomajiStyle[]
+  /** Alternate-spelling families excluded from acceptance. Passed straight
+   *  through to `createRomajiMatcher`'s `disabledStyles` opt. */
+  disabledStyles?: RomajiStyle[]
+  /** Total number of guide lines shown, line-synchronized with the reading
+   *  window's word lines, 0-3: 0 hides the row entirely, 1 shows only the
+   *  line the current word sits on, 2 adds the next line, 3 adds the next
+   *  two lines. Default: 2. Named for lines (not words) since the guide
+   *  row anchors to the same line structure as the reading window — see
+   *  `RomajiGuide`. */
+  guideLineCount?: number
+  /** Whether a LINE-END word (real lines from tatoeba/fileImport, tracked
+   *  via `state.lineBreaks`) holds once its romaji completes until Enter
+   *  commits it, instead of auto-advancing like every other word (see
+   *  `processRomajiKeyEvent`/`handleRomajiChar` in romaji-input.ts, and
+   *  Task-romaji-line-end-enter). Default: true (Enter required) — this is
+   *  the behaviour that existed before the setting did, so an absent value
+   *  changes nothing for existing configs. Only an explicit `false` opts
+   *  out and auto-advances at line ends too. */
+  lineEndEnter?: boolean
+  /** Japanese input method: 'romaji' (sequential romaji-keystroke judging
+   *  — romaji-input.ts) or 'kana' (JIS かな direct input, judged from
+   *  physical KeyboardEvent.code + shiftKey — kana-input.ts). Default:
+   *  'romaji' (undefined and 'romaji' are equivalent — see
+   *  isKanaInputSelected in romaji-input.ts). Only meaningful while
+   *  isRomajiInputEnabled is true; a mode/content combination incapable of
+   *  either engine ignores this the same way it ignores romajiInput
+   *  itself (see isRomajiCapable). */
+  inputMethod?: 'romaji' | 'kana'
+}
+
+/** Rolling-window size for Weak Spot Training's mistake-count aggregation
+ *  (see weak-spot-profile.ts's `computeWeaknessProfile`) — the newest N
+ *  scoped history rows, by `date` desc, or `'all'` for the pre-existing
+ *  unbounded behaviour. Applies to BOTH the miss and timing signals
+ *  identically (one shared row set, not two independently-windowed ones). */
+export type WeakSpotMissWindow = 10 | 25 | 50 | 100 | 'all'
+
+/** Half-life (days) for Weak Spot Training's miss-count time decay, or
+ *  `'none'` to disable decay entirely (every miss counts at full weight
+ *  regardless of age — the pre-existing behaviour). See
+ *  weak-spot-profile.ts's decay weighting for the exact formula. */
+export type WeakSpotDecayHalfLife = 7 | 14 | 30 | 'none'
+
+/** Weak Spot Settings modal fields (words/time modes only). Every field is
+ *  optional and undefined means "use the built-in default" — same
+ *  undefined-is-default contract as `RomajiDetailSettings`, so a stored
+ *  config only ever carries what the user actually changed from the
+ *  default. See weak-spot-settings.ts for the concrete default values and
+ *  the resolution helpers that fill these in. */
+export interface WeakSpotDetailSettings {
+  /** Aggregated mistake count a token needs to reach before the miss
+   *  signal alone counts it weak. Default: 2. */
+  missThreshold?: number
+  /** How many times slower than the scope-wide median a token's own
+   *  median pre-token interval must be for the slowness signal to count
+   *  it weak. Default: 1.5. */
+  slownessRatio?: number
+  /** Share of a token's own timed intervals that must exceed
+   *  `stallMultiple` × the scope median for the stall signal to count it
+   *  weak. Default: 0.2 (20%). */
+  stallRate?: number
+  /** How many times the scope-wide median an interval must exceed to
+   *  count as a "stall" for the stall-rate calculation above. Default: 2. */
+  stallMultiple?: number
+  /** Minimum timed samples a token needs before either timing signal
+   *  (slowness/stall) is trusted at all — also the shrinkage pseudo-count
+   *  the composite score dampens low-n estimates by. Default: 15. */
+  minTimingSamples?: number
+  /** Rolling window of newest history rows (by scope) the mistake/timing
+   *  aggregation is limited to. Default: 50. */
+  missWindow?: WeakSpotMissWindow
+  /** Half-life for time-decaying a miss's contribution to the aggregated
+   *  count, or `'none'` to disable decay. Default: 'none'. */
+  decayHalfLifeDays?: WeakSpotDecayHalfLife
+  /** Share of sampling draws pulled from the weak-spot-weighted pool
+   *  rather than uniformly, once biasing is active. Default: 0.6 (60%). */
+  biasRatio?: number
+}
+
 export type TypingTestConfig =
-  | { mode: 'words'; wordCount: number; punctuation: boolean; numbers: boolean }
-  | { mode: 'time'; duration: number; punctuation: boolean; numbers: boolean }
+  // `romajiInput` opts into sequential romaji-keystroke judging for kana
+  // packs (japanese_hiragana / japanese_katakana). Defaults ON when unset:
+  // an undefined value is treated as opted-in (subject to capability —
+  // see `isRomajiCapable`), and only an explicit `false` falls back to the
+  // verbatim-string matching behaviour. `romaji` holds the Romaji Settings
+  // modal's detail fields and is only ever read while `romajiInput` is
+  // honored (see `isRomajiInputActive`).
+  // `weakSpotTrainingMode` biases word sampling toward characters/tokens the
+  // user frequently mistypes (see weak-spot-profile.ts /
+  // word-generator/weak-spot-weighting.ts) — words/time modes only, since
+  // biasing needs a sampled word POOL to bias within (quote/fileImport/
+  // tatoeba play fixed/imported text verbatim). Optional, default off
+  // (unlike romajiInput's default-on): an absent/false value is the
+  // pre-existing behaviour, so no legacy config is silently reinterpreted.
+  | { mode: 'words'; wordCount: number; punctuation: boolean; numbers: boolean; weakSpotTrainingMode?: boolean; weakSpot?: WeakSpotDetailSettings; romajiInput?: boolean; romaji?: RomajiDetailSettings }
+  | { mode: 'time'; duration: number; punctuation: boolean; numbers: boolean; weakSpotTrainingMode?: boolean; weakSpot?: WeakSpotDetailSettings; romajiInput?: boolean; romaji?: RomajiDetailSettings }
   | { mode: 'quote'; quoteLength: QuoteLength }
+  // Imported user text, played verbatim in order via the quote rendering
+  // path. `textId` references an entry in the typing-test-texts store.
+  // `romajiInput`/`romaji` are only meaningful when the loaded text is
+  // kana-pure — see `isRomajiCapable` in romaji-input.ts.
+  | { mode: 'fileImport'; textId: string; romajiInput?: boolean; romaji?: RomajiDetailSettings }
+  // Tatoeba sentence pack (Hub-distributed). Sentences are played verbatim
+  // in order via the same char-count/word-flow path as fileImport. `language`
+  // selects the downloaded pack (e.g. 'english'). Like words/time, Tatoeba
+  // has its own Pattern (Lines / Time) with its own Units — `lineCount` and
+  // `duration` are both always stored (not just the active pattern's field)
+  // so switching Pattern preserves each independently, same as words/time
+  // keep their own counts. `romajiInput`/`romaji` are only meaningful when
+  // `language` is one of the kana packs — see `isRomajiCapable` in
+  // romaji-input.ts.
+  | { mode: 'tatoeba'; language: string; pattern: 'lines' | 'time'; lineCount: number; duration: number; romajiInput?: boolean; romaji?: RomajiDetailSettings }
 
 export interface Quote {
   id: number
@@ -17,7 +143,164 @@ export interface Quote {
 
 export const WORD_COUNT_OPTIONS = [15, 30, 60, 120] as const
 export const TIME_DURATION_OPTIONS = [15, 30, 60, 120] as const
+// Tatoeba's Lines pattern reuses the same 15/30/60/120 TIME_DURATION_OPTIONS
+// for its Time pattern — only Lines needs its own option set.
+export const TATOEBA_LINE_OPTIONS = [5, 10, 20, 40] as const
 export const DEFAULT_LANGUAGE = 'english'
+
+/** True for every "time-bounded" run — monkeytype time mode, or the tatoeba
+ *  Time pattern — the two config shapes whose word supply is an
+ *  ever-extending stream (see `refillTimeModeWords`) rather than a fixed
+ *  count, and whose run finishes on a countdown rather than on running out
+ *  of words (see `advanceAfterWord`). Centralizes the check so tatoeba+time
+ *  slots into the existing time logic without scattering
+ *  `mode === 'time' || (mode === 'tatoeba' && pattern === 'time')`
+ *  conditionals across run-state.ts / useTypingTest.ts. */
+export function isTimeBoundedRun(
+  config: TypingTestConfig,
+): config is Extract<TypingTestConfig, { mode: 'time' }> | (Extract<TypingTestConfig, { mode: 'tatoeba' }> & { pattern: 'time' }) {
+  return config.mode === 'time' || (config.mode === 'tatoeba' && config.pattern === 'time')
+}
+
+/** The configured duration (seconds) for a time-bounded run (see
+ *  `isTimeBoundedRun`), or null for every other mode/pattern. Derived from
+ *  the predicate so the two never disagree. */
+export function runDurationSeconds(config: TypingTestConfig): number | null {
+  return isTimeBoundedRun(config) ? config.duration : null
+}
+
+/** Whether Weak Spot Training is actually in effect for `config` — words/
+ *  time modes only (the field doesn't exist on any other variant), and
+ *  only when explicitly `true` (absent/false is the default-off state).
+ *  Centralizes the mode-guard so callers (togglesRef carry, conditionKey,
+ *  the sampling call sites, buildTypingTestResult) never have to repeat
+ *  `(config.mode === 'words' || config.mode === 'time') &&
+ *  config.weakSpotTrainingMode` inline. */
+export function isWeakSpotTrainingActive(config: TypingTestConfig): boolean {
+  return (config.mode === 'words' || config.mode === 'time') && config.weakSpotTrainingMode === true
+}
+
+/** Narrows to the 'words'/'time' variants — the only ones carrying
+ *  `weakSpotTrainingMode`/`weakSpot` (and, incidentally, `punctuation`/
+ *  `numbers`/`romajiInput`/`romaji`). Centralizes what would otherwise be
+ *  re-spelled inline (`config.mode === 'words' || config.mode === 'time'`,
+ *  or the equivalent `'weakSpot' in config`) at every call site that needs
+ *  the words/time slice of `TypingTestConfig` as a real type guard. */
+export function hasWeakSpotFields(config: TypingTestConfig): config is Extract<TypingTestConfig, { mode: 'words' | 'time' }> {
+  return config.mode === 'words' || config.mode === 'time'
+}
+
+/** Word-language packs the romaji-keystroke matcher supports (kana word
+ *  lists only). Drives the SettingsBar toggle's visibility, and — via
+ *  `isRomajiCapable` / `isRomajiInputActive` in romaji-input.ts — whether the
+ *  (default-on, unless explicitly `false`) `romajiInput` choice is actually
+ *  honored for words/time (by the active language) and tatoeba (by the
+ *  pack's `language` id). The flag itself is never stripped from the config
+ *  (same as `punctuation`/`numbers`): it stays saved across language
+ *  switches, mount, and `setConfig` calls, and is simply inert whenever the
+ *  relevant language isn't in this set. Selecting a kana pack again picks it
+ *  back up automatically. */
+export const ROMAJI_INPUT_LANGUAGES = new Set(['japanese_hiragana', 'japanese_katakana'])
+
+/** Current word's confirmed romaji + canonical remaining spelling, plus the
+ *  count of kana characters fully confirmed so far (romajiInput mode only).
+ *  `words` is the full canonical romaji spelling of every word in the run,
+ *  index-aligned with `TypingTestState.words` (unbounded — not sliced to
+ *  the guide's visible window), letting `TypingTestView` line-synchronize
+ *  the guide with the reading window's own word lines: it re-derives which
+ *  words fall on each of `lineCount` lines from the same line structure the
+ *  reading window uses, rather than this selector guessing a word count.
+ *  `lineCount` is the number of guide lines to show (line the current word
+ *  sits on, plus that many more) — see `RomajiDetailSettings.guideLineCount`.
+ *  `showRow` is false when `lineCount` is 0 — the guide row is hidden
+ *  entirely, though `kanaCompleted` still drives the current word's kana
+ *  coloring and the IME-on hint still shows independently of `showRow`.
+ *  Produced by `useTypingTest`'s `romajiGuide` selector (composed from the
+ *  `romajiWordsTable`/keystroke-reactive memos — see romaji-input.ts),
+ *  consumed by `WordDisplay` (kana coloring) and `TypingTestView` (the
+ *  guide line(s) below the reading window). */
+export interface RomajiGuide {
+  typed: string
+  remaining: string
+  kanaCompleted: number
+  words: string[]
+  lineCount: number
+  showRow: boolean
+}
+
+/** Capitalizes only the first character of a whole word (used for `words`
+ *  table entries, which have no typed/remaining split of their own). */
+function capitalizeWord(word: string): string {
+  return word.length > 0 ? word[0].toUpperCase() + word.slice(1) : word
+}
+
+/** Applies the Romaji Settings modal's display-only case transform to a
+ *  guide's typed/remaining strings, and to every `words` table entry. Never
+ *  touches acceptance/matching — `createRomajiMatcher` always works in
+ *  lowercase; this only changes what `TypingTestView`'s guide row renders.
+ *  'upper' uppercases the whole string (and each `words` entry in full);
+ *  'capital' uppercases only the first character of the word as a whole
+ *  (the first char of `typed` once anything is typed, otherwise the first
+ *  char of `remaining`; each `words` entry gets its own first character
+ *  capitalized, since each is a whole word with no typed portion);
+ *  'lower'/undefined is a no-op. */
+export function applyRomajiCaseStyle(guide: RomajiGuide, caseStyle: RomajiCaseStyle | undefined): RomajiGuide {
+  if (!caseStyle || caseStyle === 'lower') return guide
+  if (caseStyle === 'upper') {
+    return {
+      ...guide,
+      typed: guide.typed.toUpperCase(),
+      remaining: guide.remaining.toUpperCase(),
+      words: guide.words.map((word) => word.toUpperCase()),
+    }
+  }
+  const words = guide.words.map(capitalizeWord)
+  if (guide.typed.length > 0) {
+    return { ...guide, typed: capitalizeWord(guide.typed), words }
+  }
+  if (guide.remaining.length > 0) {
+    return { ...guide, remaining: capitalizeWord(guide.remaining), words }
+  }
+  return { ...guide, words }
+}
+
+// Imported file-import-text display preferences (fileImport mode only).
+// 1 is a valid choice — a single visible reading-window line — and is
+// handled generically by clampDisplayLines/logicalWindowHeight/the
+// --tt-lines CSS floor below; none of them special-case a >=2 minimum.
+export const DISPLAY_LINES_MIN = 1
+export const DISPLAY_LINES_MAX = 10
+export const DEFAULT_DISPLAY_LINES = 4
+export const FONT_SIZE_MIN = 14
+export const FONT_SIZE_MAX = 48
+export const FONT_SIZE_STEP = 2
+export const DEFAULT_FONT_SIZE = 24
+
+/** Saved-result retention cap (see `trimResults` in result-builder.ts,
+ *  applied on every new save regardless of period filter or Weak Spot's
+ *  own rolling window/decay settings) — exported here so History's header
+ *  note and the Weak Spot Training description can both interpolate the
+ *  real number instead of hardcoding it twice. */
+export const MAX_TYPING_TEST_RESULTS = 500
+
+/** Every selectable font size (px), in ascending order — shared by every
+ *  font-size <select> (the reading window's Settings > Font and the Romaji
+ *  Settings modal's own font-size field). */
+export const FONT_OPTIONS = Array.from(
+  { length: (FONT_SIZE_MAX - FONT_SIZE_MIN) / FONT_SIZE_STEP + 1 },
+  (_, i) => FONT_SIZE_MIN + i * FONT_SIZE_STEP,
+)
+
+/** Clamp + round a display-line-count to the supported range. */
+export function clampDisplayLines(n: number): number {
+  return Math.min(DISPLAY_LINES_MAX, Math.max(DISPLAY_LINES_MIN, Math.round(n)))
+}
+
+/** Clamp + snap a font size (px) to the supported even range. */
+export function clampFontSize(px: number): number {
+  const snapped = Math.round(px / FONT_SIZE_STEP) * FONT_SIZE_STEP
+  return Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, snapped))
+}
 export const DEFAULT_CONFIG: TypingTestConfig = {
   mode: 'words',
   wordCount: 30,

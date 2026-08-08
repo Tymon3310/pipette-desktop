@@ -12,6 +12,7 @@ import {
   minuteStatsRowId,
   scopeRowId,
   sessionRowId,
+  trigramMinuteRowId,
   type JsonlRow,
 } from '../jsonl-row'
 import { applyRowsToCache } from '../apply-to-cache'
@@ -39,7 +40,7 @@ function scopeRow(updatedAt: number, productName = 'Pipette'): JsonlRow {
 
 function charRow(updatedAt: number, count: number, char = 'a'): JsonlRow {
   return {
-    id: charMinuteRowId(SCOPE_ID, 60_000, char),
+    id: charMinuteRowId(SCOPE_ID, 60_000, '', char),
     kind: 'char-minute',
     updated_at: updatedAt,
     payload: { scopeId: SCOPE_ID, minuteTs: 60_000, char, count },
@@ -48,7 +49,7 @@ function charRow(updatedAt: number, count: number, char = 'a'): JsonlRow {
 
 function matrixRow(updatedAt: number, count: number, tap = 0, hold = 0): JsonlRow {
   return {
-    id: matrixMinuteRowId(SCOPE_ID, 60_000, 1, 2, 0),
+    id: matrixMinuteRowId(SCOPE_ID, 60_000, '', 1, 2, 0),
     kind: 'matrix-minute',
     updated_at: updatedAt,
     payload: {
@@ -67,7 +68,7 @@ function matrixRow(updatedAt: number, count: number, tap = 0, hold = 0): JsonlRo
 
 function statsRow(updatedAt: number, keystrokes: number): JsonlRow {
   return {
-    id: minuteStatsRowId(SCOPE_ID, 60_000),
+    id: minuteStatsRowId(SCOPE_ID, 60_000, ''),
     kind: 'minute-stats',
     updated_at: updatedAt,
     payload: {
@@ -99,10 +100,22 @@ function bigramRow(
   bigrams: Record<string, { c: number; h: number[] }>,
 ): JsonlRow {
   return {
-    id: bigramMinuteRowId(SCOPE_ID, 60_000),
+    id: bigramMinuteRowId(SCOPE_ID, 60_000, ''),
     kind: 'bigram-minute',
     updated_at: updatedAt,
     payload: { scopeId: SCOPE_ID, minuteTs: 60_000, bigrams },
+  }
+}
+
+function trigramRow(
+  updatedAt: number,
+  trigrams: Record<string, { c: number; h: number[] }>,
+): JsonlRow {
+  return {
+    id: trigramMinuteRowId(SCOPE_ID, 60_000, ''),
+    kind: 'trigram-minute',
+    updated_at: updatedAt,
+    payload: { scopeId: SCOPE_ID, minuteTs: 60_000, trigrams },
   }
 }
 
@@ -136,6 +149,7 @@ describe('applyRowsToCache', () => {
       minuteStats: 1,
       sessions: 1,
       bigramMinutes: 0,
+      trigramMinutes: 0,
     })
     const conn = db.getConnection()
     expect(conn.prepare('SELECT COUNT(*) AS n FROM typing_scopes').get()).toEqual({ n: 1 })
@@ -143,6 +157,92 @@ describe('applyRowsToCache', () => {
     expect(conn.prepare('SELECT COUNT(*) AS n FROM typing_matrix_minute').get()).toEqual({ n: 1 })
     expect(conn.prepare('SELECT COUNT(*) AS n FROM typing_minute_stats').get()).toEqual({ n: 1 })
     expect(conn.prepare('SELECT COUNT(*) AS n FROM typing_sessions').get()).toEqual({ n: 1 })
+  })
+
+  it('applies matrix-minute dh/ds/dq, bigram-minute oc/on, and minute-stats pollP50Ms/pollP95Ms through to their SQL columns', () => {
+    const rows: JsonlRow[] = [
+      scopeRow(1_000),
+      {
+        id: matrixMinuteRowId(SCOPE_ID, 60_000, '', 1, 2, 0),
+        kind: 'matrix-minute',
+        updated_at: 1_000,
+        payload: {
+          scopeId: SCOPE_ID, minuteTs: 60_000, row: 1, col: 2, layer: 0, keycode: 0x04,
+          count: 1, tapCount: 0, holdCount: 0,
+          dh: [0, 1, 0, 0, 0, 0, 0, 0], ds: 65, dq: 4_225,
+        },
+      },
+      {
+        id: bigramMinuteRowId(SCOPE_ID, 60_000, ''),
+        kind: 'bigram-minute',
+        updated_at: 1_000,
+        payload: {
+          scopeId: SCOPE_ID, minuteTs: 60_000,
+          bigrams: { '4_11': { c: 2, h: [0, 2, 0, 0, 0, 0, 0, 0], oc: 1, on: 2 } },
+        },
+      },
+      {
+        id: minuteStatsRowId(SCOPE_ID, 60_000, ''),
+        kind: 'minute-stats',
+        updated_at: 1_000,
+        payload: {
+          scopeId: SCOPE_ID, minuteTs: 60_000, keystrokes: 2, activeMs: 100,
+          intervalAvgMs: null, intervalMinMs: null, intervalP25Ms: null, intervalP50Ms: null, intervalP75Ms: null, intervalMaxMs: null,
+          pollP50Ms: 20, pollP95Ms: 45,
+        },
+      },
+    ]
+    applyRowsToCache(db, rows)
+    const conn = db.getConnection()
+
+    const matrix = conn.prepare('SELECT dur_hist, dur_sum, dur_sumsq FROM typing_matrix_minute').get() as {
+      dur_hist: Uint8Array
+      dur_sum: number
+      dur_sumsq: number
+    }
+    expect(matrix.dur_sum).toBe(65)
+    expect(matrix.dur_sumsq).toBe(4_225)
+    // Little-endian u32 histogram: bucket 1 (offset 4) should read 1.
+    expect(Buffer.from(matrix.dur_hist).readUInt32LE(4)).toBe(1)
+
+    const bigram = conn.prepare('SELECT overlap_count, overlap_n FROM typing_bigram_minute').get() as {
+      overlap_count: number
+      overlap_n: number
+    }
+    expect(bigram.overlap_count).toBe(1)
+    expect(bigram.overlap_n).toBe(2)
+
+    const stats = conn.prepare('SELECT poll_p50_ms, poll_p95_ms FROM typing_minute_stats').get() as {
+      poll_p50_ms: number
+      poll_p95_ms: number
+    }
+    expect(stats.poll_p50_ms).toBe(20)
+    expect(stats.poll_p95_ms).toBe(45)
+  })
+
+  it('leaves dh/ds/dq, oc/on, and pollP50Ms/pollP95Ms columns NULL for pre-v8 rows that omit them', () => {
+    applyRowsToCache(db, [scopeRow(1_000), matrixRow(1_000, 5, 3, 2), statsRow(1_000, 10), bigramRow(1_000, { '4_11': { c: 1, h: [1, 0, 0, 0, 0, 0, 0, 0] } })])
+    const conn = db.getConnection()
+    const matrix = conn.prepare('SELECT dur_hist, dur_sum, dur_sumsq FROM typing_matrix_minute').get() as {
+      dur_hist: Buffer | null
+      dur_sum: number | null
+      dur_sumsq: number | null
+    }
+    expect(matrix.dur_hist).toBeNull()
+    expect(matrix.dur_sum).toBeNull()
+    expect(matrix.dur_sumsq).toBeNull()
+    const bigram = conn.prepare('SELECT overlap_count, overlap_n FROM typing_bigram_minute').get() as {
+      overlap_count: number | null
+      overlap_n: number | null
+    }
+    expect(bigram.overlap_count).toBeNull()
+    expect(bigram.overlap_n).toBeNull()
+    const stats = conn.prepare('SELECT poll_p50_ms, poll_p95_ms FROM typing_minute_stats').get() as {
+      poll_p50_ms: number | null
+      poll_p95_ms: number | null
+    }
+    expect(stats.poll_p50_ms).toBeNull()
+    expect(stats.poll_p95_ms).toBeNull()
   })
 
   it('applies scope rows before dependent rows so FKs resolve', () => {
@@ -224,6 +324,37 @@ describe('applyRowsToCache', () => {
     expect(row.count).toBe(5)
   })
 
+  it('expands a trigram-minute row into per-triple rows in typing_trigram_minute', () => {
+    const rows: JsonlRow[] = [
+      scopeRow(1_000),
+      trigramRow(1_000, {
+        '4_11_7': { c: 3, h: [0, 1, 2, 0, 0, 0, 0, 0] },
+      }),
+    ]
+    const result = applyRowsToCache(db, rows)
+    expect(result.trigramMinutes).toBe(1)
+    const conn = db.getConnection()
+    const dbRows = conn
+      .prepare('SELECT trigram_id, count, hist FROM typing_trigram_minute')
+      .all() as { trigram_id: string; count: number; hist: Uint8Array }[]
+    expect(dbRows).toHaveLength(1)
+    expect(dbRows[0].trigram_id).toBe('4_11_7')
+    expect(dbRows[0].count).toBe(3)
+  })
+
+  it('LWW: a stale trigram-minute row does not override a newer aggregate', () => {
+    applyRowsToCache(db, [
+      scopeRow(1_000),
+      trigramRow(2_000, { '4_11_7': { c: 5, h: [0, 5, 0, 0, 0, 0, 0, 0] } }),
+    ])
+    applyRowsToCache(db, [
+      trigramRow(1_500, { '4_11_7': { c: 999, h: [9, 0, 0, 0, 0, 0, 0, 0] } }),
+    ])
+    const conn = db.getConnection()
+    const row = conn.prepare('SELECT count FROM typing_trigram_minute WHERE trigram_id = ?').get('4_11_7') as { count: number }
+    expect(row.count).toBe(5)
+  })
+
   it('returns zero counters when given an empty batch', () => {
     expect(applyRowsToCache(db, [])).toEqual({
       scopes: 0,
@@ -232,6 +363,7 @@ describe('applyRowsToCache', () => {
       minuteStats: 0,
       sessions: 0,
       bigramMinutes: 0,
+      trigramMinutes: 0,
     })
   })
 })

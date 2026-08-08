@@ -1,0 +1,198 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+/** Word/quote supply for each typing-test mode config. Resolves a
+ *  TypingTestConfig + language into the word list (plus any quote / line
+ *  metadata) a run's state is seeded from, in sync (cache-only) and async
+ *  (store round-trip) variants. */
+
+import { generateWords, generateWordsSync, selectQuote, quoteToWords, getFileImportTextData, getFileImportTextDataSync, getTatoebaPack, getTatoebaPackSync, tatoebaRun } from './word-generator'
+import type { FileImportTextData, WeakSpotBiasProfile } from './word-generator'
+import type { TypingTestConfig, Quote } from './types'
+
+const TIME_MODE_BATCH_SIZE = 60
+const TIME_MODE_EXTEND_THRESHOLD = 10
+/** Sentences sampled for the tatoeba Time pattern's initial batch and every
+ *  refill — larger than a Lines-pattern run since a running clock chews
+ *  through many short sentences before the next low-water refill check. */
+const TATOEBA_TIME_BATCH_SIZE = 20
+
+/** Return the word count and generation options for word-based modes (words/time). */
+function wordGenParams(config: TypingTestConfig & { mode: 'words' | 'time' }): { count: number; opts: { punctuation: boolean; numbers: boolean } } {
+  return {
+    count: config.mode === 'words' ? config.wordCount : TIME_MODE_BATCH_SIZE,
+    opts: { punctuation: config.punctuation, numbers: config.numbers },
+  }
+}
+
+/** Result of a time-bounded refill: `words` is the extended list; `lineBreaks`
+ *  are the NEW line-break indices (absolute, into the returned `words`)
+ *  contributed by this refill. Empty for monkeytype time mode (no line
+ *  concept); the caller merges these into the run's existing `lineBreaks`
+ *  set (see `advanceAfterWord`). `lastRawWord` is the RAW (pre-decoration)
+ *  word this refill's batch actually ended on — undefined for the tatoeba
+ *  branch (no decoration concept there) — see `GeneratedWords.lastRawWord`
+ *  for why this must never be read off the decorated `words` tail. */
+export interface WordsRefill {
+  words: string[]
+  lineBreaks: number[]
+  lastRawWord?: string
+}
+
+/** Time-bounded word refill — monkeytype time mode, or the tatoeba Time
+ *  pattern (see `isTimeBoundedRun`). Self-contained: every non-time-bounded
+ *  config (including tatoeba's Lines pattern) returns null on its own,
+ *  rather than trusting the caller to only invoke this once time-bounded.
+ *  When the untyped tail of `words` runs low, returns the list extended by
+ *  one more batch; returns null when no refill is due, or (tatoeba) the
+ *  pack isn't cached / sampled empty, so the caller can keep its state
+ *  object untouched. Keeps the batch/threshold policy private to this
+ *  module.
+ *
+ *  `weakSpotProfile` is the SAME immutable snapshot the run's initial word
+ *  batch was sampled with (see `TypingTestState.weakSpotProfile`, threaded
+ *  in by `advanceAfterWord`) — never recomputed per refill, so a run's
+ *  bias can't shift mid-run even if the underlying history changes.
+ *  Deliberately NOT read for the tatoeba branch above: tatoeba samples
+ *  whole sentences from its own pack, not this module's word-list
+ *  sampler, and Weak Spot Training is words/time-only by design (see
+ *  `isWeakSpotTrainingActive`).
+ *
+ *  `seedLastRawWord` is the RAW (pre-decoration) word the run's word
+ *  supply most recently ended on — `TypingTestState.lastRawWord`, threaded
+ *  in by `advanceAfterWord` the same way `weakSpotProfile` is. This must
+ *  NOT be read off `words`' own tail: `words` holds the DECORATED batch
+ *  (post `injectNumbers`/`injectPunctuation`), while `sampleWords`'
+ *  repeat-avoidance always compares its seed against RAW candidates
+ *  pulled straight from the language's word list — a decorated seed (e.g.
+ *  a capitalized/punctuated/digit-replaced word) would almost never
+ *  string-match a raw candidate, silently defeating the very check this
+ *  seed exists for and letting a refill's first word repeat the previous
+ *  batch's actual last source word. */
+export function refillTimeModeWords(
+  words: readonly string[],
+  nextIndex: number,
+  config: TypingTestConfig,
+  language: string,
+  weakSpotProfile?: WeakSpotBiasProfile,
+  seedLastRawWord?: string,
+): WordsRefill | null {
+  if (words.length - nextIndex >= TIME_MODE_EXTEND_THRESHOLD) return null
+
+  if (config.mode === 'tatoeba' && config.pattern === 'time') {
+    const pack = getTatoebaPackSync(config.language)
+    if (!pack) return null
+    const { words: moreWords, lineBreaks } = tatoebaRun(pack, TATOEBA_TIME_BATCH_SIZE)
+    if (moreWords.length === 0) return null
+    const offset = words.length
+    // The previous batch's final sentence never got a trailing break
+    // recorded (nothing followed it yet, by tatoebaRun's own convention) —
+    // the seam between it and this batch's first sentence needs one now,
+    // so Enter (not Space) still advances between them.
+    return {
+      words: [...words, ...moreWords],
+      lineBreaks: [offset - 1, ...lineBreaks.map((b) => b + offset)],
+    }
+  }
+
+  if (config.mode !== 'time') return null
+  const { opts } = wordGenParams(config)
+  const { words: moreWords, lastRawWord } = generateWordsSync(TIME_MODE_BATCH_SIZE, opts, language, weakSpotProfile, seedLastRawWord)
+  return { words: [...words, ...moreWords], lineBreaks: [], lastRawWord }
+}
+
+export interface WordsForConfig {
+  words: string[]
+  quote: Quote | null
+  /** Line-end word indices — Enter advances past them; empty for flat
+   *  word-flow sources. */
+  lineBreaks: number[]
+  /** Per-line leading whitespace (fileImport mode only); empty otherwise. */
+  lineIndents: string[]
+  /** Whether this text is romaji-capable (fileImport mode only — see
+   *  `isRomajiCapable` in romaji-input.ts). Always false for every other
+   *  mode, which derive capability from `language`/`config.language`
+   *  instead and never consult this field. */
+  romajiCapable: boolean
+  /** RAW (pre-decoration) last word sampled for words/time modes — see
+   *  `GeneratedWords.lastRawWord`. Undefined for quote/fileImport/tatoeba
+   *  (no sampleWords call, no decoration concept). Carried onto
+   *  `TypingTestState.lastRawWord` by `freshState`/`createInitialState` so
+   *  a later time-mode refill can seed its own repeat-avoidance correctly
+   *  (see `refillTimeModeWords`'s `seedLastRawWord` param). */
+  lastRawWord?: string
+}
+
+/** Build the verbatim quote shell for an imported fileImport text so the
+ *  finished screen can show its name as the source. Carries the line-break
+ *  positions through so Enter can advance at line ends. */
+function fileImportTextToWords(data: FileImportTextData): WordsForConfig {
+  const text = data.words.join(' ')
+  return {
+    words: data.words,
+    quote: { id: 0, text, source: data.name, length: text.length },
+    lineBreaks: data.lineBreaks,
+    lineIndents: data.indents,
+    romajiCapable: data.romajiCapable,
+  }
+}
+
+/** Build a word-flow config from a sampled Tatoeba run (empty when the pack
+ *  is uncached / not downloaded). Reuses the quote path's char-based
+ *  counting and carries the run's per-sentence `lineBreaks` through so each
+ *  sampled sentence renders on its own line, same as imported fileImport
+ *  text. `count` is the Lines pattern's `lineCount`, or the Time pattern's
+ *  initial batch size — see the two `createWordsForConfig*` call sites. */
+function tatoebaWordsForConfig(pack: { name: string; words: string[] } | undefined, count: number): WordsForConfig {
+  if (!pack) return { words: [], quote: null, lineBreaks: [], lineIndents: [], romajiCapable: false }
+  return { ...tatoebaRun(pack, count), lineIndents: [], romajiCapable: false }
+}
+
+/** Sentence count to sample for a tatoeba config: the Lines pattern's own
+ *  `lineCount`, or the Time pattern's fixed initial batch (matching the
+ *  refill batch size — see `refillTimeModeWords`). */
+function tatoebaSampleCount(config: TypingTestConfig & { mode: 'tatoeba' }): number {
+  return config.pattern === 'time' ? TATOEBA_TIME_BATCH_SIZE : config.lineCount
+}
+
+/** `weakSpotProfile` is only ever consulted in the final words/time
+ *  fallthrough below — quote/fileImport/tatoeba all return earlier,
+ *  explicitly excluded from Weak Spot Training's biasing (fixed/imported
+ *  text, no word pool to bias within — see `isWeakSpotTrainingActive`). */
+export function createWordsForConfigSync(config: TypingTestConfig, language: string, weakSpotProfile?: WeakSpotBiasProfile): WordsForConfig {
+  if (config.mode === 'quote') {
+    const quote = selectQuote(config.quoteLength)
+    return { words: quoteToWords(quote), quote, lineBreaks: [], lineIndents: [], romajiCapable: false }
+  }
+  if (config.mode === 'fileImport') {
+    const data = getFileImportTextDataSync(config.textId)
+    // Cache miss — the async setConfig path fills words once the store
+    // round-trip resolves. Return empty (never call sampleWords on []).
+    return data ? fileImportTextToWords(data) : { words: [], quote: null, lineBreaks: [], lineIndents: [], romajiCapable: false }
+  }
+  if (config.mode === 'tatoeba') {
+    // Cache miss — the async path fills words once langGet resolves.
+    return tatoebaWordsForConfig(getTatoebaPackSync(config.language), tatoebaSampleCount(config))
+  }
+  const { count, opts } = wordGenParams(config)
+  const { words, lastRawWord } = generateWordsSync(count, opts, language, weakSpotProfile)
+  return { words, quote: null, lineBreaks: [], lineIndents: [], romajiCapable: false, lastRawWord }
+}
+
+/** Async counterpart of `createWordsForConfigSync` — see its own doc
+ *  comment for the `weakSpotProfile` gating (words/time only). */
+export async function createWordsForConfig(config: TypingTestConfig, language: string, weakSpotProfile?: WeakSpotBiasProfile): Promise<WordsForConfig> {
+  if (config.mode === 'quote') {
+    const quote = selectQuote(config.quoteLength)
+    return { words: quoteToWords(quote), quote, lineBreaks: [], lineIndents: [], romajiCapable: false }
+  }
+  if (config.mode === 'fileImport') {
+    const data = await getFileImportTextData(config.textId)
+    return data ? fileImportTextToWords(data) : { words: [], quote: null, lineBreaks: [], lineIndents: [], romajiCapable: false }
+  }
+  if (config.mode === 'tatoeba') {
+    return tatoebaWordsForConfig(await getTatoebaPack(config.language), tatoebaSampleCount(config))
+  }
+  const { count, opts } = wordGenParams(config)
+  const { words, lastRawWord } = await generateWords(count, opts, language, weakSpotProfile)
+  return { words, quote: null, lineBreaks: [], lineIndents: [], romajiCapable: false, lastRawWord }
+}

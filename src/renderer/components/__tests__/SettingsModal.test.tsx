@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { SettingsModal } from '../SettingsModal'
 import type { UseSyncReturn } from '../../hooks/useSync'
@@ -23,9 +23,13 @@ vi.mock('../../i18n', () => ({
 }))
 
 const mockAppConfigSet = vi.fn()
+// Mutable so individual tests can set trayResident/startInTray before
+// rendering (e.g. to exercise the startInTray disabled-dependency and
+// the trayResident-off-clears-startInTray behavior).
+const mockAppConfigState: Record<string, unknown> = { language: 'en' }
 vi.mock('../../hooks/useAppConfig', () => ({
   useAppConfig: () => ({
-    config: { language: 'en' },
+    config: mockAppConfigState,
     loading: false,
     set: mockAppConfigSet,
   }),
@@ -87,12 +91,12 @@ Object.defineProperty(window, 'vialAPI', {
 const FULLY_CONFIGURED: Partial<UseSyncReturn> = {
   authStatus: { authenticated: true },
   hasPassword: true,
-  config: { autoSync: false },
+  config: { ...DEFAULT_APP_CONFIG, autoSync: false },
 }
 
 const SYNC_ENABLED: Partial<UseSyncReturn> = {
   ...FULLY_CONFIGURED,
-  config: { autoSync: true },
+  config: { ...DEFAULT_APP_CONFIG, autoSync: true },
 }
 
 function makeSyncMock(overrides?: Partial<UseSyncReturn>): UseSyncReturn {
@@ -108,6 +112,7 @@ function makeSyncMock(overrides?: Partial<UseSyncReturn>): UseSyncReturn {
     hasRemotePassword: null,
     checkingRemotePassword: false,
     syncUnavailable: false,
+    syncReadinessReason: null,
     retryRemoteCheck: vi.fn(),
     startAuth: vi.fn().mockResolvedValue(undefined),
     signOut: vi.fn().mockResolvedValue(undefined),
@@ -116,10 +121,8 @@ function makeSyncMock(overrides?: Partial<UseSyncReturn>): UseSyncReturn {
     changePassword: vi.fn().mockResolvedValue({ success: true }),
     resetSyncTargets: vi.fn().mockResolvedValue({ success: true }),
     validatePassword: vi.fn().mockResolvedValue({ score: 4, feedback: [] }),
-    syncNow: vi.fn().mockResolvedValue(undefined),
+    syncNow: vi.fn().mockResolvedValue({ success: true, status: 'completed' }),
     refreshStatus: vi.fn().mockResolvedValue(undefined),
-    listUndecryptable: vi.fn().mockResolvedValue([]),
-    scanRemote: vi.fn().mockResolvedValue({ keyboards: [], favorites: [], undecryptable: [] }),
     deleteFiles: vi.fn().mockResolvedValue({ success: true }),
     ...overrides,
   }
@@ -132,15 +135,27 @@ const defaultProps = {
   onDefaultLayoutChange: vi.fn(),
   defaultAutoAdvance: true,
   onDefaultAutoAdvanceChange: vi.fn(),
+  defaultLayerPanelOpen: false,
+  onDefaultLayerPanelOpenChange: vi.fn(),
+  defaultBasicViewType: 'ansi' as const,
+  onDefaultBasicViewTypeChange: vi.fn(),
+  defaultSplitKeyMode: 'split' as const,
+  onDefaultSplitKeyModeChange: vi.fn(),
+  defaultQuickSelect: false,
+  onDefaultQuickSelectChange: vi.fn(),
   autoLockTime: 10 as const,
   onAutoLockTimeChange: vi.fn(),
+  maxKeymapHistory: 10,
+  onMaxKeymapHistoryChange: vi.fn(),
   hubEnabled: true,
   onHubEnabledChange: vi.fn(),
   hubAuthenticated: false,
+  hubDisplayName: null,
+  onHubDisplayNameChange: vi.fn().mockResolvedValue({ success: true }),
 }
 
 describe('SettingsModal', () => {
-  let onClose: ReturnType<typeof vi.fn>
+  let onClose: Mock<() => void>
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -151,6 +166,9 @@ describe('SettingsModal', () => {
     defaultProps.onAutoLockTimeChange = vi.fn()
     defaultProps.onHubEnabledChange = vi.fn()
     defaultProps.hubAuthenticated = false
+    for (const key of Object.keys(mockAppConfigState)) {
+      if (key !== 'language') delete mockAppConfigState[key]
+    }
   })
 
   function renderAndSwitchToTools(props?: Partial<Parameters<typeof SettingsModal>[0]>) {
@@ -372,7 +390,7 @@ describe('SettingsModal', () => {
   })
 
   it('allows disabling auto-sync even when not authenticated', async () => {
-    const sync = makeSyncMock({ config: { autoSync: true } })
+    const sync = makeSyncMock({ config: { ...DEFAULT_APP_CONFIG, autoSync: true } })
     renderAndSwitchToData({ sync })
 
     const stopBtn = screen.getByTestId('sync-auto-off')
@@ -668,6 +686,96 @@ describe('SettingsModal', () => {
 
       expect(screen.getByTestId('settings-theme-packs-row')).toBeInTheDocument()
       expect(screen.getByTestId('settings-theme-packs-button')).toBeInTheDocument()
+    })
+  })
+
+  describe('Auto launch / Tray resident section (Tools tab)', () => {
+    it('renders auto launch toggle off by default', () => {
+      renderAndSwitchToTools()
+      const toggle = screen.getByTestId('settings-auto-launch-toggle')
+      expect(toggle).toBeInTheDocument()
+      expect(toggle.getAttribute('aria-checked')).toBe('false')
+    })
+
+    it('renders tray resident toggle off by default', () => {
+      renderAndSwitchToTools()
+      const toggle = screen.getByTestId('settings-tray-resident-toggle')
+      expect(toggle).toBeInTheDocument()
+      expect(toggle.getAttribute('aria-checked')).toBe('false')
+    })
+
+    it('calls appConfig.set with autoLaunch true when auto launch toggle is clicked', () => {
+      renderAndSwitchToTools()
+
+      fireEvent.click(screen.getByTestId('settings-auto-launch-toggle'))
+      expect(mockAppConfigSet).toHaveBeenCalledWith('autoLaunch', true)
+    })
+
+    it('calls appConfig.set with trayResident true when tray resident toggle is clicked', () => {
+      renderAndSwitchToTools()
+
+      fireEvent.click(screen.getByTestId('settings-tray-resident-toggle'))
+      expect(mockAppConfigSet).toHaveBeenCalledWith('trayResident', true)
+    })
+
+    it('renders restore last session toggle on by default', () => {
+      renderAndSwitchToTools()
+      const toggle = screen.getByTestId('settings-restore-last-session-toggle')
+      expect(toggle).toBeInTheDocument()
+      expect(toggle.getAttribute('aria-checked')).toBe('true')
+    })
+
+    it('calls appConfig.set with restoreLastSession false when its toggle is clicked', () => {
+      renderAndSwitchToTools()
+
+      fireEvent.click(screen.getByTestId('settings-restore-last-session-toggle'))
+      expect(mockAppConfigSet).toHaveBeenCalledWith('restoreLastSession', false)
+    })
+
+    it('renders startInTray toggle disabled when trayResident is off', () => {
+      renderAndSwitchToTools()
+      const toggle = screen.getByTestId('settings-start-in-tray-toggle')
+      expect(toggle).toBeInTheDocument()
+      expect(toggle).toBeDisabled()
+      expect(toggle.getAttribute('aria-checked')).toBe('false')
+    })
+
+    it('renders startInTray toggle enabled when trayResident is on', () => {
+      mockAppConfigState.trayResident = true
+      renderAndSwitchToTools()
+
+      const toggle = screen.getByTestId('settings-start-in-tray-toggle')
+      expect(toggle).not.toBeDisabled()
+    })
+
+    it('calls appConfig.set with startInTray true when trayResident is on and its toggle is clicked', () => {
+      mockAppConfigState.trayResident = true
+      renderAndSwitchToTools()
+
+      fireEvent.click(screen.getByTestId('settings-start-in-tray-toggle'))
+      expect(mockAppConfigSet).toHaveBeenCalledWith('startInTray', true)
+    })
+
+    it('turning trayResident off also sets startInTray false when it was on', () => {
+      mockAppConfigState.trayResident = true
+      mockAppConfigState.startInTray = true
+      renderAndSwitchToTools()
+
+      fireEvent.click(screen.getByTestId('settings-tray-resident-toggle'))
+
+      expect(mockAppConfigSet).toHaveBeenCalledWith('trayResident', false)
+      expect(mockAppConfigSet).toHaveBeenCalledWith('startInTray', false)
+    })
+
+    it('turning trayResident off does not touch startInTray when it was already off', () => {
+      mockAppConfigState.trayResident = true
+      mockAppConfigState.startInTray = false
+      renderAndSwitchToTools()
+
+      fireEvent.click(screen.getByTestId('settings-tray-resident-toggle'))
+
+      expect(mockAppConfigSet).toHaveBeenCalledWith('trayResident', false)
+      expect(mockAppConfigSet).not.toHaveBeenCalledWith('startInTray', false)
     })
   })
 

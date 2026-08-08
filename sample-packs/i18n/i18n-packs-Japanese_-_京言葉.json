@@ -1,11 +1,11 @@
 {
-  "version": "0.1.1",
+  "version": "0.1.87",
   "name": "Japanese - 京言葉",
   "common": {
     "save": "保存しますえ",
     "saved": "保存しましたえ",
     "cancel": "やめときますわ",
-    "delete": "消しますえ",
+    "delete": "消すえ",
     "confirmDelete": "消してもよろしおすか？",
     "close": "閉じますえ",
     "reset": "戻しますえ",
@@ -27,6 +27,7 @@
     "exported": "書き出しましたえ",
     "imported": "入れましたえ",
     "load": "読み込みますえ",
+    "confirmLoad": "読み込んでもよろしおすか？",
     "labelPlaceholder": "ラベル",
     "noLabel": "（ラベルおへん）",
     "synced": "同期しましたえ",
@@ -35,7 +36,17 @@
     "installed": "入れてありますえ",
     "searchPlaceholder": "Pipette Hub を検索しますえ（2文字以上で）…",
     "done": "完了しましたえ",
-    "edit": "編集しますえ"
+    "edit": "編集しますえ",
+    "sortByName": "お名前どすえ",
+    "importing": "インポートしてますえ…",
+    "importedNamed": "{{name}} を入れましたえ",
+    "updatedNamed": "{{name}} を更新しましたえ",
+    "importBatchFailed_one": "{{count}} 件、インポートできまへんでしたわ",
+    "importBatchFailed_other": "{{count}} 件、インポートできまへんでしたわ",
+    "importSummary_one": "{{count}} 件インポートしましたえ (成功{{success}}、失敗{{failure}})",
+    "importSummary_other": "{{count}} 件インポートしましたえ (成功{{success}}、失敗{{failure}})",
+    "pullFromCloud": "Google Driveから取ってきますえ",
+    "pulling": "取ってきてますえ..."
   },
   "app": {
     "title": "Pipette",
@@ -66,6 +77,14 @@
   },
   "editor": {
     "autoAdvance": "自動移動",
+    "viewMatrix": {
+      "label": "ビューマトリクス",
+      "edit": "編集しますえ",
+      "done": "完了しましたえ",
+      "rowLabel": "行",
+      "colLabel": "列",
+      "blankOption": "—"
+    },
     "keymap": {
       "title": "キーマップ",
       "layer": "Layer {{number}}",
@@ -90,6 +109,7 @@
       "previousLayers": "前のレイヤーどすえ",
       "nextLayers": "次のレイヤーどすえ",
       "layerN": "Layer {{n}}",
+      "layerPreview": "プレビューどすえ - {{label}}",
       "undo": "元に戻しますえ",
       "redo": "やり直しますえ",
       "zoomIn": "大きゅうしますえ",
@@ -249,22 +269,151 @@
       "switchToTypingMode": "タイピングテストどすえ",
       "exitTypingMode": "テスト終わりどすえ",
       "restart": "もういっぺんどすえ",
+      "nextTest": "次のテストどすえ",
+      "collapseSettings": "設定を閉じますえ",
+      "expandSettings": "設定を開きますえ",
+      "keymapToggle": "キーマップ",
+      "statsToggle": "計測",
+      "controlsToggle": "操作",
+      "hideKeymap": "キーマップを隠しますえ",
+      "showKeymap": "キーマップを見せますえ",
+      "hideStats": "計測を隠しますえ",
+      "showStats": "計測を見せますえ",
+      "hideControls": "操作を隠しますえ",
+      "showControls": "操作を見せますえ",
+      "saveUnnamedToggle": "名前なしでも保存どすえ",
+      "enableSaveUnnamed": "名前がのうても結果を自動で保存しますえ",
+      "disableSaveUnnamed": "保存には名前が要りますえ",
+      "section": {
+        "settings": "設定",
+        "data": "データ",
+        "view": "表示"
+      },
+      "compare": {
+        "button": "比較",
+        "title": "比較どすえ",
+        "previous": "前回",
+        "best": "ベスト",
+        "average": "平均",
+        "pinned": "結果",
+        "off": "オフ",
+        "noResults": "ピンできる結果がおへんなぁ",
+        "colName": "名前",
+        "colKeyboard": "キーボード",
+        "colTime": "時間"
+      },
       "wpm": "WPM",
-      "accuracy": "正確さどすえ",
+      "kpm": "KPM",
+      "accuracy": "正確どすえ",
+      "kspc": "KSPC",
       "time": "時間",
       "words": "単語",
+      "lines": "行",
+      "chars": "文字数",
+      "fontSize": "Font",
       "correct": "正解どすえ",
       "incorrect": "ミスどすなぁ",
-      "finished": "お疲れさんどすえ",
       "loading": "読み込んでますえ…",
       "wordCount": "{{current}} / {{total}}",
       "mode": {
         "words": "単語",
         "time": "時間",
-        "quote": "引用"
+        "quote": "引用",
+        "fileImport": "テキスト",
+        "lines": "行"
       },
       "punctuation": "句読点",
       "numbers": "数字",
+      "weakSpotTraining": "苦手克服モードどす",
+      "japaneseInputToggle": "日本語入力どす",
+      "romaji": {
+        "imeHint": "ローマ字入力モードの時は、OSのIMEを切っておくれやす"
+      },
+      "kana": {
+        "imeHint": "かな入力モードの時は、OSのIMEを切っておくれやす"
+      },
+      "romajiSettings": {
+        "title": "日本語入力の詳細設定どすえ",
+        "inputMethodLabel": "入力方式どす",
+        "inputMethod": {
+          "direct": "直接入力",
+          "romaji": "ローマ字",
+          "kana": "かな"
+        },
+        "caseLabel": "表示する文字どす",
+        "case": {
+          "upper": "ROMAJI",
+          "capital": "Romaji",
+          "lower": "romaji"
+        },
+        "guideLinesLabel": "表示行数どす",
+        "lineEndEnterLabel": "行末でEnterを必須にしますえ",
+        "lineEndEnterHint": "オンやと行末の単語はEnterで確定するまで待っとくれやす。オフにしたら他の単語と同じですぐ次へ進みますえ",
+        "guideLabel": "表示パターン",
+        "guideHint": "表示だけどすえ。他の入力パターンでも正解になりますえ",
+        "inputLabel": "入力パターン",
+        "inputHint": "オフにしたパターンは受け付けまへん。ベース（ヘボン式/訓令式）は最低ひとつ有効どす",
+        "style": {
+          "hepburn": "ヘボン式 (shi/chi)",
+          "kunrei": "訓令式 (si/ti)",
+          "c": "C表記 (ca)",
+          "q": "Q表記 (qu)",
+          "digraph": "二重字 (jya)",
+          "xSmall": "小文字x (xa)",
+          "lSmall": "小文字l (la)",
+          "w": "W表記 (wi)",
+          "v": "V表記 (va)",
+          "f": "F表記 (fa)",
+          "ye": "YE表記 (ye)",
+          "xn": "撥音x (xn)",
+          "nApos": "N区切り (n')"
+        },
+        "styleTip": {
+          "hepburn": "し:shi じ:ji ち:chi つ:tsu ふ:fu しゃ:sha しゅ:shu しょ:sho じゃ:ja じゅ:ju じょ:jo ちゃ:cha ちゅ:chu ちょ:cho\nっし:sshi っち:cchi っち:tchi っつ:ttsu っふ:ffu っしゃ:ssha っちゃ:tcha っじゃ:jja",
+          "kunrei": "し:si じ:zi ち:ti つ:tu ふ:hu しゃ:sya しゅ:syu しょ:syo じゃ:zya じゅ:zyu じょ:zyo ちゃ:tya ちゅ:tyu ちょ:tyo\nっし:ssi っち:tti っつ:ttu っふ:hhu っしゃ:ssya っちゃ:ttya っじゃ:zzya",
+          "c": "か:ca く:cu こ:co し:ci せ:ce ちゃ:cya ちゅ:cyu ちょ:cyo ちぃ:cyi ちぇ:cye",
+          "q": "く:qu くぁ:qa くぃ:qi くぇ:qe くぉ:qo",
+          "digraph": "じゃ:jya じゅ:jyu じょ:jyo じぃ:jyi じぇ:jye",
+          "xSmall": "ぁ:xa ぃ:xi ぅ:xu ぇ:xe ぉ:xo ゃ:xya ゅ:xyu ょ:xyo ゎ:xwa ゕ:xka ゖ:xke ぃ:xyi ぇ:xye っ:xtu っ:xtsu",
+          "lSmall": "ぁ:la ぃ:li ぅ:lu ぇ:le ぉ:lo ゃ:lya ゅ:lyu ょ:lyo ゎ:lwa ゕ:lka ゖ:lke ぃ:lyi ぇ:lye っ:ltu っ:ltsu",
+          "w": "うぃ:wi うぃ:whi うぇ:we うぇ:whe うぉ:who うぁ:wha う:wu う:whu",
+          "v": "ゔ:vu ゔぁ:va ゔぃ:vi ゔぇ:ve ゔぉ:vo ゔゃ:vya ゔゅ:vyu ゔょ:vyo ゔぃ:vyi ゔぇ:vye",
+          "f": "ふぁ:fa ふぃ:fi ふぇ:fe ふぉ:fo ふゅ:fyu ふゃ:fya ふょ:fyo ふぁ:hwa ふぃ:hwi ふぇ:hwe ふぉ:hwo ふゅ:hwyu",
+          "ye": "いぇ:ye",
+          "xn": "ん:xn",
+          "nApos": "ん:n'"
+        }
+      },
+      "weakSpotSettings": {
+        "title": "苦手克服モードどす",
+        "tokenJoin": "・",
+        "tokenOverflow": " ほか{{extra}}件どすえ",
+        "notApplicableNote": "単語パターンと時間パターンでしか使えしまへん。",
+        "statusUnavailable": "履歴の読み込み、まだどすえ。もうちょっと待っとくれやす。",
+        "statusNoWeakSpots": "苦手なとこ、おへんどすえ",
+        "statusActive": "苦手なとこ見つかりましたえ（{{tokenCount}}件）: {{tokens}}",
+        "statusActiveNoTokens": "苦手なとこ見つかりましたえ。",
+        "description": "文字（ローマ字入力やと綴りの区切り単位どすえ）は{{missThreshold}}回以上ミスしはったら苦手認定どすえ。タイミング記録がある場合（{{minTimingSamples}}回以上のサンプル）は、普段のペースより{{slownessRatio}}倍以上遅い、またはつまずき（普段の{{stallMultiple}}倍を超える間隔）がサンプルの{{stallRatePercent}}%以上で起きても苦手認定どすえ。",
+        "windowDescription": "判定は直近{{count}}回分の記録どすえ、それだけ見させてもろてます。",
+        "windowDescriptionAll": "判定は今まで全部の記録を見させてもろてますえ。",
+        "decayDescription": "古いミスはだんだん軽うなっていきますえ、{{days}}日ごとに半分どすえ。",
+        "biasDescription": "有効にしはったら、出題される単語の約{{percent}}%が苦手な文字から選ばれますえ。",
+        "historyRetentionNote": "上の範囲設定や減衰設定とは関係のう、履歴自体が直近{{max}}件までしか残りまへんよって、それより古い記録は判定から外れてしまいますえ。",
+        "sectionDetection": "判定の条件",
+        "sectionWindow": "データの範囲",
+        "sectionSampling": "出題の按配",
+        "missThresholdLabel": "ミス回数のしきい値（回）",
+        "slownessRatioLabel": "遅さの倍率（倍）",
+        "stallRateLabel": "詰まり率（%）",
+        "stallMultipleLabel": "詰まり判定の倍率（倍）",
+        "minTimingSamplesLabel": "最低サンプル数",
+        "missWindowLabel": "集計する範囲（直近の回数）",
+        "missWindowAll": "ぜんぶ",
+        "decayLabel": "時間による重みの減衰（半減期・日）",
+        "decayNone": "オフ",
+        "biasRatioLabel": "苦手な文字の出題割合（%）",
+        "resetButton": "元の設定に戻す"
+      },
       "quoteLength": {
         "short": "短いのん",
         "medium": "普通のん",
@@ -272,29 +421,36 @@
         "all": "全部どすえ"
       },
       "quoteSource": "-- {{source}}",
+      "nameResult": "この結果に名前を付けますえ",
+      "nameModal": {
+        "title": "結果に名前を付けますえ"
+      },
       "viewOnly": "タイピングビュー",
       "exitViewOnly": "ビュー終わりどすえ",
       "alwaysOnTop": "最前面どすえ",
+      "recordModalTitle": "記録設定",
       "recordStart": "始めますえ",
       "recordStop": "止めますえ",
-      "viewAnalytics": "分析ビュー",
-      "tab": {
-        "window": "ウィンドウ",
-        "rec": "REC"
-      },
       "monitorApp": {
         "label": "Monitor App"
       },
       "heatmap": {
-        "legend": "ヒートマップ: ここ1時間どすえ"
+        "legend": "ヒートマップ: ここ{{minutes}}分どすえ"
       },
       "closeHint": "クリックしたらメニューが開きますえ",
       "recordingIndicator": "記録中どすえ",
       "resetSize": "初期サイズ",
       "fitSize": "フィット",
       "baseLayer": "Base Layer",
+      "modeLabel": "データ元",
+      "pattern": "パターン",
+      "units": "単位",
+      "unitsWords": "単位(単語)",
+      "unitsSec": "単位(秒)",
+      "unitsLines": "単位(行)",
+      "optionLabel": "オプション",
       "baseLayerShort": "Base",
-      "heatmapWindow": "ヒートマップの表示期間（分）",
+      "heatmapWindow": "タイピングビューのヒートマップの表示期間（分）",
       "heatmapWindowShort": "HeatMap",
       "heatmapWindowOption": "{{minutes}} 分どすえ",
       "consent": {
@@ -317,28 +473,184 @@
       "paused": "ウィンドウからフォーカスが離れましたえ",
       "layerNote": "レイヤー切替は MO / LT / LM だけ追随しますえ。他のんは反映されへんこともありますえ。",
       "language": {
-        "title": "言語",
+        "title": "データ元",
         "searchPlaceholder": "言語を検索しますえ...",
         "downloaded": "入れてありますえ",
         "available": "使えますえ",
         "noResults": "合うのんがおへんなぁ",
         "words": "{{count}} 単語どすえ",
+        "lines": "{{count}} 行どすえ",
         "loadingLanguage": "言語を読み込んでますえ…",
-        "downloadFailed": "ダウンロードがあきまへんでしたえ"
+        "downloadFailed": "ダウンロードがあきまへんでしたえ",
+        "tabMonkeytype": "MonkeyType",
+        "tabTatoeba": "Tatoeba",
+        "tabFileImport": "ファイル取込",
+        "tabAozora": "青空文庫",
+        "import": "UTF-8 のテキストを取り込みますえ",
+        "importEmpty": "取り込んだテキストはまだおへんなぁ",
+        "importFailed": "取り込みがあきまへんでした",
+        "importErrorNotUtf8": "UTF-8 のテキストファイルしか対応してしまへんえ",
+        "importErrorTooLarge": "ファイルが大きすぎますえ（最大 5 MB）",
+        "importErrorEmpty": "打てるテキストがおへんなぁ",
+        "importOverwritePrompt": "「{{name}}」はもうありますえ。上書きしますか？",
+        "confirmOverwrite": "上書きしますえ",
+        "fileImportText": "取り込んだテキストどすえ",
+        "datasetUpdateAvailable": "単語リストの更新がありますえ。",
+        "datasetUpdate": "更新しますえ",
+        "datasetUpdating": "更新してますえ…",
+        "catalogSearchPlaceholder": "作品名か著者名で検索しますえ...",
+        "catalogImportAction": "取り込みますえ",
+        "estimatedChars": "約 {{count}} 文字どすえ",
+        "catalogImportErrorDuplicate": "同じ作品名のテキストがもうありますえ",
+        "catalogImportErrorGeneric": "ダウンロードがあきまへんでしたえ（{{code}}）",
+        "catalogLoadFailed": "カタログの読み込みがあきまへんでした。つながりを確かめてもういっぺんお試しやす。",
+        "kanaRowLabel": "行",
+        "kanaRowGroupAriaLabel": "著者名の読みの行で絞り込みますえ",
+        "kanaColumnGroupAriaLabel": "著者名の読みの段で絞り込みますえ",
+        "romajiBadge": "Romaji",
+        "romajiFilter": "ローマ字入力できるものだけ表示しますえ"
+      },
+      "memory": {
+        "pause": "一時停止どすえ",
+        "resumeButton": "再開どすえ",
+        "resumeTitle": "保存したテストを再開しはりますか？",
+        "resumeBody": "{{total}} 語中 {{current}} 語目で一時停止してますえ。続きから再開しますか？最初からやり直しますか？",
+        "resume": "続きから再開しますえ",
+        "restart": "最初からどすえ"
       },
       "history": {
         "title": "履歴どすえ",
+        "retentionNote": "履歴は直近{{max}}件までしか残りまへんえ",
         "bestWpm": "最高どすえ",
         "avgWpm": "平均どすえ",
         "last10Avg": "直近10回",
         "totalTests": "テスト数",
         "avgAccuracy": "平均正確さ",
+        "avgHold": "平均キー押下時間どすえ",
+        "avgHoldAbbr": "AKH",
         "date": "日時",
+        "name": "名前",
+        "unnamed": "名なしどすえ",
         "mode": "モード",
+        "tabMonkeytype": "MonkeyType",
+        "tabTatoeba": "Tatoeba",
+        "tabAozora": "青空文庫",
+        "tabFileImport": "ファイル取込",
+        "tabText": "テキスト",
+        "tabResults": "結果",
+        "tabAnalysis": "分析",
+        "viewTabsAriaLabel": "履歴の表示を切り替えますえ",
+        "sourceFilterLabel": "ソースで絞り込みますえ",
+        "periodFilterLabel": "期間で絞り込みますえ",
+        "period1Week": "1週間どす",
+        "period1Month": "1ヶ月どす",
+        "period3Months": "3ヶ月どす",
+        "period1Year": "1年どす",
+        "periodAll": "全期間どす",
         "noResults": "結果がおへんなぁ",
         "pb": "PB",
         "allModes": "全部",
-        "exportCsv": "CSV出しますえ"
+        "filterMode": "モードで絞り込みますえ",
+        "filterText": "テキストで絞り込みますえ",
+        "exportCsv": "CSV出しますえ",
+        "delete": "消しますえ",
+        "accuracyTrendTitle": "正確性の推移どすえ",
+        "wpmTrendTitle": "WPMの推移どすえ",
+        "trendBest": "最高どすえ",
+        "trendWorst": "最低どすえ",
+        "trendAvg": "平均どすえ",
+        "conditionFilterLabel": "条件で絞り込みますえ",
+        "conditionPunctuation": "+句読点",
+        "conditionNumbers": "+数字",
+        "conditionRomaji": "+ローマ字入力",
+        "conditionKana": "+かな",
+        "conditionWeakSpot": "+苦手克服モード",
+        "conditionTatoeba": "Tatoeba",
+        "mistakeRankingTitle": "苦手な文字どすえ",
+        "mistakeRankingEmpty": "ミスの記録はまだおへんなぁ",
+        "errorMixTitle": "誤り種別どすえ",
+        "errorMixEmpty": "対象となる結果はまだおへんなぁ",
+        "errorMixColumnType": "種別",
+        "errorMixColumnYou": "あなた",
+        "errorMixColumnPopAvg": "母平均",
+        "errorMixLabelSubstitution": "置換",
+        "errorMixLabelOmission": "脱字",
+        "errorMixLabelInsertion": "衍字",
+        "errorMixDescSubstitution": "置換いうんは、その位置で本来と違う文字を打ってしまわはる誤りどすえ。",
+        "errorMixAdviceSubstitution": "隣のキーと押し間違えたはることが多いんどす。速さより正確さを意識して、そのキーだけそっと打ってみておくれやす。",
+        "errorMixDescOmission": "脱字いうんは、対象の文字を打たんと飛ばしてしまわはる誤りどす。",
+        "errorMixAdviceOmission": "急いで打たはった時に起こりやすおすえ。他のキーより深う押さんとあかんのやないか、確かめてみておくれやす。",
+        "errorMixDescInsertion": "衍字いうんは、対象にない余分な文字を打ってしまわはる誤りどすなぁ。",
+        "errorMixAdviceInsertion": "キーを二度押ししてしまわはることが多おすえ。うっかり連打してしまわはってへんか、気ぃつけておくれやす。",
+        "timeline": {
+          "modalTitle": "打鍵タイムラインどすえ",
+          "openButton": "打鍵タイムラインを開きますえ",
+          "linkLabel": "足あとどすえ",
+          "loading": "タイムラインを読み込み中どすえ…",
+          "error": "このランの打鍵ログが読み込めしまへんどした。",
+          "partialBadge": "未完了どすえ",
+          "stats": {
+            "wordPace": "ワード速度どすえ",
+            "runWpm": "WPM",
+            "accuracy": "正確度どすえ",
+            "overlap": "重複率どすえ",
+            "duration": "所要時間どすえ",
+            "kpm": "1分あたりの打鍵数どすえ",
+            "durationSeconds": "{{s}}秒",
+            "avgHold": "平均キー押下時間どすえ",
+            "avgHoldTooltip": "キーを押してから離すまでの平均の時間（ミリ秒）どすえ。"
+          },
+          "legend": {
+            "normal": "通常の打鍵どすえ",
+            "mistake": "ミスどすえ",
+            "overlap": "重複打鍵",
+            "overlapTooltip": "前のキーを離さんうちに押さはったん",
+            "unjudged": "未判定",
+            "unjudgedTooltip": "正誤のデータがおへん",
+            "blank": "ブランク",
+            "blankTooltip": "圧縮して表示どすえ",
+            "leadIn": "ワード前の間どすえ",
+            "blankLine": "ブランク",
+            "blankLineTooltip": "250ms超、圧縮して表示どすえ",
+            "leadInLine": "行前の間どすえ",
+            "correctedNote": "ミスの印には提出前に直さはった打鍵も入ってますよって、印があっても正確度100%になることがおすえ",
+            "infoAriaLabel": "凡例の補足情報"
+          },
+          "axisNote": "ブランクはこの軸の上で圧縮して表示してますけど、出てる時間はどれも本当の値どすえ",
+          "correlationUnreliable": "このランは正誤の印が正しないことがおすえ（IME変換を通した入力が入ってますよって）",
+          "zoom": {
+            "label": "拡大率",
+            "aria": "タイムラインの拡大率"
+          },
+          "tooltip": {
+            "releaseUnobserved": "離鍵未観測どすえ",
+            "overlapYes": "前のキーと重複どすえ",
+            "overlapNo": "重複おへん",
+            "overlapUnknown": "重複不明どすえ",
+            "mistake": "ミス（直さはったかもどすえ）",
+            "unjudged": "未判定どすえ",
+            "correct": "正解どすえ",
+            "offset": "+{{ms}}ms",
+            "blankDuration": "ブランク: {{ms}}ms",
+            "leadInDuration": "ワード前の間: {{ms}}ms",
+            "leadInLineDuration": "行前の間: {{ms}}ms"
+          },
+          "line": {
+            "indexAria": "{{n}}行目どすえ",
+            "romajiAria": "ローマ字: {{text}}どすえ"
+          }
+        }
+      },
+      "results": {
+        "mistakesLabel": "ミス文字どすえ",
+        "errorSubstitutions": "置換 {{count}}どす",
+        "errorOmissions": "脱字 {{count}}どす",
+        "errorInsertions": "衍字 {{count}}どす",
+        "timelineConsentHint": "打鍵タイムラインを見とうおすなら、タイピングの記録を有効にしておくれやすどす。",
+        "missedBarTypedLine": "代わりに打ちはったんは: {{chars}}",
+        "missedBarCorrectedLine": "Backspaceで直しはったんは: {{count}}どす",
+        "missedBarMovedOnLine": "直さんまま次へ行かはったんは: {{count}}どす",
+        "missedBarNoDetail": "この記録には打鍵ごとの詳細がおへんどす"
       }
     }
   },
@@ -400,8 +712,12 @@
       "keyOverrideKeys": "Key",
       "altRepeatKeyKeys": "Key",
       "capsWord": "Caps Word",
+      "tappingTerm": "Dynamic Tapping Term",
+      "autocorrect": "Autocorrect",
+      "leader": "Leader",
       "boot": "Boot",
       "osm": "One-Shot Modifiers",
+      "oneShotControl": "One-Shot Control",
       "modMask": "Modifier Masks",
       "modTap": "Mod-Tap",
       "modSpecial": "Special",
@@ -409,7 +725,8 @@
       "rgbLighting": "RGB Lighting",
       "rgbMatrix": "RGB Matrix",
       "systemControl": "System",
-      "appBrowser": "App & Browser",
+      "app": "App",
+      "browser": "Browser",
       "mediaPlayback": "Media",
       "mouse": "Mouse",
       "lockingKeys": "Locking Keys",
@@ -455,7 +772,10 @@
     "autoAdvance": "自動移動",
     "locked": "ロック中どすえ",
     "unlocked": "アンロックどすえ",
-    "keyTester": "キーテスター",
+    "typingGroup": "タイピング:",
+    "typingViewShort": "View",
+    "typingTestShort": "Test",
+    "typingRecordShort": "Record",
     "sync": {
       "pending": "同期待ちどすえ",
       "syncing": "同期してますえ…",
@@ -533,15 +853,13 @@
     "manualSync": "手動同期",
     "sync": "同期しますえ",
     "resetTarget": {
-      "keyboardData": "キーボード",
       "favorites": "お気に入り",
-      "appSettings": "アプリケーション",
-      "i18nPacks": "言語パック"
+      "i18nPacks": "言語パック",
+      "themePacks": "テーマパック",
+      "keyLabels": "キーラベル",
+      "typingTestTexts": "タイピングテスト文章"
     },
-    "deleteSelected": "選んだもんを消しますえ",
     "resetTargetsConfirm": "選んだデータが完全に消えますえ。元には戻せまへんえ。",
-    "resetLocalTargetsConfirm": "選んだローカルデータが完全に消えますえ。元には戻せまへんえ。",
-    "resettingData": "データを消してますえ…",
     "syncing": "同期してますえ…",
     "continueOffline": "オフラインで続けますえ",
     "noSyncYet": "まだ同期してまへんえ",
@@ -554,17 +872,23 @@
     "importComplete": "インポートしましたえ",
     "importFailed": "インポートがあきまへんでしたえ",
     "passwordMismatch": "同期パスワードが合いまへんなぁ。暗号化パスワードを確認しておくれやす。",
-    "scanRemote": "スキャンしますえ",
     "scanning": "スキャンしてますえ…",
     "downloading": "ダウンロードしてますえ…",
     "noRemoteData": "リモートにデータがおへんなぁ",
     "undecryptableCount": "{{count}} 件開けへんファイルがありますえ",
-    "selectAll": "全部選びますえ",
-    "deselectAll": "全部はずしますえ",
     "checkingRemotePassword": "同期状態を確認してますえ…",
     "existingPasswordHint": "同期パスワードがもう設定されてますえ。他のデバイスで使うてたパスワードを入れておくれやす。",
     "unavailable": "接続先かネットワークに問題がありますえ。同期できまへんなぁ。",
-    "retry": "もういっぺんやりますえ"
+    "retry": "もういっぺんやりますえ",
+    "pullError": {
+      "busy": "いま同期してますさかい、ちょっと待っておくれやす。",
+      "unauthenticated": "Google Driveから取ってくるにはGoogleにつないでおくれやす。",
+      "noPasswordFile": "Google Driveから取ってくるには同期パスワードを設定しておくれやす。",
+      "decryptFailed": "保存してあるパスワードが読めまへんでしたえ。",
+      "keystoreUnavailable": "OSのキーチェーンが使えへんさかい、ここではGoogle Driveから取ってこれまへんなぁ。",
+      "remoteCheckFailed": "Google Driveにつながりまへんでした。また後でやっておくれやす。",
+      "partial": "一部のパックの取得があきまへんでしたえ。もういっぺん試しておくれやす。"
+    }
   },
   "settings": {
     "title": "設定",
@@ -575,7 +899,6 @@
     "defaultLayout": "キーラベル",
     "defaultAutoAdvance": "自動移動",
     "defaultLayerPanelOpen": "レイヤーリスト展開",
-    "defaultBasicViewType": "Basic タブ表示",
     "defaultSplitKeyMode": "キーピッカーでShiftキーを分離",
     "defaultQuickSelect": "キーの即時選択",
     "basicViewTypeList": "LIST",
@@ -595,7 +918,15 @@
       "licenseValue": "GPL-3.0-or-later"
     },
     "zoomLevel": "ズーム",
-    "zoomLevelWarning": "表示が崩れることがありますえ。自己責任でお願いしますえ。"
+    "zoomLevelWarning": "表示が崩れることがありますえ。自己責任でお願いしますえ。",
+    "autoLaunch": "自動起動どすえ",
+    "autoLaunchDescription": "サインインしはったら自動で Pipette を起動しますえ",
+    "trayResident": "トレイに常駐どすえ",
+    "trayResidentDescription": "ウィンドウを閉じてもトレイに常駐して動き続けますえ",
+    "restoreLastSession": "最後の状態で起動どすえ",
+    "restoreLastSessionDescription": "起動しはったら前に繋いではったキーボードと画面を戻しますえ",
+    "startInTray": "トレイ常駐で起動どすえ",
+    "startInTrayDescription": "ウィンドウを開かんとトレイに常駐したまま起動しますえ"
   },
   "analyze": {
     "noKeyboards": "まだ打鍵データがおへんなぁ",
@@ -666,6 +997,33 @@
       "keys": "回",
       "activations": "回"
     },
+    "benchmark": {
+      "populationAverage": "みなさんの平均は {{value}} WPMどすえ",
+      "populationAverageKspc": "みなさんの平均は {{value}} どすえ",
+      "position": {
+        "farBelow": "平均よりだいぶゆっくりどすなぁ",
+        "below": "平均より少しゆっくりどす",
+        "average": "平均的どす",
+        "above": "平均より少し速いどす",
+        "farAbove": "平均よりえろう速いどすなぁ"
+      },
+      "positionRate": {
+        "farBelow": "平均よりだいぶ少ないどすなぁ",
+        "below": "平均より少し少ないどす",
+        "average": "平均的どす",
+        "above": "平均より少し多いどす",
+        "farAbove": "平均よりえろう多いどすなぁ"
+      },
+      "positionRateShort": {
+        "farBelow": "かなり少なめ",
+        "below": "やや少なめ",
+        "average": "平均的",
+        "above": "やや多め",
+        "farAbove": "かなり多め"
+      },
+      "referenceLineLabel": "みなさんの平均",
+      "toggleAria": "みなさんの平均の基準線を表示しますえ"
+    },
     "snapshotTimeline": {
       "title": "キーマップ履歴",
       "current": "いまのキーマップどすえ"
@@ -734,6 +1092,7 @@
         "gt10000": ">10s"
       },
       "distribution": {
+        "sectionTitle": "間隔の分布どす",
         "tooltipLabel": "推定打鍵数",
         "summary": {
           "label": "打鍵リズムサマリー",
@@ -750,6 +1109,7 @@
         }
       },
       "timeSeries": {
+        "sectionTitle": "間隔の推移どす",
         "summary": {
           "label": "インターバルサマリー",
           "medianP50": "重み付き中央値",
@@ -757,6 +1117,68 @@
           "longestPause": "最長打鍵間隔（1分）"
         }
       }
+    },
+    "rollover": {
+      "sectionTitle": "観測ロールオーバー率どす",
+      "ariaLabel": "観測ロールオーバー率のまとめどす",
+      "stat": {
+        "title": "観測ロールオーバー率どす",
+        "description": "実効サンプリング周期は p50 中央値 {{p50}} / p95 最悪値 {{p95}}どす。サンプリング周期より短い重なりは見えしまへんさかい、この値は控えめに出てしまいますえ。正確な測定とは違いますよって、ご承知おきくださいませ"
+      },
+      "chart": {
+        "legend": "観測ロールオーバー"
+      },
+      "underBiasNote": "この値は構造上どうしても控えめに出てしまうもので、ほんまのロールオーバー率とは違いますえ。母集団平均の線より下でも、タイピングが遅いいうことにはなりまへん"
+    },
+    "duration": {
+      "sectionTitle": "打鍵の長さどす",
+      "ariaLabel": "打鍵の長さのまとめどす",
+      "tooltipLabel": "サンプル数どす",
+      "empty": "この期間、打鍵の長さのデータがおへん。打鍵の長さは matrix モードでロック解除中にタイピングしはった時だけ記録されますえ — この機能が入る前の期間や、記録がオフやった期間はデータがおへん",
+      "bin": {
+        "lt50": "<50ms",
+        "50to80": "50-80ms",
+        "80to110": "80-110ms",
+        "110to140": "110-140ms",
+        "140to180": "140-180ms",
+        "180to250": "180-250ms",
+        "250to400": "250-400ms",
+        "gt400": ">400ms"
+      },
+      "stat": {
+        "mean": "平均打鍵の長さ",
+        "sd": "SD",
+        "sdDesc": "ホールド時間の標準偏差どす。SDが低いほどホールド時間が揃うてて、高いほどばらつきが大きいいうことどす。",
+        "samples": "サンプル数",
+        "samplesDesc": "1サンプルは、キーを押してから離すまでを1回分測ったものどす。",
+        "populationAverage": "母集団平均 {{value}} msどす"
+      }
+    },
+    "tappingTerm": {
+      "sectionTitle": "Tapping Term の診断どす",
+      "ariaLabel": "Tapping Term 診断のまとめどす",
+      "stat": {
+        "current": "今の値",
+        "assumed": "見込みの値",
+        "tapP95": "観測タップ p95",
+        "tapP95Desc": "このキーのタップの長さの95%がこの範囲より短かったいうことどす — 上の Tapping Term と見比べて、タップとホールドが区別しやすいかどうかの目安になりますえ。",
+        "samples": "サンプル数どす",
+        "recordedCounts": "記録済みタップ / ホールド"
+      },
+      "recordedCountsDescription": "打鍵しはった時に有効やった Tapping Term を基準に分類されとりますよって、今の値とは違うこともおすえ — あくまで参考としてお見せしとります",
+      "verdict": {
+        "unknown": {
+          "insufficientSamples": "これを診断するにはタップ・ホールドの記録がまだ足りしまへん",
+          "noTapMass": "このキーの押下は今の値やともうみんなホールド判定になってしもてますよって、比べられるタップ側のデータがまだおへん",
+          "bucketResolution": "Tapping Term が、あんさんの普段のタップの長さと同じ計測区間に収まってしもてますよって、実際どちら側にあるんかこのデータからは判定できしまへん"
+        },
+        "ok": "今の Tapping Term は、あんさんの打鍵の癖によう合うてはりますえ",
+        "canLower": "あんさんの打鍵傾向やと、~{{value}} ms くらいまで下げても良さそうどす",
+        "nearTerm": "この Tapping Term のあたりやと、長いタップと短いホールドの見分けがつきしまへん — 数字だけでは切り分けられまへんのや"
+      },
+      "reportedHint": "エディタの {{tab}} タブ → {{button}} から変えられますえ",
+      "unreportedNotice": "このファームウェアは QMK Settings 経由で Tapping Term を教えてくれしまへん。せやさかい、この診断は QMK の既定値である {{default}} ms を前提にしとります。変えるにはファームウェアの再ビルドが要りますえ",
+      "guidance": "このキーボードを繋いだら Tapping Term を読み取って、この診断ができますえ"
     },
     "activity": {
       "tableLabel": "時間帯 × 曜日の活動量",
@@ -927,6 +1349,56 @@
           "low": "低いどすえ",
           "medium": "中くらいどすなぁ",
           "high": "高おすなぁ"
+        },
+        "kspcLabel": "KSPC",
+        "kspcDesc": "1文字打つのに何回キーを押したはるかどすえ（Backspaceも打鍵として数えますえ）。この期間に保存されたタイピングテストの結果から出してますえ。Device/Appのフィルタは効きまへん（記録した打鍵データやのうてHistoryから計算してるさかい）。ローマ字入力のランはここには入れてしまへんえ（計算のしくみが違うさかい、下の基準値とそのまま比べられしまへんのどす）",
+        "errorMixLabel": "誤り種別どすえ",
+        "errorMixContext": "置換{{subPct}}%（平均{{subAvg}}%）・脱字{{omPct}}%（平均{{omAvg}}%）・衍字{{insPct}}%（平均{{insAvg}}%）どすなぁ",
+        "errorMixDesc": "置換・脱字・衍字の割合どす（対象文字数に対する比率どすえ）。この期間に保存されたタイピングテストの結果から文字数で重み付けして出してますえ。Device/Appのフィルタは効きまへん（記録した打鍵データやのうてHistoryから計算してるさかい）。ローマ字入力のランは対象外どす（確定した綴りはいつも正しいものどすさかい、分類するもんがおへんのどす）",
+        "typistClusterLabel": "打鍵タイプ",
+        "typistClusterDesc": "この期間の打鍵の平均を、スピード・リズム・誤りの傾向から作った母集団のタイプ別プロフィールと比べますのどす。ロールオーバーの指標はこの比較には入ってしまへん",
+        "typistClusterDescNoError": "この期間の打鍵の平均を母集団のタイプ別プロフィールと比べますのどす。誤りの傾向はこの判定には入ってしまへん — 今回は判定に使える誤りのデータがおへんかったさかい",
+        "typistCluster": {
+          "1": {
+            "name": "ゆったりリズムどすなぁ",
+            "context": "平均よりゆっくりめのペースで、左右交互打鍵は並どす。誤りの残りも並な感じどすえ"
+          },
+          "2": {
+            "name": "ゆったり交互打鍵どすなぁ",
+            "context": "ゆっくりめのペースで左右交互打鍵がよう見られますえ。誤りの残りは平均より多めどす"
+          },
+          "3": {
+            "name": "並ペース・誤りやや多めどすなぁ",
+            "context": "ペースも交互打鍵も並どすけど、誤りの残りはちょっと多めどすえ"
+          },
+          "4": {
+            "name": "並ペース・右手寄りどすなぁ",
+            "context": "ペースは並どすが、右手が左手よりはっきり速おすなぁ"
+          },
+          "5": {
+            "name": "並ペース・交互打鍵どすなぁ",
+            "context": "ペースは並どすが、この中で一番左右交互打鍵が強うおすなぁ"
+          },
+          "6": {
+            "name": "並ペース・バランスどすなぁ",
+            "context": "どの指標も母集団の真ん中あたり、ようある並のタイプどすえ"
+          },
+          "7": {
+            "name": "速め・誤りやや多めどすなぁ",
+            "context": "平均より速いペースで、誤りの残りは一番速いグループよりちょっと多めどすえ"
+          },
+          "8": {
+            "name": "速め・誤り少なめどすなぁ",
+            "context": "この中で一番速いペースで、誤りの残りもこの中では少なめどすなぁ"
+          },
+          "noMatch": {
+            "name": "該当おへん",
+            "context": "どのプロフィールにも近い感じがしまへんどしたなぁ"
+          },
+          "ambiguous": {
+            "name": "中間どすなぁ",
+            "context": "二つのプロフィールに同じくらい近い感じどしたなぁ"
+          }
         }
       }
     },
@@ -937,13 +1409,25 @@
       "quadrant": {
         "top": "よう出るペア",
         "slow": "ペア間隔",
-        "fingerIki": "指間隔"
+        "fingerIki": "指間隔",
+        "classes": "打鍵パターン"
+      },
+      "cappedNotice": "頻度上位 {{limit}} 件のペアから出してますえ — 珍しいペアは入っとらんこともありますえ",
+      "gramToggle": {
+        "ariaLabel": "N-gram の粒度",
+        "bigram": "2-gram",
+        "trigram": "3-gram"
       },
       "column": {
         "pair": "ペア",
+        "class": "分類",
         "count": "回数",
         "avgIki": "平均間隔",
-        "p95": "p95 間隔"
+        "avgIkiTrigramTooltip": "3キー間にある2つの間隔の平均どす。3キー全体の時間とは違いますえ",
+        "sd": "SD",
+        "p95": "p95 間隔",
+        "rollover": "ロールオーバー",
+        "rolloverTooltip": "このペアで前のキーを押したまま次のキーを押してしまわはった割合どす。サンプリングによるものどすので控えめに出ますえ。詳しゅうは Interval タブの観測ロールオーバー率を見ておくれやす"
       },
       "fingerIki": {
         "noSnapshot": "指間隔にはスナップショットが要りますえ。Record を始めるかスナップショットのある期間を選んでおくれやす",
@@ -952,6 +1436,27 @@
           "desc": "遅い順どすえ",
           "asc": "速い順どすえ"
         }
+      },
+      "classes": {
+        "noSnapshot": "手の使用にもスナップショットが要りますえ。Record を始めるかスナップショットのある期間を選んでおくれやす",
+        "section": {
+          "handUsage": "手の使用どすえ",
+          "wordPosition": "単語内位置どすえ"
+        },
+        "className": {
+          "left": "左手どすえ",
+          "right": "右手どすえ",
+          "alternation": "交互打鍵どすえ",
+          "repetition": "同指連打どすえ",
+          "initiation": "語頭どすえ",
+          "inWord": "語中どすえ"
+        },
+        "coverage": "{{percent}}% のペアを分類できましたえ",
+        "deltaLeft": "ΔLeft",
+        "deltaRight": "ΔRight",
+        "deltaInitiation": "ΔInitiation",
+        "deltaTooltip": "プラスやったら、先に書いてる方の分類が遅かったいうことどすえ",
+        "excludedNote": "{{count}} 件のペアは区切り文字で終わるさかい除外しましたえ"
       },
       "pairIntervalThreshold": {
         "label": "平均間隔",
@@ -968,6 +1473,23 @@
       "bondToggle": "レイヤー {{i}} を結合しますえ",
       "noLayout": "このスナップショットにレイアウトデータがおへんなぁ",
       "noSnapshot": "この期間のスナップショットがおへんなぁ。Record を始めたら取れますえ。",
+      "modeToggle": {
+        "ariaLabel": "ヒートマップの着彩モード",
+        "count": "回数",
+        "speed": "速度",
+        "duration": "打鍵の長さどす"
+      },
+      "speed": {
+        "colAvgIki": "到達 Avg IKI",
+        "empty": "この期間の到達速度データはまだおへん",
+        "minSampleNote": "到達回数が {{n}} 回に満たへんキーは着彩しまへん",
+        "cappedNotice": "頻度上位 {{limit}} 件のペアから出してますえ — 珍しいペアは入っとらんこともありますえ"
+      },
+      "duration": {
+        "colAvgDuration": "平均打鍵の長さ",
+        "empty": "この期間の打鍵の長さデータはまだおへん",
+        "minSampleNote": "打鍵長サンプルが {{n}} 件に満たへんキーは着彩しまへん"
+      },
       "ranking": {
         "frequentUsedN": "上位",
         "frequentUsed": "よう使うキー",
@@ -1157,6 +1679,17 @@
         "none": "全アプリ合わせて",
         "multi": "{{first}} 他{{rest}}件"
       },
+      "typingTest": "TypingTest",
+      "typingTestOption": {
+        "none": "全TypingTest合わせて",
+        "multi": "{{first}} 他{{rest}}件"
+      },
+      "run": "結果",
+      "runOption": {
+        "none": "全ラン合わせて",
+        "multi": "{{first}} 他{{rest}}件"
+      },
+      "dimensionLabel": "App / TypingTest で絞り込みますえ",
       "unit": "表示",
       "unitOption": {
         "sec": "秒",
@@ -1167,6 +1700,7 @@
         "timeSeries": "時系列",
         "distribution": "分布"
       },
+      "intervalDistributionSection": "セクションどす",
       "wpmViewMode": "ビュー",
       "wpmViewModeOption": {
         "timeSeries": "時系列",
@@ -1238,7 +1772,13 @@
         "day3": "3日",
         "week1": "1週間",
         "month1": "1ヶ月"
-      }
+      },
+      "sourceLabel": "ソース",
+      "editConditions": "検索条件を編集しますえ",
+      "chipAriaLabel": "検索条件を編集しますえ",
+      "sourceDisabledByApp": "By App は全ソースを合算しますよって、この項目は使えまへんえ。",
+      "distributionDisabledNote": "分布ビューはいつもこのデバイスのデータを使いますよって、この項目は使えまへんえ。",
+      "openRunTimeline": "タイムラインを開きますえ"
     }
   },
   "dataModal": {
@@ -1256,6 +1796,7 @@
     "deleteAllConfirm": "同期データも全部消えますえ",
     "syncNoOrphans": "同期データは全部ここにありますえ",
     "resetAppSettings": "アプリケーション設定をリセットしますえ",
+    "cloudData": "クラウドデータ",
     "typing": {
       "title": "タイピング",
       "noKeyboards": "タイピングデータがおへんなぁ",
@@ -1294,7 +1835,7 @@
     "title": "メニュー",
     "tabData": "データ",
     "tabSave": "保存",
-    "tabTools": "設定",
+    "tabTools": "設定 / インポート",
     "tabLayout": "レイアウト",
     "basicViewType": "Basic タブ表示",
     "splitKeyMode": "キーピッカーでShiftキーを分離",
@@ -1358,6 +1899,30 @@
       "titleTooLong": "タイトルが長すぎますえ（200文字以内で）。",
       "authFailed": "Hubの認証があきまへんでしたえ。いっぺんサインアウトしてからサインインし直しておくれやす。",
       "payloadTooLarge": "大きすぎてアップロードできまへんえ。チャートを減らすか期間を短こうしておくれやす。"
+    },
+    "uploadConfirm": {
+      "title": {
+        "create": "Hubにアップロードしますえ",
+        "update": "Hub投稿を更新しますえ"
+      },
+      "visibilityPublic": "公開",
+      "publicDesc": "Hubの一覧と検索に出ますえ",
+      "visibilityPrivate": "非公開（限定リンク）",
+      "privateDesc": "秘密のリンクを知ってはる方だけ見られますえ。一覧・検索には出まへん",
+      "expiryLabel": "リンクの有効期限",
+      "expiryDays_one": "{{count}}日",
+      "expiryDays_other": "{{count}}日",
+      "expiresAtPreview": "{{date}} に切れますえ",
+      "warnUrlExpiryChange": "更新すると投稿が作り直しになって、共有リンクと期限が変わりますえ",
+      "confirm": "決定",
+      "cancel": "やめときますえ"
+    },
+    "private": {
+      "badgePublic": "Hub（公開）",
+      "badgePrivate": "Hub（非公開）",
+      "expiresAt": "{{date}} に切れますえ",
+      "noExpiry": "無期限",
+      "removeConfirm": "Hubから消してもよろしおすか？ 非公開リンクはすぐに使えのうなりますえ"
     }
   },
   "notification": {
@@ -1388,14 +1953,14 @@
     "importCurrent": "インポート"
   },
   "keyLabels": {
-    "title": "Key Labels",
-    "manageRow": "Key Labels 管理",
+    "title": "キーラベル",
+    "manageRow": "キーラベル管理",
     "edit": "編集しますえ",
     "hubEmpty": "ハブに合うラベルがおへんなぁ",
     "search": "検索しますえ",
     "searching": "検索してますえ…",
     "import": "インポート",
-    "empty": "Key Label がまだおへんなぁ。検索か Import で追加しておくれやす。",
+    "empty": "キーラベルがまだおへんなぁ。検索か Import で追加しておくれやす。",
     "actionUpload": "アップロード",
     "actionUpdate": "更新",
     "actionSync": "同期",
@@ -1403,16 +1968,29 @@
     "actionDownload": "ダウンロード",
     "actionDelete": "消しますえ",
     "actionExport": ".json",
+    "typeKeymapWrite": "書き換えできますえ",
+    "typeViewOnly": "見るだけどす",
+    "typeKeymapWriteShort": "書換どす",
+    "typeViewOnlyShort": "拝見どす",
+    "qwertyDefaultName": "QWERTY（デフォルトどす）",
+    "qwertyDefaultShort": "デフォルトどす",
     "hubRemoved": "（消されましたえ）",
     "errorDuplicate": "同じ名前のラベルがもうありますえ",
-    "errorImportFailed": "Key Label のインポートがあきまへんでしたえ",
+    "errorImportFailed": "キーラベルのインポートがあきまへんでしたえ",
     "errorInvalidName": "ラベル名がおかしゅうございますえ",
     "errorSearchFailed": "Pipette Hub の検索があきまへんでしたえ",
     "errorGeneric": "あきまへんでしたえ",
-    "missingTitle": "Key Label が見つかりまへんなぁ",
-    "missingMessage": "Key Label「{{name}}」が入ってまへんさかい、QWERTY ラベルで表示しますえ。",
+    "missingTitle": "キーラベルが見つかりまへんなぁ",
+    "missingMessage": "キーラベル「{{name}}」が入ってまへんさかい、QWERTY ラベルで表示しますえ。",
     "missingHint": "「{{name}}」は {{settings}} > {{tools}} > {{keyLabels}}、またはキーピッカー右上の Edit ボタンから入れられますえ。",
-    "missingClose": "閉じますえ"
+    "missingClose": "閉じますえ",
+    "keymapApply": {
+      "title": "「{{name}}」をキーマップにも適用しますか？",
+      "saveRecommendation": "書き換えるまえに、いまのキーマップを保存しておかはるのがよろしおすえ。書き換えは全レイヤーのキーコードを変えてしまいますし、Undo と Redo の履歴も消えてしまいますよって、戻したいときは保存しといたファイルから復元するしかおへんえ。",
+      "confirmApply": "適用してもよろしおすか？",
+      "tabsLabel": "見た目の切り替えどす",
+      "errorPartial": "一部のキーが書き換えられまへんでしたえ。ここで止めときますよって、要りようなら前に保存した .vil ファイルかスナップショットから復元しておくれやす。"
+    }
   },
   "i18n": {
     "edit": "編集しますえ",

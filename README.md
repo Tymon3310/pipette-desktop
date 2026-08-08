@@ -24,6 +24,7 @@ Communicates with Vial keyboards via USB HID to configure keymaps, macros, light
 ## Table of Contents
 
 - [Installation](#installation)
+- [System Requirements](#system-requirements)
 - [Usage](#usage)
 - [Operation Guide](#operation-guide)
 - [Platform Setup](#platform-setup)
@@ -76,6 +77,12 @@ Two AUR packages are available for Arch-based distributions:
 
 - **[pipette-desktop-keychron-bin](https://aur.archlinux.org/packages/pipette-desktop-keychron-bin)** — Pre-built binary (recommended)
 - **[pipette-desktop-keychron-git](https://aur.archlinux.org/packages/pipette-desktop-keychron-git)** — Builds from source
+
+## System Requirements
+
+Pipette's window has a minimum size of **1280×1024**, and defaults to **1440×1024** (or larger is recommended) on first launch.
+
+It might feel a bit large — but keyboards are wide, so this is what it takes to work with them comfortably. Sorry!
 
 ## Usage
 
@@ -162,6 +169,28 @@ The typing-view Monitor App toggle requires the **Accessibility** permission on 
 Without this permission, Monitor App silently records `null` for every minute on macOS — keystroke counts still flow to the analytics, but per-app breakdowns are unavailable.
 
 ## Features
+
+### Feature Availability
+
+| Feature | No Integration | Google Account Integration |
+|---|:---:|:---:|
+| Keymap / macro / tap-dance / combo / key-override / alt-repeat editing | ✅ | ✅ |
+| RGB lighting · QMK settings · Matrix tester | ✅ | ✅ |
+| Snapshots & Favorites (local save / load) | ✅ | ✅ |
+| Import / Export (`.vil` · `.pipette` · `keymap.c` · PDF) | ✅ | ✅ |
+| Offline editing (`.pipette` without a keyboard) | ✅ | ✅ |
+| Typing Test & Typing View | ✅ | ✅ |
+| Analyze — typing analytics (heatmaps · ergonomics · bigrams · layout comparison · per-app) | ✅ | ✅ |
+| Download community language / theme / key-label packs from Hub | ✅ | ✅ |
+| Cloud Sync — snapshots / favorites / settings across devices | ❌ | ✅ |
+| Download remote-only keyboards on demand | ❌ | ✅ |
+| Sync typing analytics across devices | ❌ | ✅ |
+| Share keymaps to Hub | ❌ | ✅ (Hub) |
+| Share favorites (tap dance · macro · combo · …) to Hub | ❌ | ✅ (Hub) |
+| Share typing analytics to Hub | ❌ | ✅ (Hub) |
+| Publish your own language / theme / key-label packs | ❌ | ✅ (Hub) |
+
+> **Pipette Hub requires a connected Google account.** Rows marked **(Hub)** need Hub connected (set a Display Name in Settings → Data) in addition to Google sign-in. Cloud Sync also needs a sync encryption password. **Downloading community packs from Hub needs no sign-in at all.**
 
 ### Keyboard Configuration
 
@@ -316,6 +345,15 @@ We are deeply grateful to the Vial team and contributors for making open-source 
 
 The Typing Test feature is based on [Monkeytype](https://github.com/monkeytypegame/monkeytype) (GPL-3.0).
 Thank you to the Monkeytype team for their excellent open-source typing test.
+
+Typing Test sentence packs are curated from the [Tatoeba Project](https://tatoeba.org) and its contributors.
+Most language packs are licensed under [CC BY 2.0 FR](https://creativecommons.org/licenses/by/2.0/fr/); some packs are dedicated to the public domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+Thank you to the Tatoeba community for building an open corpus of example sentences.
+
+The Aozora Bunko catalog lets you type public-domain Japanese literature. Catalog metadata and work texts are
+sourced from [Aozora Bunko](https://www.aozora.gr.jp/) via the [aozorabunko GitHub mirror](https://github.com/aozorabunko/aozorabunko),
+with Aozora's ruby and editorial annotation markup cleaned during import.
+Thank you to the Aozora Bunko volunteers for decades of careful digitization.
 
 ## License
 

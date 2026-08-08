@@ -4,6 +4,16 @@
 import type { FavoriteType } from './favorite-store'
 import type { ThemeColorScheme } from './theme-store'
 
+export type {
+  HubPrivateKind,
+  HubPrivateLink,
+  HubPrivateUploadResponse,
+  HubPrivateUploadResult,
+} from './hub-private'
+
+/** Days until a private upload expires; `null` = no expiry. */
+export type HubExpiresInDays = number | null
+
 // --- i18n language pack posts -------------------------------------------------
 
 /** Wire-format wrapper sent to / received from Pipette Hub for an i18n
@@ -231,10 +241,9 @@ export interface HubUpdateFavoritePostParams extends HubUploadFavoritePostParams
 
 // --- Analytics post types ---
 //
-// Wire format for "Analyze 集計データ" uploads. The full contract lives in
-// `.claude/docs/HUB-ANALYTICS-API.md` (Hub agent's source of truth). The
-// types below mirror that contract; the validators in
-// `src/main/hub/hub-analytics.ts` enforce the runtime invariants.
+// Wire format for "Analyze 集計データ" uploads, the payload shape shared
+// with pipette-hub. The types below mirror that contract; the validators
+// in `src/main/hub/hub-analytics.ts` enforce the runtime invariants.
 
 /** Hub-side `analytics-export-v1.json` payload. */
 export interface HubAnalyticsExportV1 {
@@ -413,6 +422,13 @@ export interface HubPreviewAnalyticsPostParams {
   keyboard: { productName: string; vendorId: number; productId: number }
   fingerOverrides: Record<string, string>
   layoutComparisonInputs: HubAnalyticsLayoutComparisonInputs | null
+  /** See {@link HubUploadAnalyticsPostParams.categories}. Currently
+   * unset for every preview call site — kept optional so
+   * `prepareAnalyticsExport`'s shared param union can read it
+   * defensively for both the upload and preview shapes. */
+  categories?: HubAnalyticsCategoryId[]
+  /** See {@link HubUploadAnalyticsPostParams.appDataApps}. */
+  appDataApps?: string[]
 }
 
 /** Renderer-side preview shown before the user confirms the upload —
@@ -426,3 +442,23 @@ export interface HubAnalyticsPreview {
     | { ok: true }
     | { ok: false; reason: string }
 }
+
+// --- Private (unlisted) upload params ----------------------------------------
+//
+// Each mirrors its public counterpart plus `expiresInDays` (`null` = no
+// expiry). The handlers upload to `/api/private/*` and return a
+// `HubPrivateUploadResult`; the renderer persists the returned link via
+// the per-store `set-hub-private` IPC.
+
+export interface HubPrivateUploadPostParams extends HubUploadPostParams {
+  expiresInDays: HubExpiresInDays
+}
+
+export interface HubPrivateUploadFavoritePostParams extends HubUploadFavoritePostParams {
+  expiresInDays: HubExpiresInDays
+}
+
+export interface HubPrivateUploadAnalyticsPostParams extends HubUploadAnalyticsPostParams {
+  expiresInDays: HubExpiresInDays
+}
+

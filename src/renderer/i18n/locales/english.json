@@ -1,5 +1,5 @@
 {
-  "version": "0.1.4",
+  "version": "0.1.87",
   "name": "English",
   "common": {
     "save": "Save",
@@ -27,6 +27,7 @@
     "exported": "Exported",
     "imported": "Imported",
     "load": "Load",
+    "confirmLoad": "Load?",
     "labelPlaceholder": "Label",
     "noLabel": "(No label)",
     "synced": "Synced",
@@ -35,7 +36,17 @@
     "done": "Done",
     "findOnHub": "Find on Hub",
     "searchPlaceholder": "Search Pipette Hub (type 2 or more characters)...",
-    "findOnHubHint": "Browse uploaded files on <hub>Pipette Hub</hub>."
+    "findOnHubHint": "Browse uploaded files on <hub>Pipette Hub</hub>.",
+    "sortByName": "Name",
+    "importing": "Importing...",
+    "importedNamed": "Imported {{name}}",
+    "updatedNamed": "Updated {{name}}",
+    "importBatchFailed_one": "{{count}} file could not be imported:",
+    "importBatchFailed_other": "{{count}} files could not be imported:",
+    "importSummary_one": "Imported {{count}} file (success {{success}}, failure {{failure}})",
+    "importSummary_other": "Imported {{count}} files (success {{success}}, failure {{failure}})",
+    "pullFromCloud": "Pull from Google Drive",
+    "pulling": "Pulling..."
   },
   "app": {
     "title": "Pipette",
@@ -66,6 +77,14 @@
   },
   "editor": {
     "autoAdvance": "Auto Move",
+    "viewMatrix": {
+      "label": "View Matrix",
+      "edit": "Edit",
+      "done": "Done",
+      "rowLabel": "Row",
+      "colLabel": "Col",
+      "blankOption": "—"
+    },
     "keymap": {
       "title": "Keymap",
       "layer": "Layer {{number}}",
@@ -90,6 +109,7 @@
       "previousLayers": "Previous layers",
       "nextLayers": "Next layers",
       "layerN": "Layer {{n}}",
+      "layerPreview": "Preview - {{label}}",
       "undo": "Undo",
       "redo": "Redo",
       "zoomIn": "Zoom In",
@@ -249,22 +269,151 @@
       "switchToTypingMode": "Typing Test",
       "exitTypingMode": "Exit Typing Test",
       "restart": "Restart",
+      "nextTest": "Next Test",
+      "collapseSettings": "Collapse settings",
+      "expandSettings": "Expand settings",
+      "keymapToggle": "Keymap",
+      "statsToggle": "Measurement",
+      "controlsToggle": "Operation",
+      "hideKeymap": "Hide keymap",
+      "showKeymap": "Show keymap",
+      "hideStats": "Hide measurement",
+      "showStats": "Show measurement",
+      "hideControls": "Hide operation",
+      "showControls": "Show operation",
+      "saveUnnamedToggle": "Save Unnamed",
+      "enableSaveUnnamed": "Auto-save results without a name",
+      "disableSaveUnnamed": "Require a name to save results",
+      "section": {
+        "settings": "Settings",
+        "data": "Data",
+        "view": "View"
+      },
+      "compare": {
+        "button": "Compare",
+        "title": "Comparison",
+        "previous": "Previous",
+        "best": "Best",
+        "average": "Average",
+        "pinned": "Result",
+        "off": "Off",
+        "noResults": "No results to pin yet",
+        "colName": "Name",
+        "colKeyboard": "Keyboard",
+        "colTime": "Time"
+      },
       "wpm": "WPM",
+      "kpm": "KPM",
       "accuracy": "Accuracy",
+      "kspc": "KSPC",
       "time": "Time",
       "words": "Words",
+      "lines": "Lines",
+      "chars": "Chars",
+      "fontSize": "Font",
       "correct": "Correct",
       "incorrect": "Incorrect",
-      "finished": "Complete",
       "loading": "Loading...",
       "wordCount": "{{current}} / {{total}}",
       "mode": {
         "words": "words",
         "time": "time",
-        "quote": "quote"
+        "quote": "quote",
+        "fileImport": "text",
+        "lines": "Lines"
       },
       "punctuation": "punctuation",
       "numbers": "numbers",
+      "weakSpotTraining": "Weak Spot Training Mode",
+      "japaneseInputToggle": "Japanese Input",
+      "romaji": {
+        "imeHint": "Turn off your OS IME to type in romaji input mode"
+      },
+      "kana": {
+        "imeHint": "Turn off your OS IME to type in kana input mode"
+      },
+      "romajiSettings": {
+        "title": "Japanese Input Settings",
+        "inputMethodLabel": "Input method",
+        "inputMethod": {
+          "direct": "Direct",
+          "romaji": "Romaji",
+          "kana": "Kana"
+        },
+        "caseLabel": "Displayed case",
+        "case": {
+          "upper": "ROMAJI",
+          "capital": "Romaji",
+          "lower": "romaji"
+        },
+        "guideLinesLabel": "Lines shown",
+        "lineEndEnterLabel": "Require Enter at line ends",
+        "lineEndEnterHint": "When on, a line-end word holds until Enter commits it. Turn off to auto-advance like any other word.",
+        "guideLabel": "Guide spelling pattern",
+        "guideHint": "Display only — typing any accepted pattern is still correct",
+        "inputLabel": "Accepted input patterns",
+        "inputHint": "Turned-off patterns are rejected; at least one base system stays enabled",
+        "style": {
+          "hepburn": "Hepburn (shi/chi)",
+          "kunrei": "Kunrei (si/ti)",
+          "c": "C notation (ca)",
+          "q": "Q notation (qu)",
+          "digraph": "Digraph (jya)",
+          "xSmall": "Small x (xa)",
+          "lSmall": "Small l (la)",
+          "w": "W notation (wi)",
+          "v": "V notation (va)",
+          "f": "F notation (fa)",
+          "ye": "YE notation (ye)",
+          "xn": "Nasal x (xn)",
+          "nApos": "N separator (n')"
+        },
+        "styleTip": {
+          "hepburn": "し:shi じ:ji ち:chi つ:tsu ふ:fu しゃ:sha しゅ:shu しょ:sho じゃ:ja じゅ:ju じょ:jo ちゃ:cha ちゅ:chu ちょ:cho\nっし:sshi っち:cchi っち:tchi っつ:ttsu っふ:ffu っしゃ:ssha っちゃ:tcha っじゃ:jja",
+          "kunrei": "し:si じ:zi ち:ti つ:tu ふ:hu しゃ:sya しゅ:syu しょ:syo じゃ:zya じゅ:zyu じょ:zyo ちゃ:tya ちゅ:tyu ちょ:tyo\nっし:ssi っち:tti っつ:ttu っふ:hhu っしゃ:ssya っちゃ:ttya っじゃ:zzya",
+          "c": "か:ca く:cu こ:co し:ci せ:ce ちゃ:cya ちゅ:cyu ちょ:cyo ちぃ:cyi ちぇ:cye",
+          "q": "く:qu くぁ:qa くぃ:qi くぇ:qe くぉ:qo",
+          "digraph": "じゃ:jya じゅ:jyu じょ:jyo じぃ:jyi じぇ:jye",
+          "xSmall": "ぁ:xa ぃ:xi ぅ:xu ぇ:xe ぉ:xo ゃ:xya ゅ:xyu ょ:xyo ゎ:xwa ゕ:xka ゖ:xke ぃ:xyi ぇ:xye っ:xtu っ:xtsu",
+          "lSmall": "ぁ:la ぃ:li ぅ:lu ぇ:le ぉ:lo ゃ:lya ゅ:lyu ょ:lyo ゎ:lwa ゕ:lka ゖ:lke ぃ:lyi ぇ:lye っ:ltu っ:ltsu",
+          "w": "うぃ:wi うぃ:whi うぇ:we うぇ:whe うぉ:who うぁ:wha う:wu う:whu",
+          "v": "ゔ:vu ゔぁ:va ゔぃ:vi ゔぇ:ve ゔぉ:vo ゔゃ:vya ゔゅ:vyu ゔょ:vyo ゔぃ:vyi ゔぇ:vye",
+          "f": "ふぁ:fa ふぃ:fi ふぇ:fe ふぉ:fo ふゅ:fyu ふゃ:fya ふょ:fyo ふぁ:hwa ふぃ:hwi ふぇ:hwe ふぉ:hwo ふゅ:hwyu",
+          "ye": "いぇ:ye",
+          "xn": "ん:xn",
+          "nApos": "ん:n'"
+        }
+      },
+      "weakSpotSettings": {
+        "title": "Weak Spot Training Mode",
+        "tokenJoin": ", ",
+        "tokenOverflow": " +{{extra}}",
+        "notApplicableNote": "Only available in the Words and Time patterns.",
+        "statusUnavailable": "History hasn't finished loading yet — nothing to report.",
+        "statusNoWeakSpots": "No weak spots detected — nice!",
+        "statusActive": "Weak spots detected ({{tokenCount}}): {{tokens}}",
+        "statusActiveNoTokens": "Weak spots detected.",
+        "description": "A character (or romaji sequence) counts as a weak spot when you've missed it {{missThreshold}}+ times, or — when recorded timing is available ({{minTimingSamples}}+ timed samples) — typing it runs {{slownessRatio}}× slower than your typical pace, or it stalls (a pause over {{stallMultiple}}× your pace) on {{stallRatePercent}}%+ of its timed samples.",
+        "windowDescription": "Detection only looks at your {{count}} most recent matching runs.",
+        "windowDescriptionAll": "Detection looks at your entire matching history.",
+        "decayDescription": "Older misses count for less — their weight halves every {{days}} days.",
+        "biasDescription": "About {{percent}}% of sampled words are pulled from your weak spots once active.",
+        "historyRetentionNote": "Regardless of the window and decay settings above, History only ever keeps your {{max}} most recent results — anything older is gone from detection entirely.",
+        "sectionDetection": "Detection thresholds",
+        "sectionWindow": "Data window",
+        "sectionSampling": "Sampling",
+        "missThresholdLabel": "Miss threshold (times)",
+        "slownessRatioLabel": "Slowness ratio (×)",
+        "stallRateLabel": "Stall rate (%)",
+        "stallMultipleLabel": "Stall multiple (×)",
+        "minTimingSamplesLabel": "Min. timed samples",
+        "missWindowLabel": "Rolling window (runs)",
+        "missWindowAll": "All",
+        "decayLabel": "Time decay (half-life, days)",
+        "decayNone": "Off",
+        "biasRatioLabel": "Weak spot word share (%)",
+        "resetButton": "Reset to defaults"
+      },
       "quoteLength": {
         "short": "short",
         "medium": "medium",
@@ -272,29 +421,36 @@
         "all": "all"
       },
       "quoteSource": "-- {{source}}",
+      "nameResult": "Name this result",
+      "nameModal": {
+        "title": "Name result"
+      },
       "viewOnly": "Typing View",
       "exitViewOnly": "Exit Typing View",
       "alwaysOnTop": "top",
+      "recordModalTitle": "Recording Settings",
       "recordStart": "Start",
       "recordStop": "Stop",
-      "viewAnalytics": "View Analytics",
-      "tab": {
-        "window": "Window",
-        "rec": "REC"
-      },
       "monitorApp": {
         "label": "Monitor App"
       },
       "heatmap": {
-        "legend": "Heatmap: last 1 hour"
+        "legend": "Heatmap: last {{minutes}} min"
       },
       "closeHint": "Click to open menu",
       "recordingIndicator": "Recording",
       "resetSize": "Default Size",
       "fitSize": "Fit Size",
-      "baseLayer": "Base Layer",
+      "baseLayer": "Layer",
+      "modeLabel": "Data Source",
+      "pattern": "Pattern",
+      "units": "Units",
+      "unitsWords": "Units(Words)",
+      "unitsSec": "Units(Sec)",
+      "unitsLines": "Units(Lines)",
+      "optionLabel": "Option",
       "baseLayerShort": "Base",
-      "heatmapWindow": "Heatmap window (minutes)",
+      "heatmapWindow": "Typing View Heatmap window (minutes)",
       "heatmapWindowShort": "HeatMap",
       "heatmapWindowOption": "{{minutes}} min",
       "consent": {
@@ -317,28 +473,184 @@
       "paused": "Window lost focus",
       "layerNote": "Only MO / LT / LM layer switches are tracked. Other layer keys and advanced features may not be reflected.",
       "language": {
-        "title": "Languages",
+        "title": "Data Source",
         "searchPlaceholder": "Search languages...",
         "downloaded": "Downloaded",
         "available": "Available",
         "noResults": "No matching languages",
         "words": "{{count}} words",
+        "lines": "{{count}} lines",
         "loadingLanguage": "Loading language...",
-        "downloadFailed": "Download failed"
+        "downloadFailed": "Download failed",
+        "tabMonkeytype": "MonkeyType",
+        "tabTatoeba": "Tatoeba",
+        "tabFileImport": "File Import",
+        "tabAozora": "Aozora Bunko",
+        "import": "Import UTF-8 text file",
+        "importEmpty": "No imported texts yet",
+        "importFailed": "Import failed",
+        "importErrorNotUtf8": "Only UTF-8 encoded text files are supported",
+        "importErrorTooLarge": "File is too large (max 5 MB)",
+        "importErrorEmpty": "The file has no typeable text",
+        "importOverwritePrompt": "\"{{name}}\" already exists. Overwrite?",
+        "confirmOverwrite": "Overwrite",
+        "fileImportText": "Imported text",
+        "datasetUpdateAvailable": "An update is available for the word lists.",
+        "datasetUpdate": "Update",
+        "datasetUpdating": "Updating…",
+        "catalogSearchPlaceholder": "Search title or author...",
+        "catalogImportAction": "Import",
+        "estimatedChars": "~{{count}} chars",
+        "catalogImportErrorDuplicate": "A text with this title already exists",
+        "catalogImportErrorGeneric": "Download failed ({{code}})",
+        "catalogLoadFailed": "Failed to load the catalog. Check your connection and try again.",
+        "kanaRowLabel": "row",
+        "kanaRowGroupAriaLabel": "Filter by author reading, gojuon row",
+        "kanaColumnGroupAriaLabel": "Filter by author reading, gojuon column",
+        "romajiBadge": "Romaji",
+        "romajiFilter": "Show romaji-input entries only"
+      },
+      "memory": {
+        "pause": "Pause",
+        "resumeButton": "Resume",
+        "resumeTitle": "Resume saved test?",
+        "resumeBody": "You paused at word {{current}} of {{total}}. Continue from there, or start over?",
+        "resume": "Resume",
+        "restart": "Start over"
       },
       "history": {
         "title": "History",
+        "retentionNote": "Keeps up to {{max}} most recent results",
         "bestWpm": "Best",
         "avgWpm": "Avg",
         "last10Avg": "Last 10",
         "totalTests": "Tests",
         "avgAccuracy": "Avg Acc",
+        "avgHold": "Avg Key Hold",
+        "avgHoldAbbr": "AKH",
         "date": "Date",
+        "name": "Name",
+        "unnamed": "Unnamed",
         "mode": "Mode",
+        "tabMonkeytype": "MonkeyType",
+        "tabTatoeba": "Tatoeba",
+        "tabAozora": "Aozora",
+        "tabFileImport": "File Import",
+        "tabText": "Text",
+        "tabResults": "Results",
+        "tabAnalysis": "Analysis",
+        "viewTabsAriaLabel": "History view",
+        "sourceFilterLabel": "Filter by source",
+        "periodFilterLabel": "Filter by period",
+        "period1Week": "1 Week",
+        "period1Month": "1 Month",
+        "period3Months": "3 Months",
+        "period1Year": "1 Year",
+        "periodAll": "All Time",
         "noResults": "No results yet",
         "pb": "PB",
         "allModes": "All",
-        "exportCsv": "Export CSV"
+        "filterMode": "Filter by mode",
+        "filterText": "Filter by text",
+        "exportCsv": "Export CSV",
+        "delete": "Delete",
+        "accuracyTrendTitle": "Accuracy Trend",
+        "wpmTrendTitle": "WPM Trend",
+        "trendBest": "Best",
+        "trendWorst": "Worst",
+        "trendAvg": "Avg",
+        "conditionFilterLabel": "Filter by condition",
+        "conditionPunctuation": "+punct",
+        "conditionNumbers": "+nums",
+        "conditionRomaji": "+romaji",
+        "conditionKana": "+kana",
+        "conditionWeakSpot": "+weak spot",
+        "conditionTatoeba": "Tatoeba",
+        "mistakeRankingTitle": "Most missed",
+        "mistakeRankingEmpty": "No mistakes recorded yet",
+        "errorMixTitle": "Error mix",
+        "errorMixEmpty": "No qualifying results yet",
+        "errorMixColumnType": "Type",
+        "errorMixColumnYou": "You",
+        "errorMixColumnPopAvg": "Pop. avg",
+        "errorMixLabelSubstitution": "Substitution",
+        "errorMixLabelOmission": "Omission",
+        "errorMixLabelInsertion": "Insertion",
+        "errorMixDescSubstitution": "Substitution is typing a different character than the one expected at that position.",
+        "errorMixAdviceSubstitution": "Often a neighbor-key mixup — slow down slightly on this key rather than pushing for speed.",
+        "errorMixDescOmission": "Omission is skipping a character from the target text entirely — nothing gets typed for it.",
+        "errorMixAdviceOmission": "Usually a rushed keypress — check whether this key needs more travel or force than the keys around it.",
+        "errorMixDescInsertion": "Insertion is typing an extra character that isn't in the target text.",
+        "errorMixAdviceInsertion": "Often a stray double-press — watch for this key repeating when you don't mean it to.",
+        "timeline": {
+          "modalTitle": "Keystroke Timeline",
+          "openButton": "Open keystroke timeline",
+          "linkLabel": "Timeline",
+          "loading": "Loading timeline…",
+          "error": "Couldn't load this run's keystroke log.",
+          "partialBadge": "Partial",
+          "stats": {
+            "wordPace": "Word Pace",
+            "runWpm": "WPM",
+            "accuracy": "Accuracy",
+            "overlap": "Overlap",
+            "duration": "Duration",
+            "kpm": "Keystrokes/min",
+            "durationSeconds": "{{s}}s",
+            "avgHold": "Avg Key Hold",
+            "avgHoldTooltip": "Average time a key is held down (press to release), in milliseconds."
+          },
+          "legend": {
+            "normal": "Normal keystroke",
+            "mistake": "Mistake",
+            "overlap": "Overlapped",
+            "overlapTooltip": "Pressed before the previous key released",
+            "unjudged": "Unjudged",
+            "unjudgedTooltip": "No correctness data",
+            "blank": "Pause",
+            "blankTooltip": "Shown compressed",
+            "leadIn": "Pause before this word",
+            "blankLine": "Pause",
+            "blankLineTooltip": "More than 250ms, shown compressed",
+            "leadInLine": "Pause before this line",
+            "correctedNote": "Mistake markers include keystrokes later corrected before submit — a word can show markers and still be 100% accuracy.",
+            "infoAriaLabel": "Legend notes"
+          },
+          "axisNote": "Pauses are shown compressed on this axis; every duration shown is still the real one.",
+          "correlationUnreliable": "Correctness markers may be unreliable for this run — some input went through IME composition.",
+          "zoom": {
+            "label": "Zoom",
+            "aria": "Timeline zoom"
+          },
+          "tooltip": {
+            "releaseUnobserved": "release unobserved",
+            "overlapYes": "overlapped the previous key",
+            "overlapNo": "did not overlap",
+            "overlapUnknown": "overlap unknown",
+            "mistake": "mistake (may have been corrected)",
+            "unjudged": "unjudged",
+            "correct": "correct",
+            "offset": "+{{ms}}ms",
+            "blankDuration": "Pause: {{ms}}ms",
+            "leadInDuration": "Pause before word: {{ms}}ms",
+            "leadInLineDuration": "Pause before line: {{ms}}ms"
+          },
+          "line": {
+            "indexAria": "Line {{n}}",
+            "romajiAria": "Romaji: {{text}}"
+          }
+        }
+      },
+      "results": {
+        "mistakesLabel": "Missed",
+        "errorSubstitutions": "Substitution {{count}}",
+        "errorOmissions": "Omission {{count}}",
+        "errorInsertions": "Insertion {{count}}",
+        "timelineConsentHint": "Enable typing recording to see the keystroke timeline here.",
+        "missedBarTypedLine": "Typed instead: {{chars}}",
+        "missedBarCorrectedLine": "Corrected with Backspace: {{count}}",
+        "missedBarMovedOnLine": "Moved on uncorrected: {{count}}",
+        "missedBarNoDetail": "No per-keystroke detail available for this run"
       }
     }
   },
@@ -400,8 +712,12 @@
       "keyOverrideKeys": "Key",
       "altRepeatKeyKeys": "Key",
       "capsWord": "Caps Word",
+      "tappingTerm": "Dynamic Tapping Term",
+      "autocorrect": "Autocorrect",
+      "leader": "Leader",
       "boot": "Boot",
       "osm": "One-Shot Modifiers",
+      "oneShotControl": "One-Shot Control",
       "modMask": "Modifier Masks",
       "modTap": "Mod-Tap",
       "modSpecial": "Special",
@@ -409,7 +725,8 @@
       "rgbLighting": "RGB Lighting",
       "rgbMatrix": "RGB Matrix",
       "systemControl": "System",
-      "appBrowser": "App & Browser",
+      "app": "App",
+      "browser": "Browser",
       "mediaPlayback": "Media",
       "mouse": "Mouse",
       "lockingKeys": "Locking Keys",
@@ -455,7 +772,10 @@
     "autoAdvance": "Auto Move",
     "locked": "Locked",
     "unlocked": "Unlocked",
-    "keyTester": "Key Tester",
+    "typingGroup": "Typing:",
+    "typingViewShort": "View",
+    "typingTestShort": "Test",
+    "typingRecordShort": "Record",
     "sync": {
       "pending": "Pending",
       "syncing": "Syncing...",
@@ -543,15 +863,13 @@
     "manualSync": "Manual Sync",
     "sync": "Sync",
     "resetTarget": {
-      "keyboardData": "Keyboard",
       "favorites": "Favorite",
-      "appSettings": "Application",
-      "i18nPacks": "Language Packs"
+      "i18nPacks": "Language Packs",
+      "themePacks": "Theme Packs",
+      "keyLabels": "Key Labels",
+      "typingTestTexts": "Typing Test Texts"
     },
-    "deleteSelected": "Delete Selected",
     "resetTargetsConfirm": "The selected data will be permanently deleted. This action cannot be undone.",
-    "resetLocalTargetsConfirm": "The selected local data will be permanently deleted. This action cannot be undone.",
-    "resettingData": "Deleting data...",
     "syncing": "Syncing...",
     "continueOffline": "Continue offline",
     "noSyncYet": "Not synced yet",
@@ -564,17 +882,23 @@
     "importComplete": "Import complete",
     "importFailed": "Import failed",
     "passwordMismatch": "Sync password does not match. Please check your encryption password.",
-    "scanRemote": "Scan",
     "scanning": "Scanning...",
     "downloading": "Downloading...",
     "noRemoteData": "No remote data found",
     "undecryptableCount": "{{count}} undecryptable file(s)",
-    "selectAll": "Select All",
-    "deselectAll": "Deselect All",
     "checkingRemotePassword": "Checking sync status...",
     "existingPasswordHint": "A sync password already exists. Enter the same password used on your other device.",
     "unavailable": "Unable to connect to sync server. Sync features are currently disabled.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "pullError": {
+      "busy": "A sync is already running. Try again in a moment.",
+      "unauthenticated": "Sign in to Google to pull from Google Drive.",
+      "noPasswordFile": "Set a sync password to pull from Google Drive.",
+      "decryptFailed": "Couldn't read the saved sync password.",
+      "keystoreUnavailable": "OS keychain is not available; Google Drive pull is disabled here.",
+      "remoteCheckFailed": "Couldn't reach Google Drive. Try again later.",
+      "partial": "Some packs failed to pull. Try again."
+    }
   },
   "settings": {
     "title": "Settings",
@@ -585,7 +909,6 @@
     "defaultLayout": "Key Labels",
     "defaultAutoAdvance": "Auto Move",
     "defaultLayerPanelOpen": "Layer List Open",
-    "defaultBasicViewType": "Basic Tab View",
     "defaultSplitKeyMode": "Separate Shift in Key Picker",
     "defaultQuickSelect": "Instant Key Selection",
     "basicViewTypeList": "LIST",
@@ -605,7 +928,15 @@
       "licenseValue": "GPL-3.0-or-later"
     },
     "zoomLevel": "Zoom",
-    "zoomLevelWarning": "Changing this may cause layout issues. Use at your own risk."
+    "zoomLevelWarning": "Changing this may cause layout issues. Use at your own risk.",
+    "autoLaunch": "Launch at Login",
+    "autoLaunchDescription": "Start Pipette automatically when you sign in",
+    "trayResident": "Stay in System Tray",
+    "trayResidentDescription": "Closing the window keeps Pipette running in the tray",
+    "restoreLastSession": "Restore Last Session",
+    "restoreLastSessionDescription": "Reconnect the last keyboard and screen at launch",
+    "startInTray": "Start Hidden in Tray",
+    "startInTrayDescription": "Launch resident in the system tray without opening the window"
   },
   "analyze": {
     "noKeyboards": "No typing data yet.",
@@ -676,6 +1007,33 @@
       "keys": "keys",
       "activations": "activations"
     },
+    "benchmark": {
+      "populationAverage": "Population avg {{value}} WPM",
+      "populationAverageKspc": "Population avg {{value}}",
+      "position": {
+        "farBelow": "Far below average",
+        "below": "Below average",
+        "average": "Average",
+        "above": "Above average",
+        "farAbove": "Far above average"
+      },
+      "positionRate": {
+        "farBelow": "Far below average",
+        "below": "Below average",
+        "average": "Average",
+        "above": "Above average",
+        "farAbove": "Far above average"
+      },
+      "positionRateShort": {
+        "farBelow": "Far below avg",
+        "below": "Below avg",
+        "average": "Average",
+        "above": "Above avg",
+        "farAbove": "Far above avg"
+      },
+      "referenceLineLabel": "Population avg",
+      "toggleAria": "Show population average reference line"
+    },
     "snapshotTimeline": {
       "title": "Keymap snapshots",
       "current": "Current keymap"
@@ -744,6 +1102,7 @@
         "gt10000": ">10s"
       },
       "distribution": {
+        "sectionTitle": "Interval distribution",
         "tooltipLabel": "Estimated keystrokes",
         "summary": {
           "label": "Typing rhythm summary",
@@ -760,6 +1119,7 @@
         }
       },
       "timeSeries": {
+        "sectionTitle": "Interval over time",
         "summary": {
           "label": "Interval summary",
           "medianP50": "Weighted median interval",
@@ -767,6 +1127,68 @@
           "longestPause": "Longest interval (per min)"
         }
       }
+    },
+    "rollover": {
+      "sectionTitle": "Observed rollover rate",
+      "ariaLabel": "Observed rollover rate summary",
+      "stat": {
+        "title": "Observed rollover rate",
+        "description": "Effective sampling period: median p50 {{p50}} / worst-case p95 {{p95}}. Overlaps shorter than the sampling period aren't observed, so this rate is an undercount, not a precise measurement."
+      },
+      "chart": {
+        "legend": "Observed rollover"
+      },
+      "underBiasNote": "This is structurally an undercount, not the true rollover rate — sitting below the population average line does not mean slower typing."
+    },
+    "duration": {
+      "sectionTitle": "Keypress duration",
+      "ariaLabel": "Keypress duration summary",
+      "tooltipLabel": "Samples",
+      "empty": "No keypress-duration data in this range. Durations are only recorded while typing in matrix mode with the keyboard unlocked — ranges from before that capture existed, or with recording off, show no data here.",
+      "bin": {
+        "lt50": "<50ms",
+        "50to80": "50-80ms",
+        "80to110": "80-110ms",
+        "110to140": "110-140ms",
+        "140to180": "140-180ms",
+        "180to250": "180-250ms",
+        "250to400": "250-400ms",
+        "gt400": ">400ms"
+      },
+      "stat": {
+        "mean": "Mean duration",
+        "sd": "SD",
+        "sdDesc": "Standard deviation of your hold times. Low SD means a consistent hold time; high SD means hold times vary widely.",
+        "samples": "Samples",
+        "samplesDesc": "Each sample is one completed key press-to-release measurement.",
+        "populationAverage": "Population avg {{value}} ms"
+      }
+    },
+    "tappingTerm": {
+      "sectionTitle": "Tapping Term diagnosis",
+      "ariaLabel": "Tapping Term diagnosis summary",
+      "stat": {
+        "current": "Current term",
+        "assumed": "Assumed term",
+        "tapP95": "Observed tap p95",
+        "tapP95Desc": "95% of your taps on these keys were shorter than this range — compared against the Tapping Term above to judge whether taps and holds are easy to tell apart.",
+        "samples": "Samples",
+        "recordedCounts": "Recorded tap / hold"
+      },
+      "recordedCountsDescription": "Classified against whatever Tapping Term was active when each press was recorded, not the current term — shown for context only.",
+      "verdict": {
+        "unknown": {
+          "insufficientSamples": "Not enough recorded tap-hold presses yet to diagnose this term.",
+          "noTapMass": "Every recorded press on these keys has already resolved as a hold at this term, so there's no tap-side data yet to compare it against.",
+          "bucketResolution": "Your Tapping Term falls in the same measured bucket as your typical tap length, so this data can't tell which side of it your taps actually land on."
+        },
+        "ok": "Your Tapping Term looks well matched to how you type.",
+        "canLower": "Based on your typing, you could try lowering this to ~{{value}} ms.",
+        "nearTerm": "Long taps and fast holds are hard to tell apart at this Tapping Term — the number alone can't separate them here."
+      },
+      "reportedHint": "You can change this from the editor's {{tab}} tab → {{button}}.",
+      "unreportedNotice": "This firmware doesn't report Tapping Term through QMK Settings, so this diagnosis assumes the QMK default of {{default}} ms. Changing it requires rebuilding the firmware.",
+      "guidance": "Connect this keyboard to read its Tapping Term and run this diagnosis."
     },
     "activity": {
       "tableLabel": "Hour × day-of-week activity",
@@ -937,6 +1359,56 @@
           "low": "Low",
           "medium": "Medium",
           "high": "High"
+        },
+        "kspcLabel": "KSPC",
+        "kspcDesc": "Keystrokes per confirmed character (Backspace counts as a keystroke), aggregated from your saved Typing Test results over this window — not filtered by Device/App, since it comes from History rather than the recorded keystroke stream. Romaji-input runs are excluded here, since their ratio measures something different (rejected keystrokes per accepted one) and isn't comparable to the population average shown below.",
+        "errorMixLabel": "Error mix",
+        "errorMixContext": "Sub {{subPct}}% (avg {{subAvg}}%) · Om {{omPct}}% (avg {{omAvg}}%) · Ins {{insPct}}% (avg {{insAvg}}%)",
+        "errorMixDesc": "Substitution / omission / insertion rates (share of target characters), char-weighted from your saved Typing Test results over this window — not filtered by Device/App, since it comes from History rather than the recorded keystroke stream. Romaji-input runs are excluded (their typed text always matches an accepted spelling, so there's nothing to classify).",
+        "typistClusterLabel": "Typing style",
+        "typistClusterDesc": "Compares your typing averages over this window against population typing-style profiles built from speed, typing rhythm, and error patterns. The rollover dimension isn't part of this comparison.",
+        "typistClusterDescNoError": "Compares your typing averages over this window against population typing-style profiles. Error patterns weren't part of this match — no qualifying error data was available for this window.",
+        "typistCluster": {
+          "1": {
+            "name": "Steady rhythm",
+            "context": "Slower pace than the population average, with typical hand alternation and typical leftover-error rates."
+          },
+          "2": {
+            "name": "Steady, alternating",
+            "context": "Slower pace with pronounced hand alternation, and more leftover errors than average."
+          },
+          "3": {
+            "name": "Mid pace, more leftovers",
+            "context": "Near-average pace and typical hand alternation, with more leftover errors than most."
+          },
+          "4": {
+            "name": "Mid pace, right-hand lean",
+            "context": "Near-average pace, with the right hand noticeably faster than the left."
+          },
+          "5": {
+            "name": "Mid pace, alternating",
+            "context": "Near-average pace with the strongest hand alternation in this set."
+          },
+          "6": {
+            "name": "Mid pace, balanced",
+            "context": "Near-average pace across every measure, close to the overall population median."
+          },
+          "7": {
+            "name": "Quick, some leftovers",
+            "context": "Faster pace than most, with slightly more leftover errors than the quickest group."
+          },
+          "8": {
+            "name": "Quick, few leftovers",
+            "context": "The fastest pace in this set, with leftover errors among the lowest here."
+          },
+          "noMatch": {
+            "name": "No match",
+            "context": "Your typing doesn't closely resemble any of the reference profiles."
+          },
+          "ambiguous": {
+            "name": "Between styles",
+            "context": "Your typing sits about equally between two reference profiles."
+          }
         }
       }
     },
@@ -947,13 +1419,25 @@
       "quadrant": {
         "top": "Top pairs",
         "slow": "Pair interval",
-        "fingerIki": "Finger IKI"
+        "fingerIki": "Finger IKI",
+        "classes": "Bigram patterns"
+      },
+      "cappedNotice": "Computed from the {{limit}} most frequent pairs — rare pairs may be missing.",
+      "gramToggle": {
+        "ariaLabel": "N-gram size",
+        "bigram": "2-gram",
+        "trigram": "3-gram"
       },
       "column": {
         "pair": "Pair",
+        "class": "Class",
         "count": "Count",
         "avgIki": "Avg IKI",
-        "p95": "p95 IKI"
+        "avgIkiTrigramTooltip": "Average of the two intervals between the three keystrokes — not the total time across all three.",
+        "sd": "SD",
+        "p95": "p95 IKI",
+        "rollover": "Rollover",
+        "rolloverTooltip": "Share of this pair's presses where the previous key was still held down when this one was pressed. Sampled, so it's an undercount — see the Interval tab's Observed rollover rate for details."
       },
       "fingerIki": {
         "noSnapshot": "Finger interval needs a keymap snapshot. Start a record session or pick a range with one.",
@@ -962,6 +1446,27 @@
           "desc": "Slowest first",
           "asc": "Fastest first"
         }
+      },
+      "classes": {
+        "noSnapshot": "Hand usage needs a keymap snapshot. Start a record session or pick a range with one.",
+        "section": {
+          "handUsage": "Hand usage",
+          "wordPosition": "Word position"
+        },
+        "className": {
+          "left": "Left",
+          "right": "Right",
+          "alternation": "Alternation",
+          "repetition": "Repetition",
+          "initiation": "Initiation",
+          "inWord": "In-word"
+        },
+        "coverage": "{{percent}}% of pairs classified",
+        "deltaLeft": "ΔLeft",
+        "deltaRight": "ΔRight",
+        "deltaInitiation": "ΔInitiation",
+        "deltaTooltip": "Positive means the first-named class was slower.",
+        "excludedNote": "{{count}} pairs ending at a separator excluded"
       },
       "pairIntervalThreshold": {
         "label": "Avg interval",
@@ -978,6 +1483,23 @@
       "bondToggle": "Bond Layer {{i}} with another group",
       "noLayout": "Layout data not available for this snapshot.",
       "noSnapshot": "No keymap snapshot recorded for this range. Start a record session to capture one.",
+      "modeToggle": {
+        "ariaLabel": "Heatmap colouring mode",
+        "count": "Count",
+        "speed": "Speed",
+        "duration": "Duration"
+      },
+      "speed": {
+        "colAvgIki": "Avg IKI",
+        "empty": "No reach-speed data in this range yet.",
+        "minSampleNote": "Keys reached fewer than {{n}} times are left uncoloured.",
+        "cappedNotice": "Computed from the {{limit}} most frequent pairs — rare pairs may be missing."
+      },
+      "duration": {
+        "colAvgDuration": "Avg Duration",
+        "empty": "No keypress-duration data in this range yet.",
+        "minSampleNote": "Keys with fewer than {{n}} duration samples are left uncoloured."
+      },
       "ranking": {
         "frequentUsedN": "Top N",
         "frequentUsed": "Frequently Used",
@@ -1167,6 +1689,17 @@
         "none": "All apps",
         "multi": "{{first}} +{{rest}}"
       },
+      "typingTest": "TypingTest",
+      "typingTestOption": {
+        "none": "All tests",
+        "multi": "{{first}} +{{rest}}"
+      },
+      "run": "Results",
+      "runOption": {
+        "none": "All runs",
+        "multi": "{{first}} +{{rest}}"
+      },
+      "dimensionLabel": "Filter by App or TypingTest",
       "unit": "Display",
       "unitOption": {
         "sec": "Seconds",
@@ -1177,6 +1710,7 @@
         "timeSeries": "Time series",
         "distribution": "Distribution"
       },
+      "intervalDistributionSection": "Section",
       "wpmViewMode": "View",
       "wpmViewModeOption": {
         "timeSeries": "Time series",
@@ -1248,7 +1782,13 @@
         "day3": "3 days",
         "week1": "1 week",
         "month1": "1 month"
-      }
+      },
+      "sourceLabel": "Source",
+      "editConditions": "Edit filter conditions",
+      "chipAriaLabel": "Edit filter conditions",
+      "sourceDisabledByApp": "By App combines every source, so this filter is disabled.",
+      "distributionDisabledNote": "Distribution view always uses this device, so this filter is disabled.",
+      "openRunTimeline": "Open timeline"
     }
   },
   "dataModal": {
@@ -1263,9 +1803,10 @@
     "noSaves": "No saves found",
     "importExportDesc": "Import/Export all local data (keyboards, favorites, settings)",
     "deleteAll": "Delete All Data",
-    "deleteAllConfirm": "This will delete all data including synced data.",
+    "deleteAllConfirm": "This deletes everything tied to this keyboard — keymaps, typing history & analytics, and settings — including synced data.",
     "syncNoOrphans": "All synced data is available locally",
     "resetAppSettings": "Reset application settings",
+    "cloudData": "Cloud Data",
     "typing": {
       "title": "Typing",
       "noKeyboards": "No recorded typing data",
@@ -1304,7 +1845,7 @@
     "title": "Menu",
     "tabData": "Data",
     "tabSave": "Save",
-    "tabTools": "Settings",
+    "tabTools": "Settings / Import",
     "tabLayout": "Layout",
     "basicViewType": "Basic Tab View",
     "splitKeyMode": "Separate Shift in Key Picker",
@@ -1346,6 +1887,30 @@
     "displayNameSaveFailed": "Failed to save display name",
     "displayNameTaken": "This display name is already taken",
     "openInBrowser": "Open",
+    "uploadConfirm": {
+      "title": {
+        "create": "Upload to Hub",
+        "update": "Update Hub post"
+      },
+      "visibilityPublic": "Public",
+      "publicDesc": "Listed and searchable on Hub.",
+      "visibilityPrivate": "Private (unlisted)",
+      "privateDesc": "Shareable by secret link only. Not listed or searchable.",
+      "expiryLabel": "Link expires",
+      "expiryDays_one": "{{count}} day",
+      "expiryDays_other": "{{count}} days",
+      "expiresAtPreview": "Expires {{date}}",
+      "warnUrlExpiryChange": "Updating replaces the post — the share link and expiry will change.",
+      "confirm": "Confirm",
+      "cancel": "Cancel"
+    },
+    "private": {
+      "badgePublic": "Hub (Public)",
+      "badgePrivate": "Hub (Private)",
+      "expiresAt": "Expires {{date}}",
+      "noExpiry": "No expiry",
+      "removeConfirm": "Remove from Hub? The private link stops working immediately."
+    },
     "needsDisplayName": "Set a display name in Settings to upload",
     "displayNameRequired": "Required to upload to Hub",
     "authDisplayNameConflict": "Your Google account name conflicts with an existing display name. Please choose a different display name to continue.",
@@ -1413,6 +1978,12 @@
     "actionDownload": "Download",
     "actionDelete": "Delete",
     "actionExport": ".json",
+    "typeKeymapWrite": "Keymap Write",
+    "typeViewOnly": "View Only",
+    "typeKeymapWriteShort": "Write",
+    "typeViewOnlyShort": "View",
+    "qwertyDefaultName": "QWERTY (Default)",
+    "qwertyDefaultShort": "Default",
     "hubRemoved": "(removed)",
     "errorDuplicate": "A label with the same name already exists",
     "errorImportFailed": "Failed to import key label",
@@ -1422,7 +1993,14 @@
     "missingTitle": "Key Label not found",
     "missingMessage": "The key label \"{{name}}\" is not installed. Showing keymap with QWERTY labels.",
     "missingHint": "You can download \"{{name}}\" from {{settings}} > {{tools}} > {{keyLabels}}, or from the keypicker overlay's Edit button.",
-    "missingClose": "Close"
+    "missingClose": "Close",
+    "keymapApply": {
+      "title": "Apply {{name}} to the Keymap?",
+      "saveRecommendation": "Save your current keymap first. Rewrite replaces keycodes on every layer and clears the undo/redo history; restoring your saved file is the only way back.",
+      "confirmApply": "Apply?",
+      "tabsLabel": "Keymap view",
+      "errorPartial": "Some keys could not be rewritten. The change stops here — restore from a previously saved .vil file or snapshot if needed."
+    }
   },
   "i18n": {
     "modalTitle": "Language Packs",

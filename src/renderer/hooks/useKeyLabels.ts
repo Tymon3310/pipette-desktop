@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type {
   KeyLabelMeta,
   KeyLabelStoreResult,
+  KeyLabelImportBatchResult,
 } from '../../shared/types/key-label-store'
 import type {
   HubKeyLabelListParams,
@@ -36,7 +37,7 @@ export interface UseKeyLabelsReturn {
   error: string | null
   refresh: () => Promise<void>
 
-  importFromFile: () => Promise<KeyLabelStoreResult<KeyLabelMeta>>
+  importFromFile: () => Promise<KeyLabelStoreResult<KeyLabelImportBatchResult>>
   exportEntry: (id: string) => Promise<KeyLabelStoreResult<{ filePath: string }>>
   reorder: (orderedIds: string[]) => Promise<KeyLabelStoreResult<void>>
   rename: (id: string, newName: string) => Promise<KeyLabelStoreResult<KeyLabelMeta>>
@@ -53,7 +54,12 @@ export interface UseKeyLabelsReturn {
 
 export function useKeyLabels(): UseKeyLabelsReturn {
   const [metas, setMetas] = useState<KeyLabelMeta[]>([])
-  const [loading, setLoading] = useState(false)
+  // Starts true: the initial `refresh()` below fires from an effect
+  // (after this first render commits), so `loading` must already read
+  // true on that very first render for consumers that gate on it (e.g.
+  // Key Labels' Name-sort `ready` flag) to correctly treat "not yet
+  // fetched" as not-ready, rather than racing the effect.
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
@@ -92,7 +98,7 @@ export function useKeyLabels(): UseKeyLabelsReturn {
     return () => window.removeEventListener(REFRESH_EVENT, handler)
   }, [refresh])
 
-  const importFromFile = useCallback(async (): Promise<KeyLabelStoreResult<KeyLabelMeta>> => {
+  const importFromFile = useCallback(async (): Promise<KeyLabelStoreResult<KeyLabelImportBatchResult>> => {
     const result = await window.vialAPI.keyLabelStoreImport()
     if (result.success) {
       await refresh()

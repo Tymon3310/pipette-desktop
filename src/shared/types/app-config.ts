@@ -34,6 +34,18 @@ export function clampZoomFactor(raw: unknown): number {
   return Math.max(ZOOM_FACTOR_MIN, Math.min(ZOOM_FACTOR_MAX, Math.round(n)))
 }
 
+/** USB identity of the most recently connected device. Reopening a
+ * keyboard at launch needs this because the firmware `uid` alone cannot
+ * locate a HID device to open — only vendorId/productId (and, when
+ * available, serialNumber to disambiguate multiple identical boards)
+ * can. Written by the renderer on successful connect, cleared (null) on
+ * manual disconnect. */
+export interface LastDeviceInfo {
+  vendorId: number
+  productId: number
+  serialNumber?: string
+}
+
 export interface AppConfig {
   autoSync: boolean
   windowState?: WindowState
@@ -73,6 +85,36 @@ export interface AppConfig {
   /** UI zoom level as a percentage (50–200). Applied to the renderer
    * via webContents.setZoomFactor(zoomFactor / 100). */
   zoomFactor: number
+  /** Start the app automatically when the user signs in to the OS. */
+  autoLaunch: boolean
+  /** Keep the app running in the system tray when the main window is
+   * closed, instead of quitting. */
+  trayResident: boolean
+  /** Start the app with the main window hidden, resident in the tray.
+   * Only honored while `trayResident` is enabled — a hidden window with
+   * no tray icon to reopen it would be unreachable. The Settings UI
+   * enforces this dependency (disables/clears the toggle when tray
+   * residency is off). */
+  startInTray: boolean
+  /** Auto-reconnect the last-used keyboard at launch. Combined with the
+   * per-uid viewMode restore, this also brings back the last screen the
+   * user was on for that keyboard. Defaults to on. */
+  restoreLastSession: boolean
+  /** USB identity of the last successfully connected device, used by
+   * `restoreLastSession` to reopen it at launch. */
+  lastDevice?: LastDeviceInfo | null
+  /** Settable via IPC like `lastDevice` (App.tsx writes it directly), but
+   * exposes no Settings UI toggle — nothing for the user to turn on or
+   * off. True once the app has successfully run a one-time `'packs'`-
+   * scoped download (i18n + theme packs) after sync credentials became
+   * ready — see `useDeviceLifecycle`'s first-sync seam. Exists because
+   * the 3-minute poll cannot discover a pack that was already on Drive
+   * before this machine ever polled (see `matchesScope`'s doc in
+   * sync-service.ts), so a fresh machine would otherwise never learn
+   * about pre-existing remote packs without the user manually opening a
+   * Pack Manager modal and clicking pull. Stays false on failure so the
+   * next launch retries. */
+  packsPulledOnce: boolean
 }
 
 export const SETTABLE_APP_CONFIG_KEYS: ReadonlySet<keyof AppConfig> = new Set([
@@ -95,6 +137,12 @@ export const SETTABLE_APP_CONFIG_KEYS: ReadonlySet<keyof AppConfig> = new Set([
   'typingRecordingConsentAccepted',
   'typingMonitorAppEnabled',
   'zoomFactor',
+  'autoLaunch',
+  'trayResident',
+  'startInTray',
+  'restoreLastSession',
+  'lastDevice',
+  'packsPulledOnce',
 ])
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
@@ -115,4 +163,9 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   typingRecordingConsentAccepted: false,
   typingMonitorAppEnabled: true,
   zoomFactor: ZOOM_FACTOR_DEFAULT,
+  autoLaunch: false,
+  trayResident: false,
+  startInTray: false,
+  restoreLastSession: true,
+  packsPulledOnce: false,
 }

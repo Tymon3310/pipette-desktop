@@ -4,8 +4,6 @@ import type { KeyboardDefinition } from '../../shared/types/protocol'
 
 export const FAKE_KEYCHRON_JSON: KeyboardDefinition = {
   name: 'Keychron Q1 HE (Fake)',
-  vendorId: 0x3434,
-  productId: 0x0113,
   lighting: 'vialrgb',
   matrix: { rows: 6, cols: 16 },
   layouts: {

@@ -101,6 +101,44 @@ export async function upsertKeyboardMeta(
   })
 }
 
+/** Name a keyboard from its firmware `deviceName` at connect time.
+ *  - No entry yet → record the name.
+ *  - Tombstoned entry → revive it with the firmware name. The physical
+ *    keyboard is present, so its name should resolve again — a tombstone
+ *    (e.g. left by a "Delete all"/reset) must not permanently block naming a
+ *    reconnected device.
+ *  - Active entry → left untouched, so a user's manual rename is never
+ *    clobbered and reconnects don't churn the index.
+ *
+ *  The presence check and the write share one lock so a concurrent writer
+ *  can't be clobbered. Same 'unchanged' | 'upserted' contract as
+ *  {@link upsertKeyboardMeta}. */
+export async function nameKeyboardOnConnect(
+  uid: string,
+  deviceName: string,
+): Promise<'unchanged' | 'upserted'> {
+  const normalized = deviceName.trim()
+  if (!uid || !normalized) return 'unchanged'
+  return withMetaWriteLock(async () => {
+    const index = await readKeyboardMetaIndex()
+    const existing = findEntry(index, uid)
+    // Active entry → keep the (possibly user-renamed) name as-is.
+    if (existing && !existing.deletedAt) return 'unchanged'
+    const now = new Date().toISOString()
+    if (existing) {
+      // Revive a tombstone with the firmware name.
+      existing.deviceName = normalized
+      existing.updatedAt = now
+      delete existing.deletedAt
+    } else {
+      index.entries.push({ uid, deviceName: normalized, updatedAt: now })
+    }
+    index.entries = gcKeyboardMetaTombstones(index.entries)
+    await writeKeyboardMetaIndex(index)
+    return 'upserted'
+  })
+}
+
 export async function tombstoneKeyboardMeta(uid: string): Promise<'unchanged' | 'tombstoned'> {
   if (!uid) return 'unchanged'
   return withMetaWriteLock(async () => {
@@ -219,6 +257,23 @@ async function resolveDeviceNameFromLocalSnapshots(uid: string): Promise<string 
   } catch {
     return null
   }
+}
+
+/** Best-effort display name for a stored keyboard: its meta-index name, else
+ *  the device name from its local snapshot filename, else the analytics product
+ *  name (present even for keyboards with no saved keymap), else the uid.
+ *  No side effects (unlike the backfill path), so it's safe for read-only
+ *  lookups such as the comparison-result pool. */
+export async function resolveKeyboardDisplayName(
+  uid: string,
+  metaMap: Map<string, string>,
+  analyticsNames?: Map<string, string>,
+): Promise<string> {
+  const metaName = metaMap.get(uid)
+  if (metaName && metaName !== uid) return metaName
+  const snapshotName = await resolveDeviceNameFromLocalSnapshots(uid)
+  if (snapshotName) return snapshotName
+  return analyticsNames?.get(uid) || uid
 }
 
 async function resolveDeviceNameFromRemoteSnapshots(

@@ -1,0 +1,231 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// @vitest-environment jsdom
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
+import { useTypingTest } from '../useTypingTest'
+import { getFileImportTextData, clearFileImportTextCache } from '../word-generator'
+
+const mockGet = vi.fn()
+const originalVialAPI = window.vialAPI
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  clearFileImportTextCache()
+  window.vialAPI = {
+    ...(window.vialAPI ?? {}),
+    typingTestTextStoreGet: mockGet,
+  } as unknown as typeof window.vialAPI
+})
+
+afterEach(() => {
+  clearFileImportTextCache()
+  window.vialAPI = originalVialAPI
+})
+
+const type = (result: { current: { processKeyEvent: (k: string, c: boolean, a: boolean, m: boolean) => void } }, key: string): void => {
+  act(() => result.current.processKeyEvent(key, false, false, false))
+}
+
+describe('useTypingTest — imported fileImport text (line breaks)', () => {
+  it('Enter advances at a line break, Space advances within a line; the wrong key is a no-op', async () => {
+    // "a b" / "c d" → words [a,b,c,d], line break after index 1 (the word "b").
+    mockGet.mockResolvedValue({
+      success: true,
+      data: { meta: { id: 't' }, data: { name: 'T', text: 'a b\nc d' } },
+    })
+    // Warm the cache so the hook's synchronous initial state has the words.
+    await getFileImportTextData('t')
+
+    const { result } = renderHook(() => useTypingTest({ mode: 'fileImport', textId: 't' }, 'english'))
+    expect(result.current.state.words).toEqual(['a', 'b', 'c', 'd'])
+    expect([...result.current.state.lineBreaks]).toEqual([1])
+
+    // Word 0 ("a") is mid-line → Space advances, Enter would be a no-op.
+    type(result, 'a')
+    type(result, 'Enter') // mismatch at a non-line-end word → ignored
+    expect(result.current.state.currentWordIndex).toBe(0)
+    type(result, ' ')
+    expect(result.current.state.currentWordIndex).toBe(1)
+
+    // Word 1 ("b") ends a line → Enter advances, Space is a no-op.
+    type(result, 'b')
+    type(result, ' ') // mismatch at a line-end word → ignored
+    expect(result.current.state.currentWordIndex).toBe(1)
+    type(result, 'Enter')
+    expect(result.current.state.currentWordIndex).toBe(2)
+
+    // Word 2 ("c") mid-line → Space advances.
+    type(result, 'c')
+    type(result, ' ')
+    expect(result.current.state.currentWordIndex).toBe(3)
+
+    // Last word finishes on the final character (no separator needed).
+    type(result, 'd')
+    expect(result.current.state.status).toBe('finished')
+  })
+
+  it('words mode ignores Enter (line breaks empty) — existing behaviour unchanged', () => {
+    const { result } = renderHook(() => useTypingTest({ mode: 'words', wordCount: 5, punctuation: false, numbers: false }, 'english'))
+    expect([...result.current.state.lineBreaks]).toEqual([])
+
+    const firstWord = result.current.state.words[0]
+    for (const ch of firstWord) type(result, ch)
+    type(result, 'Enter') // ignored in words mode
+    expect(result.current.state.currentWordIndex).toBe(0)
+    type(result, ' ') // Space advances as usual
+    expect(result.current.state.currentWordIndex).toBe(1)
+  })
+})
+
+// Plan-typing-mistake-analysis Phase 1: verbatim-mode mistake tracking
+// end-to-end through processKeyEvent (Backspace / Space), not just the
+// run-state reducers directly (see run-state.test.ts for the reducer-level
+// coverage of the same rules).
+describe('useTypingTest — verbatim mistake tracking', () => {
+  it('records a mistake for a wrong char typed then deleted, and does not double-count on resubmit', async () => {
+    mockGet.mockResolvedValue({
+      success: true,
+      data: { meta: { id: 't' }, data: { name: 'T', text: 'cat' } },
+    })
+    await getFileImportTextData('t')
+    const { result } = renderHook(() => useTypingTest({ mode: 'fileImport', textId: 't' }, 'english'))
+
+    type(result, 'c')
+    type(result, 'x') // wrong ('a' expected)
+    expect(result.current.state.mistakes).toEqual({})
+    type(result, 'Backspace')
+    expect(result.current.state.mistakes).toEqual({ a: 1 })
+
+    type(result, 'a')
+    type(result, 't')
+    expect(result.current.state.status).toBe('finished')
+    // Retyping correctly and finishing must not add a second tally for
+    // the same position.
+    expect(result.current.state.mistakes).toEqual({ a: 1 })
+  })
+
+  it('records nothing for correct typing', async () => {
+    mockGet.mockResolvedValue({
+      success: true,
+      data: { meta: { id: 't' }, data: { name: 'T', text: 'cat' } },
+    })
+    await getFileImportTextData('t')
+    const { result } = renderHook(() => useTypingTest({ mode: 'fileImport', textId: 't' }, 'english'))
+
+    type(result, 'c')
+    type(result, 'a')
+    type(result, 't')
+
+    expect(result.current.state.status).toBe('finished')
+    expect(result.current.state.mistakes).toEqual({})
+  })
+})
+
+describe('useTypingTest — memory mode (pause / capture / restore)', () => {
+  const setupFileImport = async () => {
+    mockGet.mockResolvedValue({
+      success: true,
+      data: { meta: { id: 't' }, data: { name: 'T', text: 'a b\nc d' } },
+    })
+    await getFileImportTextData('t')
+    return renderHook(() => useTypingTest({ mode: 'fileImport', textId: 't' }, 'english'))
+  }
+
+  it('captureMemory snapshots progress; pause freezes and blocks input', async () => {
+    const { result } = await setupFileImport()
+    type(result, 'a')
+    type(result, ' ')
+    expect(result.current.state.currentWordIndex).toBe(1)
+
+    const mem = result.current.captureMemory()
+    expect(mem).not.toBeNull()
+    expect(mem?.textId).toBe('t')
+    expect(mem?.currentWordIndex).toBe(1)
+    expect(mem?.wordResults).toEqual([{ word: 'a', typed: 'a', correct: true }])
+    expect(typeof mem?.elapsedMs).toBe('number')
+
+    act(() => result.current.pause())
+    expect(result.current.state.status).toBe('paused')
+    // Input is ignored while paused.
+    type(result, 'c')
+    expect(result.current.state.currentInput).toBe('')
+  })
+
+  it('captureMemory returns null for non-fileImport modes', () => {
+    const { result } = renderHook(() => useTypingTest({ mode: 'words', wordCount: 5, punctuation: false, numbers: false }, 'english'))
+    expect(result.current.captureMemory()).toBeNull()
+  })
+
+  it('restoreState(resume=true) continues running at the saved position', async () => {
+    const { result } = await setupFileImport()
+    const memory = {
+      textId: 't', currentWordIndex: 2, currentInput: 'c',
+      wordResults: [
+        { word: 'a', typed: 'a', correct: true },
+        { word: 'b', typed: 'b', correct: true },
+      ],
+      correctChars: 4, incorrectChars: 0, elapsedMs: 5000, wpmHistory: [10, 20],
+      savedAt: new Date(0).toISOString(),
+    }
+    let ok = false
+    await act(async () => { ok = await result.current.restoreState(memory, true) })
+    expect(ok).toBe(true)
+    expect(result.current.state.status).toBe('running')
+    expect(result.current.state.currentWordIndex).toBe(2)
+    expect(result.current.state.currentInput).toBe('c')
+    expect(result.current.state.wpmHistory).toEqual([10, 20])
+  })
+
+  it('restoreState(resume=false) restores the snapshot frozen as paused', async () => {
+    const { result } = await setupFileImport()
+    const memory = {
+      textId: 't', currentWordIndex: 1, currentInput: '',
+      wordResults: [{ word: 'a', typed: 'a', correct: true }],
+      correctChars: 2, incorrectChars: 0, elapsedMs: 1000, wpmHistory: [],
+      savedAt: new Date(0).toISOString(),
+    }
+    await act(async () => { await result.current.restoreState(memory, false) })
+    expect(result.current.state.status).toBe('paused')
+    expect(result.current.state.currentWordIndex).toBe(1)
+  })
+
+  it('captureMemory includes totalKeystrokes, confirmedChars and kspcUncomputable', async () => {
+    const { result } = await setupFileImport()
+    type(result, 'a')
+    type(result, ' ')
+    const mem = result.current.captureMemory()
+    expect(mem?.totalKeystrokes).toBe(2) // 'a' + separator space
+    expect(mem?.confirmedChars).toBe(2) // 'a' -> correct 1(sep)+1, incorrect 0
+    expect(mem?.kspcUncomputable).toBe(false)
+  })
+
+  it('round-trips totalKeystrokes/confirmedChars/kspcUncomputable through pause -> restoreState', async () => {
+    const { result } = await setupFileImport()
+    type(result, 'a')
+    type(result, ' ')
+    const mem = result.current.captureMemory()
+    expect(mem).not.toBeNull()
+    await act(async () => { await result.current.restoreState(mem!, true) })
+    expect(result.current.state.totalKeystrokes).toBe(2)
+    expect(result.current.state.confirmedChars).toBe(2)
+    expect(result.current.state.kspcUncomputable).toBe(false)
+  })
+
+  it('restoring a memory saved before KSPC existed (fields absent) makes the run permanently uncomputable', async () => {
+    const { result } = await setupFileImport()
+    const legacyMemory = {
+      textId: 't', currentWordIndex: 1, currentInput: '',
+      wordResults: [{ word: 'a', typed: 'a', correct: true }],
+      correctChars: 2, incorrectChars: 0, elapsedMs: 1000, wpmHistory: [],
+      savedAt: new Date(0).toISOString(),
+      // totalKeystrokes / confirmedChars / kspcUncomputable intentionally
+      // absent (legacy format).
+    }
+    await act(async () => { await result.current.restoreState(legacyMemory, true) })
+    expect(result.current.state.totalKeystrokes).toBe(0)
+    expect(result.current.state.confirmedChars).toBe(0)
+    expect(result.current.state.kspcUncomputable).toBe(true)
+    expect(result.current.kspc).toBeNull()
+  })
+})

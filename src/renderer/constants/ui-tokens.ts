@@ -27,5 +27,37 @@ export const TOOLBAR_BTN_INACTIVE = `${TOOLBAR_BTN_BASE} border-edge text-conten
 export const BTN_TOGGLE_ACTIVE = 'rounded border border-accent bg-accent/10 px-2 py-1 text-sm text-accent transition-colors'
 export const BTN_TOGGLE_INACTIVE = 'rounded border border-edge px-2 py-1 text-sm text-content-secondary transition-colors hover:text-content'
 
+// Borderless segments inside a bordered container (px-1.5 py-0.5 text-xs) —
+// segmented controls that must stay compact, e.g. the Analyze filter-row
+// App / TypingTest dimension toggle. The container draws the single border.
+export const SEGMENT_TOGGLE_ACTIVE = 'rounded px-1.5 py-0.5 text-xs text-accent bg-accent/10 transition-colors'
+export const SEGMENT_TOGGLE_INACTIVE = 'rounded px-1.5 py-0.5 text-xs text-content-secondary transition-colors hover:text-content'
+
 // Accent-outline button — non-destructive secondary CTA on accent color
 export const BTN_ACCENT_OUTLINE = 'rounded border border-accent bg-accent/10 px-3 py-1.5 text-sm text-accent hover:bg-accent/20 disabled:opacity-50 disabled:cursor-not-allowed'
+
+// Footer-sized primary button — BTN_PRIMARY's accent-fill color at the
+// footer/status-bar action buttons' size (rounded, px-2.5 py-1, text-xs,
+// leading-none — see StatusBar.tsx's TYPING_TEST_BASE and
+// QuickSettingsSelects.tsx's BUTTON_CLASS). For primary actions that sit
+// in a footer row and must not dominate it the way BTN_PRIMARY's text-sm
+// py-1.5 would.
+export const BTN_PRIMARY_FOOTER = 'rounded bg-accent px-2.5 py-1 text-xs leading-none font-medium text-content-inverse hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed'
+
+// Key Label pack type tag ("Keymap Write" vs "View Only") — shared by the
+// Key Labels modal's row type label (KeyLabelsInstalledTable.tsx) and the
+// footer Keyboard Layout select's per-option tag (UpwardSelect.tsx), so the
+// two surfaces can never visually disagree about the same pack.
+// `-secondary` (not `-muted`) for the View-only variant per DESIGN.md:
+// "Secondary / label text" is the right tone for a display-only pack's
+// type label — `-muted` is reserved for placeholder/disabled text, and a
+// View-only pack is neither.
+export const PACK_TYPE_TAG_WRITABLE = 'font-medium text-accent'
+export const PACK_TYPE_TAG_VIEW = 'text-content-secondary'
+
+// Pack-manager toolbar button (Import / Pull from Cloud) — shared by
+// PackManagerModal's Import button and its Pull from Cloud button (both
+// modal-agnostic, secondary-weight toolbar actions), and by
+// MissingKeysModal's Export button, which is visually the same kind of
+// control.
+export const PACK_TOOLBAR_BTN = 'shrink-0 rounded border border-edge bg-surface px-3 py-1.5 text-sm font-medium text-content hover:bg-surface-hover disabled:opacity-50'

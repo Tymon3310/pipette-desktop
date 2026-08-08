@@ -41,6 +41,7 @@ import type { ActivityCalendarFilters } from '../../../shared/types/analyze-filt
 import type { ActivityMetric, ActivityView, DeviceScope, RangeMs } from './analyze-types'
 import { ActivityCalendarChart } from './ActivityCalendarChart'
 import { CHART_TICK_FONT_SIZE } from '../../utils/chart-palette'
+import { localeCount } from '../../utils/i18n-count'
 
 interface Props {
   uid: string
@@ -48,6 +49,8 @@ interface Props {
   deviceScope: DeviceScope
   /** App filter — see WpmChart.Props.appScopes. */
   appScopes: string[]
+  typingTestScopes: string[]
+  runIdScopes: string[]
   metric: ActivityMetric
   /** Chart geometry — `grid` keeps the existing 24×7 grid / sessions
    * histogram, `calendar` swaps to the year heatmap. */
@@ -100,7 +103,7 @@ export function ActivityChart(props: Props) {
   return <ActivityGridChart {...props} />
 }
 
-function ActivityGridChart({ uid, range, deviceScope, appScopes, metric, minActiveMs }: Props) {
+function ActivityGridChart({ uid, range, deviceScope, appScopes, typingTestScopes, runIdScopes, metric, minActiveMs }: Props) {
   const { t } = useTranslation()
   const [rows, setRows] = useState<TypingMinuteStatsRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -112,10 +115,10 @@ function ActivityGridChart({ uid, range, deviceScope, appScopes, metric, minActi
     const load = async () => {
       try {
         const data = isHashScope(deviceScope)
-          ? await window.vialAPI.typingAnalyticsListMinuteStatsForHash(uid, deviceScope.machineHash, range.fromMs, range.toMs, appScopes)
+          ? await window.vialAPI.typingAnalyticsListMinuteStatsForHash(uid, deviceScope.machineHash, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes)
           : isOwnScope(deviceScope)
-            ? await window.vialAPI.typingAnalyticsListMinuteStatsLocal(uid, range.fromMs, range.toMs, appScopes)
-            : await window.vialAPI.typingAnalyticsListMinuteStats(uid, range.fromMs, range.toMs, appScopes)
+            ? await window.vialAPI.typingAnalyticsListMinuteStatsLocal(uid, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes)
+            : await window.vialAPI.typingAnalyticsListMinuteStats(uid, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes)
         if (!cancelled) setRows(data)
       } catch {
         if (!cancelled) setRows([])
@@ -125,7 +128,7 @@ function ActivityGridChart({ uid, range, deviceScope, appScopes, metric, minActi
     }
     void load()
     return () => { cancelled = true }
-  }, [uid, scopeKey, range, appScopes])
+  }, [uid, scopeKey, range, appScopes, typingTestScopes, runIdScopes])
 
   const grid = useMemo(
     () => buildActivityGrid({ rows, range, minActiveMs }),
@@ -235,7 +238,7 @@ function ActivityGridChart({ uid, range, deviceScope, appScopes, metric, minActi
         <span>
           {metric === 'wpm'
             ? t('analyze.activity.legendHighWpm', { wpm: formatWpm(peak) })
-            : t('analyze.activity.legendHigh', { count: peak.toLocaleString() })}
+            : t('analyze.activity.legendHigh', { count: localeCount(peak) })}
         </span>
       </div>
       {summaryItems !== null && (
@@ -337,7 +340,7 @@ function SessionDistributionChart({ uid, range, deviceScope }: SessionChartProps
                 const s = Number(entry?.payload?.share ?? 0)
                 return [
                   boldValue(t('analyze.activity.sessions.tooltipValue', {
-                    count: c.toLocaleString(),
+                    count: localeCount(c),
                     share: formatSharePercent(s),
                   })),
                   t('analyze.activity.sessions.tooltipLabel'),

@@ -2,9 +2,8 @@
 //
 // Hub Analytics export builder. Assembles the
 // `analytics-export-v1.json` payload that the desktop ships to
-// pipette-hub. The full wire contract lives in
-// `.claude/docs/HUB-ANALYTICS-API.md`; this module is the only
-// production producer of that shape.
+// pipette-hub, which treats this shape as its wire contract; this
+// module is the only production producer of that shape.
 //
 // The export is *all derived data*. We never include raw events:
 // minute-level (1 minute) is the smallest granularity, and bigram
@@ -23,6 +22,7 @@ import type {
   LayoutComparisonResult,
   TypingKeymapSnapshot,
 } from '../../shared/types/typing-analytics'
+import { isFingerType, isPosKey, type FingerType } from '../../shared/kle/kle-ergonomics'
 import { aggregatePairTotals, rankBigramsByCount, rankBigramsBySlow } from '../typing-analytics/bigram-aggregate'
 import { computeLayoutComparison } from '../typing-analytics/compute-layout-comparison'
 import { getMachineHash } from '../typing-analytics/machine-hash'
@@ -106,6 +106,12 @@ export interface BuildAnalyticsExportInput {
      * uses layer 0; pass through whatever the live chart used. */
     layer?: number
   } | null
+  /** Per-cell finger assignments the live Ergonomics chart uses,
+   * sanitized via `sanitizeFingerOverrides` before it reaches this
+   * input. Threaded into the Layout Comparison computation so the
+   * Hub upload's fingerLoad / handBalance numbers agree with what the
+   * user sees locally. Undefined / empty behaves like "no override". */
+  fingerOverrides?: Record<string, FingerType>
   /** Optional category picker — only the listed sections get fetched.
    * Sections not in the set ship as empty arrays so the Hub-side
    * validator still accepts the payload. Undefined / empty fetches
@@ -307,12 +313,17 @@ async function collectData(
       ? db.listBigramMinutesInRangeForUid(uid, fromMs, toMs, appScopes)
       : db.listBigramMinutesInRangeForUidAndHash(uid, machineHash, fromMs, toMs, appScopes)
     const bigramTotals = aggregatePairTotals(bigramRows)
+    // Hub's wire field is `bigramId` (see HUB-ANALYTICS-API.md); map it
+    // explicitly from the aggregator's `ngramId` instead of relying on
+    // structural assignability, so a future ngramId-only shape can't
+    // silently break this export.
     bigramTop = rankBigramsByCount(bigramTotals, ANALYTICS_BIGRAM_TOP_LIMIT)
+      .map(({ ngramId, count, hist, avgIki }) => ({ bigramId: ngramId, count, hist, avgIki }))
     bigramSlow = rankBigramsBySlow(
       bigramTotals,
       ANALYTICS_BIGRAM_SLOW_MIN_SAMPLE,
       ANALYTICS_BIGRAM_SLOW_LIMIT,
-    )
+    ).map(({ ngramId, count, hist, avgIki, p95 }) => ({ bigramId: ngramId, count, hist, avgIki, p95 }))
   }
 
   const layoutComparison = needsLayoutComparison
@@ -324,6 +335,7 @@ async function collectData(
         appScopes,
         input.layoutComparisonInputs,
         input.snapshot,
+        input.fingerOverrides,
       )
     : null
 
@@ -355,6 +367,7 @@ async function computeLayoutComparisonForExport(
   appScopes: string[],
   inputs: BuildAnalyticsExportInput['layoutComparisonInputs'],
   snapshot: TypingKeymapSnapshot,
+  fingerOverrides: Record<string, FingerType> | undefined,
 ): Promise<LayoutComparisonResult | null> {
   if (inputs === null) return null
   // Layer 0 is the Phase 1 default; the IPC handler does the same thing
@@ -382,6 +395,7 @@ async function computeLayoutComparisonForExport(
     targets: inputs.targets,
     metrics: inputs.metrics,
     layer,
+    fingerOverrides,
   })
   const nameById = new Map(inputs.targets.map((t) => [t.id, t.name]))
   for (const target of result.targets) {
@@ -392,6 +406,27 @@ async function computeLayoutComparisonForExport(
     }
   }
   return result
+}
+
+/** Drops any entry whose key isn't a `"row,col"` position or whose
+ * value isn't one of the 10 finger names (see `isPosKey` / `isFingerType`
+ * in kle-ergonomics.ts). The source (`pipetteSettingsGet(uid).analyze.
+ * fingerAssignments`) is already validated at write time by
+ * `pipette-settings-store.ts`, so this is defense-in-depth rather than
+ * the primary gate — invalid entries are silently dropped instead of
+ * rejecting the whole upload, matching "best-effort mirror of the
+ * user's current mapping" rather than a hard validation boundary. */
+export function sanitizeFingerOverrides(
+  value: Record<string, string> | undefined,
+): Record<string, FingerType> | undefined {
+  if (!value) return undefined
+  const out: Record<string, FingerType> = {}
+  for (const [key, v] of Object.entries(value)) {
+    if (!isPosKey(key)) continue
+    if (!isFingerType(v)) continue
+    out[key] = v
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 const FINGER_KEY_TO_HUB: Record<string, string> = {

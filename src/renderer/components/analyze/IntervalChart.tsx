@@ -14,9 +14,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { PeakRecords, TypingMinuteStatsRow } from '../../../shared/types/typing-analytics'
-import { isHashScope, isOwnScope, primaryDeviceScope, scopeToSelectValue } from '../../../shared/types/analyze-filters'
+import { BENCHMARK_IKI_MS } from '../../../shared/typing-benchmarks'
+import { benchmarkReferenceLineProps } from './analyze-benchmark'
+import { distributionForcesOwnDevice, isHashScope, isOwnScope, primaryDeviceScope, scopeToSelectValue } from '../../../shared/types/analyze-filters'
 import type { DeviceScope, GranularityChoice, IntervalUnit, IntervalViewMode, RangeMs } from './analyze-types'
 import { bucketMinuteStats, pickBucketMs } from './analyze-bucket'
 import { listMinuteStatsForScope } from './analyze-fetch'
@@ -46,9 +48,14 @@ interface Props {
   deviceScopes: readonly DeviceScope[]
   /** App filter — see WpmChart.Props.appScopes. */
   appScopes: string[]
+  typingTestScopes: string[]
+  runIdScopes: string[]
   unit: IntervalUnit
   granularity: GranularityChoice
   viewMode: IntervalViewMode
+  /** Show the population-average IKI reference line (timeSeries mode
+   * only — distribution has no counterpart in the source study). */
+  showBenchmark: boolean
 }
 
 const SERIES_KEYS = ['min', 'p25', 'p50', 'p75', 'max'] as const
@@ -87,7 +94,7 @@ function formatShare(v: number): string {
   return `${formatSharePercent(v)}%`
 }
 
-export function IntervalChart({ uid, range, deviceScopes, appScopes, unit, granularity, viewMode }: Props) {
+export function IntervalChart({ uid, range, deviceScopes, appScopes, typingTestScopes, runIdScopes, unit, granularity, viewMode, showBenchmark }: Props) {
   const { t } = useTranslation()
   const [rows, setRows] = useState<TypingMinuteStatsRow[]>([])
   const [peakRecords, setPeakRecords] = useState<PeakRecords | null>(null)
@@ -98,27 +105,23 @@ export function IntervalChart({ uid, range, deviceScopes, appScopes, unit, granu
 
   const deviceScope = primaryDeviceScope(deviceScopes)
 
-  // Distribution mode needs per-scope raw quartiles — the cross-scope
-  // `all` query already aggregates MIN / AVG / MAX over contributing
-  // scopes, so redistributing those meta-aggregates as "four samples
-  // per minute" would muddy the histogram. Force `own` for distribution
-  // regardless of the outer scope (including per-hash selections) and
-  // hide the device filter at the parent when the user picks
-  // Distribution.
-  const effectiveDeviceScope: DeviceScope = viewMode === 'distribution' ? 'own' : deviceScope
+  // See `distributionForcesOwnDevice` — Distribution forces `own`
+  // regardless of the outer scope (including per-hash selections); the
+  // filter modal disables the Device row when this rule is active.
+  const effectiveDeviceScope: DeviceScope = distributionForcesOwnDevice(viewMode) ? 'own' : deviceScope
   const scopeKey = scopeToSelectValue(effectiveDeviceScope)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    listMinuteStatsForScope(uid, effectiveDeviceScope, range.fromMs, range.toMs, appScopes)
+    listMinuteStatsForScope(uid, effectiveDeviceScope, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes)
       .then((data) => { if (!cancelled) setRows(data) })
       .catch(() => { if (!cancelled) setRows([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
     // `scopeKey` encodes `effectiveDeviceScope` identity; including the
     // object would refetch every parent rerender.
-  }, [uid, scopeKey, range, appScopes])
+  }, [uid, scopeKey, range, appScopes, typingTestScopes, runIdScopes])
 
   // Longest session comes from a narrow aggregation IPC rather than
   // the minute-stats rows so it surfaces the run that straddles bucket
@@ -130,15 +133,15 @@ export function IntervalChart({ uid, range, deviceScopes, appScopes, unit, granu
     }
     let cancelled = false
     const peakPromise = isHashScope(effectiveDeviceScope)
-      ? window.vialAPI.typingAnalyticsGetPeakRecordsForHash(uid, effectiveDeviceScope.machineHash, range.fromMs, range.toMs, appScopes)
+      ? window.vialAPI.typingAnalyticsGetPeakRecordsForHash(uid, effectiveDeviceScope.machineHash, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes)
       : isOwnScope(effectiveDeviceScope)
-        ? window.vialAPI.typingAnalyticsGetPeakRecordsLocal(uid, range.fromMs, range.toMs, appScopes)
-        : window.vialAPI.typingAnalyticsGetPeakRecords(uid, range.fromMs, range.toMs, appScopes)
+        ? window.vialAPI.typingAnalyticsGetPeakRecordsLocal(uid, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes)
+        : window.vialAPI.typingAnalyticsGetPeakRecords(uid, range.fromMs, range.toMs, appScopes, typingTestScopes, runIdScopes)
     void peakPromise
       .then((r) => { if (!cancelled) setPeakRecords(r) })
       .catch(() => { if (!cancelled) setPeakRecords(null) })
     return () => { cancelled = true }
-  }, [uid, scopeKey, range, appScopes])
+  }, [uid, scopeKey, range, appScopes, typingTestScopes, runIdScopes])
 
   // Log-axis can't plot 0 ms, but min often legitimately rounds to 0
   // on fast adjacent keystrokes. Clamp the axis floor at 1 ms so the
@@ -216,8 +219,37 @@ export function IntervalChart({ uid, range, deviceScopes, appScopes, unit, granu
       )
     }
     return (
-      <div className="flex h-full w-full flex-col gap-2" data-testid="analyze-interval-distribution">
-        <div className="flex-1 min-h-0">
+      // Unlike the timeSeries branch below, this root deliberately does
+      // NOT use `h-full` / `flex-1 min-h-0` for the chart: distribution
+      // mode has no RolloverSection-style sibling that needs the chart
+      // to cede space (see #328), and DurationSection/TappingTermCard
+      // render below it as separate `shrink-0` siblings in AnalyzePane,
+      // not inside this component. Stretching the chart to fill
+      // whatever height AnalyzePane's flex-1 wrapper happened to
+      // allocate (which varies while those siblings' own async data is
+      // still loading — see AnalyzePane's viewMode-conditional wrapper)
+      // produced an oversized, mostly-empty BarChart plot area that
+      // read as a large void above the summary grid, and — because
+      // AnalyzeStatGrid's "Longest session" card shares a labelKey with
+      // the timeSeries summary and so keeps the same Tooltip instance
+      // across a view-mode switch (see components/ui/Tooltip.tsx) —
+      // also caused that card to visibly shift position across two
+      // reflows as the allocated height changed. A fixed height
+      // (matching DurationSection's own `h-64` convention) keeps the
+      // chart's footprint deterministic regardless of sibling loading
+      // state, eliminating both symptoms at the source.
+      // No visible <h3> here — this branch only ever renders under
+      // AnalyzePane's "Section" filter-row select, which already labels
+      // it (shared `sectionTitle` key), so a second in-body heading
+      // would just repeat it. `aria-label` keeps the name available to
+      // assistive tech (as a named landmark) even without a visible
+      // heading to navigate by.
+      <section
+        className="flex w-full flex-col gap-2"
+        data-testid="analyze-interval-distribution"
+        aria-label={t('analyze.interval.distribution.sectionTitle')}
+      >
+        <div className="h-64 w-full" data-testid="analyze-interval-distribution-plot">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={distributionData} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-edge)" />
@@ -255,9 +287,10 @@ export function IntervalChart({ uid, range, deviceScopes, appScopes, unit, granu
           <AnalyzeStatGrid
             items={distributionItems}
             ariaLabelKey="analyze.interval.distribution.summary.label"
+            testId="analyze-interval-distribution-summary"
           />
         )}
-      </div>
+      </section>
     )
   }
 
@@ -271,7 +304,8 @@ export function IntervalChart({ uid, range, deviceScopes, appScopes, unit, granu
 
   return (
     <div className="flex h-full w-full flex-col gap-2" data-testid="analyze-interval-chart">
-      <div className="flex-1 min-h-0">
+      <h3 className="text-sm font-semibold text-content">{t('analyze.interval.timeSeries.sectionTitle')}</h3>
+      <div className="flex-1 min-h-0" data-testid="analyze-interval-timeseries-plot">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--color-edge)" />
@@ -297,9 +331,19 @@ export function IntervalChart({ uid, range, deviceScopes, appScopes, unit, granu
               style: { fontSize: CHART_TICK_FONT_SIZE, fill: 'var(--color-content-muted)' },
             }}
           />
+          {showBenchmark && (
+            // `unit` only swaps the axis tick-label formatter (ms vs. sec
+            // text) — `chartData` itself (and thus the chart's y domain)
+            // always stays in ms, so the reference value is the paper's
+            // raw ms mean regardless of `unit`. Converting it here would
+            // put the line 1000x off whenever `unit === 'sec'`.
+            <ReferenceLine
+              {...benchmarkReferenceLineProps(BENCHMARK_IKI_MS.mean, t('analyze.benchmark.referenceLineLabel'))}
+            />
+          )}
           <Tooltip
             {...ANALYZE_TOOLTIP_DEFAULTS}
-            labelFormatter={(v: number) => formatBucketAxisLabel(v, bucketMs)}
+            labelFormatter={(v) => formatBucketAxisLabel(v as number, bucketMs)}
             formatter={(value) => {
               const n = typeof value === 'number' ? value : Number(value)
               if (!Number.isFinite(n)) return boldValue(String(value))
@@ -349,6 +393,7 @@ export function IntervalChart({ uid, range, deviceScopes, appScopes, unit, granu
         <AnalyzeStatGrid
           items={timeSeriesItems}
           ariaLabelKey="analyze.interval.timeSeries.summary.label"
+          testId="analyze-interval-timeseries-summary"
         />
       )}
     </div>

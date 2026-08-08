@@ -3,7 +3,7 @@
 // cache is always derivable from the JSONL files, so a missing /
 // stale / machine-migrated cache is never fatal: this module drops the
 // user rows, re-reads every master file, and re-applies every row via
-// the LWW merge path. See .claude/plans/typing-analytics.md.
+// the LWW merge path.
 
 import { applyRowsToCache } from './jsonl/apply-to-cache'
 import { readRows } from './jsonl/jsonl-reader'
@@ -23,6 +23,8 @@ export interface CacheRebuildResult {
   matrixMinutes: number
   minuteStats: number
   sessions: number
+  bigramMinutes: number
+  trigramMinutes: number
   jsonlFilesRead: number
 }
 
@@ -53,6 +55,8 @@ export async function rebuildCacheFromMasterFiles(
     matrixMinutes: 0,
     minuteStats: 0,
     sessions: 0,
+    bigramMinutes: 0,
+    trigramMinutes: 0,
     jsonlFilesRead: 0,
   }
 
@@ -65,6 +69,8 @@ export async function rebuildCacheFromMasterFiles(
     result.matrixMinutes += applied.matrixMinutes
     result.minuteStats += applied.minuteStats
     result.sessions += applied.sessions
+    result.bigramMinutes += applied.bigramMinutes
+    result.trigramMinutes += applied.trigramMinutes
     result.jsonlFilesRead += 1
   }
 

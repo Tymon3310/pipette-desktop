@@ -3,11 +3,18 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { buildKeymapRewriteTable } from '../../../../shared/keymap/keymap-apply'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, params?: Record<string, unknown>) => {
       if (params && 'name' in params) return `${key}:${String(params.name)}`
+      // Surfaces the toolbar import summary's success/failure counts so
+      // tests can assert on them without a real i18next pluralization
+      // pipeline.
+      if (params && 'success' in params && 'failure' in params) {
+        return `${key}:${String(params.count)}:${String(params.success)}:${String(params.failure)}`
+      }
       return key
     },
   }),
@@ -70,7 +77,32 @@ vi.mock('../../../hooks/useKeyLabels', () => ({
   }),
 }))
 
+// Entry-file registry for the "Keymap Write" / "View Only" type label —
+// mirrors the fake `useKeyLabelLookup` in useKeymapApplyPrompt.test.ts so
+// this suite doesn't have to round-trip through the real IPC-backed
+// cache. Empty by default: every row falls back to "View Only" unless a
+// test seeds an entry, same as a not-yet-loaded/missing pack does in
+// production.
+const keyLabelRegistry = new Map<string, { map: Record<string, string>; keymapApplicable: boolean }>()
+
+vi.mock('../../../hooks/useKeyLabelLookup', () => ({
+  useKeyLabelLookup: () => ({
+    ensure: vi.fn(async () => {}),
+    ensureAll: vi.fn(() => {}),
+    getName: vi.fn((id: string) => id),
+    getMap: vi.fn((id: string) => keyLabelRegistry.get(id)?.map),
+    getCompositeLabels: vi.fn(() => undefined),
+    getKeymapApplicable: vi.fn((id: string) => keyLabelRegistry.get(id)?.keymapApplicable === true),
+    isKeymapWritable: vi.fn((id: string) => {
+      const entry = keyLabelRegistry.get(id)
+      if (!entry || !entry.keymapApplicable) return false
+      return buildKeymapRewriteTable(entry.map).ok
+    }),
+  }),
+}))
+
 import { KeyLabelsModal } from '../KeyLabelsModal'
+import { HUB_ERROR_RATE_LIMITED } from '../../../../shared/types/hub'
 
 function meta(over: Partial<{ id: string; name: string; uploaderName: string; hubPostId: string }> = {}) {
   return {
@@ -88,7 +120,8 @@ describe('KeyLabelsModal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     metas = []
-    importFromFile.mockResolvedValue({ success: true, data: meta() })
+    keyLabelRegistry.clear()
+    importFromFile.mockResolvedValue({ success: true, data: { imported: [{ fileName: 'a.json', meta: meta() }], rejections: [] } })
     exportEntry.mockResolvedValue({ success: true, data: { filePath: '/tmp/x.json' } })
     reorder.mockResolvedValue({ success: true })
     renameFn.mockResolvedValue({ success: true, data: meta() })
@@ -115,11 +148,40 @@ describe('KeyLabelsModal', () => {
   it('shows qwerty row without actions', () => {
     metas = [meta({ id: 'qwerty', name: 'QWERTY', uploaderName: 'pipette' })]
     render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
-    expect(screen.getByText('QWERTY')).toBeTruthy()
+    // The row's display name is overridden to the shared
+    // `keyLabels.qwertyDefaultName` string (`resolveLayoutDisplayName`),
+    // not the raw stored "QWERTY" — under the identity `t` mock that
+    // renders literally as the key itself.
+    expect(screen.getByText('keyLabels.qwertyDefaultName')).toBeTruthy()
     // No upload/rename/delete buttons for qwerty
     expect(screen.queryByTestId('key-labels-upload-qwerty')).toBeNull()
     expect(screen.queryByTestId('key-labels-rename-qwerty')).toBeNull()
     expect(screen.queryByTestId('key-labels-delete-qwerty')).toBeNull()
+  })
+
+  // --- Keymap Write / View Only type label ---------------------------
+
+  it('shows the "Keymap Write" type label for a pack flagged keymapApplicable whose map builds a clean permutation', () => {
+    metas = [meta({ id: 'colemak', name: 'Colemak', uploaderName: 'me' })]
+    keyLabelRegistry.set('colemak', { map: { KC_A: 'b', KC_B: 'a' }, keymapApplicable: true })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+    expect(screen.getByTestId('key-labels-type-colemak').textContent).toBe('keyLabels.typeKeymapWrite')
+  })
+
+  it('shows the "View Only" type label for a display-only pack (e.g. a Japanese QWERTY label with no rewrite table)', () => {
+    metas = [meta({ id: 'japanese', name: 'Japanese (QWERTY)', uploaderName: 'pipette' })]
+    // A shift-pair display map (not a permutation) — fails
+    // buildKeymapRewriteTable the same way the Hub's actual Japanese
+    // QWERTY packs do, even though it opts in via keymapApplicable.
+    keyLabelRegistry.set('japanese', { map: { KC_2: '"\n2' }, keymapApplicable: true })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+    expect(screen.getByTestId('key-labels-type-japanese').textContent).toBe('keyLabels.typeViewOnly')
+  })
+
+  it('shows the "View Only" type label for the built-in QWERTY row', () => {
+    metas = [meta({ id: 'qwerty', name: 'QWERTY', uploaderName: 'pipette' })]
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+    expect(screen.getByTestId('key-labels-type-qwerty').textContent).toBe('keyLabels.typeViewOnly')
   })
 
   it('shows Upload + clickable rename name + Delete for own local row without hub post', () => {
@@ -270,6 +332,90 @@ describe('KeyLabelsModal', () => {
     await waitFor(() => expect(remove).toHaveBeenCalledWith('mine'))
   })
 
+  // --- Phase 3: Delete = Hub cascade (aligns Key Labels with Language/Theme Packs) ---
+
+  it('Delete on a hub-linked entry cascades to hubDelete before the local remove', async () => {
+    metas = [meta({ id: 'linked', name: 'Linked', uploaderName: 'me', hubPostId: 'hub-1' })]
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+    fireEvent.click(screen.getByTestId('key-labels-delete-linked'))
+    const confirm = await screen.findByTestId('key-labels-confirm-delete-linked')
+    fireEvent.click(confirm)
+    await waitFor(() => expect(hubDelete).toHaveBeenCalledWith('linked'))
+    await waitFor(() => expect(remove).toHaveBeenCalledWith('linked'))
+  })
+
+  it('Delete on a local-only entry (no hubPostId) does not call hubDelete', async () => {
+    metas = [meta({ id: 'localonly', name: 'Local Only', uploaderName: 'me' })]
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+    fireEvent.click(screen.getByTestId('key-labels-delete-localonly'))
+    const confirm = await screen.findByTestId('key-labels-confirm-delete-localonly')
+    fireEvent.click(confirm)
+    await waitFor(() => expect(remove).toHaveBeenCalledWith('localonly'))
+    expect(hubDelete).not.toHaveBeenCalled()
+  })
+
+  it('blocks the local delete and surfaces a localized error when the Hub delete rejects, leaving the entry intact', async () => {
+    metas = [meta({ id: 'linked2', name: 'Linked2', uploaderName: 'me', hubPostId: 'hub-2' })]
+    // A 429 from the Hub — surfaced as the bare `RATE_LIMITED` sentinel,
+    // which must reach the row as the localized message, not raw text.
+    hubDelete.mockRejectedValueOnce(new Error(HUB_ERROR_RATE_LIMITED))
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+    fireEvent.click(screen.getByTestId('key-labels-delete-linked2'))
+    const confirm = await screen.findByTestId('key-labels-confirm-delete-linked2')
+    fireEvent.click(confirm)
+    await waitFor(() => expect(hubDelete).toHaveBeenCalledWith('linked2'))
+    await waitFor(() => expect(screen.getByTestId('key-labels-result-linked2').textContent).toBe('hub.rateLimited'))
+    // A failed cascade must not proceed to the local delete — otherwise
+    // the Hub post is orphaned under a name nobody can re-upload.
+    expect(remove).not.toHaveBeenCalled()
+    // Confirm state closed — retrying just means clicking Delete again.
+    expect(screen.queryByTestId('key-labels-confirm-delete-linked2')).toBeNull()
+    expect(screen.getByTestId('key-labels-delete-linked2')).toBeTruthy()
+  })
+
+  it('blocks the local delete when the Hub delete resolves with success: false', async () => {
+    metas = [meta({ id: 'linked3', name: 'Linked3', uploaderName: 'me', hubPostId: 'hub-3' })]
+    // An unrecognized raw error string falls back to the generic
+    // localized error copy rather than leaking backend text.
+    hubDelete.mockResolvedValueOnce({ success: false, error: 'Hub rejected the delete' })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+    fireEvent.click(screen.getByTestId('key-labels-delete-linked3'))
+    const confirm = await screen.findByTestId('key-labels-confirm-delete-linked3')
+    fireEvent.click(confirm)
+    await waitFor(() => expect(hubDelete).toHaveBeenCalledWith('linked3'))
+    await waitFor(() => expect(screen.getByTestId('key-labels-result-linked3').textContent).toBe('keyLabels.errorGeneric'))
+    expect(remove).not.toHaveBeenCalled()
+  })
+
+  // --- regression: Delete must not cascade to Hub for entries the user
+  // does not own (fix/delete-ownership-gate). A downloaded label also
+  // carries hubPostId (for Sync/freshness linkage) but is never
+  // deletable on Hub by this user — the old code attempted the Hub
+  // delete regardless of ownership, which failed for a foreign post
+  // (or a deactivated uploader account, e.g. "Brazilian (QWERTY)" by
+  // pipette) and then blocked the local delete too, leaving the user
+  // unable to remove a downloaded label at all. ---
+
+  it('a label downloaded from someone else deletes locally only — no Hub call at all (THE regression)', async () => {
+    metas = [meta({ id: 'foreign-del', name: 'Foreign Label', uploaderName: 'pipette', hubPostId: 'hub-foreign' })]
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+    fireEvent.click(screen.getByTestId('key-labels-delete-foreign-del'))
+    const confirm = await screen.findByTestId('key-labels-confirm-delete-foreign-del')
+    fireEvent.click(confirm)
+    await waitFor(() => expect(remove).toHaveBeenCalledWith('foreign-del'))
+    expect(hubDelete).not.toHaveBeenCalled()
+  })
+
+  it('a legacy hub-linked label with no cached uploaderName deletes locally only (conservative default, matches Update/Remove gating)', async () => {
+    metas = [meta({ id: 'legacy-del', name: 'Legacy Label', hubPostId: 'hub-legacy' })]
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+    fireEvent.click(screen.getByTestId('key-labels-delete-legacy-del'))
+    const confirm = await screen.findByTestId('key-labels-confirm-delete-legacy-del')
+    fireEvent.click(confirm)
+    await waitFor(() => expect(remove).toHaveBeenCalledWith('legacy-del'))
+    expect(hubDelete).not.toHaveBeenCalled()
+  })
+
   it('Export action triggers exportEntry for the row', async () => {
     metas = [meta({ id: 'mine', name: 'Mine', uploaderName: 'me' })]
     render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
@@ -283,17 +429,358 @@ describe('KeyLabelsModal', () => {
     await waitFor(() => expect(importFromFile).toHaveBeenCalled())
   })
 
-  it('shows duplicate-name error when import fails with DUPLICATE_NAME', async () => {
+  it('P1-b: starting a rename then triggering an import cancels the edit instead of letting it commit mid-batch', async () => {
+    metas = [meta({ id: 'r2', name: 'Old Name', uploaderName: 'me' })]
+    let resolveImport!: (value: { success: boolean; data?: { imported: unknown[]; rejections: unknown[] } }) => void
+    importFromFile.mockImplementationOnce(() => new Promise((resolve) => { resolveImport = resolve }))
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    fireEvent.click(screen.getByTestId('key-labels-name-r2'))
+    const input = screen.getByTestId('key-labels-rename-input-r2')
+    fireEvent.change(input, { target: { value: 'New Name' } })
+
+    // Trigger the import batch WITHOUT ever blurring the rename input —
+    // jsdom does not auto-blur an unrelated element on click the way a
+    // real browser does, so this specifically exercises the
+    // cancel-on-import-start effect rather than the (unpreventable)
+    // same-click blur race.
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    await waitFor(() => expect(importFromFile).toHaveBeenCalled())
+
+    // The edit was canceled, not left open and interactive for the
+    // duration of the batch.
+    expect(screen.queryByTestId('key-labels-rename-input-r2')).toBeNull()
+    expect(renameFn).not.toHaveBeenCalled()
+
+    resolveImport({ success: false, data: undefined })
+    await waitFor(() => expect((screen.getByTestId('key-labels-import-button') as HTMLButtonElement).disabled).toBe(false))
+    // Still never committed, even after the batch finished.
+    expect(renameFn).not.toHaveBeenCalled()
+  })
+
+  // --- Import/download placement + toolbar feedback + auto-scroll ---
+
+  it('asc state: a new import is inserted at its sorted position via reorder, including QWERTY in scope', async () => {
+    // Already ascending (QWERTY sorts between Alpha and Zeta) — detected
+    // as 'asc' on open, no click needed.
+    metas = [
+      meta({ id: 'a', name: 'Alpha', uploaderName: 'me' }),
+      meta({ id: 'qwerty', name: 'QWERTY', uploaderName: 'pipette' }),
+      meta({ id: 'z', name: 'Zeta', uploaderName: 'me' }),
+    ]
+    importFromFile.mockResolvedValueOnce({ success: true, data: { imported: [{ fileName: 'mu.json', meta: meta({ id: 'm', name: 'Mu' }) }], rejections: [] } })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    await waitFor(() => expect(reorder).toHaveBeenCalledWith(['a', 'm', 'qwerty', 'z']))
+  })
+
+  it('free state (shuffled list): a new import does not call reorder — the store appends it at the bottom on its own', async () => {
+    metas = [
+      meta({ id: 'm', name: 'Mu', uploaderName: 'me' }),
+      meta({ id: 'z', name: 'Zeta', uploaderName: 'me' }),
+      meta({ id: 'a', name: 'Alpha', uploaderName: 'me' }),
+    ]
+    importFromFile.mockResolvedValueOnce({ success: true, data: { imported: [{ fileName: 'beta.json', meta: meta({ id: 'b', name: 'Beta' }) }], rejections: [] } })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    await waitFor(() => expect(importFromFile).toHaveBeenCalled())
+    expect(reorder).not.toHaveBeenCalled()
+  })
+
+  it('overwrite (same id already installed) keeps its position — no reorder call, "Updated" feedback', async () => {
+    metas = [meta({ id: 'a', name: 'Alpha', uploaderName: 'me' }), meta({ id: 'z', name: 'Zeta', uploaderName: 'me' })]
+    // Overwrite: the store reuses the existing 'a' id.
+    importFromFile.mockResolvedValueOnce({ success: true, data: { imported: [{ fileName: 'alpha.json', meta: meta({ id: 'a', name: 'Alpha' }) }], rejections: [] } })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    await waitFor(() => expect(importFromFile).toHaveBeenCalled())
+    expect(reorder).not.toHaveBeenCalled()
+    expect(screen.getByTestId('key-labels-import-feedback').textContent).toBe('common.updatedNamed:Alpha')
+  })
+
+  it('new import shows "Imported {{name}}" feedback next to the Name button', async () => {
+    metas = [meta({ id: 'a', name: 'Alpha', uploaderName: 'me' })]
+    importFromFile.mockResolvedValueOnce({ success: true, data: { imported: [{ fileName: 'beta.json', meta: meta({ id: 'b', name: 'Beta' }) }], rejections: [] } })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    await waitFor(() => expect(screen.getByTestId('key-labels-import-feedback').textContent).toBe('common.importedNamed:Beta'))
+  })
+
+  it('scrolls the imported row into view', async () => {
+    metas = [meta({ id: 'a', name: 'Alpha', uploaderName: 'me' })]
+    const newMeta = meta({ id: 'b', name: 'Beta' })
+    importFromFile.mockImplementationOnce(async () => {
+      metas = [...metas, newMeta]
+      return { success: true, data: { imported: [{ fileName: 'beta.json', meta: newMeta }], rejections: [] } }
+    })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    await waitFor(() => expect(screen.getByTestId('key-labels-row-a')).toBeTruthy())
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    try {
+      fireEvent.click(screen.getByTestId('key-labels-import-button'))
+      await waitFor(() => expect(screen.getByTestId('key-labels-row-b')).toBeTruthy())
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' }))
+    } finally {
+      scrollIntoView.mockRestore()
+    }
+  })
+
+  it('hub download parity: DUPLICATE_NAME guard aside, a new Hub download is always an insert (never an overwrite), placed at its sorted position via reorder', async () => {
+    // Already ascending — detected as 'asc' on open, no click needed.
+    metas = [meta({ id: 'a', name: 'Alpha', uploaderName: 'me' }), meta({ id: 'z', name: 'Zeta', uploaderName: 'me' })]
+    hubDownload.mockResolvedValueOnce({ success: true, data: meta({ id: 'hub-m', name: 'Mu' }) })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    fireEvent.click(screen.getByTestId('key-labels-tab-hub'))
+    fireEvent.change(screen.getByTestId('key-labels-search-input'), { target: { value: 'mu' } })
+    hubSearch.mockResolvedValueOnce({
+      success: true,
+      data: { items: [{ id: 'hub-m', name: 'Mu', map: {}, composite_labels: null, uploaded_by: null, uploader_name: 'someone', created_at: '', updated_at: '' }], total: 1, page: 1, per_page: 50 },
+    })
+    fireEvent.click(screen.getByTestId('key-labels-search-button'))
+    await waitFor(() => expect(screen.getByTestId('key-labels-download-hub-m')).toBeTruthy())
+
+    fireEvent.click(screen.getByTestId('key-labels-download-hub-m'))
+    await waitFor(() => expect(reorder).toHaveBeenCalledWith(['a', 'hub-m', 'z']))
+  })
+
+  it('shows duplicate-name error when a file in the batch is rejected with DUPLICATE_NAME', async () => {
     importFromFile.mockResolvedValueOnce({
-      success: false,
-      errorCode: 'DUPLICATE_NAME',
-      error: 'KEY_LABEL_DUPLICATE',
+      success: true,
+      data: {
+        imported: [],
+        rejections: [{ fileName: 'dup.json', errorCode: 'DUPLICATE_NAME', error: 'A label with the same name already exists' }],
+      },
     })
     render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
     fireEvent.click(screen.getByTestId('key-labels-import-button'))
     await waitFor(() => {
-      expect(screen.getByText('keyLabels.errorDuplicate')).toBeTruthy()
+      expect(screen.getByTestId('key-labels-error').textContent).toContain('keyLabels.errorDuplicate')
     })
+    expect(screen.getByTestId('key-labels-error').textContent).toContain('dup.json')
+  })
+
+  it('cancelling the dialog (no files selected) does not touch feedback or error state', async () => {
+    importFromFile.mockResolvedValueOnce({ success: false, errorCode: 'IO_ERROR', error: 'cancelled' })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    await waitFor(() => expect(importFromFile).toHaveBeenCalled())
+    expect(screen.queryByTestId('key-labels-error')).toBeNull()
+  })
+
+  it('multi-file import: every selected file is saved and each row gets its own "Saved" badge', async () => {
+    metas = [meta({ id: 'a', name: 'Alpha', uploaderName: 'me' })]
+    const newMetaB = meta({ id: 'b', name: 'Beta' })
+    const newMetaC = meta({ id: 'c', name: 'Gamma' })
+    // `refresh` is a no-op mock (like every other test in this file) so the
+    // module-level `metas` array is updated by hand to mimic the real
+    // store's post-import state, matching the "scrolls the imported row
+    // into view" test's pattern above.
+    importFromFile.mockImplementationOnce(async () => {
+      metas = [...metas, newMetaB, newMetaC]
+      return {
+        success: true,
+        data: {
+          imported: [
+            { fileName: 'beta.json', meta: newMetaB },
+            { fileName: 'gamma.json', meta: newMetaC },
+          ],
+          rejections: [],
+        },
+      }
+    })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    await waitFor(() => expect(screen.getByTestId('key-labels-result-b').textContent).toBe('common.saved'))
+    expect(screen.getByTestId('key-labels-result-c').textContent).toBe('common.saved')
+  })
+
+  it('multi-file import (2+ files): does not auto-scroll and shows the toolbar summary instead of per-name feedback', async () => {
+    metas = [meta({ id: 'a', name: 'Alpha', uploaderName: 'me' })]
+    const newMetaB = meta({ id: 'b', name: 'Beta' })
+    const newMetaC = meta({ id: 'c', name: 'Gamma' })
+    importFromFile.mockImplementationOnce(async () => {
+      metas = [...metas, newMetaB, newMetaC]
+      return {
+        success: true,
+        data: {
+          imported: [
+            { fileName: 'beta.json', meta: newMetaB },
+            { fileName: 'gamma.json', meta: newMetaC },
+          ],
+          rejections: [],
+        },
+      }
+    })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    try {
+      fireEvent.click(screen.getByTestId('key-labels-import-button'))
+      await waitFor(() => expect(screen.getByTestId('key-labels-result-c').textContent).toBe('common.saved'))
+
+      // 2+ batch: no auto-scroll to an arbitrary one of the new rows.
+      expect(scrollIntoView).not.toHaveBeenCalled()
+      // The toolbar headline supersedes the per-name "Imported {{name}}"
+      // feedback for a 2+ batch: 2 processed, both saved, none rejected.
+      expect(screen.getByTestId('key-labels-import-feedback').textContent).toBe('common.importSummary:2:2:0')
+    } finally {
+      scrollIntoView.mockRestore()
+    }
+  })
+
+  it('partial-failure batch: a hub-sync failure still counts as a success in the summary headline, but appears in the failure banner', async () => {
+    metas = [meta({ id: 'a', name: 'Alpha', uploaderName: 'me' })]
+    const savedMeta = meta({ id: 'existing', name: 'Existing', hubPostId: 'hub-55' })
+    importFromFile.mockResolvedValueOnce({
+      success: true,
+      data: {
+        imported: [{ fileName: 'existing.json', meta: savedMeta }],
+        rejections: [{ fileName: 'broken.json', errorCode: 'INVALID_FILE', error: 'Invalid key label file' }],
+      },
+    })
+    // A 429 from the Hub during the batch's hub-sync loop — surfaced as
+    // the bare `RATE_LIMITED` sentinel, exactly as the localization
+    // fix's target case arrives from main.
+    hubUpdate.mockResolvedValueOnce({ success: false, error: HUB_ERROR_RATE_LIMITED })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    await waitFor(() => expect(hubUpdate).toHaveBeenCalledWith('existing'))
+
+    // Headline: 1 saved (the hub-sync failure doesn't reduce this — the
+    // file itself landed on disk) and 1 not-saved (the main-side
+    // rejection) — 2 processed total.
+    await waitFor(() => expect(screen.getByTestId('key-labels-import-feedback').textContent).toBe('common.importSummary:2:1:1'))
+
+    // The hub-sync failure shows up in the failure banner localized —
+    // the raw `RATE_LIMITED` sentinel must never reach the user.
+    const banner = screen.getByTestId('key-labels-error')
+    expect(banner.textContent).toContain('broken.json')
+    expect(banner.textContent).toContain('existing.json')
+    expect(banner.textContent).toContain('hub.rateLimited')
+    expect(banner.textContent).not.toContain('RATE_LIMITED')
+  })
+
+  it('locks the Import button and existing row actions while a batch import is in flight', async () => {
+    metas = [meta({ id: 'a', name: 'Alpha', uploaderName: 'me' })]
+    let resolveImport!: (value: { success: boolean; data?: { imported: unknown[]; rejections: unknown[] } }) => void
+    importFromFile.mockImplementationOnce(() => new Promise((resolve) => { resolveImport = resolve }))
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    await waitFor(() => expect(importFromFile).toHaveBeenCalled())
+
+    // Mid-batch: the toolbar feedback slot shows "Importing…", superseding
+    // both the post-batch summary and the per-name feedback for the
+    // duration of the import.
+    expect(screen.getByTestId('key-labels-import-feedback').textContent).toBe('common.importing')
+
+    expect((screen.getByTestId('key-labels-import-button') as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByTestId('key-labels-sort-button') as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByTestId('key-labels-upload-a') as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByTestId('key-labels-delete-a') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByTestId('key-labels-row-a').getAttribute('draggable')).toBeNull()
+
+    // A second click while in flight is a no-op (the in-flight ref
+    // guard) — the import dialog is not opened a second time.
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    expect(importFromFile).toHaveBeenCalledTimes(1)
+
+    resolveImport({ success: false, data: undefined })
+    await waitFor(() => expect((screen.getByTestId('key-labels-import-button') as HTMLButtonElement).disabled).toBe(false))
+    // The "Importing…" text goes away with nothing left to show — a
+    // failed-with-no-data batch never produced a summary or per-name
+    // feedback.
+    expect(screen.queryByTestId('key-labels-import-feedback')).toBeNull()
+  })
+
+  it('P1 fix: importing files that interleave with existing rows (existing A,D; import B,C) lands fully sorted A,B,C,D in one reorder call', async () => {
+    metas = [
+      meta({ id: 'a', name: 'Alpha', uploaderName: 'me' }),
+      meta({ id: 'd', name: 'Delta', uploaderName: 'me' }),
+    ]
+    const newMetaB = meta({ id: 'b', name: 'Beta' })
+    const newMetaC = meta({ id: 'c', name: 'Charlie' })
+    importFromFile.mockResolvedValueOnce({
+      success: true,
+      data: {
+        imported: [
+          { fileName: 'beta.json', meta: newMetaB },
+          { fileName: 'charlie.json', meta: newMetaC },
+        ],
+        rejections: [],
+      },
+    })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    await waitFor(() => expect(reorder).toHaveBeenCalled())
+    // Without the fix (per-file `place()` calls hoping a re-render lands
+    // between them), this could compute Charlie's position from a stale
+    // pre-batch [A,D] snapshot and persist ['a','c','d'] — silently
+    // dropping Beta. `placeMany` merges both in one pure pass instead.
+    expect(reorder).toHaveBeenCalledTimes(1)
+    expect(reorder).toHaveBeenCalledWith(['a', 'b', 'c', 'd'])
+  })
+
+  it('dedupes a batch where two files resolve to the same id: hub-sync and badge run only once', async () => {
+    metas = [meta({ id: 'a', name: 'Alpha', uploaderName: 'me' })]
+    // Two files sharing a name both overwrite the same entry — main
+    // resolves this in file-list order (see key-label-store.ts's
+    // importFromDialog), so `imported` legitimately contains the same
+    // id twice.
+    const overwritten = meta({ id: 'dup', name: 'Duplicate', hubPostId: 'hub-1' })
+    importFromFile.mockResolvedValueOnce({
+      success: true,
+      data: {
+        imported: [
+          { fileName: 'first.json', meta: overwritten },
+          { fileName: 'second.json', meta: overwritten },
+        ],
+        rejections: [],
+      },
+    })
+    hubUpdate.mockResolvedValue({ success: true, data: overwritten })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    await waitFor(() => expect(hubUpdate).toHaveBeenCalledWith('dup'))
+    expect(hubUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  it('partial-failure batch: good files keep their badges while bad files are aggregated into one banner', async () => {
+    metas = [meta({ id: 'a', name: 'Alpha', uploaderName: 'me' })]
+    const newMetaB = meta({ id: 'b', name: 'Beta' })
+    importFromFile.mockImplementationOnce(async () => {
+      metas = [...metas, newMetaB]
+      return {
+        success: true,
+        data: {
+          imported: [{ fileName: 'beta.json', meta: newMetaB }],
+          rejections: [
+            { fileName: 'broken.json', errorCode: 'INVALID_FILE', error: 'Invalid key label file' },
+            { fileName: 'dup.json', errorCode: 'DUPLICATE_NAME', error: 'A label with the same name already exists' },
+          ],
+        },
+      }
+    })
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+
+    fireEvent.click(screen.getByTestId('key-labels-import-button'))
+    await waitFor(() => expect(screen.getByTestId('key-labels-result-b').textContent).toBe('common.saved'))
+
+    const banner = screen.getByTestId('key-labels-error')
+    expect(banner.textContent).toContain('broken.json')
+    expect(banner.textContent).toContain('keyLabels.errorImportFailed')
+    expect(banner.textContent).toContain('dup.json')
+    expect(banner.textContent).toContain('keyLabels.errorDuplicate')
   })
 
   it('disables hub-write actions when hubCanWrite is false', () => {
@@ -314,22 +801,49 @@ describe('KeyLabelsModal', () => {
 
   it('auto-pushes to Hub when importing over an entry with hubPostId', async () => {
     const importedMeta = meta({ id: 'existing', name: 'Existing', hubPostId: 'hub-55' })
-    importFromFile.mockResolvedValueOnce({ success: true, data: importedMeta })
+    importFromFile.mockResolvedValueOnce({ success: true, data: { imported: [{ fileName: 'existing.json', meta: importedMeta }], rejections: [] } })
     hubUpdate.mockResolvedValueOnce({ success: true, data: importedMeta })
     render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
     fireEvent.click(screen.getByTestId('key-labels-import-button'))
     await waitFor(() => expect(hubUpdate).toHaveBeenCalledWith('existing'))
   })
 
-  it('shows error when hub auto-sync fails after import', async () => {
+  it('shows error when hub auto-sync fails after import, reported against the originating filename (P2a)', async () => {
     const importedMeta = meta({ id: 'existing', name: 'Existing', hubPostId: 'hub-55' })
-    importFromFile.mockResolvedValueOnce({ success: true, data: importedMeta })
+    importFromFile.mockResolvedValueOnce({ success: true, data: { imported: [{ fileName: 'existing.json', meta: importedMeta }], rejections: [] } })
+    // An unrecognized raw error string falls back to the generic
+    // localized error copy rather than leaking backend text.
     hubUpdate.mockResolvedValueOnce({ success: false, error: 'network error' })
     render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
     fireEvent.click(screen.getByTestId('key-labels-import-button'))
     await waitFor(() => expect(hubUpdate).toHaveBeenCalledWith('existing'))
     await waitFor(() => {
-      expect(screen.getByText('network error')).toBeTruthy()
+      expect(screen.getByTestId('key-labels-error').textContent).toContain('keyLabels.errorGeneric')
     })
+    // P2a: the failure line reports the file the user picked, not the
+    // label's internal display name (both happen to differ in this test).
+    expect(screen.getByTestId('key-labels-error').textContent).toContain('existing.json')
+  })
+
+  // --- Phase 2: Name sort (drag reorder itself predates this phase) -------
+
+  it('the Name sort button sorts installed labels ascending on first click, including QWERTY', async () => {
+    metas = [
+      meta({ id: 'qwerty', name: 'QWERTY', uploaderName: 'pipette' }),
+      meta({ id: 'z', name: 'Zeta' }),
+      meta({ id: 'a', name: 'Alpha' }),
+    ]
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+    fireEvent.click(screen.getByTestId('key-labels-sort-button'))
+    await waitFor(() => expect(reorder).toHaveBeenCalledWith(['a', 'qwerty', 'z']))
+  })
+
+  it('a second click on the Name sort button reverses the order', async () => {
+    metas = [meta({ id: 'z', name: 'Zeta' }), meta({ id: 'a', name: 'Alpha' })]
+    render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+    fireEvent.click(screen.getByTestId('key-labels-sort-button'))
+    await waitFor(() => expect(reorder).toHaveBeenCalledWith(['a', 'z']))
+    fireEvent.click(screen.getByTestId('key-labels-sort-button'))
+    await waitFor(() => expect(reorder).toHaveBeenLastCalledWith(['z', 'a']))
   })
 })

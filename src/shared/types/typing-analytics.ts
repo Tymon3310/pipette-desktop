@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Typing analytics shared types — see .claude/plans/typing-analytics.md.
+// Typing analytics shared types, used by both the renderer (Analyze view)
+// and main (ingestion, SQLite cache, sync).
 
 import type { FingerType, RowCategory } from '../kle/kle-ergonomics'
 
@@ -62,28 +63,86 @@ export interface TypingAnalyticsKeyboard {
 
 /** How a physical press resolved for masked (tap-hold style) keys. The
  * heatmap uses this to colour the outer (hold) and inner (tap) rects
- * independently. `undefined` is reserved for non-masked keys and for
- * release-edge data that the press-edge pipeline dispatches eagerly.*/
+ * independently. Classified by release edge, or by the renderer's
+ * deferred-emit deadline if the key is still held when it fires,
+ * whichever comes first. `undefined` is reserved for non-masked keys and
+ * for a masked press the ordering queue hasn't classified yet. */
 export type TypingMatrixAction = 'tap' | 'hold'
 
 /** Partial event emitted by `useTypingTest` before the active keyboard is
  * attached. `useInputModes` wraps it into a full {@link TypingAnalyticsEvent}
  * before dispatching to the main process. */
+interface TypingAnalyticsEventCommon {
+  /** Identifies the typing test producing this keystroke (custom = text
+   *  name, normal = `mode (language)`). Absent for ordinary Typing View REC
+   *  input. Resolved per-minute into the `typing_test` dimension (like the
+   *  active-app tag), so Analyze can slice by which test it was. */
+  typingTest?: string
+  /** Identifies the individual test run producing this keystroke (one
+   *  uuid per run, regenerated on every (re)start and carried across
+   *  pause/resume). Absent for ordinary Typing View REC input. Resolved
+   *  per-run into the `run_id` dimension so Analyze can slice a single
+   *  test material down to specific History runs. */
+  runId?: string
+}
+
 export type TypingAnalyticsEventPayload =
-  | { kind: 'char'; key: string; ts: number }
-  | {
+  | (TypingAnalyticsEventCommon & { kind: 'char'; key: string; ts: number })
+  | (TypingAnalyticsEventCommon & {
       kind: 'matrix'
       row: number
       col: number
       layer: number
       keycode: number
       ts: number
-      /** Only set for masked keys (LT/MT/etc.) after the release edge
-       * has been classified against TAPPING_TERM. Non-masked presses
-       * and presses that have not yet seen a release leave this
-       * undefined; the count still lands in the `count` total column. */
+      /** Only set for masked keys (LT/MT), once classified — by its
+       * release edge if that arrives first, or by the press-time
+       * deadline itself if the key is still held with no release yet.
+       * That deadline is TAPPING_TERM capped at MAX_TAP_HOLD_DEFER_MS
+       * (see `qmk-settings-tapping-term.ts`), so a press can resolve as
+       * `hold` before the keyboard's own TAPPING_TERM would have fired
+       * when the configured term exceeds the cap. Non-masked presses
+       * and masked presses not yet classified leave this undefined; the
+       * count still lands in the `count` total column. */
       action?: TypingMatrixAction
-    }
+      /** Whether the immediately preceding press-edge key (across any
+       * frame) was still physically held down when THIS press was
+       * observed — a same-frame set-membership check, not a measurement
+       * of how much the two presses overlapped in time (sub-poll-interval
+       * timing isn't available from the HID layer). `undefined` when
+       * there is no prior press to compare against, when that prior
+       * press predates an observation hole, or when this frame itself
+       * follows a hole — see `PressDurationTracker` in
+       * matrix-press-duration.ts for the full derivation. */
+      overlap?: boolean
+      /** Effective gap (ms) since the previous polled frame, attached
+       * only to the first press edge of a frame (attaching it to every
+       * simultaneous key in a chord would over-weight that one sample in
+       * any per-minute percentile). Absent when there is no previous
+       * frame yet, or when the gap exceeds the observation-hole
+       * threshold (a hole is a break in sampling, not a sample of the
+       * sampling period itself). */
+      pollGapMs?: number
+    })
+  | (TypingAnalyticsEventCommon & {
+      kind: 'matrix-release'
+      row: number
+      col: number
+      layer: number
+      keycode: number
+      /** Release timestamp. Minute attribution follows this ts, NOT the
+       * matching press's ts — a press in second 59 and its release in
+       * second 00 of the next minute land the press count and the
+       * duration sample in different per-minute buckets. Consumers must
+       * not assume the duration sample count equals the press count for
+       * any given minute. */
+      ts: number
+      /** ts - (the matching press's ts), in ms. Always > 0; a press
+       * whose duration would span an observation hole is never emitted
+       * (see matrix-press-duration.ts) rather than reported with a
+       * fabricated value. */
+      durationMs: number
+    })
 
 /** Normalized analytics event carried over the IPC to the main process. */
 export type TypingAnalyticsEvent = TypingAnalyticsEventPayload & {
@@ -180,6 +239,19 @@ export interface TypingMinuteStatsRow {
   intervalP50Ms: number | null
   intervalP75Ms: number | null
   intervalMaxMs: number | null
+  /** Equal-weight AVG of the per-scope `poll_p50_ms`/`poll_p95_ms`
+   * samples contributing to this minute (see
+   * selectMinuteStatsInRangeForUidStmt) — deliberate: sample-weighting
+   * by scope isn't possible once the value is already a percentile,
+   * and the range this feeds (the Analyze rollover section) only needs
+   * an indicative effective-sampling-period figure, not a precise one.
+   * Optional/null when no contributing row recorded a poll-gap sample
+   * that minute (pre-v8 data, or a minute with no matrix polling at
+   * all) — optional so existing fixtures across the Analyze test
+   * suite don't all need updating for a field most of them don't
+   * exercise. */
+  pollP50Ms?: number | null
+  pollP95Ms?: number | null
 }
 
 /** One bucket of the Analyze activity heatmap (hour-of-day × day-of-week).
@@ -278,8 +350,9 @@ export interface PeakRecords {
 
 /** One cell of the typing-view heatmap. `total` is the overall press
  * count for the cell; `tap` and `hold` are the portions of that total
- * that the release-edge classifier routed to the tap vs hold arm of
- * an LT/MT key. Non-tap-hold presses leave both at 0 and consumers
+ * that the tap/hold classifier (release edge, or the renderer's
+ * deferred-emit deadline if still held) routed to the tap vs hold arm
+ * of an LT/MT key. Non-tap-hold presses leave both at 0 and consumers
  * fall back to `total` as a single intensity. */
 export interface TypingHeatmapCell {
   total: number
@@ -297,7 +370,15 @@ export interface TypingTombstoneResult {
   charMinutes: number
   matrixMinutes: number
   minuteStats: number
+  bigramMinutes: number
+  trigramMinutes: number
   sessions: number
+}
+
+/** All-zero {@link TypingTombstoneResult}, for call sites that need to
+ * return early (invalid input, empty range) before any table is touched. */
+export function emptyTombstoneResult(): TypingTombstoneResult {
+  return { charMinutes: 0, matrixMinutes: 0, minuteStats: 0, bigramMinutes: 0, trigramMinutes: 0, sessions: 0 }
 }
 
 /** Sub-view requested from the bigram aggregate IPC. `top` ranks by
@@ -314,16 +395,36 @@ export interface TypingBigramAggregateOptions {
   /** Maximum number of pairs returned. Defaults to 30 at the handler
    * level if absent. */
   limit?: number
+  /** 2 = bigram (`typing_bigram_minute`), 3 = trigram
+   * (`typing_trigram_minute`). Defaults to 2 at the handler level if
+   * absent or invalid. */
+  gram?: 2 | 3
 }
 
-/** Per-pair entry in a `top` view response. `avgIki` is null when the
- * pair has no recorded IKI samples (count = 0 — usually filtered
- * upstream but kept defensive). */
+/** Per-pair entry in a `top` view response. `ngramId` is the
+ * `_`-joined keycode chain — 2 codes for a bigram, 3 for a trigram
+ * (see `gram` on {@link TypingBigramAggregateOptions}). `avgIki` is
+ * null when the pair has no recorded IKI samples (count = 0 — usually
+ * filtered upstream but kept defensive). `sd` is null when any
+ * contributing row predates the sum/sumSq columns — see
+ * aggregatePairTotals. */
 export interface TypingBigramTopEntry {
-  bigramId: string
+  ngramId: string
   count: number
   hist: number[]
   avgIki: number | null
+  sd: number | null
+  /** This pair's own contribution to the observed rollover rate — see
+   * {@link BigramPairTotal} (bigram-aggregate.ts) for the accumulators
+   * and `rankBigramsByCount`/`rankBigramsBySlow` for the projection.
+   * ALWAYS null-paired: `overlapN === 0` (no determined-overlap sample
+   * for this pair in the selection) projects both fields as null;
+   * `overlapN > 0` projects the raw counts even when `overlapCount` is
+   * 0 (a real, observed 0%). Optional so fixtures/tests written before
+   * this field existed don't all need updating — the real IPC path
+   * always sets both or neither. */
+  overlapCount?: number | null
+  overlapN?: number | null
 }
 
 /** Per-pair entry in a `slow` view response. Adds `p95` so the UI can
@@ -335,10 +436,78 @@ export interface TypingBigramSlowEntry extends TypingBigramTopEntry {
 
 /** Discriminated result for the bigram aggregate IPC. The view tag
  * matches the request so the renderer can narrow without inspecting
- * fields. */
+ * fields. `truncated` is true when the period holds more distinct
+ * pairs than the requested `limit`, so `entries` (which is always
+ * count-ranked before any avgIki re-ranking) may be missing low-
+ * frequency-but-slow pairs. Computed server-side from the full pair
+ * universe rather than guessed from `entries.length` on the renderer,
+ * so a period with exactly `limit` distinct pairs isn't misreported.
+ *
+ * `observedRolloverRatio` is Σoverlap / Σcount across every pair in the
+ * selection — see aggregatePairTotals / observedRolloverRatio in
+ * bigram-aggregate.ts. A row with no overlap data (older than schema
+ * v8, or a trigram row where the columns don't exist) simply
+ * contributes 0 to both sums rather than poisoning the whole pair —
+ * unlike the sum/sumSq columns used for standard deviation, a row's
+ * own overlap counts are always self-consistent on their own, so a
+ * missing row can't hide a real partial count. Null when the resulting
+ * denominator is 0 (no pair in the selection ever had a determined
+ * overlap — e.g. the `slow`/`top` view was requested with `gram: 3`, or
+ * every contributing row predates schema v8). The `observed` prefix is
+ * deliberate and must be kept on every surface this value reaches (type
+ * name, IPC field, any future CSV/UI column): it is a SAMPLED
+ * approximation bounded by the renderer's polling cadence, not a
+ * measurement of true rollover timing — see the Typing Metrics plan's
+ * constraint on why the exact overlap duration can never be recovered
+ * from HID polling alone. It also carries a small amount of pair
+ * misattribution noise from same-frame ties (two presses landing in one
+ * polled frame): the tied key's overlap can end up counted against the
+ * NEXT pair the chain completes rather than the pair it was actually
+ * measured against, concentrated in fast chords — see
+ * MinuteBuffer.recordNgramChain and observedRolloverRatio's own doc
+ * comment for why a full fix was rejected as disproportionate to an
+ * avowedly approximate metric. */
 export type TypingBigramAggregateResult =
-  | { view: 'top'; entries: TypingBigramTopEntry[] }
-  | { view: 'slow'; entries: TypingBigramSlowEntry[] }
+  | { view: 'top'; entries: TypingBigramTopEntry[]; truncated: boolean; observedRolloverRatio?: number | null }
+  | { view: 'slow'; entries: TypingBigramSlowEntry[]; truncated: boolean; observedRolloverRatio?: number | null }
+
+/** One minute's Σoverlap_count / Σoverlap_n across every bigram pair
+ * observed that minute — the per-minute granularity the Analyze
+ * rollover trend chart needs (the bigram-aggregate IPC only returns a
+ * single ratio for the whole range, not a time series). Backed by
+ * `TYPING_ANALYTICS_LIST_ROLLOVER_MINUTES`; see
+ * listRolloverMinutesInRange in typing-analytics-db.ts. A minute
+ * with no determined-overlap sample (pre-v8 data, or every row that
+ * minute failed to observe overlap) is simply absent from the result
+ * array rather than emitted with `on: 0` — callers bucket by summing
+ * `oc`/`on` and must treat a bucket with zero contributing minutes as
+ * null (no data), never as a 0% ratio. */
+export interface TypingRolloverMinuteRow {
+  minuteTs: number
+  oc: number
+  on: number
+}
+
+/** Per-(row,col,layer) keypress-duration totals for the Analyze
+ * duration distribution (Interval tab) and the Heatmap duration mode.
+ * Already folded across every contributing minute on the main side
+ * (see `aggregateMatrixDurationTotals` in bigram-aggregate.ts) — one
+ * row per physical cell that had at least one `matrix-release` sample
+ * in range, not one row per minute. `durationSamples` is the duration
+ * SAMPLE count, explicitly NOT the press count: a keystroke that spans
+ * a minute boundary is counted (as a press) in the minute it was
+ * pressed but (as a duration) in the minute it was released, so the
+ * two can legitimately differ. `hist` follows the shared
+ * DURATION_BUCKET_UPPER_BOUNDS_MS grid (duration-buckets.ts). */
+export interface TypingDurationCell {
+  row: number
+  col: number
+  layer: number
+  durationSamples: number
+  hist: number[]
+  sum: number
+  sumSq: number
+}
 
 /** Phase 1 metrics for the Layout Comparison. Bigram-derived ones
  * (travel distance / SFB) are added in Phase 2. */
@@ -360,6 +529,10 @@ export type LayoutComparisonRowKey = RowCategory
  * resolver needs, so the main process stays data-agnostic. */
 export interface LayoutComparisonInputLayout {
   id: string
+  /** Display name for the layout. Renderer sends this for `targets`
+   * entries (Hub analytics export uses it to label the comparison
+   * table); `source` entries typically omit it. */
+  name?: string
   map: Record<string, string>
 }
 
@@ -370,6 +543,13 @@ export interface LayoutComparisonOptions {
   /** Subset of metrics to compute. Empty array yields just the
    * total / skipped event counts. */
   metrics: LayoutComparisonMetric[]
+  /** Per-cell finger assignments the live Ergonomics / Bigrams charts
+   * already use. Applied at the TARGET physical position's posKey —
+   * same physical-key rule as the Ergonomics chart — so a user
+   * override reclassifies fingerLoad / handBalance the same way
+   * whether the chart is comparing layouts or just showing the
+   * current one. Absent / empty means "use the geometry estimate". */
+  fingerOverrides?: Record<string, FingerType>
 }
 
 export interface LayoutComparisonTargetResult {

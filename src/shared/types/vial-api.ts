@@ -15,8 +15,10 @@ import type {
 } from './protocol'
 import type { SnapshotMeta } from './snapshot-store'
 import type { AnalyzeFilterSnapshotMeta } from './analyze-filter-store'
+import type { RunKeystrokeLog, RunLogMeta } from './typing-run-log'
 import type { FavoriteType, SavedFavoriteMeta, FavoriteImportResult } from './favorite-store'
-import type { KeyLabelMeta, KeyLabelRecord, KeyLabelStoreResult } from './key-label-store'
+import type { KeyLabelMeta, KeyLabelRecord, KeyLabelStoreResult, KeyLabelImportBatchResult } from './key-label-store'
+import type { TypingTestTextMeta, TypingTestTextRecord, TypingTestTextStoreResult } from './typing-test-text-store'
 import type { HubKeyLabelItem, HubKeyLabelListResponse, HubKeyLabelListParams, HubKeyLabelTimestampsResponse } from './hub-key-label'
 import type {
   I18nPackMeta,
@@ -35,7 +37,7 @@ import type {
 import type { AppConfig } from './app-config'
 import type { DeviceScope } from './analyze-filters'
 import type { SyncAuthStatus, SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, UndecryptableFile, SyncScope, SyncDataScanResult, StoredKeyboardInfo, SyncOperationResult } from './sync'
-import type { PipetteSettings } from './pipette-settings'
+import type { PipetteSettings, PipetteSettingsPatch, PooledTypingTestResult } from './pipette-settings'
 import type {
   TypingActivityCell,
   TypingAnalyticsDeviceInfoBundle,
@@ -50,6 +52,8 @@ import type {
   TypingMatrixCellRow,
   TypingMatrixCellDailyRow,
   TypingMinuteStatsRow,
+  TypingRolloverMinuteRow,
+  TypingDurationCell,
   TypingSessionRow,
   TypingBksMinuteRow,
   TypingTombstoneResult,
@@ -57,9 +61,13 @@ import type {
   TypingBigramAggregateOptions,
   TypingBigramAggregateResult,
   TypingBigramAggregateView,
+  LayoutComparisonOptions,
+  LayoutComparisonResult,
 } from './typing-analytics'
 import type { LanguageListEntry } from './language-store'
-import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyKeyboardPostsResult, HubFetchMyPostsParams, HubUserResult, HubUploadFavoritePostParams, HubUpdateFavoritePostParams, HubUploadAnalyticsPostParams, HubUpdateAnalyticsPostParams, HubPreviewAnalyticsPostParams, HubAnalyticsPreview, HubUploadI18nPostParams, HubUpdateI18nPostParams, HubI18nListParams, HubI18nListResponse, HubI18nExportV1, HubI18nPackTimestampsResponse, HubUploadThemePostParams, HubUpdateThemePostParams, HubThemeListParams, HubThemeListResponse, HubThemePackBody, HubThemePackTimestampsResponse } from './hub'
+import type { AozoraImportResult } from './aozora-import'
+import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyKeyboardPostsResult, HubFetchMyPostsParams, HubUserResult, HubUploadFavoritePostParams, HubUpdateFavoritePostParams, HubUploadAnalyticsPostParams, HubUpdateAnalyticsPostParams, HubPreviewAnalyticsPostParams, HubAnalyticsPreview, HubUploadI18nPostParams, HubUpdateI18nPostParams, HubI18nListParams, HubI18nListResponse, HubI18nExportV1, HubI18nPackTimestampsResponse, HubUploadThemePostParams, HubUpdateThemePostParams, HubThemeListParams, HubThemeListResponse, HubThemePackBody, HubThemePackTimestampsResponse, HubPrivateUploadResult, HubPrivateKind, HubPrivateUploadPostParams, HubPrivateUploadFavoritePostParams, HubPrivateUploadAnalyticsPostParams } from './hub'
+import type { HubPrivateLink } from './hub-private'
 import type { NotificationFetchResult } from './notification'
 
 export interface VialAPI {
@@ -186,6 +194,9 @@ export interface VialAPI {
   exportKeymapC(content: string, deviceName?: string): Promise<{ success: boolean; filePath?: string; error?: string }>
   exportPdf(base64Data: string, deviceName?: string): Promise<{ success: boolean; filePath?: string; error?: string }>
   exportCsv(content: string, defaultName?: string): Promise<{ success: boolean; filePath?: string; error?: string }>
+  exportCsvBundle(
+    files: ReadonlyArray<{ name: string; content: string }>,
+  ): Promise<{ success: boolean; dirPath?: string; files?: string[]; error?: string }>
   exportJson(content: string, defaultName?: string): Promise<{ success: boolean; filePath?: string; error?: string }>
   sideloadJson(title?: string): Promise<{ success: boolean; data?: unknown; error?: string }>
 
@@ -205,6 +216,11 @@ export interface VialAPI {
   analyzeFilterStoreRename(uid: string, entryId: string, newLabel: string): Promise<{ success: boolean; error?: string }>
   analyzeFilterStoreDelete(uid: string, entryId: string): Promise<{ success: boolean; error?: string }>
 
+  // --- Typing Run Log Store (per-run raw keystroke log) ---
+  typingRunLogSave(uid: string, log: RunKeystrokeLog): Promise<{ success: boolean; entry?: RunLogMeta; error?: string }>
+  typingRunLogList(uid: string): Promise<{ success: boolean; entries?: RunLogMeta[]; error?: string }>
+  typingRunLogGet(uid: string, runId: string): Promise<{ success: boolean; data?: RunKeystrokeLog; error?: string }>
+
   // Favorite Store (internal save/load)
   favoriteStoreList(type: string): Promise<{ success: boolean; entries?: SavedFavoriteMeta[]; error?: string }>
   favoriteStoreSave(type: string, json: string, label: string): Promise<{ success: boolean; entry?: SavedFavoriteMeta; error?: string }>
@@ -222,11 +238,19 @@ export interface VialAPI {
   keyLabelStoreGet(id: string): Promise<KeyLabelStoreResult<KeyLabelRecord>>
   keyLabelStoreRename(id: string, newName: string): Promise<KeyLabelStoreResult<KeyLabelMeta>>
   keyLabelStoreDelete(id: string): Promise<KeyLabelStoreResult<void>>
-  keyLabelStoreImport(): Promise<KeyLabelStoreResult<KeyLabelMeta>>
+  keyLabelStoreImport(): Promise<KeyLabelStoreResult<KeyLabelImportBatchResult>>
   keyLabelStoreExport(id: string): Promise<KeyLabelStoreResult<{ filePath: string }>>
   keyLabelStoreReorder(orderedIds: string[]): Promise<KeyLabelStoreResult<void>>
   keyLabelStoreSetHubPostId(id: string, hubPostId: string | null): Promise<KeyLabelStoreResult<KeyLabelMeta>>
   keyLabelStoreHasName(name: string, excludeId?: string): Promise<KeyLabelStoreResult<boolean>>
+
+  // Typing Test Text Store
+  typingTestTextStoreList(): Promise<TypingTestTextStoreResult<TypingTestTextMeta[]>>
+  typingTestTextStoreGet(id: string): Promise<TypingTestTextStoreResult<TypingTestTextRecord>>
+  typingTestTextStoreRename(id: string, newName: string): Promise<TypingTestTextStoreResult<TypingTestTextMeta>>
+  typingTestTextStoreDelete(id: string): Promise<TypingTestTextStoreResult<void>>
+  typingTestTextStoreImport(): Promise<TypingTestTextStoreResult<TypingTestTextMeta>>
+  typingTestTextStoreImportConfirm(): Promise<TypingTestTextStoreResult<TypingTestTextMeta>>
 
   // Key Label Hub
   keyLabelHubList(params?: HubKeyLabelListParams): Promise<KeyLabelStoreResult<HubKeyLabelListResponse>>
@@ -240,7 +264,13 @@ export interface VialAPI {
 
   // Pipette Settings Store
   pipetteSettingsGet(uid: string): Promise<PipetteSettings | null>
-  pipetteSettingsSet(uid: string, prefs: PipetteSettings): Promise<{ success: boolean; error?: string }>
+  /** Field-level merge persist: only the defined keys of `partial` are
+   * written, so concurrent writers never clobber each other's fields. */
+  pipetteSettingsPatch(uid: string, partial: PipetteSettingsPatch): Promise<{ success: boolean; error?: string }>
+  /** Every locally-stored keyboard's saved typing-test results, pooled flat
+   * (each tagged with its keyboard name) for the keyboard-agnostic
+   * Measurement-row comparison baseline. */
+  pipetteSettingsListAllTypingResults(): Promise<PooledTypingTestResult[]>
 
   // Typing Analytics
   typingAnalyticsEvent(event: TypingAnalyticsEvent): Promise<void>
@@ -251,6 +281,23 @@ export interface VialAPI {
     untilMs: number,
     scope: unknown,
   ): Promise<{ name: string; keystrokes: number; activeMs: number }[]>
+  typingAnalyticsListTypingTestsForRange(
+    uid: string,
+    sinceMs: number,
+    untilMs: number,
+    scope: unknown,
+  ): Promise<{ name: string; keystrokes: number; activeMs: number }[]>
+  /** Distinct run ids in range, narrowed to the selected material(s). The
+   * analytics DB is the source of truth for which runs exist; labels are
+   * resolved separately from typingTestResults. `firstMs` is the run's
+   * start minute, for labeling runs with no saved result. */
+  typingAnalyticsListTypingTestRunsForRange(
+    uid: string,
+    sinceMs: number,
+    untilMs: number,
+    scope: unknown,
+    typingTestScopes: string[],
+  ): Promise<{ runId: string; keystrokes: number; firstMs: number }[]>
   typingAnalyticsGetAppUsageForRange(
     uid: string,
     sinceMs: number,
@@ -264,45 +311,48 @@ export interface VialAPI {
     scope: unknown,
   ): Promise<{ name: string; keystrokes: number; activeMs: number }[]>
   typingAnalyticsListKeyboards(): Promise<TypingKeyboardSummary[]>
-  typingAnalyticsListItems(uid: string, appScopes?: string[]): Promise<TypingDailySummary[]>
+  typingAnalyticsListItems(uid: string, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingDailySummary[]>
   typingAnalyticsDeleteItems(uid: string, dates: string[]): Promise<TypingTombstoneResult>
   typingAnalyticsDeleteAll(uid: string): Promise<TypingTombstoneResult>
   typingAnalyticsGetMatrixHeatmap(uid: string, layer: number, sinceMs: number): Promise<TypingHeatmapByCell>
-  typingAnalyticsListItemsLocal(uid: string, appScopes?: string[]): Promise<TypingDailySummary[]>
+  typingAnalyticsListItemsLocal(uid: string, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingDailySummary[]>
   typingAnalyticsListDeviceInfos(uid: string): Promise<TypingAnalyticsDeviceInfoBundle | null>
-  typingAnalyticsListItemsForHash(uid: string, machineHash: string, appScopes?: string[]): Promise<TypingDailySummary[]>
+  typingAnalyticsListItemsForHash(uid: string, machineHash: string, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingDailySummary[]>
   typingAnalyticsListIntervalItems(uid: string): Promise<TypingIntervalDailySummary[]>
   typingAnalyticsListIntervalItemsLocal(uid: string): Promise<TypingIntervalDailySummary[]>
   typingAnalyticsListIntervalItemsForHash(uid: string, machineHash: string): Promise<TypingIntervalDailySummary[]>
-  typingAnalyticsListActivityGrid(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingActivityCell[]>
-  typingAnalyticsListActivityGridLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingActivityCell[]>
-  typingAnalyticsListActivityGridForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingActivityCell[]>
-  typingAnalyticsListLayerUsage(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingLayerUsageRow[]>
-  typingAnalyticsListLayerUsageLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingLayerUsageRow[]>
-  typingAnalyticsListLayerUsageForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingLayerUsageRow[]>
-  typingAnalyticsListMatrixCells(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingMatrixCellRow[]>
-  typingAnalyticsListMatrixCellsLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingMatrixCellRow[]>
-  typingAnalyticsListMatrixCellsForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingMatrixCellRow[]>
-  typingAnalyticsListMatrixCellsByDay(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingMatrixCellDailyRow[]>
-  typingAnalyticsListMatrixCellsByDayLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingMatrixCellDailyRow[]>
-  typingAnalyticsListMatrixCellsByDayForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingMatrixCellDailyRow[]>
-  typingAnalyticsListMinuteStats(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingMinuteStatsRow[]>
-  typingAnalyticsListMinuteStatsLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingMinuteStatsRow[]>
-  typingAnalyticsListMinuteStatsForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingMinuteStatsRow[]>
+  typingAnalyticsListActivityGrid(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingActivityCell[]>
+  typingAnalyticsListActivityGridLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingActivityCell[]>
+  typingAnalyticsListActivityGridForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingActivityCell[]>
+  typingAnalyticsListLayerUsage(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingLayerUsageRow[]>
+  typingAnalyticsListLayerUsageLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingLayerUsageRow[]>
+  typingAnalyticsListLayerUsageForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingLayerUsageRow[]>
+  typingAnalyticsListMatrixCells(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingMatrixCellRow[]>
+  typingAnalyticsListMatrixCellsLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingMatrixCellRow[]>
+  typingAnalyticsListMatrixCellsForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingMatrixCellRow[]>
+  typingAnalyticsListMatrixCellsByDay(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingMatrixCellDailyRow[]>
+  typingAnalyticsListMatrixCellsByDayLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingMatrixCellDailyRow[]>
+  typingAnalyticsListMatrixCellsByDayForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingMatrixCellDailyRow[]>
+  typingAnalyticsListMinuteStats(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingMinuteStatsRow[]>
+  typingAnalyticsListMinuteStatsLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingMinuteStatsRow[]>
+  typingAnalyticsListMinuteStatsForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingMinuteStatsRow[]>
   typingAnalyticsListSessions(uid: string, sinceMs: number, untilMs: number): Promise<TypingSessionRow[]>
   typingAnalyticsListSessionsLocal(uid: string, sinceMs: number, untilMs: number): Promise<TypingSessionRow[]>
   typingAnalyticsListSessionsForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number): Promise<TypingSessionRow[]>
-  typingAnalyticsListBksMinute(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingBksMinuteRow[]>
-  typingAnalyticsListBksMinuteLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingBksMinuteRow[]>
-  typingAnalyticsListBksMinuteForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<TypingBksMinuteRow[]>
-  typingAnalyticsGetPeakRecords(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<PeakRecords>
-  typingAnalyticsGetPeakRecordsLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<PeakRecords>
-  typingAnalyticsGetPeakRecordsForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[]): Promise<PeakRecords>
+  typingAnalyticsListBksMinute(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingBksMinuteRow[]>
+  typingAnalyticsListBksMinuteLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingBksMinuteRow[]>
+  typingAnalyticsListBksMinuteForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingBksMinuteRow[]>
+  typingAnalyticsGetPeakRecords(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<PeakRecords>
+  typingAnalyticsGetPeakRecordsLocal(uid: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<PeakRecords>
+  typingAnalyticsGetPeakRecordsForHash(uid: string, machineHash: string, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<PeakRecords>
   typingAnalyticsSaveKeymapSnapshot(partial: Omit<TypingKeymapSnapshot, 'machineHash'>): Promise<{ saved: boolean; savedAt: number | null }>
   typingAnalyticsGetKeymapSnapshotForRange(uid: string, fromMs: number, toMs: number): Promise<TypingKeymapSnapshot | null>
   typingAnalyticsListKeymapSnapshots(uid: string): Promise<TypingKeymapSnapshotSummary[]>
-  typingAnalyticsGetMatrixHeatmapForRange(uid: string, layer: number, sinceMs: number, untilMs: number, scope: DeviceScope, appScopes?: string[]): Promise<TypingHeatmapByCell>
-  typingAnalyticsGetBigramAggregateForRange(uid: string, sinceMs: number, untilMs: number, view: TypingBigramAggregateView, scope: DeviceScope, options?: TypingBigramAggregateOptions, appScopes?: string[]): Promise<TypingBigramAggregateResult>
+  typingAnalyticsGetMatrixHeatmapForRange(uid: string, layer: number, sinceMs: number, untilMs: number, scope: DeviceScope, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingHeatmapByCell>
+  typingAnalyticsGetBigramAggregateForRange(uid: string, sinceMs: number, untilMs: number, view: TypingBigramAggregateView, scope: DeviceScope, options?: TypingBigramAggregateOptions, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingBigramAggregateResult>
+  typingAnalyticsListRolloverMinutes(uid: string, scope: DeviceScope, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingRolloverMinuteRow[]>
+  typingAnalyticsListDurationCells(uid: string, scope: DeviceScope, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingDurationCell[]>
+  typingAnalyticsGetLayoutComparisonForRange(uid: string, sinceMs: number, untilMs: number, scope: DeviceScope, options: LayoutComparisonOptions, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<LayoutComparisonResult | null>
   typingAnalyticsListLocalDeviceDays(uid: string, machineHash: string): Promise<string[]>
   typingAnalyticsHasRemote(): Promise<boolean>
   typingAnalyticsListRemoteCloudHashes(uid: string): Promise<string[]>
@@ -337,13 +387,21 @@ export interface VialAPI {
   syncOnPendingChange(callback: (pending: boolean) => void): () => void
 
   // Language Store
-  langList(): Promise<LanguageListEntry[]>
-  langGet(name: string): Promise<unknown>
-  langDownload(name: string): Promise<{ success: boolean; error?: string }>
-  langDelete(name: string): Promise<{ success: boolean; error?: string }>
+  langList(provider?: string): Promise<LanguageListEntry[]>
+  langGet(name: string, provider?: string): Promise<unknown>
+  langDownload(name: string, provider?: string): Promise<{ success: boolean; error?: string }>
+  langDelete(name: string, provider?: string): Promise<{ success: boolean; error?: string }>
+  checkTypingDatasetUpdate(provider?: string): Promise<{ provider: string; updateAvailable: boolean }>
+  updateTypingDataset(provider?: string): Promise<{ provider: string; changed: boolean; fromVersion: string; toVersion?: string }>
+
+  // Aozora Bunko catalog import
+  aozoraImport(workId: string): Promise<AozoraImportResult>
 
   // Data management
   listStoredKeyboards(): Promise<StoredKeyboardInfo[]>
+  /** Record a keyboard's display name on connect, only when it has none yet
+   * (never overwrites a user-set name). No-op for empty uid/name. */
+  keyboardMetaNameIfMissing(uid: string, name: string): Promise<void>
   resetKeyboardData(uid: string): Promise<{ success: boolean; error?: string }>
   resetLocalTargets(targets: LocalResetTargets): Promise<{ success: boolean; error?: string }>
   exportLocalData(): Promise<{ success: boolean; error?: string }>
@@ -351,6 +409,8 @@ export interface VialAPI {
 
   // Hub
   hubUploadPost(params: HubUploadPostParams): Promise<HubUploadResult>
+  hubUploadPrivatePost(params: HubPrivateUploadPostParams): Promise<HubPrivateUploadResult>
+  hubDeletePrivatePost(kind: HubPrivateKind, id: string): Promise<HubDeleteResult>
   hubUpdatePost(params: HubUpdatePostParams): Promise<HubUploadResult>
   hubPatchPost(params: HubPatchPostParams): Promise<HubDeleteResult>
   hubDeletePost(postId: string): Promise<HubDeleteResult>
@@ -369,13 +429,16 @@ export interface VialAPI {
 
   // Snapshot Store extensions
   snapshotStoreSetHubPostId(uid: string, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }>
+  snapshotStoreSetHubPrivate(uid: string, entryId: string, link: HubPrivateLink | null): Promise<{ success: boolean; error?: string }>
 
   // Hub Feature posts (favorites)
   hubUploadFavoritePost(params: HubUploadFavoritePostParams): Promise<HubUploadResult>
+  hubUploadPrivateFavoritePost(params: HubPrivateUploadFavoritePostParams): Promise<HubPrivateUploadResult>
   hubUpdateFavoritePost(params: HubUpdateFavoritePostParams): Promise<HubUploadResult>
 
   // Hub Analytics posts
   hubUploadAnalyticsPost(params: HubUploadAnalyticsPostParams): Promise<HubUploadResult>
+  hubUploadPrivateAnalyticsPost(params: HubPrivateUploadAnalyticsPostParams): Promise<HubPrivateUploadResult>
   hubUpdateAnalyticsPost(params: HubUpdateAnalyticsPostParams): Promise<HubUploadResult>
   hubPreviewAnalyticsPost(params: HubPreviewAnalyticsPostParams): Promise<{ success: boolean; preview?: HubAnalyticsPreview; error?: string }>
 
@@ -385,8 +448,11 @@ export interface VialAPI {
   i18nPackRename(id: string, newName: string): Promise<I18nPackStoreResult<I18nPackMeta>>
   i18nPackSetEnabled(id: string, enabled: boolean): Promise<I18nPackStoreResult<I18nPackMeta>>
   i18nPackDelete(id: string): Promise<I18nPackStoreResult<void>>
-  i18nPackSetHubPostId(id: string, hubPostId: string | null): Promise<I18nPackStoreResult<I18nPackMeta>>
+  i18nPackSetHubPostId(id: string, hubPostId: string | null, uploaderName?: string, hubUpdatedAt?: string): Promise<I18nPackStoreResult<I18nPackMeta>>
   i18nPackHasName(name: string, excludeId?: string): Promise<I18nPackStoreResult<boolean>>
+  /** Persist a manual drag/sort order for the active packs. Built-in
+   *  English is not a store entry and is never part of `orderedIds`. */
+  i18nPackReorder(orderedIds: string[]): Promise<I18nPackStoreResult<void>>
   i18nPackImport(): Promise<I18nPackImportDialogResult>
   i18nPackImportApply(raw: unknown, options?: I18nPackImportApplyOptions): Promise<I18nPackStoreResult<I18nPackMeta>>
   i18nPackExport(id: string): Promise<I18nPackStoreResult<{ filePath: string }>>
@@ -403,8 +469,12 @@ export interface VialAPI {
   themePackGet(id: string): Promise<ThemePackStoreResult<ThemePackRecord>>
   themePackRename(id: string, newName: string): Promise<ThemePackStoreResult<ThemePackMeta>>
   themePackDelete(id: string): Promise<ThemePackStoreResult<void>>
-  themePackSetHubPostId(id: string, hubPostId: string | null): Promise<ThemePackStoreResult<ThemePackMeta>>
+  themePackSetHubPostId(id: string, hubPostId: string | null, uploaderName?: string, hubUpdatedAt?: string): Promise<ThemePackStoreResult<ThemePackMeta>>
   themePackHasName(name: string, excludeId?: string): Promise<ThemePackStoreResult<boolean>>
+  /** Persist a manual drag/sort order for the active packs. The
+   *  built-in System/Light/Dark selector bar is not a store entry and
+   *  is never part of `orderedIds`. */
+  themePackReorder(orderedIds: string[]): Promise<ThemePackStoreResult<void>>
   themePackImport(): Promise<ThemePackImportDialogResult>
   themePackImportApply(raw: unknown, options?: ThemePackImportApplyOptions): Promise<ThemePackStoreResult<ThemePackMeta>>
   themePackExport(id: string): Promise<ThemePackStoreResult<{ filePath: string }>>
@@ -427,9 +497,11 @@ export interface VialAPI {
 
   // Favorite Store extensions
   favoriteStoreSetHubPostId(type: FavoriteType, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }>
+  favoriteStoreSetHubPrivate(type: FavoriteType, entryId: string, link: HubPrivateLink | null): Promise<{ success: boolean; error?: string }>
 
   // Analyze Filter Store extensions
   analyzeFilterStoreSetHubPostId(uid: string, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }>
+  analyzeFilterStoreSetHubPrivate(uid: string, entryId: string, link: HubPrivateLink | null): Promise<{ success: boolean; error?: string }>
 
   // Window management
   setWindowCompactMode(enabled: boolean, compactSize?: { width: number; height: number }): Promise<{ width: number; height: number } | null>
@@ -438,4 +510,25 @@ export interface VialAPI {
   setWindowMinSize(width: number, height: number): Promise<void>
   isAlwaysOnTopSupported(): Promise<boolean>
   setWindowZoom(zoom: number): Promise<void>
+  windowShow(): Promise<boolean>
+  windowHide(): Promise<void>
+  windowStartedHidden(): Promise<boolean>
+  windowIsVisible(): Promise<boolean>
+  onWindowVisibilityChanged(callback: (visible: boolean) => void): () => void
+
+  // Tray status
+  trayStatusUpdate(status: TrayStatus): Promise<void>
+}
+
+/** Connected-keyboard name and REC keystroke-counter state reported by
+ * the renderer to the main-process tray. Purely display data — declared
+ * once here so every IPC leg (renderer hook, preload bridge, main
+ * handler) shares one shape instead of re-typing it per boundary. */
+export interface TrayStatus {
+  keyboardName: string | null
+  recording: boolean
+  count: number
+  /** Rolling keystrokes-per-minute rate — keystrokes recorded in the last
+   * 60 seconds. See useRecKeystrokeCounter for how it is computed. */
+  kpm: number
 }

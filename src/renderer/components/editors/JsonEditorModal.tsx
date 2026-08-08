@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ModalCloseButton } from './ModalCloseButton'
 import { BTN_PRIMARY } from '../../constants/ui-tokens'
+import { useEscapeCloseCapture } from '../../hooks/useEscapeClose'
+import { tsForExportFilename } from '../../../shared/utils/safe-filename'
 
 export interface JsonEditorModalProps<T> {
   title: string
@@ -31,16 +33,12 @@ export function JsonEditorModal<T>({
   const [error, setError] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handler, true)
-    return () => window.removeEventListener('keydown', handler, true)
-  }, [onClose])
+  // guardTypable=false: this modal's only control is the textarea below —
+  // with the default typable-element guard, Escape could never fire at
+  // all, since every keydown while editing originates from inside it (see
+  // useEscapeCloseCapture's own doc comment). The isComposing guard still
+  // applies.
+  useEscapeCloseCapture(onClose, true, false)
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -71,7 +69,7 @@ export function JsonEditorModal<T>({
   }, [text, parse, onApply, onClose, t])
 
   const handleExport = useCallback(async () => {
-    const ts = new Date().toISOString().replace(/:/g, '').replace(/\.\d+Z$/, '').replace('T', '-')
+    const ts = tsForExportFilename()
     const filename = `pipette-fav-${exportFileName}-current-all-${ts}`
     await window.vialAPI.exportJson(text, filename)
   }, [text, exportFileName])

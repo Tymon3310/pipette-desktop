@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Bridges the keymap editor's popover state (`PopoverState` — key or
+// encoder target) to the KeyPopover widget, resolving the current keycode
+// for the clicked position and the mask-only editing flag.
+
+import { KeyPopover } from '../keycodes/KeyPopover'
+import { serialize, isMask } from '../../../shared/keycodes/keycodes'
+import type { Keycode } from '../../../shared/keycodes/keycodes'
+import type { PopoverState } from './keymap-editor-types'
+
+/** Builds the `key` KeymapEditor assigns to `<PopoverForState>` so Auto
+ *  Move's follow-along (same call site, new target) remounts KeyPopover
+ *  like a close+reopen — see the contract on `KeyPopoverProps`.
+ *
+ *  `currentLayer` is excluded on purpose: a layer switch keeps the same
+ *  key/encoder open, so it's handled by `usePopoverKeycodeWorkflow`'s own
+ *  effect instead of a remount, which is what lets `activeTab` survive it.
+ *  `currentKeycode`/`anchorRect` are excluded too — mid-edit churn, not
+ *  target identity. */
+export function popoverInstanceKey(popoverState: NonNullable<PopoverState>): string {
+  return popoverState.kind === 'key'
+    ? `key:${popoverState.row},${popoverState.col}:${popoverState.maskClicked}`
+    : `encoder:${popoverState.idx},${popoverState.dir}:${popoverState.maskClicked}`
+}
+
+interface PopoverForStateProps {
+  popoverState: NonNullable<PopoverState>
+  keymap: Map<string, number>
+  encoderLayout: Map<string, number>
+  currentLayer: number
+  layers: number
+  onLayerChange?: (layer: number) => void
+  layerNames?: string[]
+  onKeycodeSelect: (kc: Keycode) => void
+  onRawKeycodeSelect: (code: number, advance: boolean) => void
+  onModMaskChange?: (newMask: number) => void
+  onClose: () => void
+  quickSelect?: boolean
+  previousKeycode?: number
+  onUndo?: () => void
+  nextKeycode?: number
+  onRedo?: () => void
+  remapLabel?: (qmkId: string) => string
+}
+
+export function PopoverForState({
+  popoverState, keymap, encoderLayout, currentLayer, layers,
+  onLayerChange, layerNames,
+  onKeycodeSelect, onRawKeycodeSelect, onModMaskChange, onClose,
+  quickSelect, previousKeycode, onUndo, nextKeycode, onRedo, remapLabel,
+}: PopoverForStateProps) {
+  const currentKeycode = popoverState.kind === 'key'
+    ? keymap.get(`${currentLayer},${popoverState.row},${popoverState.col}`) ?? 0
+    : encoderLayout.get(`${currentLayer},${popoverState.idx},${popoverState.dir}`) ?? 0
+  const maskOnly = popoverState.maskClicked && isMask(serialize(currentKeycode))
+  return (
+    <KeyPopover
+      anchorRect={popoverState.anchorRect} currentKeycode={currentKeycode} maskOnly={maskOnly} layers={layers}
+      currentLayer={currentLayer} onLayerChange={onLayerChange} layerNames={layerNames}
+      onKeycodeSelect={onKeycodeSelect} onRawKeycodeSelect={onRawKeycodeSelect} onModMaskChange={onModMaskChange}
+      onClose={onClose} quickSelect={quickSelect} previousKeycode={previousKeycode} onUndo={onUndo}
+      nextKeycode={nextKeycode} onRedo={onRedo} remapLabel={remapLabel}
+      // The keymap editor decides close-vs-advance itself (Auto Move
+      // follow-along) instead of letting a confirm auto-close — see
+      // `useKeymapSelectionHandlers`'s popover handlers and the prop doc
+      // on `KeyPopover.closeOnSelect`.
+      closeOnSelect={false}
+      targetKey={popoverInstanceKey(popoverState)}
+    />
+  )
+}

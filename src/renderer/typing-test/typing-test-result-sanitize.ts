@@ -1,0 +1,187 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Sanitization for a persisted TypingTestResult's optional fields —
+// shared by useDevicePrefs.ts (the per-device History read path) and
+// AnalyzePane.tsx (which fetches the same pipetteSettingsGet payload for
+// TypingProfileCard's KSPC cell) so both funnel through the identical
+// filter+sanitize pair instead of drifting into two definitions of
+// "valid". Kept out of useDevicePrefs.ts on purpose: that module pulls
+// in useAppConfig (and, transitively, i18n's self-initializing module),
+// which a plain data consumer like AnalyzePane shouldn't have to drag in
+// just to sanitize a fetched array.
+
+import type { TypingTestResult } from '../../shared/types/pipette-settings'
+import { WEAK_SPOT_FIELD_SPECS, WEAK_SPOT_FIELD_KEYS, type WeakSpotFieldSpec } from './weak-spot-settings'
+
+/** A non-negative integer — the base shape shared by every raw
+ *  KSPC/memory counter field (`totalKeystrokes`/`confirmedChars`/
+ *  `kspcKeystrokes`), used by both `sanitizeKspcFields` below and
+ *  useDevicePrefs.ts's `validateTypingTestMemory` group check, so the
+ *  two don't drift into subtly different phrasings of the same guard.
+ *  Every one of these fields is a keystroke/char tally — always a whole
+ *  number in practice — so `Number.isInteger` rejects a fractional value
+ *  (corrupted data, or a hand-edited file) instead of accepting it as a
+ *  plausible count. `kspcChars` needs the stricter `> 0` (division-by-zero
+ *  guard) on top of this. */
+export function isNonNegInt(n: unknown): n is number {
+  return typeof n === 'number' && Number.isInteger(n) && n >= 0
+}
+
+export function isValidTypingTestResult(item: unknown): item is TypingTestResult {
+  if (typeof item !== 'object' || item === null) return false
+  const r = item as Record<string, unknown>
+  return typeof r.date === 'string' && typeof r.wpm === 'number' && typeof r.accuracy === 'number'
+}
+
+/** Validates a result's optional `mistakes` field: a plain object mapping
+ *  every key to a finite number. Returns `undefined` for anything else
+ *  (absent, wrong shape, non-numeric/non-finite values) so a malformed
+ *  field degrades to "not set" rather than rejecting the whole result —
+ *  same treatment as the other optional fields on `TypingTestResult`. */
+function sanitizeMistakes(raw: unknown): Record<string, number> | undefined {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const entries = Object.entries(raw as Record<string, unknown>)
+  if (entries.length === 0) return undefined
+  const mistakes: Record<string, number> = {}
+  for (const [key, value] of entries) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+    mistakes[key] = value
+  }
+  return mistakes
+}
+
+/** Validates a result's optional `kspcKeystrokes`/`kspcChars` pair:
+ *  both-or-neither, each a non-negative integer, `kspcChars` > 0
+ *  (matches `computeKspc`'s own zero-division guard). Returns `{}` for
+ *  anything else (only one present, wrong type, fractional/negative) so
+ *  a malformed pair degrades to "not set" — same treatment as `mistakes`
+ *  above — rather than displaying a bogus ratio. */
+function sanitizeKspcFields(result: TypingTestResult): { kspcKeystrokes?: number; kspcChars?: number } {
+  const { kspcKeystrokes, kspcChars } = result
+  if (kspcKeystrokes === undefined && kspcChars === undefined) return {}
+  if (isNonNegInt(kspcKeystrokes) && isNonNegInt(kspcChars) && kspcChars > 0) {
+    return { kspcKeystrokes, kspcChars }
+  }
+  return {}
+}
+
+/** Validates a result's optional `holdSumMs`/`holdSamples` pair:
+ *  both-or-neither, `holdSumMs` a non-negative finite number (a
+ *  millisecond sum, not necessarily an integer boundary in practice but
+ *  never required to be one here), `holdSamples` a non-negative integer
+ *  > 0 (matches `computeKspc`'s zero-division guard precedent). Returns
+ *  `{}` for anything else so a malformed pair degrades to "not set",
+ *  same treatment as `sanitizeKspcFields` above. */
+function sanitizeHoldFields(result: TypingTestResult): { holdSumMs?: number; holdSamples?: number } {
+  const { holdSumMs, holdSamples } = result
+  if (holdSumMs === undefined && holdSamples === undefined) return {}
+  if (
+    typeof holdSumMs === 'number' && Number.isFinite(holdSumMs) && holdSumMs >= 0
+    && isNonNegInt(holdSamples) && holdSamples > 0
+  ) {
+    return { holdSumMs, holdSamples }
+  }
+  return {}
+}
+
+/** Validates a result's optional 4-field error-class raw group
+ *  (`errorSubstitutions`/`errorOmissions`/`errorInsertions`/
+ *  `errorTargetChars` — see `TypingTestResult`'s doc comment): all-or-
+ *  none, each a non-negative integer, `errorTargetChars` > 0 (same
+ *  division-by-zero guard rationale as `kspcChars` above, since it's the
+ *  rate denominator at display time). Returns `{}` for anything else
+ *  (partial group, wrong type, fractional/negative) so a malformed group
+ *  degrades to "not set" rather than displaying a bogus rate. */
+function sanitizeErrorClassFields(result: TypingTestResult): {
+  errorSubstitutions?: number
+  errorOmissions?: number
+  errorInsertions?: number
+  errorTargetChars?: number
+} {
+  const { errorSubstitutions, errorOmissions, errorInsertions, errorTargetChars } = result
+  if (
+    errorSubstitutions === undefined
+    && errorOmissions === undefined
+    && errorInsertions === undefined
+    && errorTargetChars === undefined
+  ) return {}
+  if (
+    isNonNegInt(errorSubstitutions)
+    && isNonNegInt(errorOmissions)
+    && isNonNegInt(errorInsertions)
+    && isNonNegInt(errorTargetChars)
+    && errorTargetChars > 0
+  ) {
+    return { errorSubstitutions, errorOmissions, errorInsertions, errorTargetChars }
+  }
+  return {}
+}
+
+/** A field's raw snapshot value is acceptable when it's a finite number, or
+ *  — for the two fields whose spec carries a literal-string escape value
+ *  (`missWindow`'s `'all'`, `decayHalfLifeDays`'s `'none'`) — exactly that
+ *  string. Deliberately looser than `WEAK_SPOT_FIELD_SPECS`' own discrete
+ *  option sets (unlike device-prefs-validate.ts's field-level validator,
+ *  which DOES check exact membership): this is a frozen metadata snapshot
+ *  of values already resolved/validated at save time under whatever
+ *  option set was live THEN, so a since-narrowed option set must not
+ *  retroactively invalidate an old snapshot. */
+function isValidWeakSpotSnapshotField(spec: WeakSpotFieldSpec, value: unknown): boolean {
+  if (typeof value === 'number') return Number.isFinite(value)
+  return typeof value === 'string' && (spec.options as readonly unknown[]).includes(value)
+}
+
+/** Validates a result's optional `weakSpotSettings` metadata snapshot: a
+ *  plain object with every one of its 8 fields present and individually
+ *  well-typed (see `isValidWeakSpotSnapshotField`). All-or-nothing (not
+ *  field-by-field like `validateWeakSpotDetailSettings` in
+ *  device-prefs-validate.ts) since this is a frozen METADATA snapshot of
+ *  values that were already resolved/validated at save time — a partially
+ *  corrupted snapshot has no sensible per-field fallback the way a live
+ *  editable config does, so it degrades to "not set" as a whole. Returns
+ *  undefined for anything else. */
+function sanitizeWeakSpotSettings(raw: unknown): TypingTestResult['weakSpotSettings'] {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const o = raw as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const key of WEAK_SPOT_FIELD_KEYS) {
+    const value = o[key]
+    if (!isValidWeakSpotSnapshotField(WEAK_SPOT_FIELD_SPECS[key], value)) return undefined
+    out[key] = value
+  }
+  return out as unknown as TypingTestResult['weakSpotSettings']
+}
+
+/** Replaces a malformed `mistakes` / `kspcKeystrokes`+`kspcChars` /
+ *  error-class field with `undefined` (rather than discarding the rest of
+ *  an already-`isValidTypingTestResult`-checked result). Applied after
+ *  that filter so a persisted result with a corrupted field still
+ *  survives (minus that one field) instead of vanishing from History
+ *  entirely. */
+export function sanitizeTypingTestResult(result: TypingTestResult): TypingTestResult {
+  const { kspcKeystrokes, kspcChars } = sanitizeKspcFields(result)
+  const { holdSumMs, holdSamples } = sanitizeHoldFields(result)
+  const { errorSubstitutions, errorOmissions, errorInsertions, errorTargetChars } = sanitizeErrorClassFields(result)
+  // Same asymmetric-true-only convention buildTypingTestResult writes
+  // (see result-builder.ts) — a non-`true` persisted value (corrupted
+  // data, hand-edited file) degrades to "not set" rather than being
+  // trusted verbatim, since a stray truthy-but-not-`true` value would
+  // otherwise flow into configKey/resultConditionKey's `|weakspot`
+  // branch check (`result.weakSpotTrainingMode ?`) with unintended results.
+  const weakSpotTrainingMode = result.weakSpotTrainingMode === true ? true : undefined
+  return {
+    ...result,
+    mistakes: sanitizeMistakes(result.mistakes),
+    kspcKeystrokes,
+    kspcChars,
+    holdSumMs,
+    holdSamples,
+    errorSubstitutions,
+    errorOmissions,
+    errorInsertions,
+    errorTargetChars,
+    weakSpotTrainingMode,
+    // Both-or-neither with `weakSpotTrainingMode` itself, same as
+    // `buildTypingTestResult` only ever writes it alongside a true flag.
+    weakSpotSettings: weakSpotTrainingMode ? sanitizeWeakSpotSettings(result.weakSpotSettings) : undefined,
+  }
+}

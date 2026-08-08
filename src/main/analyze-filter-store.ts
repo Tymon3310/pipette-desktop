@@ -3,10 +3,9 @@
 // snapshots per keyboard. File layout intentionally mirrors
 // snapshot-store.ts so the existing index-based sync (sync-bundle /
 // sync-service / merge) picks it up via the new
-// "keyboards/{uid}/analyze_filters" sync unit. Helpers are duplicated
-// rather than abstracted while there are still only two index stores;
-// see snapshot-store.ts for the original rationale on uid validation,
-// write locks, and tombstone-based deletes.
+// "keyboards/{uid}/analyze_filters" sync unit; see snapshot-store.ts for
+// the original rationale on uid validation, write locks, and
+// tombstone-based deletes.
 
 import { app } from 'electron'
 import { join } from 'node:path'
@@ -14,20 +13,18 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { IpcChannels } from '../shared/ipc/channels'
 import { notifyChange } from './sync/sync-service'
+import { withWriteLock } from './per-uid-write-lock'
 import { secureHandle } from './ipc-guard'
+import { isSafePathSegment, tsForFilename } from './utils/safe-filename'
 import {
   ANALYZE_FILTER_STORE_ERROR_MAX_ENTRIES,
   ANALYZE_FILTER_STORE_MAX_ENTRIES_PER_KEYBOARD,
   type AnalyzeFilterSnapshotIndex,
   type AnalyzeFilterSnapshotMeta,
 } from '../shared/types/analyze-filter-store'
+import type { HubPrivateLink } from '../shared/types/hub-private'
 
 const MAX_ENTRIES_PER_KEYBOARD = ANALYZE_FILTER_STORE_MAX_ENTRIES_PER_KEYBOARD
-
-function isSafePathSegment(segment: string): boolean {
-  if (!segment || segment === '.' || segment === '..') return false
-  return !/[/\\]/.test(segment)
-}
 
 function validateUid(uid: string): void {
   if (!isSafePathSegment(uid)) throw new Error('Invalid uid')
@@ -88,13 +85,6 @@ async function updateEntry(
   })
 }
 
-const writeLocks = new Map<string, Promise<unknown>>()
-function withWriteLock<T>(uid: string, fn: () => Promise<T>): Promise<T> {
-  const prev = writeLocks.get(uid) ?? Promise.resolve()
-  const next = prev.then(fn, fn)
-  writeLocks.set(uid, next)
-  return next
-}
 
 export function setupAnalyzeFilterStore(): void {
   secureHandle(
@@ -135,7 +125,7 @@ export function setupAnalyzeFilterStore(): void {
           await mkdir(dir, { recursive: true })
 
           const now = new Date()
-          const timestamp = now.toISOString().replace(/:/g, '-')
+          const timestamp = tsForFilename(now)
           const filename = `${timestamp}_${randomUUID()}.json`
           const filePath = getSafeFilePath(uid, filename)
 
@@ -237,14 +227,14 @@ export function setupAnalyzeFilterStore(): void {
   secureHandle(
     IpcChannels.ANALYZE_FILTER_STORE_SET_HUB_POST_ID,
     async (_event, uid: string, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }> => {
-      return updateEntry(uid, entryId, (entry) => {
-        const normalized = hubPostId?.trim() || null
-        if (normalized === null) {
-          delete entry.hubPostId
-        } else {
-          entry.hubPostId = normalized
-        }
-      })
+      return setAnalyzeFilterHubPostId(uid, entryId, hubPostId)
+    },
+  )
+
+  secureHandle(
+    IpcChannels.ANALYZE_FILTER_STORE_SET_HUB_PRIVATE,
+    async (_event, uid: string, entryId: string, link: HubPrivateLink | null): Promise<{ success: boolean; error?: string }> => {
+      return setAnalyzeFilterHubPrivate(uid, entryId, link)
     },
   )
 }
@@ -282,6 +272,25 @@ export async function setAnalyzeFilterHubPostId(
       delete entry.hubPostId
     } else {
       entry.hubPostId = normalized
+      // public and private linkage are mutually exclusive
+      delete entry.hubPrivate
+    }
+  })
+}
+
+/** Sets (or clears with `null`) the private Hub linkage on an analyze
+ *  filter entry. Setting a link clears the public `hubPostId`. */
+export async function setAnalyzeFilterHubPrivate(
+  uid: string,
+  entryId: string,
+  link: HubPrivateLink | null,
+): Promise<{ success: boolean; error?: string }> {
+  return updateEntry(uid, entryId, (entry) => {
+    if (link === null) {
+      delete entry.hubPrivate
+    } else {
+      entry.hubPrivate = link
+      delete entry.hubPostId
     }
   })
 }

@@ -61,11 +61,20 @@ vi.mock('../TapDanceModal', () => ({ TapDanceModal: () => null }))
 vi.mock('../MacroModal', () => ({ MacroModal: () => null }))
 
 import { KeymapEditor } from '../KeymapEditor'
+import type { KleKey } from '../../../../shared/kle/types'
+
+const KEY_DEFAULTS: KleKey = {
+  x: 0, y: 0, width: 1, height: 1, row: 0, col: 0,
+  encoderIdx: -1, encoderDir: -1, layoutIndex: -1, layoutOption: -1,
+  decal: false, labels: [], x2: 0, y2: 0, width2: 1, height2: 1,
+  rotation: 0, rotationX: 0, rotationY: 0, color: '',
+  textColor: [], textSize: [], nub: false, stepped: false, ghost: false,
+}
+
+const makeKey = (x: number, col: number): KleKey => ({ ...KEY_DEFAULTS, x, col })
 
 const makeLayout = () => ({
-  keys: [
-    { x: 0, y: 0, w: 1, h: 1, row: 0, col: 0, encoderIdx: -1, decal: false, labels: [] },
-  ],
+  keys: [makeKey(0, 0)],
 })
 
 describe('KeymapEditor — LayerListPanel', () => {
@@ -246,6 +255,18 @@ describe('KeymapEditor — LayerListPanel', () => {
       fireEvent.keyDown(input, { key: 'Enter' })
 
       expect(onSetLayerName).not.toHaveBeenCalled()
+    })
+
+    it('saves an empty name on Enter when clearing a named layer', () => {
+      render(<KeymapEditor {...defaultProps} layerNames={['XXXXXX', 'Nav', '', 'Num']} />)
+
+      fireEvent.click(screen.getByTestId('layer-panel-layer-name-box-0'))
+
+      const input = screen.getByTestId('layer-panel-layer-name-input-0')
+      fireEvent.change(input, { target: { value: '' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      expect(onSetLayerName).toHaveBeenCalledWith(0, '')
     })
 
     it('shows confirm flash after Enter rename', () => {

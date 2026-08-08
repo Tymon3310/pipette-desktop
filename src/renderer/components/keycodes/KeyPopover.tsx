@@ -3,35 +3,28 @@
 import { useState, useRef, useLayoutEffect, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Keycode } from '../../../shared/keycodes/keycodes'
-import {
-  isModMaskKeycode,
-  isModTapKeycode,
-  isLTKeycode,
-  isSHTKeycode,
-  isLMKeycode,
-  extractModMask,
-  extractBasicKey,
-  extractLTLayer,
-  extractLMLayer,
-  extractLMMod,
-  resolve,
-  serialize,
-  buildModMaskKeycode,
-  buildModTapKeycode,
-  buildLTKeycode,
-  buildSHTKeycode,
-  buildLMKeycode,
-} from '../../../shared/keycodes/keycodes'
+import { serialize, isLMKeycode } from '../../../shared/keycodes/keycodes'
 import { PopoverTabKey } from './PopoverTabKey'
 import { PopoverTabCode } from './PopoverTabCode'
 import { ModifierCheckboxStrip } from './ModifierCheckboxStrip'
 import { LayerSelector } from './LayerSelector'
+import { usePopoverKeycodeWorkflow, type WrapperMode } from './use-popover-keycode-workflow'
+import { Tooltip } from '../ui/Tooltip'
 
 type Tab = 'key' | 'code'
-type WrapperMode = 'none' | 'modMask' | 'modTap' | 'lt' | 'shT' | 'lm'
 
-type PendingAction = { kind: 'kc'; kc: Keycode } | { kind: 'raw'; code: number }
-
+/** Contract for callers that keep the same `<KeyPopover>` call site across
+ *  edit-target changes (e.g. `KeymapEditor`'s Auto Move follow-along, which
+ *  advances this same popover to a new key/encoder instead of unmounting
+ *  it): the caller must pass a React `key` derived from the new target
+ *  (kind, position, mask side — see `KeymapEditor`'s `popoverInstanceKey`)
+ *  so React remounts this component and its internal state (wrapper mode,
+ *  buffered pick, active tab, search box) resets like a close+reopen.
+ *  `currentLayer` changes are the one exception, handled internally instead
+ *  (see `usePopoverKeycodeWorkflow`'s `currentLayer` effect) so that
+ *  `activeTab` survives a layer-sidebar switch. `MacroEditor` and
+ *  `KeycodeEntryModalShell` don't need this — they mount a fresh instance
+ *  per open. */
 interface KeyPopoverProps {
   anchorRect: DOMRect
   currentKeycode: number
@@ -42,25 +35,45 @@ interface KeyPopoverProps {
   onLayerChange?: (layer: number) => void
   layerNames?: string[]
   onKeycodeSelect: (kc: Keycode) => void
-  onRawKeycodeSelect: (code: number) => void
+  /** `advance` distinguishes a genuine keycode confirm from a raw call
+   *  that merely reconfigures the wrapper itself — see the full contract
+   *  and call sites (mode-button switch, LT/LM layer change, modifier-
+   *  checkbox-strip change) on `onRawKeycodeSelect` in
+   *  `use-popover-keycode-workflow.ts`'s `UsePopoverKeycodeWorkflowOptions`.
+   *  This file's own call site (Code tab Apply, below) always passes
+   *  `true`. Callers that don't care (MacroEditor, KeycodeEntryModalShell)
+   *  can ignore it. */
+  onRawKeycodeSelect: (code: number, advance: boolean) => void
   onModMaskChange?: (newMask: number) => void
   onClose: () => void
   onConfirm?: () => void // Enter / click-to-close: confirm and close the picker
   quickSelect?: boolean  // true: click applies + closes; false: buffer until Enter
+  /** Gates whether a confirmed keycode selection closes the popover itself
+   *  or leaves that decision to the caller (the keymap editor's Auto Move
+   *  follow-along) — see the full contract on `closeOnSelect` in
+   *  `use-popover-keycode-workflow.ts`'s `UsePopoverKeycodeWorkflowOptions`.
+   *  Defaults to true here, matching every other caller's existing
+   *  "confirm closes" expectation. */
+  closeOnSelect?: boolean
   previousKeycode?: number // Previous keycode for undo (undefined = no undo available)
   onUndo?: () => void      // Revert to previousKeycode and close
   nextKeycode?: number     // Next keycode for redo (undefined = no redo available)
   onRedo?: () => void      // Re-apply nextKeycode and close
-}
-
-function detectWrapperMode(keycode: number, maskOnly?: boolean): WrapperMode {
-  if (maskOnly) return 'none'
-  if (isLTKeycode(keycode)) return 'lt'
-  if (isSHTKeycode(keycode)) return 'shT'
-  if (isLMKeycode(keycode)) return 'lm'
-  if (isModTapKeycode(keycode)) return 'modTap'
-  if (isModMaskKeycode(keycode)) return 'modMask'
-  return 'none'
+  /** Active Key Label pack's per-key legend override — same source
+   *  `KeycodeGrid`/`BasicKeyboardView` already receive, threaded here
+   *  so the Key tab's search index and result rows agree with what
+   *  the keymap grid shows (issue #294). */
+  remapLabel?: (qmkId: string) => string
+  /** Edit target identity, exposed as the `data-popover-target-key`
+   *  attribute on the root element so e2e tests can observe which
+   *  key/encoder is currently being edited. This is `popoverInstanceKey`
+   *  (`keymap-editor-popover.tsx`) itself — the same string that tells
+   *  React to remount this component — so the attribute answers exactly
+   *  "did the edit target change" rather than reimplementing that
+   *  identity separately. Only `KeymapEditor`'s `PopoverForState` passes
+   *  this; `MacroEditor` and `KeycodeEntryModalShell` have no edit-target
+   *  concept, so the attribute is omitted for them. */
+  targetKey?: string
 }
 
 const POPOVER_WIDTH = 320
@@ -82,10 +95,13 @@ export function KeyPopover({
   onClose,
   onConfirm,
   quickSelect,
+  closeOnSelect = true,
   previousKeycode,
   onUndo,
   nextKeycode,
   onRedo,
+  remapLabel,
+  targetKey,
 }: KeyPopoverProps) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<Tab>('key')
@@ -94,27 +110,38 @@ export function KeyPopover({
   const popoverRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
 
-  // When quickSelect is OFF, buffer search-result clicks until Enter confirms
-  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+  // Bumps `searchResetKey` above (owned here — purely a rendering concern,
+  // forces `PopoverTabKey` to remount and clear its search box) whenever
+  // the keycode workflow hook's wrapper-mode state changes in a way that
+  // should clear the search: leaving LM mode via a mode switch, or a
+  // cross-layer reset of the wrapper.
+  const resetSearch = useCallback(() => setSearchResetKey((k) => k + 1), [])
 
-  // Wrapper mode: determines how modifier + basic key are combined
-  const [wrapperMode, setWrapperMode] = useState<WrapperMode>(() => detectWrapperMode(currentKeycode, maskOnly))
-
-  // Layer selection for LT / LM modes
-  const [selectedLayer, setSelectedLayer] = useState<number>(() => {
-    if (isLTKeycode(currentKeycode)) return extractLTLayer(currentKeycode)
-    if (isLMKeycode(currentKeycode)) return extractLMLayer(currentKeycode)
-    return 0
+  const {
+    wrapperMode,
+    selectedLayer,
+    showModeButtons,
+    showModStrip,
+    showLayerSelector,
+    currentModMask,
+    handleModStripChange,
+    handleLayerChange,
+    handleModeSwitch,
+    handleKeycodeSelect,
+    confirmAndClose,
+  } = usePopoverKeycodeWorkflow({
+    currentKeycode,
+    maskOnly,
+    currentLayer,
+    onKeycodeSelect,
+    onRawKeycodeSelect,
+    onModMaskChange,
+    onClose,
+    onConfirm,
+    quickSelect,
+    closeOnSelect,
+    resetSearch,
   })
-
-  const showModeButtons = !maskOnly
-  const showModStrip = wrapperMode === 'modMask' || wrapperMode === 'modTap' || wrapperMode === 'lm'
-  const showLayerSelector = wrapperMode === 'lt' || wrapperMode === 'lm'
-  const currentModMask = (() => {
-    if (wrapperMode === 'lm') return extractLMMod(currentKeycode)
-    if (wrapperMode === 'modMask' || wrapperMode === 'modTap') return extractModMask(currentKeycode)
-    return 0
-  })()
 
   const showLayerSidebar = currentLayer != null && onLayerChange != null && layers > 1
   const popoverWidth = showLayerSidebar ? POPOVER_WIDTH + LAYER_SIDEBAR_WIDTH : POPOVER_WIDTH
@@ -126,18 +153,6 @@ export function KeyPopover({
     },
     [onLayerChange, currentLayer],
   )
-
-  const prevCurrentLayerRef = useRef(currentLayer)
-  useEffect(() => {
-    if (currentLayer == null || currentLayer === prevCurrentLayerRef.current) return
-    prevCurrentLayerRef.current = currentLayer
-    setWrapperMode(detectWrapperMode(currentKeycode, maskOnly))
-    if (isLTKeycode(currentKeycode)) setSelectedLayer(extractLTLayer(currentKeycode))
-    else if (isLMKeycode(currentKeycode)) setSelectedLayer(extractLMLayer(currentKeycode))
-    else setSelectedLayer(0)
-    setSearchResetKey((k) => k + 1)
-    setPendingAction(null)
-  }, [currentLayer, currentKeycode, maskOnly])
 
   useLayoutEffect(() => {
     const el = popoverRef.current
@@ -183,155 +198,6 @@ export function KeyPopover({
     return () => window.removeEventListener('resize', onClose)
   }, [onClose])
 
-  // Handle modifier strip changes — immediate keymap update
-  const handleModStripChange = useCallback(
-    (newMask: number) => {
-      const basicKey = extractBasicKey(currentKeycode)
-      if (wrapperMode === 'lm') {
-        onRawKeycodeSelect(buildLMKeycode(selectedLayer, newMask))
-      } else if (wrapperMode === 'modTap') {
-        onRawKeycodeSelect(buildModTapKeycode(newMask, basicKey))
-      } else if (onModMaskChange) {
-        onModMaskChange(newMask)
-      } else {
-        onRawKeycodeSelect(buildModMaskKeycode(newMask, basicKey))
-      }
-    },
-    [wrapperMode, currentKeycode, selectedLayer, onRawKeycodeSelect, onModMaskChange],
-  )
-
-  // Wrap a keycode selection into a PendingAction (shared by buffer + commit paths)
-  const wrapKeycode = useCallback(
-    (kc: Keycode): PendingAction => {
-      const code = resolve(kc.qmkId)
-      switch (wrapperMode) {
-        case 'lt':   return { kind: 'raw', code: buildLTKeycode(selectedLayer, code) }
-        case 'shT':  return { kind: 'raw', code: buildSHTKeycode(code) }
-        case 'lm':   return { kind: 'raw', code: buildLMKeycode(selectedLayer, code) }
-        case 'modTap':  return { kind: 'raw', code: buildModTapKeycode(currentModMask, code) }
-        case 'modMask': return { kind: 'raw', code: buildModMaskKeycode(currentModMask, code) }
-        default:     return { kind: 'kc', kc }
-      }
-    },
-    [currentModMask, selectedLayer, wrapperMode],
-  )
-
-  // Apply a PendingAction to the keymap
-  const applyAction = useCallback(
-    (action: PendingAction) => {
-      if (action.kind === 'kc') onKeycodeSelect(action.kc)
-      else onRawKeycodeSelect(action.code)
-    },
-    [onKeycodeSelect, onRawKeycodeSelect],
-  )
-
-  const handleKeycodeSelect = useCallback(
-    (kc: Keycode) => {
-      const action = wrapKeycode(kc)
-      if (quickSelect === false) {
-        setPendingAction(action)
-      } else {
-        applyAction(action)
-        // Auto-close after immediate apply when quickSelect is on
-        ;(onConfirm ?? onClose)()
-      }
-    },
-    [quickSelect, wrapKeycode, applyAction, onConfirm, onClose],
-  )
-
-  // Apply any buffered pending action then close the popover
-  const confirmAndClose = useCallback(() => {
-    if (pendingAction) applyAction(pendingAction)
-    ;(onConfirm ?? onClose)()
-  }, [pendingAction, applyAction, onConfirm, onClose])
-
-  // Refs so the keydown handler always sees latest values without re-subscribing
-  const pendingRef = useRef(pendingAction)
-  pendingRef.current = pendingAction
-  const confirmAndCloseRef = useRef(confirmAndClose)
-  confirmAndCloseRef.current = confirmAndClose
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onClose()
-      } else if (e.key === 'Enter') {
-        const el = e.target as HTMLElement | null
-        // Allow Enter in inputs unless there's a buffered selection waiting to be confirmed
-        if (!pendingRef.current && (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.tagName === 'BUTTON' || el?.isContentEditable)) return
-        e.preventDefault()
-        e.stopPropagation()
-        confirmAndCloseRef.current()
-      }
-    }
-    window.addEventListener('keydown', handler, true)
-    return () => window.removeEventListener('keydown', handler, true)
-  }, [onClose])
-
-  // Handle layer selector changes — immediate keycode rebuild
-  const handleLayerChange = useCallback(
-    (layer: number) => {
-      setSelectedLayer(layer)
-      const basicKey = extractBasicKey(currentKeycode)
-      if (wrapperMode === 'lt') {
-        onRawKeycodeSelect(buildLTKeycode(layer, basicKey))
-      } else if (wrapperMode === 'lm') {
-        onRawKeycodeSelect(buildLMKeycode(layer, currentModMask))
-      }
-    },
-    [wrapperMode, currentKeycode, currentModMask, onRawKeycodeSelect],
-  )
-
-  // Switching modes converts the keycode format (preserving basic key)
-  const handleModeSwitch = useCallback(
-    (newMode: WrapperMode) => {
-      // Toggle off if clicking the active mode
-      const target = newMode === wrapperMode ? 'none' : newMode
-      // LM keycodes store modifiers (not a basic key) in the lower bits,
-      // so extractBasicKey would return the modifier value (e.g. MOD_LGUI=0x08=KC_E).
-      const basicKey = wrapperMode === 'lm' ? 0 : extractBasicKey(currentKeycode)
-
-      if (target === 'none') {
-        // Turning off: revert to basic key
-        if (basicKey !== currentKeycode) {
-          onRawKeycodeSelect(basicKey)
-        }
-      } else {
-        // Switching to a new mode: rebuild keycode
-        switch (target) {
-          case 'lt':
-            onRawKeycodeSelect(buildLTKeycode(selectedLayer, basicKey))
-            break
-          case 'shT':
-            onRawKeycodeSelect(buildSHTKeycode(basicKey))
-            break
-          case 'lm':
-            onRawKeycodeSelect(buildLMKeycode(selectedLayer, 0))
-            break
-          case 'modTap': {
-            // Only preserve mod mask when switching from another mod-based mode
-            const mask = (wrapperMode === 'modMask' || wrapperMode === 'modTap') ? extractModMask(currentKeycode) : 0
-            onRawKeycodeSelect(buildModTapKeycode(mask, basicKey))
-            break
-          }
-          case 'modMask': {
-            const mask = (wrapperMode === 'modMask' || wrapperMode === 'modTap') ? extractModMask(currentKeycode) : 0
-            onRawKeycodeSelect(buildModMaskKeycode(mask, basicKey))
-            break
-          }
-        }
-      }
-
-      // Force PopoverTabKey remount to clear search when leaving LM mode
-      if (wrapperMode === 'lm' && target !== 'lm') {
-        setSearchResetKey((k) => k + 1)
-      }
-      setWrapperMode(target)
-    },
-    [wrapperMode, currentKeycode, selectedLayer, onRawKeycodeSelect],
-  )
-
   const tabClass = (tab: Tab) => {
     const base = 'px-3 py-1.5 text-xs border-b-2 transition-colors whitespace-nowrap'
     if (activeTab === tab) return `${base} border-b-accent text-accent font-semibold`
@@ -357,6 +223,8 @@ export function KeyPopover({
         paddingLeft: showLayerSidebar ? LAYER_SIDEBAR_WIDTH : undefined,
       }}
       data-testid="key-popover"
+      data-popover-target-key={targetKey}
+      data-popover-target-layer={targetKey != null ? currentLayer : undefined}
     >
       {showLayerSidebar && (
         <div
@@ -365,20 +233,20 @@ export function KeyPopover({
           data-testid="popover-layer-sidebar"
         >
           {Array.from({ length: layers }, (_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => handleLayerSidebarClick(i)}
-              className={`w-8 shrink-0 rounded-md border flex items-center justify-center py-1.5 text-xs font-semibold tabular-nums transition-colors ${
-                currentLayer === i
-                  ? 'border-accent bg-accent text-content-inverse'
-                  : 'border-edge bg-surface/20 text-content-muted hover:bg-surface-dim'
-              }`}
-              title={layerNames?.[i] || undefined}
-              data-testid={`popover-layer-${i}`}
-            >
-              {i}
-            </button>
+            <Tooltip key={i} content={layerNames?.[i] || ''} disabled={!layerNames?.[i]} side="right">
+              <button
+                type="button"
+                onClick={() => handleLayerSidebarClick(i)}
+                className={`w-8 shrink-0 rounded-md border flex items-center justify-center py-1.5 text-xs font-semibold tabular-nums transition-colors ${
+                  currentLayer === i
+                    ? 'border-accent bg-accent text-content-inverse'
+                    : 'border-edge bg-surface/20 text-content-muted hover:bg-surface-dim'
+                }`}
+                data-testid={`popover-layer-${i}`}
+              >
+                {i}
+              </button>
+            </Tooltip>
           ))}
         </div>
       )}
@@ -471,7 +339,7 @@ export function KeyPopover({
         {activeTab === 'key' && wrapperMode !== 'lm' && (
           <PopoverTabKey
             key={searchResetKey}
-            // LM keycodes store modifier bits where the basic key normally lives (see line 209).
+            // LM keycodes store modifier bits where the basic key normally lives (see `use-popover-keycode-workflow.ts`'s `handleModStripChange`).
             // After a mode switch away from LM, currentKeycode may still hold the stale LM value
             // for one render frame before the parent propagates the rebuilt keycode.
             currentKeycode={isLMKeycode(currentKeycode) ? 0 : currentKeycode}
@@ -481,13 +349,15 @@ export function KeyPopover({
             basicKeyOnly={wrapperMode === 'lt' || wrapperMode === 'shT'}
             onKeycodeSelect={handleKeycodeSelect}
             onClose={confirmAndClose}
+            remapLabel={remapLabel}
           />
         )}
         {activeTab === 'code' && (
           <PopoverTabCode
             currentKeycode={currentKeycode}
             maskOnly={maskOnly}
-            onRawKeycodeSelect={onRawKeycodeSelect}
+            // Code tab Apply is a genuine confirm, same as a Key tab pick.
+            onRawKeycodeSelect={(code) => onRawKeycodeSelect(code, true)}
           />
         )}
       </div>

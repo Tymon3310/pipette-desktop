@@ -19,7 +19,10 @@ export type SingleHistoryEntry =
 
 export type HistoryEntry =
   | SingleHistoryEntry
-  | { kind: 'batch'; entries: SingleHistoryEntry[] }
+  | {
+      kind: 'batch'
+      entries: SingleHistoryEntry[]
+    }
 
 export interface UseKeymapHistoryReturn {
   /** Push a new entry onto the undo stack. Clears the redo stack. */

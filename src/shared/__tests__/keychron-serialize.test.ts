@@ -40,7 +40,7 @@ describe('serializeKeychronState', () => {
         {
           name: 'FPS',
           keyConfigs: new Map([
-            ['0,0', { mode: 1, actuationPoint: 10, sensitivity: 5, releaseSensitivity: 5 }],
+            ['0,0', { mode: 1, actuationPoint: 10, sensitivity: 5, releaseSensitivity: 5, advMode: 0, advModeData: 0 }],
           ]),
           socdPairs: [{ type: 1, key1Row: 0, key1Col: 0, key2Row: 0, key2Col: 1 }],
           okmcConfigs: [

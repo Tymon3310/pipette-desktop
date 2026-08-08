@@ -4,17 +4,20 @@
 import { app } from 'electron'
 import { join } from 'node:path'
 import { readFile, readdir, access } from 'node:fs/promises'
-import { gcTombstones } from './merge'
+import { gcTombstones, type EntryMeta } from './merge'
 import { keyboardMetaFilePath, readKeyboardMetaIndex } from './keyboard-meta'
 import { FAVORITE_TYPES } from '../../shared/favorite-data'
 import type { FavoriteIndex } from '../../shared/types/favorite-store'
 import type { SnapshotIndex } from '../../shared/types/snapshot-store'
 import type { AnalyzeFilterSnapshotIndex } from '../../shared/types/analyze-filter-store'
 import type { KeyLabelIndex } from '../../shared/types/key-label-store'
+import type { TypingTestTextIndex } from '../../shared/types/typing-test-text-store'
+import type { RunLogIndex } from '../../shared/types/typing-run-log'
 import type { SyncBundle } from '../../shared/types/sync'
 import { KEYBOARD_META_SYNC_UNIT } from '../../shared/types/keyboard-meta'
 import { KEY_LABEL_SYNC_UNIT } from '../key-label-store'
-import { I18N_INDEX_SYNC_UNIT, type I18nPackIndex } from '../../shared/types/i18n-store'
+import { TYPING_TEST_TEXT_SYNC_UNIT } from '../typing-test-text-store'
+import { BUILTIN_ENGLISH_PACK_ID, I18N_INDEX_SYNC_UNIT, type I18nPackIndex } from '../../shared/types/i18n-store'
 import { THEME_INDEX_SYNC_UNIT, type ThemePackIndex } from '../../shared/types/theme-store'
 import {
   deviceDayJsonlPath,
@@ -28,10 +31,10 @@ import {
 } from '../typing-analytics/sync'
 import { log } from '../logger'
 
-export async function readIndexFile(dir: string): Promise<FavoriteIndex | SnapshotIndex | AnalyzeFilterSnapshotIndex | KeyLabelIndex | null> {
+export async function readIndexFile(dir: string): Promise<FavoriteIndex | SnapshotIndex | AnalyzeFilterSnapshotIndex | RunLogIndex | KeyLabelIndex | TypingTestTextIndex | null> {
   try {
     const raw = await readFile(join(dir, 'index.json'), 'utf-8')
-    return JSON.parse(raw) as FavoriteIndex | SnapshotIndex | AnalyzeFilterSnapshotIndex | KeyLabelIndex
+    return JSON.parse(raw) as FavoriteIndex | SnapshotIndex | AnalyzeFilterSnapshotIndex | RunLogIndex | KeyLabelIndex | TypingTestTextIndex
   } catch {
     return null
   }
@@ -62,9 +65,14 @@ export async function bundleSyncUnit(syncUnit: string): Promise<SyncBundle | nul
 
   // Handle "i18n/packs/{packId}" — single-file bundle carrying one
   // pack's translations. Each pack rides its own sync unit so editing
-  // one pack does not bump every other pack's LWW timestamp.
+  // one pack does not bump every other pack's LWW timestamp. The
+  // built-in English body is refused defensively even if somehow
+  // requested (collectAllSyncUnits already never enumerates it, and
+  // the store's own notifyPackChange never dirty-marks it — this is
+  // belt-and-suspenders against a stale/future call site).
   if (parts.length === 3 && parts[0] === 'i18n' && parts[1] === 'packs') {
     const packId = parts[2]
+    if (packId === BUILTIN_ENGLISH_PACK_ID) return null
     const filePath = join(userData, 'sync', 'i18n', 'packs', `${packId}.json`)
     try {
       const content = await readFile(filePath, 'utf-8')
@@ -151,7 +159,11 @@ export async function bundleSyncUnit(syncUnit: string): Promise<SyncBundle | nul
   const index = await readIndexFile(basePath)
   if (!index) return null
 
-  const gcEntries = gcTombstones(index.entries)
+  // `index.entries`'s static type is a union of each possible index's own
+  // array type (rather than a single array-of-union type), which a generic
+  // function call can't unify against. Every constituent is an EntryMeta[]
+  // at runtime, so widen through that shared alias.
+  const gcEntries = gcTombstones(index.entries as EntryMeta[])
   index.entries = gcEntries as typeof index.entries
 
   const files: Record<string, string> = {}
@@ -175,11 +187,17 @@ export async function bundleSyncUnit(syncUnit: string): Promise<SyncBundle | nul
   if (syncUnit === KEY_LABEL_SYNC_UNIT) {
     type = 'key-label'
     key = KEY_LABEL_SYNC_UNIT
+  } else if (syncUnit === TYPING_TEST_TEXT_SYNC_UNIT) {
+    type = 'typing-test-text'
+    key = TYPING_TEST_TEXT_SYNC_UNIT
   } else if (parts[0] === 'favorites') {
     type = 'favorite'
     key = parts[1]
   } else if (parts[2] === 'analyze_filters') {
     type = 'analyze-filter'
+    key = parts[1]
+  } else if (parts[2] === 'runs') {
+    type = 'run-log'
     key = parts[1]
   } else {
     type = 'layout'
@@ -193,10 +211,18 @@ export async function bundleSyncUnit(syncUnit: string): Promise<SyncBundle | nul
  * parser so the shape (including `utcDay` validation) is single-sourced
  * and drifts with the parser, not with a separate regex. Connect-time
  * initial sync and 3-minute polling skip these; the Analyze panel pulls
- * them on demand via `executeAnalyticsSync`. See
- * `.claude/rules/settings-persistence.md`. */
+ * them on demand via `executeAnalyticsSync`. */
 export function isAnalyticsSyncUnit(syncUnit: string): boolean {
   return parseTypingAnalyticsDeviceDaySyncUnit(syncUnit) !== null
+}
+
+/** Per-run raw keystroke log units (`keyboards/{uid}/runs`). Excluded
+ * from connect-time initial sync and 3-minute polling for the same
+ * reason as `isAnalyticsSyncUnit`. Unlike typing-analytics units, this
+ * data has no dedicated on-demand sync entry point — it only syncs via
+ * the generic before-quit flush and manual "sync now". */
+export function isRunLogSyncUnit(syncUnit: string): boolean {
+  return /^keyboards\/[^/]+\/runs$/.test(syncUnit)
 }
 
 /** Own-hash typing-analytics units for one keyboard. Narrower than
@@ -231,9 +257,17 @@ export async function collectAllSyncUnits(): Promise<string[]> {
     units.push(KEY_LABEL_SYNC_UNIT)
   } catch { /* no key labels */ }
 
+  try {
+    await access(join(userData, 'sync', TYPING_TEST_TEXT_SYNC_UNIT, 'index.json'))
+    units.push(TYPING_TEST_TEXT_SYNC_UNIT)
+  } catch { /* no typing-test texts */ }
+
   // i18n: emit "i18n/index" plus one "i18n/packs/{packId}" per known
   // meta (including tombstones — the tombstone needs to propagate to
-  // remote machines until it expires from purge).
+  // remote machines until it expires from purge). The built-in English
+  // entry is excluded: its body is a trivial placeholder every machine
+  // ensures identically, so syncing it is pure waste (its *position* in
+  // the index still syncs normally via I18N_INDEX_SYNC_UNIT above).
   try {
     const i18nIndexPath = join(userData, 'sync', 'i18n', 'index.json')
     const raw = await readFile(i18nIndexPath, 'utf-8')
@@ -241,6 +275,7 @@ export async function collectAllSyncUnits(): Promise<string[]> {
     if (Array.isArray(index?.metas)) {
       units.push(I18N_INDEX_SYNC_UNIT)
       for (const meta of index.metas) {
+        if (meta.id === BUILTIN_ENGLISH_PACK_ID) continue
         units.push(`i18n/packs/${meta.id}`)
       }
     }
@@ -281,6 +316,14 @@ export async function collectAllSyncUnits(): Promise<string[]> {
         await access(join(keyboardsDir, uid, 'analyze_filters', 'index.json'))
         units.push(`keyboards/${uid}/analyze_filters`)
       } catch { /* no analyze filter snapshots */ }
+      // per-run raw keystroke logs (index-based, mirrors analyze_filters
+      // layout) — connect-time initial sync/polling exclude this unit
+      // via isRunLogSyncUnit, but it still needs to be collected here so
+      // before-quit flush and manual sync can upload it.
+      try {
+        await access(join(keyboardsDir, uid, 'runs', 'index.json'))
+        units.push(`keyboards/${uid}/runs`)
+      } catch { /* no run logs */ }
     }
   } catch { /* dir doesn't exist */ }
 

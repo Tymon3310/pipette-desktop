@@ -35,6 +35,19 @@ vi.mock('../key-label-store', () => ({
   setHubPostId: vi.fn().mockResolvedValue({ success: true, data: {} }),
 }))
 
+// Stub the key-label Hub client; this suite exercises the hub-ipc
+// handlers' mapping logic (keymapApplicable <-> keymap_applicable), not
+// the actual fetch() calls (those are covered in hub-key-labels.test.ts).
+vi.mock('../hub/hub-key-labels', () => ({
+  fetchKeyLabelList: vi.fn(),
+  fetchKeyLabelDetail: vi.fn().mockRejectedValue(new Error('not configured for this test')),
+  fetchKeyLabelTimestamps: vi.fn(),
+  downloadKeyLabel: vi.fn(),
+  uploadKeyLabel: vi.fn(),
+  updateKeyLabel: vi.fn(),
+  deleteKeyLabel: vi.fn(),
+}))
+
 // Mock google-auth
 vi.mock('../sync/google-auth', () => ({
   getIdToken: vi.fn(),
@@ -91,6 +104,8 @@ import { getIdToken } from '../sync/google-auth'
 import { HUB_ERROR_DISPLAY_NAME_CONFLICT, HUB_ERROR_ACCOUNT_DEACTIVATED, HUB_ERROR_RATE_LIMITED } from '../../shared/types/hub'
 import { Hub401Error, Hub403Error, Hub409Error, Hub429Error, authenticateWithHub, uploadPostToHub, updatePostOnHub, patchPostOnHub, deletePostFromHub, fetchMyPosts, fetchMyPostsByKeyboard, fetchAuthMe, patchAuthMe, getHubOrigin } from '../hub/hub-client'
 import { setupHubIpc, clearHubTokenCache } from '../hub/hub-ipc'
+import { getRecord, saveRecord } from '../key-label-store'
+import { downloadKeyLabel, uploadKeyLabel } from '../hub/hub-key-labels'
 
 describe('hub-ipc', () => {
   beforeEach(() => {
@@ -112,7 +127,7 @@ describe('hub-ipc', () => {
     vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
     vi.mocked(authenticateWithHub).mockResolvedValueOnce({
       token: 'hub-jwt',
-      user: { id: 'u1', email: 'test@example.com', display_name: null },
+      user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
     })
   }
 
@@ -842,10 +857,10 @@ describe('hub-ipc', () => {
       vi.mocked(getIdToken).mockResolvedValue('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValue({
         token: 'hub-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: null },
+        user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
       })
       vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
-      vi.mocked(fetchAuthMe).mockResolvedValue({ id: 'u1', email: 'test@example.com', display_name: null })
+      vi.mocked(fetchAuthMe).mockResolvedValue({ id: 'u1', email: 'test@example.com', display_name: null, role: 'user' })
 
       const fetchPostsHandler = getHandlerFor('hub:fetch-my-posts')
       const fetchAuthHandler = getHandlerFor('hub:fetch-auth-me')
@@ -860,11 +875,11 @@ describe('hub-ipc', () => {
       vi.mocked(getIdToken).mockResolvedValue('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValue({
         token: 'hub-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: null },
+        user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
       })
       vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
       vi.mocked(fetchMyPostsByKeyboard).mockResolvedValue([])
-      vi.mocked(fetchAuthMe).mockResolvedValue({ id: 'u1', email: 'test@example.com', display_name: null })
+      vi.mocked(fetchAuthMe).mockResolvedValue({ id: 'u1', email: 'test@example.com', display_name: null, role: 'user' })
 
       const fetchPostsHandler = getHandlerFor('hub:fetch-my-posts')
       const fetchKeyboardHandler = getHandlerFor('hub:fetch-my-keyboard-posts')
@@ -883,7 +898,7 @@ describe('hub-ipc', () => {
       vi.mocked(getIdToken).mockResolvedValue('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValue({
         token: 'hub-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: null },
+        user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
       })
       vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
 
@@ -902,7 +917,7 @@ describe('hub-ipc', () => {
         .mockRejectedValueOnce(new Error('Hub auth failed: 401'))
         .mockResolvedValueOnce({
           token: 'hub-jwt',
-          user: { id: 'u1', email: 'test@example.com', display_name: null },
+          user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
         })
       vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
 
@@ -920,7 +935,7 @@ describe('hub-ipc', () => {
     })
 
     it('does not write cache if cleared during inflight auth', async () => {
-      let resolveAuth!: (value: { token: string; user: { id: string; email: string; display_name: null } }) => void
+      let resolveAuth!: (value: { token: string; user: { id: string; email: string; display_name: null; role: string } }) => void
       vi.mocked(getIdToken).mockResolvedValue('id-token')
       vi.mocked(authenticateWithHub).mockImplementationOnce(
         () => new Promise((r) => { resolveAuth = r }),
@@ -937,13 +952,13 @@ describe('hub-ipc', () => {
       clearHubTokenCache()
 
       // Resolve the inflight auth
-      resolveAuth({ token: 'stale-jwt', user: { id: 'u1', email: 'test@example.com', display_name: null } })
+      resolveAuth({ token: 'stale-jwt', user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' } })
       await pending
 
       // Next call should re-authenticate (stale-jwt was not cached)
       vi.mocked(authenticateWithHub).mockResolvedValueOnce({
         token: 'fresh-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: null },
+        user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
       })
       await handler()
       expect(authenticateWithHub).toHaveBeenCalledTimes(2)
@@ -955,7 +970,7 @@ describe('hub-ipc', () => {
       vi.mocked(getIdToken).mockResolvedValue('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValue({
         token: 'hub-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: null },
+        user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
       })
     }
 
@@ -963,14 +978,14 @@ describe('hub-ipc', () => {
       mockHubAuthPersistent()
       vi.mocked(fetchAuthMe)
         .mockRejectedValueOnce(new Hub401Error('Hub fetch auth me failed', 'Unauthorized'))
-        .mockResolvedValueOnce({ id: 'u1', email: 'test@example.com', display_name: 'User' })
+        .mockResolvedValueOnce({ id: 'u1', email: 'test@example.com', display_name: 'User', role: 'user' })
 
       const handler = getHandlerFor('hub:fetch-auth-me')
       const result = await handler()
 
       expect(result).toEqual({
         success: true,
-        user: { id: 'u1', email: 'test@example.com', display_name: 'User' },
+        user: { id: 'u1', email: 'test@example.com', display_name: 'User', role: 'user' },
       })
       expect(authenticateWithHub).toHaveBeenCalledTimes(2)
       expect(fetchAuthMe).toHaveBeenCalledTimes(2)
@@ -1026,7 +1041,7 @@ describe('hub-ipc', () => {
       vi.mocked(authenticateWithHub)
         .mockResolvedValueOnce({
           token: 'hub-jwt',
-          user: { id: 'u1', email: 'test@example.com', display_name: null },
+          user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
         })
         .mockRejectedValueOnce(new Error('Hub auth failed: 401 Unauthorized'))
       vi.mocked(fetchAuthMe)
@@ -1047,7 +1062,7 @@ describe('hub-ipc', () => {
       vi.mocked(getIdToken).mockResolvedValue('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValue({
         token: 'hub-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: null },
+        user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
       })
     }
 
@@ -1130,7 +1145,7 @@ describe('hub-ipc', () => {
       vi.mocked(getIdToken).mockResolvedValue('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValue({
         token: 'hub-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: null },
+        user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
       })
       vi.mocked(fetchAuthMe)
         .mockRejectedValueOnce(new Hub401Error('Hub fetch auth me failed', 'Unauthorized'))
@@ -1190,7 +1205,7 @@ describe('hub-ipc', () => {
       vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValueOnce({
         token: 'hub-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: 'CustomName' },
+        user: { id: 'u1', email: 'test@example.com', display_name: 'CustomName', role: 'user' },
       })
       vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 0, page: 1, per_page: 10 })
 
@@ -1208,7 +1223,7 @@ describe('hub-ipc', () => {
       vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValueOnce({
         token: 'hub-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: null },
+        user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
       })
       vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 0, page: 1, per_page: 10 })
 
@@ -1227,7 +1242,7 @@ describe('hub-ipc', () => {
       vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValueOnce({
         token: 'hub-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: null },
+        user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
       })
       vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 0, page: 1, per_page: 10 })
 
@@ -1242,7 +1257,7 @@ describe('hub-ipc', () => {
       vi.mocked(getIdToken).mockResolvedValue('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValueOnce({
         token: 'hub-jwt-1',
-        user: { id: 'u1', email: 'test@example.com', display_name: null },
+        user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
       })
       vi.mocked(fetchMyPosts).mockResolvedValue({ items: [], total: 0, page: 1, per_page: 10 })
 
@@ -1257,7 +1272,7 @@ describe('hub-ipc', () => {
       // Next call should re-authenticate with the new display name
       vi.mocked(authenticateWithHub).mockResolvedValueOnce({
         token: 'hub-jwt-2',
-        user: { id: 'u1', email: 'test@example.com', display_name: 'NewName' },
+        user: { id: 'u1', email: 'test@example.com', display_name: 'NewName', role: 'user' },
       })
       await fetchHandler({})
 
@@ -1272,7 +1287,7 @@ describe('hub-ipc', () => {
       vi.mocked(getIdToken).mockResolvedValueOnce('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValueOnce({
         token: 'hub-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: null },
+        user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
       })
       vi.mocked(fetchMyPosts).mockResolvedValueOnce({ items: [], total: 0, page: 1, per_page: 10 })
 
@@ -1302,7 +1317,7 @@ describe('hub-ipc', () => {
       vi.mocked(getIdToken).mockResolvedValue('id-token')
       vi.mocked(authenticateWithHub).mockResolvedValue({
         token: 'hub-jwt',
-        user: { id: 'u1', email: 'test@example.com', display_name: null },
+        user: { id: 'u1', email: 'test@example.com', display_name: null, role: 'user' },
       })
     }
 
@@ -1379,6 +1394,90 @@ describe('hub-ipc', () => {
         success: false,
         error: HUB_ERROR_RATE_LIMITED,
       })
+    })
+  })
+
+  describe('KEY_LABEL_HUB_DOWNLOAD keymapApplicable mapping', () => {
+    it('maps keymap_applicable: true from the download body into saveRecord', async () => {
+      vi.mocked(downloadKeyLabel).mockResolvedValueOnce({
+        name: 'Colemak',
+        map: { KC_E: 'F' },
+        composite_labels: null,
+        keymap_applicable: true,
+      })
+
+      const handler = getHandlerFor('key-label-hub:download')
+      await handler({}, 'hub-post-1')
+
+      expect(saveRecord).toHaveBeenCalledWith(expect.objectContaining({ keymapApplicable: true }))
+    })
+
+    it('omits keymapApplicable when the download body has no flag', async () => {
+      vi.mocked(downloadKeyLabel).mockResolvedValueOnce({
+        name: 'Legacy',
+        map: {},
+        composite_labels: null,
+      })
+
+      const handler = getHandlerFor('key-label-hub:download')
+      await handler({}, 'hub-post-2')
+
+      const calls = vi.mocked(saveRecord).mock.calls
+      expect(calls[calls.length - 1][0].keymapApplicable).toBeUndefined()
+    })
+  })
+
+  describe('KEY_LABEL_HUB_UPLOAD keymapApplicable mapping', () => {
+    it('sends keymapApplicable: true when the local record has the flag', async () => {
+      mockHubAuth()
+      vi.mocked(getRecord).mockResolvedValueOnce({
+        success: true,
+        data: {
+          meta: { id: 'local-1', name: 'Colemak', filename: 'f.json', savedAt: 'now', updatedAt: 'now' },
+          data: { name: 'Colemak', map: { KC_E: 'F' }, keymapApplicable: true },
+        },
+      })
+      vi.mocked(uploadKeyLabel).mockResolvedValueOnce({
+        id: 'hub-new',
+        name: 'Colemak',
+        map: { KC_E: 'F' },
+        composite_labels: null,
+        uploaded_by: 'u1',
+        uploader_name: 'me',
+        created_at: 'now',
+        updated_at: 'now',
+      })
+
+      const handler = getHandlerFor('key-label-hub:upload')
+      await handler({}, 'local-1')
+
+      expect(uploadKeyLabel).toHaveBeenCalledWith('hub-jwt', expect.objectContaining({ keymapApplicable: true }))
+    })
+
+    it('sends keymapApplicable: false when the local record has no flag', async () => {
+      mockHubAuth()
+      vi.mocked(getRecord).mockResolvedValueOnce({
+        success: true,
+        data: {
+          meta: { id: 'local-2', name: 'Plain', filename: 'f.json', savedAt: 'now', updatedAt: 'now' },
+          data: { name: 'Plain', map: { KC_A: 'A' } },
+        },
+      })
+      vi.mocked(uploadKeyLabel).mockResolvedValueOnce({
+        id: 'hub-new-2',
+        name: 'Plain',
+        map: { KC_A: 'A' },
+        composite_labels: null,
+        uploaded_by: 'u1',
+        uploader_name: 'me',
+        created_at: 'now',
+        updated_at: 'now',
+      })
+
+      const handler = getHandlerFor('key-label-hub:upload')
+      await handler({}, 'local-2')
+
+      expect(uploadKeyLabel).toHaveBeenCalledWith('hub-jwt', expect.objectContaining({ keymapApplicable: false }))
     })
   })
 })

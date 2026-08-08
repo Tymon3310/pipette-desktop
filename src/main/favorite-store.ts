@@ -7,15 +7,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { IpcChannels } from '../shared/ipc/channels'
 import { isValidFavoriteType, isValidVialProtocol, isFavoriteDataFile, FAV_EXPORT_KEY_MAP, FAV_TYPE_TO_EXPORT_KEY, isValidFavExportFile, buildFavExportFile, serializeFavData, deserializeFavData } from '../shared/favorite-data'
-import { serialize as serializeKeycode, deserialize as deserializeKeycode, getProtocol, setProtocol } from '../shared/keycodes/keycodes'
+import { serialize as serializeKeycode, deserialize as deserializeKeycode } from '../shared/keycodes/keycodes'
+import { withDeserializeProtocol, withSerializeProtocol } from '../shared/keycodes/with-protocol'
 import { notifyChange } from './sync/sync-service'
 import { secureHandle } from './ipc-guard'
+import { isSafePathSegment, tsForFilename, tsForExportFilename } from './utils/safe-filename'
 import type { FavoriteType, SavedFavoriteMeta, FavoriteIndex, FavoriteExportEntry, FavoriteImportResult } from '../shared/types/favorite-store'
-
-function isSafePathSegment(segment: string): boolean {
-  if (!segment || segment === '.' || segment === '..') return false
-  return !/[/\\]/.test(segment)
-}
+import type { HubPrivateLink } from '../shared/types/hub-private'
 
 function validateType(type: unknown): asserts type is FavoriteType {
   if (!isValidFavoriteType(type)) throw new Error('Invalid favorite type')
@@ -60,25 +58,6 @@ async function findEntry(type: FavoriteType, entryId: string): Promise<{ index: 
   return { index, entry }
 }
 
-/**
- * Run `body` with `getProtocol()` temporarily set to `protocol` so that
- * `deserializeKeycode` resolves keycode strings against the file's protocol
- * version. Restores the previous protocol in `finally`.
- *
- * If `protocol` is undefined (legacy v2 file or out-of-spec v3 without
- * `vial_protocol`), runs `body` with the current default protocol.
- */
-function withImportProtocol<T>(protocol: number | undefined, body: () => T): T {
-  if (protocol === undefined) return body()
-  const prev = getProtocol()
-  setProtocol(protocol)
-  try {
-    return body()
-  } finally {
-    setProtocol(prev)
-  }
-}
-
 export function setupFavoriteStore(): void {
   secureHandle(
     IpcChannels.FAVORITE_STORE_LIST,
@@ -107,7 +86,7 @@ export function setupFavoriteStore(): void {
         await mkdir(dir, { recursive: true })
 
         const now = new Date()
-        const timestamp = now.toISOString().replace(/:/g, '-')
+        const timestamp = tsForFilename(now)
         const filename = `${type}_${timestamp}_${randomUUID().slice(0, 8)}.json`
         const filePath = getSafeFilePath(type, filename)
 
@@ -226,7 +205,7 @@ export function setupFavoriteStore(): void {
             exportEntries.push({
               label: entry.label,
               savedAt: entry.savedAt,
-              data: serializeFavData(scope, parsed.data, serializeKeycode),
+              data: withSerializeProtocol(vialProtocol, () => serializeFavData(scope, parsed.data, serializeKeycode)),
             })
           } catch {
             // Skip unreadable entries
@@ -243,7 +222,7 @@ export function setupFavoriteStore(): void {
           : {}
 
         const now = new Date()
-        const ts = now.toISOString().replace(/:/g, '').replace(/\.\d+Z$/, '').replace('T', '-')
+        const ts = tsForExportFilename(now)
         const defaultFilename = `pipette-fav-${exportKey}-${ts}.json`
 
         const result = await dialog.showSaveDialog(win, {
@@ -285,10 +264,10 @@ export function setupFavoriteStore(): void {
         if (parsed.data == null) return { success: false, error: 'Missing data field' }
 
         const exportKey = FAV_TYPE_TO_EXPORT_KEY[scope]
-        const serializedData = serializeFavData(scope, parsed.data, serializeKeycode)
+        const serializedData = withSerializeProtocol(vialProtocol, () => serializeFavData(scope, parsed.data, serializeKeycode))
 
         const now = new Date()
-        const ts = now.toISOString().replace(/:/g, '').replace(/\.\d+Z$/, '').replace('T', '-')
+        const ts = tsForExportFilename(now)
         const defaultFilename = `pipette-fav-${exportKey}-current-${ts}.json`
 
         const result = await dialog.showSaveDialog(win, {
@@ -338,6 +317,32 @@ export function setupFavoriteStore(): void {
           delete found.entry.hubPostId
         } else {
           found.entry.hubPostId = normalized
+          // public and private linkage are mutually exclusive
+          delete found.entry.hubPrivate
+        }
+        found.entry.updatedAt = new Date().toISOString()
+        await writeIndex(type, found.index)
+        notifyChange(`favorites/${type}`)
+        return { success: true }
+      } catch (err) {
+        return { success: false, error: String(err) }
+      }
+    },
+  )
+
+  secureHandle(
+    IpcChannels.FAVORITE_STORE_SET_HUB_PRIVATE,
+    async (_event, type: unknown, entryId: string, link: HubPrivateLink | null): Promise<{ success: boolean; error?: string }> => {
+      try {
+        validateType(type)
+        const found = await findEntry(type, entryId)
+        if (!found) return { success: false, error: 'Entry not found' }
+
+        if (link === null) {
+          delete found.entry.hubPrivate
+        } else {
+          found.entry.hubPrivate = link
+          delete found.entry.hubPostId
         }
         found.entry.updatedAt = new Date().toISOString()
         await writeIndex(type, found.index)
@@ -386,7 +391,7 @@ export function setupFavoriteStore(): void {
         }
 
         const firstEntry = entries[0]
-        const normalizedData = withImportProtocol(parsed.vial_protocol, () =>
+        const normalizedData = withDeserializeProtocol(parsed.vial_protocol, () =>
           deserializeFavData(scope, firstEntry.data, deserializeKeycode),
         )
 
@@ -438,7 +443,7 @@ export function setupFavoriteStore(): void {
           await mkdir(dir, { recursive: true })
 
           for (const entry of entries) {
-            const normalizedData = withImportProtocol(parsed.vial_protocol, () =>
+            const normalizedData = withDeserializeProtocol(parsed.vial_protocol, () =>
               deserializeFavData(favType, entry.data, deserializeKeycode),
             )
             if (!isFavoriteDataFile({ type: favType, data: normalizedData }, favType)) {
@@ -455,7 +460,7 @@ export function setupFavoriteStore(): void {
             }
 
             const now = new Date()
-            const timestamp = now.toISOString().replace(/:/g, '-')
+            const timestamp = tsForFilename(now)
             const filename = `${favType}_${timestamp}_${randomUUID().slice(0, 8)}.json`
             const filePath = getSafeFilePath(favType, filename)
 
