@@ -97,7 +97,7 @@ import type { NotificationFetchResult } from '../shared/types/notification'
 const vialAPI = {
   // --- Device Management (node-hid via IPC) ---
   listDevices: (): Promise<DeviceInfo[]> => listDevices(),
-  openDevice: (vendorId: number, productId: number, serialNumber?: string): Promise<boolean> =>
+  openDevice: (vendorId: number, productId: number, _serialNumber?: string): Promise<boolean> =>
     openHidDevice(vendorId, productId),
   closeDevice: (): Promise<void> => closeHidDevice(),
   isDeviceOpen: (): Promise<boolean> => isDeviceOpen(),

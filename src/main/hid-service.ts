@@ -208,7 +208,7 @@ export async function openHidDevice(
   productId: number,
   serialNumber?: string,
 ): Promise<boolean> {
-  if (openDevice || usingBridge) {
+  if (openDevice || usingBridge || isVirtualDeviceOpen()) {
     await closeHidDevice()
   }
 

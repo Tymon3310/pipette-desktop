@@ -26,6 +26,7 @@ import {
   SOCD_TYPE_NAMES,
 } from '../../../shared/constants/keychron'
 import { codeToLabel } from '../../../shared/keycodes/keycodes'
+import { Tooltip } from '../ui/Tooltip'
 
 interface Props {
   analog: KeychronAnalogState
@@ -876,19 +877,20 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap }: Props) {
                         {[0, 1, 2, 3].map((kcIdx) => (
                           <tr key={kcIdx} className="border-b border-edge/50 last:border-0">
                             <td className="py-2">
-                              <input
-                                className="w-24 rounded border border-edge bg-surface-dim px-2 py-1 text-sm font-mono"
-                                value={`0x${cfg.keycodes[kcIdx]?.toString(16).padStart(4, '0')}`}
-                                onChange={(e) => {
-                                  const val = parseInt(e.target.value, 16)
-                                  if (!isNaN(val)) {
-                                    const keycodes = [...cfg.keycodes]
-                                    keycodes[kcIdx] = val
-                                    updateCfg({ keycodes })
-                                  }
-                                }}
-                                title="Enter hexadecimal keycode (e.g., 0x0004 for A)"
-                              />
+                              <Tooltip content="Enter hexadecimal keycode (e.g., 0x0004 for A)">
+                                <input
+                                  className="w-24 rounded border border-edge bg-surface-dim px-2 py-1 text-sm font-mono"
+                                  value={`0x${cfg.keycodes[kcIdx]?.toString(16).padStart(4, '0')}`}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value, 16)
+                                    if (!isNaN(val)) {
+                                      const keycodes = [...cfg.keycodes]
+                                      keycodes[kcIdx] = val
+                                      updateCfg({ keycodes })
+                                    }
+                                  }}
+                                />
+                              </Tooltip>
                             </td>
                             {[
                               { eventIdx: kcIdx * 2 }, // shallow act
@@ -949,25 +951,26 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap }: Props) {
                 {t('keychron.deselectAll', 'Deselect All')}
               </button>
               <div className="ml-auto flex gap-2">
-                <button
-                  className="rounded border border-edge px-4 py-1.5 text-sm font-medium hover:bg-surface-dim disabled:opacity-40"
-                  onClick={async () => {
-                    if (selectedKeys.size === 0) return
-                    let allOk = true
-                    for (const key of selectedKeys) {
-                      const [r, c] = key.split(',').map(Number)
-                      if (r !== undefined && c !== undefined) {
-                        const ok = await api.keychronAnalogSetAdvanceModeClear(currentProfile, r, c)
-                        if (!ok) allOk = false
+                <Tooltip content="Remove DKS/Gamepad/Toggle bindings from selected keys">
+                  <button
+                    className="rounded border border-edge px-4 py-1.5 text-sm font-medium hover:bg-surface-dim disabled:opacity-40"
+                    onClick={async () => {
+                      if (selectedKeys.size === 0) return
+                      let allOk = true
+                      for (const key of selectedKeys) {
+                        const [r, c] = key.split(',').map(Number)
+                        if (r !== undefined && c !== undefined) {
+                          const ok = await api.keychronAnalogSetAdvanceModeClear(currentProfile, r, c)
+                          if (!ok) allOk = false
+                        }
                       }
-                    }
-                    if (allOk) scheduleSave()
-                  }}
-                  disabled={selectedKeys.size === 0}
-                  title="Remove DKS/Gamepad/Toggle bindings from selected keys"
-                >
-                  {t('keychron.analog.clearAdvance', 'Clear Mode')}
-                </button>
+                      if (allOk) scheduleSave()
+                    }}
+                    disabled={selectedKeys.size === 0}
+                  >
+                    {t('keychron.analog.clearAdvance', 'Clear Mode')}
+                  </button>
+                </Tooltip>
                 <button
                   className="rounded bg-accent px-4 py-1.5 text-sm font-medium text-on-accent transition-colors hover:bg-accent/90 disabled:opacity-40"
                   onClick={handleApplyDksToSelected}
@@ -1043,39 +1046,41 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap }: Props) {
                 >
                   <span className="text-xs font-medium text-content-secondary w-8">#{i + 1}</span>
                   <div className="flex items-center gap-1 text-xs">
-                    <button
-                      className={`rounded px-2 py-0.5 border transition-colors ${
-                        socdPickMode?.pairIdx === i && socdPickMode?.whichKey === 1
-                          ? 'bg-accent text-on-accent border-accent'
-                          : 'bg-surface-dim border-edge hover:border-accent hover:text-accent'
-                      }`}
-                      onClick={() => setSocdPickMode({ pairIdx: i, whichKey: 1 })}
-                      title="Click to assign Key 1"
-                    >
-                      R{pair.key1Row}C{pair.key1Col}
-                      {keymap.has(`0,${pair.key1Row},${pair.key1Col}`) && (
-                        <span className="ml-1 opacity-70">
-                          ({codeToLabel(keymap.get(`0,${pair.key1Row},${pair.key1Col}`)!)})
-                        </span>
-                      )}
-                    </button>
+                    <Tooltip content="Click to assign Key 1">
+                      <button
+                        className={`rounded px-2 py-0.5 border transition-colors ${
+                          socdPickMode?.pairIdx === i && socdPickMode?.whichKey === 1
+                            ? 'bg-accent text-on-accent border-accent'
+                            : 'bg-surface-dim border-edge hover:border-accent hover:text-accent'
+                        }`}
+                        onClick={() => setSocdPickMode({ pairIdx: i, whichKey: 1 })}
+                      >
+                        R{pair.key1Row}C{pair.key1Col}
+                        {keymap.has(`0,${pair.key1Row},${pair.key1Col}`) && (
+                          <span className="ml-1 opacity-70">
+                            ({codeToLabel(keymap.get(`0,${pair.key1Row},${pair.key1Col}`)!)})
+                          </span>
+                        )}
+                      </button>
+                    </Tooltip>
                     <span className="text-content-secondary">↔</span>
-                    <button
-                      className={`rounded px-2 py-0.5 border transition-colors ${
-                        socdPickMode?.pairIdx === i && socdPickMode?.whichKey === 2
-                          ? 'bg-accent text-on-accent border-accent'
-                          : 'bg-surface-dim border-edge hover:border-accent hover:text-accent'
-                      }`}
-                      onClick={() => setSocdPickMode({ pairIdx: i, whichKey: 2 })}
-                      title="Click to assign Key 2"
-                    >
-                      R{pair.key2Row}C{pair.key2Col}
+                    <Tooltip content="Click to assign Key 2">
+                      <button
+                        className={`rounded px-2 py-0.5 border transition-colors ${
+                          socdPickMode?.pairIdx === i && socdPickMode?.whichKey === 2
+                            ? 'bg-accent text-on-accent border-accent'
+                            : 'bg-surface-dim border-edge hover:border-accent hover:text-accent'
+                        }`}
+                        onClick={() => setSocdPickMode({ pairIdx: i, whichKey: 2 })}
+                      >
+                        R{pair.key2Row}C{pair.key2Col}
                       {keymap.has(`0,${pair.key2Row},${pair.key2Col}`) && (
                         <span className="ml-1 opacity-70">
                           ({codeToLabel(keymap.get(`0,${pair.key2Row},${pair.key2Col}`)!)})
                         </span>
                       )}
-                    </button>
+                      </button>
+                    </Tooltip>
                   </div>
                   <select
                     className="ml-auto rounded border border-edge bg-surface-dim px-2 py-1 text-sm"

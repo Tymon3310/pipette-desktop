@@ -12,6 +12,7 @@ import {
 } from '../../../shared/constants/keychron'
 import { ModalCloseButton } from './ModalCloseButton'
 import { codeToLabel } from '../../../shared/keycodes/keycodes'
+import { Tooltip } from '../ui/Tooltip'
 
 interface Props {
   keychron: KeychronState
@@ -174,18 +175,19 @@ export function KeychronSocd({ keychron, keys, keymap, onSettingChanged, onClose
               <span className="w-16 text-xs text-content-muted">
                 {t('keychron.snapPair', 'Pair {{n}}', { n: i + 1 })}
               </span>
-              <select
-                value={pair.type}
-                onChange={(e) => handleSnapType(i, parseInt(e.target.value, 10))}
-                className="flex-1 rounded border border-edge bg-surface px-2 py-1 text-sm"
-                title={SNAP_CLICK_TYPE_TOOLTIPS[pair.type] ?? ''}
-              >
-                {Object.entries(SNAP_CLICK_TYPE_NAMES).map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+              <Tooltip content={SNAP_CLICK_TYPE_TOOLTIPS[pair.type] ?? ''}>
+                <select
+                  value={pair.type}
+                  onChange={(e) => handleSnapType(i, parseInt(e.target.value, 10))}
+                  className="flex-1 rounded border border-edge bg-surface px-2 py-1 text-sm"
+                >
+                  {Object.entries(SNAP_CLICK_TYPE_NAMES).map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </Tooltip>
 
               <button
                 className={`flex w-24 flex-col items-center justify-center rounded border px-2 py-1 text-xs transition-colors ${
