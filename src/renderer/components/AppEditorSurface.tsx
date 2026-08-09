@@ -100,8 +100,6 @@ export function AppEditorSurface({
   handleViewAnalytics,
   timelineHandoff,
   setTypingTestRunning,
-  _keychronSupported,
-  _isBridge,
   onOpenKeychron,
   onOpenKeychronRgb,
   onOpenKeychronAnalog,

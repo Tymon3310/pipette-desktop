@@ -68,7 +68,6 @@ export function AppModals({
   decodedLayoutOptions,
   deserializedMacros,
   keychronSupported,
-  _isBridge,
   showKeychronModal,
   setShowKeychronModal,
   showKeychronRgbModal,
@@ -80,8 +79,6 @@ export function AppModals({
   showKeychronSocdModal,
   setShowKeychronSocdModal,
   keychronAnalogData,
-  _setKeychronAnalogData,
-  _handleOpenKeychronAnalog,
 }: Props) {
   const { t } = useTranslation()
   const api = window.vialAPI
