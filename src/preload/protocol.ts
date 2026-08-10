@@ -18,6 +18,7 @@ import {
   CMD_VIA_GET_KEYBOARD_VALUE,
   CMD_VIA_SET_KEYBOARD_VALUE,
   CMD_VIA_SET_KEYCODE,
+  CMD_VIA_RESET,
   CMD_VIA_LIGHTING_SET_VALUE,
   CMD_VIA_LIGHTING_GET_VALUE,
   CMD_VIA_LIGHTING_SAVE,
@@ -723,4 +724,9 @@ export async function qmkSettingsSet(qsid: number, data: number[]): Promise<void
 /** Reset all QMK settings to defaults. */
 export async function qmkSettingsReset(): Promise<void> {
   await sendReceive(cmd(CMD_VIA_VIAL_PREFIX, CMD_VIAL_QMK_SETTINGS_RESET))
+}
+
+/** Send VIA reset command — keyboard will reboot to bootloader. */
+export async function resetDevice(): Promise<void> {
+  await sendReceive(cmd(CMD_VIA_RESET))
 }

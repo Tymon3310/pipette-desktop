@@ -37,6 +37,7 @@ export const CMD_VIA_GET_KEYBOARD_VALUE = 0x02
 export const CMD_VIA_SET_KEYBOARD_VALUE = 0x03
 export const CMD_VIA_GET_KEYCODE = 0x04
 export const CMD_VIA_SET_KEYCODE = 0x05
+export const CMD_VIA_RESET = 0x0b
 export const CMD_VIA_LIGHTING_SET_VALUE = 0x07
 export const CMD_VIA_LIGHTING_GET_VALUE = 0x08
 export const CMD_VIA_LIGHTING_SAVE = 0x09

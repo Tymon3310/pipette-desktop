@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ModalCloseButton } from './ModalCloseButton'
 
 import { useUnlockGate } from '../../hooks/useUnlockGate'
-import type { DeviceInfo } from '../../../shared/types/protocol'
+import type { DeviceInfo, VilFile } from '../../../shared/types/protocol'
 
 /** How often to poll for the device to re-appear after DFU flashing (ms) */
 const RECONNECT_POLL_MS = 2000
@@ -13,7 +13,8 @@ const RECONNECT_TIMEOUT_MS = 60_000
 interface KeychronDfuFlasherProps {
   isOpen: boolean
   onClose: () => void
-  onSaveBackup?: () => Promise<boolean>
+  onSaveBackup?: () => Promise<VilFile | null>
+  onRestoreBackup?: (backup: VilFile) => Promise<void>
   unlocked?: boolean
   onUnlock?: () => void
   /** Suppress disconnect detection while flashing */
@@ -23,12 +24,13 @@ interface KeychronDfuFlasherProps {
   /** Connect to a specific device */
   connectDevice?: (device: DeviceInfo) => Promise<boolean>
   /** Called after a successful flash and reconnect to refresh the UI */
-  onReload?: () => void
+  onReload?: () => Promise<void>
 }
 
 export const KeychronDfuFlasher = ({
   onClose,
   onSaveBackup,
+  onRestoreBackup,
   unlocked,
   onUnlock,
   setSuppressDisconnect,
@@ -41,6 +43,7 @@ export const KeychronDfuFlasher = ({
   const [progress, setProgress] = useState(0)
   const [logs, setLogs] = useState<string[]>([])
   const [backupLayout, setBackupLayout] = useState(true)
+  const backupDataRef = useRef<VilFile | null>(null)
   const [flashSuccess, setFlashSuccess] = useState<boolean | null>(null)
   const [reconnecting, setReconnecting] = useState(false)
   const logEndRef = useRef<HTMLDivElement>(null)
@@ -130,10 +133,28 @@ export const KeychronDfuFlasher = ({
           if (ok) {
             setLogs((prev) => [
               ...prev,
-              'Reconnected successfully! Layout + settings will be restored.',
+              'Reconnected successfully! Restoring layout + settings...',
             ])
             setReconnecting(false)
-            onReload?.()
+            try {
+              await onReload?.()
+            } catch (e: unknown) {
+              setLogs((prev) => [
+                ...prev,
+                `Warning: Reload failed: ${e instanceof Error ? e.message : String(e)}. Attempting restore anyway...`,
+              ])
+            }
+            if (backupDataRef.current && onRestoreBackup) {
+              try {
+                await onRestoreBackup(backupDataRef.current)
+                setLogs((prev) => [...prev, 'Layout and settings restored successfully.'])
+              } catch (e: unknown) {
+                setLogs((prev) => [
+                  ...prev,
+                  `Warning: Failed to restore layout: ${e instanceof Error ? e.message : String(e)}`,
+                ])
+              }
+            }
             
             // Wait 3 seconds so the user can read the success message before closing
             setTimeout(() => {
@@ -152,7 +173,7 @@ export const KeychronDfuFlasher = ({
     setSuppressDisconnect?.(false)
     setReconnecting(false)
     return false
-  }, [originalDevice, connectDevice, setSuppressDisconnect])
+  }, [originalDevice, connectDevice, setSuppressDisconnect, onReload, onRestoreBackup])
 
   const handleFlash = async () => {
     if (!selectedFile) return
@@ -174,8 +195,9 @@ export const KeychronDfuFlasher = ({
     if (backupLayout && onSaveBackup) {
       setLogs((prev) => [...prev, 'Backing up current layout and keychron settings...'])
       try {
-        const success = await onSaveBackup()
-        if (success) {
+        const backup = await onSaveBackup()
+        if (backup) {
+          backupDataRef.current = backup
           setLogs((prev) => [...prev, 'Layout saved successfully to background.'])
         } else {
           setLogs((prev) => [...prev, 'Warning: Failed to save layout.'])

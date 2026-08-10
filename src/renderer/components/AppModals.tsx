@@ -19,6 +19,7 @@ import { KeychronRGB } from './editors/KeychronRGB'
 import { KeychronDfuFlasher } from './editors/KeychronDfuFlasher'
 import { KeychronAnalog } from './editors/KeychronAnalog'
 import { KeychronSocd } from './editors/KeychronSocd'
+import { KeychronModalShell } from './editors/KeychronModalShell'
 import type { decodeLayoutOptions } from '../../shared/kle/layout-options'
 import type { deserializeAllMacros } from '../../preload/macro'
 import type { useDeviceConnection } from '../hooks/useDeviceConnection'
@@ -253,60 +254,72 @@ export function AppModals({
       <JaRemovedBanner />
 
       {showKeychronRgbModal && keyboard.keychron?.hasRgb && keyboard.keychron.rgb && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowKeychronRgbModal(false)}>
-          <div className="flex max-h-[90vh] w-[1200px] max-w-[95vw] flex-col rounded-lg bg-surface-alt shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-              <h3 className="text-lg font-semibold">{t("keymap.keychronRgb", "Keychron RGB")}</h3>
-              <ModalCloseButton testid="keychron-rgb-modal-close" onClick={() => setShowKeychronRgbModal(false)} />
-            </div>
-            <div className="flex min-h-0 flex-1 overflow-hidden p-6 pt-0">
-              <KeychronRGB
-                rgb={keyboard.keychron.rgb}
-                ledMatrix={keyboard.keychron.rgb.ledMatrix}
-                keys={keyboard.layout?.keys ?? []}
-                vialRGBMode={keyboard.vialRGBMode}
-                vialRGBSpeed={keyboard.vialRGBSpeed}
-                vialRGBHue={keyboard.vialRGBHue}
-                vialRGBSat={keyboard.vialRGBSat}
-                vialRGBVal={keyboard.vialRGBVal}
-                vialRGBMaxBrightness={keyboard.vialRGBMaxBrightness}
-                vialRGBSupported={keyboard.vialRGBSupported}
-                onSetVialRGBMode={keyboard.setVialRGBMode}
-                onSetVialRGBSpeed={keyboard.setVialRGBSpeed}
-                onSetVialRGBColor={keyboard.setVialRGBColor}
-                onSetVialRGBBrightness={keyboard.setVialRGBBrightness}
-              />
-            </div>
-          </div>
-        </div>
+        <KeychronModalShell
+          title={t("keymap.keychronRgb", "Keychron RGB")}
+          testId="keychron-rgb-modal"
+          onClose={() => setShowKeychronRgbModal(false)}
+          width="w-modal-2xl"
+        >
+          <KeychronRGB
+            rgb={keyboard.keychron.rgb}
+            ledMatrix={keyboard.keychron.rgb.ledMatrix}
+            keys={keyboard.layout?.keys ?? []}
+            vialRGBMode={keyboard.vialRGBMode}
+            vialRGBSpeed={keyboard.vialRGBSpeed}
+            vialRGBHue={keyboard.vialRGBHue}
+            vialRGBSat={keyboard.vialRGBSat}
+            vialRGBVal={keyboard.vialRGBVal}
+            vialRGBMaxBrightness={keyboard.vialRGBMaxBrightness}
+            vialRGBSupported={keyboard.vialRGBSupported}
+            onSetVialRGBMode={keyboard.setVialRGBMode}
+            onSetVialRGBSpeed={keyboard.setVialRGBSpeed}
+            onSetVialRGBColor={keyboard.setVialRGBColor}
+            onSetVialRGBBrightness={keyboard.setVialRGBBrightness}
+          />
+        </KeychronModalShell>
       )}
 
       {showKeychronFlasherModal && (
         <KeychronDfuFlasher
           isOpen={showKeychronFlasherModal}
           onClose={() => setShowKeychronFlasherModal(false)}
+          onSaveBackup={async () => {
+            try {
+              return keyboard.serialize()
+            } catch {
+              return null
+            }
+          }}
+          onRestoreBackup={async (backup) => {
+            await keyboard.applyVilFile(backup)
+          }}
+          unlocked={keyboard.unlockStatus.unlocked}
+          onUnlock={() => editorUI.setShowUnlockDialog(true)}
           setSuppressDisconnect={device.setSuppressDisconnect}
+          originalDevice={device.connectedDevice}
+          connectDevice={device.connectDevice}
+          onReload={async () => {
+            await keyboard.reload()
+          }}
         />
       )}
 
       {showKeychronAnalogModal && keychronAnalogData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowKeychronAnalogModal(false)}>
-          <div className="flex h-[90vh] w-[1400px] max-w-[95vw] flex-col rounded-lg bg-surface-alt shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-              <h3 className="text-lg font-semibold">{t("keychron.analog.title", "Analog Matrix (HE)")}</h3>
-              <ModalCloseButton testid="keychron-analog-modal-close" onClick={() => setShowKeychronAnalogModal(false)} />
-            </div>
-            <div className="flex min-h-0 flex-1 overflow-hidden p-6 pt-0">
-              <KeychronAnalog
-                analog={keychronAnalogData}
-                keys={keyboard.layout?.keys ?? []}
-                rows={keyboard.rows}
-                cols={keyboard.cols}
-                keymap={keyboard.keymap}
-              />
-            </div>
-          </div>
-        </div>
+        <KeychronModalShell
+          title={t("keychron.analog.title", "Analog Matrix (HE)")}
+          testId="keychron-analog-modal"
+          onClose={() => setShowKeychronAnalogModal(false)}
+          width="w-modal-3xl"
+        >
+          <KeychronAnalog
+            analog={keychronAnalogData}
+            keys={keyboard.layout?.keys ?? []}
+            rows={keyboard.rows}
+            cols={keyboard.cols}
+            keymap={keyboard.keymap}
+            defaultLayer={keyboard.keychron?.defaultLayer ?? 0}
+          />
+        </KeychronModalShell>
       )}
 
       {showKeychronSocdModal && keyboard.keychron?.hasSnapClick && (
@@ -320,17 +333,14 @@ export function AppModals({
       )}
 
       {showKeychronModal && keychronSupported && keyboard.keychron && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" data-testid="keychron-modal-backdrop" onClick={() => setShowKeychronModal(false)}>
-          <div className="flex max-h-[90vh] w-[800px] max-w-[95vw] flex-col rounded-lg bg-surface-alt shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-              <h3 className="text-lg font-semibold">{t("keychron.settings", "Keychron Settings")}</h3>
-              <ModalCloseButton testid="keychron-modal-close" onClick={() => setShowKeychronModal(false)} />
-            </div>
-            <div className="flex-1 overflow-auto p-6 pt-0">
-              <KeychronSettings keychron={keyboard.keychron} onSettingChanged={keyboard.refreshKeychron} />
-            </div>
-          </div>
-        </div>
+        <KeychronModalShell
+          title={t("keychron.settings", "Keychron Settings")}
+          testId="keychron-modal"
+          onClose={() => setShowKeychronModal(false)}
+          width="w-modal-md"
+        >
+          <KeychronSettings keychron={keyboard.keychron} onSettingChanged={keyboard.refreshKeychron} />
+        </KeychronModalShell>
       )}
     </>
   )

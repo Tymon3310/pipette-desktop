@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { useState, useCallback, useRef, useLayoutEffect, useEffect } from 'react'
+import { useState, useCallback, useRef, useLayoutEffect, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { KeychronState, SnapClickEntry } from '../../../shared/types/keychron'
 import { KeyboardWidget } from '../keyboard/KeyboardWidget'
@@ -10,7 +10,7 @@ import {
   SNAP_CLICK_TYPE_NAMES,
   SNAP_CLICK_TYPE_TOOLTIPS,
 } from '../../../shared/constants/keychron'
-import { ModalCloseButton } from './ModalCloseButton'
+import { KeychronModalShell } from './KeychronModalShell'
 import { codeToLabel } from '../../../shared/keycodes/keycodes'
 import { Tooltip } from '../ui/Tooltip'
 
@@ -34,6 +34,20 @@ export function KeychronSocd({ keychron, keys, keymap, onSettingChanged, onClose
   useEffect(() => {
     setSnapEntries(keychron.snapClickEntries)
   }, [keychron.snapClickEntries])
+
+  const defaultLayer = keychron.defaultLayer >= 0 ? keychron.defaultLayer : 0
+
+  // Build keycodes map for the keyboard widget (default layer labels)
+  const widgetKeycodes = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const k of keys) {
+      if (k.row !== undefined && k.col !== undefined) {
+        const code = keymap.get(`${defaultLayer},${k.row},${k.col}`) ?? 0
+        map.set(`${k.row},${k.col}`, codeToLabel(code))
+      }
+    }
+    return map
+  }, [keys, keymap, defaultLayer])
 
   const kbContainerRef = useRef<HTMLDivElement>(null)
   const [kbScale, setKbScale] = useState(1)
@@ -99,19 +113,13 @@ export function KeychronSocd({ keychron, keys, keymap, onSettingChanged, onClose
   )
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
+    <KeychronModalShell
+      title={t('keychron.socd.title', 'Keychron SOCD')}
+      testId="keychron-socd"
+      onClose={onClose}
+      width="w-modal-lg"
+      contentClassName="p-6"
     >
-      <div
-        className="flex max-h-[90vh] w-[900px] max-w-[95vw] flex-col rounded-lg bg-surface-alt p-6 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold">{t('keychron.socd.title', 'Keychron SOCD')}</h3>
-          <ModalCloseButton testid="keychron-socd-close" onClick={onClose} />
-        </div>
-        <div className="flex-1 overflow-y-auto">
           {keychron.isDebug && (
             <div className="mb-4 rounded border border-warning/50 bg-warning/10 p-3 text-sm text-warning-content">
               <strong>Debug Mode Active:</strong> Simulating Keychron SOCD. Settings saved will not be written to physical EEPROM.
@@ -127,36 +135,38 @@ export function KeychronSocd({ keychron, keys, keymap, onSettingChanged, onClose
 
       {/* Show keyboard widget when in pick mode */}
       {socdPickMode && (
-        <div ref={kbContainerRef} className="flex flex-col items-center overflow-x-hidden rounded-lg border-2 border-accent bg-surface-dim p-4">
+        <div ref={kbContainerRef} className="w-full rounded-lg border-2 border-accent bg-surface-dim p-4 flex flex-col">
           <p className="mb-2 self-start text-sm font-medium text-accent">
             Click a key on the keyboard to assign it as Key {socdPickMode.whichKey} for SOCD pair #
             {socdPickMode.pairIdx + 1}
           </p>
-          <div data-kb-widget>
-            <KeyboardWidget
-              keys={keys}
-              keycodes={new Map()}
-              multiSelectedKeys={new Set()}
-              onKeyClick={handleKeyPick}
-              scale={kbScale}
-              keyColors={(() => {
-                const labels = new Map<string, string>()
-                keys.forEach((k) => {
-                  if (k.row !== undefined && k.col !== undefined) {
-                    const posKey = `0,${k.row},${k.col}`
-                    const code = keymap.get(posKey) ?? 0
-                    // Find if it's currently assigned to Key 1 or Key 2 of the picked pair
-                    if (code) {
-                       labels.set(`${k.row},${k.col}`, codeToLabel(code))
+          <div className="flex justify-center overflow-x-hidden">
+            <div data-kb-widget>
+              <KeyboardWidget
+                keys={keys}
+                keycodes={widgetKeycodes}
+                multiSelectedKeys={new Set()}
+                onKeyClick={handleKeyPick}
+                scale={kbScale}
+                keyColors={(() => {
+                  const labels = new Map<string, string>()
+                  keys.forEach((k) => {
+                    if (k.row !== undefined && k.col !== undefined) {
+                      const posKey = `0,${k.row},${k.col}`
+                      const code = keymap.get(posKey) ?? 0
+                      // Find if it's currently assigned to Key 1 or Key 2 of the picked pair
+                      if (code) {
+                         labels.set(`${k.row},${k.col}`, codeToLabel(code))
+                      }
                     }
-                  }
-                })
-                return labels
-              })()}
-            />
+                  })
+                  return labels
+                })()}
+              />
+            </div>
           </div>
           <button
-            className="mt-2 rounded border border-edge px-3 py-1 text-xs text-content-secondary hover:text-content"
+            className="mt-2 self-center rounded border border-edge px-3 py-1 text-xs text-content-secondary hover:text-content"
             onClick={() => setSocdPickMode(null)}
           >
             Cancel
@@ -226,8 +236,6 @@ export function KeychronSocd({ keychron, keys, keymap, onSettingChanged, onClose
           ))}
         </div>
       )}
-        </div>
-      </div>
-    </div>
+    </KeychronModalShell>
   )
 }

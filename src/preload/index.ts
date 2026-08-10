@@ -949,6 +949,8 @@ const vialAPI = {
   },
 
   // --- Special Commands ---
+  jumpToBootloader: (): Promise<void> =>
+    protocol.resetDevice(),
 
   // --- Window Management ---
   setWindowCompactMode: (enabled: boolean, compactSize?: { width: number; height: number }): Promise<{ width: number; height: number } | null> =>

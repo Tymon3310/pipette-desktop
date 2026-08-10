@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { useState, useCallback, useEffect, useRef, useLayoutEffect } from 'react'
+import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   KeychronAnalogState,
@@ -34,13 +34,16 @@ interface Props {
   rows: number
   cols: number
   keymap: Map<string, number>
+  defaultLayer?: number
 }
 
 type AnalogTab = 'actuation' | 'socd' | 'gamepad' | 'calibration' | 'dks'
 
-export function KeychronAnalog({ analog, keys, rows, cols, keymap }: Props) {
+export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer: defaultLayerProp }: Props) {
   const { t } = useTranslation()
   const api = window.vialAPI
+
+  const defaultLayer = defaultLayerProp !== undefined && defaultLayerProp >= 0 ? defaultLayerProp : 0
 
   // Profile state
   const [currentProfile, setCurrentProfile] = useState(analog.currentProfile)
@@ -87,6 +90,18 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap }: Props) {
   const [socdPickMode, setSocdPickMode] = useState<{ pairIdx: number; whichKey: 1 | 2 } | null>(
     null,
   )
+
+  // Build keycodes map for the keyboard widget (default layer labels)
+  const widgetKeycodes = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const k of keys) {
+      if (k.row !== undefined && k.col !== undefined) {
+        const code = keymap.get(`${defaultLayer},${k.row},${k.col}`) ?? 0
+        map.set(`${k.row},${k.col}`, codeToLabel(code))
+      }
+    }
+    return map
+  }, [keys, keymap, defaultLayer])
 
   // Dynamic keyboard widget scaling
   const kbContainerRef = useRef<HTMLDivElement>(null)
@@ -629,7 +644,7 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap }: Props) {
               <div data-kb-widget>
                 <KeyboardWidget
                   keys={keys}
-                  keycodes={new Map()}
+                  keycodes={widgetKeycodes}
                   multiSelectedKeys={selectedKeys}
                   onKeyClick={handleKeyClick}
                   keyColors={actuationLabels}
@@ -996,7 +1011,7 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap }: Props) {
 
           {/* Show keyboard widget when in pick mode */}
           {socdPickMode && (
-            <div ref={kbContainerRef} className="rounded-lg border-2 border-accent bg-surface-dim p-4 flex flex-col items-center overflow-x-hidden">
+            <div ref={kbContainerRef} className="rounded-lg border-2 border-accent bg-surface-dim p-4 flex flex-col overflow-x-hidden">
               <p className="mb-2 text-sm font-medium text-accent self-start">
                 Click a key on the keyboard to assign it as Key {socdPickMode.whichKey} for SOCD
                 pair #{socdPickMode.pairIdx + 1}
@@ -1004,23 +1019,9 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap }: Props) {
               <div data-kb-widget>
                 <KeyboardWidget
                   keys={keys}
-                  keycodes={new Map()}
+                  keycodes={widgetKeycodes}
                   multiSelectedKeys={new Set()}
                   onKeyClick={(key) => handleSocdKeyPick(key)}
-                  keyColors={(() => {
-                    const labels = new Map<string, string>()
-                    keys.forEach((k) => {
-                      if (k.row !== undefined && k.col !== undefined) {
-                        const posKey = `0,${k.row},${k.col}`
-                        const code = keymap.get(posKey) ?? 0
-
-                        if (code) {
-                          labels.set(`${k.row},${k.col}`, codeToLabel(code))
-                        }
-                      }
-                    })
-                    return labels
-                  })()}
                   scale={kbScale}
                 />
               </div>
