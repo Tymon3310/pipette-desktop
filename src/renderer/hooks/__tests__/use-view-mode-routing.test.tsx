@@ -215,16 +215,6 @@ describe('useViewModeRouting', () => {
         appliedUid: 'UID1',
       })
 
-      // Arm pendingViewOnlyRef too, for realism (a locked click on the
-      // StatusBar view-only toggle) — but this half is NOT what this test
-      // pins: the deferred-view-only effect's own `if (!device.connectedDevice)
-      // { pendingViewOnlyRef.current = false; return }` early return clears
-      // it independently on every disconnect, so "no deferred entry after
-      // reconnect" would hold even if the disconnect-cleanup effect's own
-      // reset of this ref were deleted.
-      act(() => { result.current.onStatusBarViewOnlyChange() })
-      expect(mocks.setShowUnlockDialog).toHaveBeenCalledWith(true)
-
       // Arm pendingTypingTestSaveRef via a real user action (StatusBar
       // typing-test toggle while not yet in typing-test mode). This half
       // IS what this test pins — nothing else clears it on disconnect.
@@ -543,6 +533,66 @@ describe('useViewModeRouting', () => {
       expect(mocks.setShowUnlockDialog).not.toHaveBeenCalled()
       expect(vialAPIStub.setWindowCompactMode).not.toHaveBeenCalled()
     })
+
+    it('retries the typingView restore once unlockStatusKnown flips true, proving the one-shot guard was not burned by the unknown-status skip', () => {
+      const { mocks, update } = renderRouting({
+        viewMode: 'typingView', unlocked: false, unlockStatusKnown: false, uid: 'UID1', appliedUid: 'UID1',
+      })
+
+      // Unknown status: skip without consuming restoreRequestedUidRef.
+      expect(mocks.setShowUnlockDialog).not.toHaveBeenCalled()
+
+      // Unlock status resolves to locked-but-known — the deferred effect
+      // rerun (unlockStatusKnown is a dep) must now perform the restore
+      // instead of finding the guard already burned.
+      act(() => { update({ unlockStatusKnown: true }) })
+
+      expect(mocks.setShowUnlockDialog).toHaveBeenCalledWith(true)
+      expect(mocks.setShowUnlockDialog).toHaveBeenCalledTimes(1)
+
+      // One-shot semantics still hold once the retry actually consumes the
+      // guard: a further unrelated rerender must not fire it again.
+      act(() => { update({ typingTestMode: true }) })
+      expect(mocks.setShowUnlockDialog).toHaveBeenCalledTimes(1)
+    })
+
+    it('behaves as today for typingTest restore: unlocked calls toggleTypingTest immediately', () => {
+      const { mocks } = renderRouting({
+        viewMode: 'typingTest', unlocked: true, unlockStatusKnown: true, uid: 'UID1', appliedUid: 'UID1',
+      })
+
+      expect(mocks.toggleTypingTest).toHaveBeenCalledTimes(1)
+    })
+
+    it('behaves as today for typingTest restore: locked-but-known calls toggleTypingTest immediately (unlock is requested by useInputModes downstream)', () => {
+      const { mocks } = renderRouting({
+        viewMode: 'typingTest', unlocked: false, unlockStatusKnown: true, uid: 'UID1', appliedUid: 'UID1',
+      })
+
+      expect(mocks.toggleTypingTest).toHaveBeenCalledTimes(1)
+    })
+
+    it('skips the typingTest restore entirely when the unlock status is unknown, without burning the one-shot guard', () => {
+      const { mocks, update } = renderRouting({
+        viewMode: 'typingTest', unlocked: false, unlockStatusKnown: false, uid: 'UID1', appliedUid: 'UID1',
+      })
+
+      expect(mocks.toggleTypingTest).not.toHaveBeenCalled()
+
+      // A further rerender while still unknown must keep skipping.
+      act(() => { update({ typingTestMode: false }) })
+      expect(mocks.toggleTypingTest).not.toHaveBeenCalled()
+
+      // unlockStatusKnown flips true — the effect reruns (it's a dep) and,
+      // since restoreRequestedUidRef was never set for this uid while
+      // unknown, the restore fires now instead of being skipped forever.
+      act(() => { update({ unlockStatusKnown: true }) })
+      expect(mocks.toggleTypingTest).toHaveBeenCalledTimes(1)
+
+      // One-shot: a further unrelated rerender must not restore again.
+      act(() => { update({ typingTestMode: true }) })
+      expect(mocks.toggleTypingTest).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('window zoom effect', () => {
@@ -591,7 +641,9 @@ describe('useViewModeRouting', () => {
 
   describe('onTypingTestViewOnlyChange (KeymapEditor prop)', () => {
     it('disabling exits view-only: setViewMode("editor") then the exit teardown', async () => {
-      const { result, mocks } = renderRouting()
+      // Realistic: this callback fires from within an active typing test
+      // (KeymapEditor owns the toggle), so typingTestMode is true here.
+      const { result, mocks } = renderRouting({ typingTestMode: true })
 
       act(() => { result.current.onTypingTestViewOnlyChange(false) })
       expect(mocks.setViewMode).toHaveBeenCalledWith('editor')
@@ -625,6 +677,26 @@ describe('useViewModeRouting', () => {
 
       await flushMicrotasks()
       expect(vialAPIStub.setWindowCompactMode).toHaveBeenCalledWith(false)
+    })
+
+    it('exits view-only even after a lock auto-exit (typingTestMode already false, still locked) instead of opening the unlock dialog (issue #418)', async () => {
+      // Mirrors the state left behind by a lock auto-exit: typingTestMode
+      // flips false but typingTestViewOnly stays true, and the keyboard is
+      // locked. Pressing the status-bar View toggle here must exit, not
+      // reopen the unlock dialog and re-enter view-only.
+      const { result, mocks } = renderRouting({ typingTestMode: false, typingTestViewOnly: true, unlocked: false })
+
+      act(() => { result.current.onStatusBarViewOnlyChange() })
+
+      expect(mocks.setShowUnlockDialog).not.toHaveBeenCalled()
+      expect(mocks.setViewMode).toHaveBeenCalledWith('editor')
+
+      await flushMicrotasks()
+      expect(vialAPIStub.setWindowCompactMode).toHaveBeenCalledWith(false)
+      expect(mocks.setTypingTestViewOnly).toHaveBeenCalledWith(false)
+      // typingTestMode was already false — the exit teardown must not
+      // re-toggle typing test back on.
+      expect(mocks.toggleTypingTest).not.toHaveBeenCalled()
     })
 
     it('shows the unlock dialog instead of entering when locked', () => {

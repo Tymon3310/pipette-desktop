@@ -23,9 +23,9 @@ import { test, expect } from '@playwright/test'
 import type { ElectronApplication } from '@playwright/test'
 import { join, resolve } from 'node:path'
 import { homedir } from 'node:os'
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { execSync, spawnSync } from 'node:child_process'
-import { launchApp } from './helpers/electron'
+import { writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { launchApp, readJson, electronRunning, quitApp as quitAppProcess } from './helpers/electron'
 import {
   connectToDevice,
   clickThroughUnlock,
@@ -43,11 +43,6 @@ const PROJECT_ROOT = resolve(import.meta.dirname, '..')
 const USER_DATA = join(homedir(), '.config', 'Electron')
 const CONFIG_PATH = join(USER_DATA, 'config.json')
 const SETTINGS_PATH = join(USER_DATA, 'sync', 'keyboards', VIRTUAL_DEVICE_UID, 'pipette_settings.json')
-
-function readJson(path: string): Record<string, unknown> | null {
-  if (!existsSync(path)) return null
-  try { return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown> } catch { return null }
-}
 
 // Reset flags a previous (crashed) run may have left behind so the setup
 // session starts as a normal visible launch with a device list.
@@ -70,28 +65,14 @@ function cleanTestFlags(): void {
   }
 }
 
-function electronRunning(): boolean {
-  try {
-    // [n] bracket trick: keeps this pgrep's own sh -c wrapper (whose
-    // command line contains the pattern text) from matching itself.
-    execSync('pgrep -f "electron/dist/electro[n].*out/main/index.js"', { stdio: 'pipe' })
-    return true
-  } catch { return false }
-}
-
-async function waitForElectronExit(timeoutMs = 30_000): Promise<void> {
-  const start = Date.now()
-  while (electronRunning()) {
-    if (Date.now() - start > timeoutMs) throw new Error('previous electron instance did not exit')
-    await new Promise((r) => setTimeout(r, 500))
-  }
-}
-
+// This suite's relaunch-across-sessions pattern needs a short grace period
+// after requesting quit (before the Playwright connection is torn down) for
+// the close handler's windowState/pipette-settings writes to land — unlike
+// the shared quitApp, which closes immediately after requesting quit.
 async function quitApp(app: ElectronApplication): Promise<void> {
   await app.evaluate(({ app: a }) => { a.quit() }).catch(() => {})
   await new Promise((r) => setTimeout(r, 2000))
-  await app.close().catch(() => { /* already gone */ })
-  await waitForElectronExit()
+  await quitAppProcess(app)
 }
 
 let app: ElectronApplication | null = null
@@ -268,6 +249,67 @@ test.describe.serial('tray start-in-tray unlock reveal', { tag: '@virtual' }, ()
 
     await quitApp(app)
     app = null
+  })
+
+  test('REC gate + editor restore: relaunch reveals the Unlock dialog, hides back to tray, and the Recording indicator lights up', async () => {
+    // Arm the REC-unlock gate: typingRecordEnabled=true while the keyboard
+    // is locked must request an unlock even for the plain editor, which on
+    // its own never prompts (see the 'editor restore path' test above).
+    // The persisted view mode is already 'editor' from that test, but set
+    // it explicitly here so this test does not depend on suite ordering.
+    const prefs = readJson(SETTINGS_PATH)
+    expect(prefs).not.toBeNull()
+    if (prefs) {
+      prefs.viewMode = 'editor'
+      prefs.typingRecordEnabled = true
+      writeFileSync(SETTINGS_PATH, JSON.stringify(prefs, null, 2))
+    }
+
+    const launched = await launchApp({ env: { PIPETTE_VIRTUAL_DEVICE: 'only' } })
+    app = launched.app
+    const page = launched.page
+
+    let dialogSeenVisible = false
+    await expect.poll(async () => {
+      const winVisible = await app!.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().map((w) => w.isVisible()))
+      const dialogUp = (await unlockDialogHeading(page).count()) > 0
+      if (dialogUp && winVisible.some(Boolean)) dialogSeenVisible = true
+      return dialogSeenVisible
+    }, { message: 'expected the Unlock dialog to appear in a visible window', timeout: 25_000, intervals: [1000] }).toBe(true)
+
+    await waitForUnlockDialog(app, page)
+
+    await expect.poll(async () => {
+      const winVisible = await app!.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().map((w) => w.isVisible()))
+      return winVisible.some(Boolean)
+    }, { message: 'expected the window to hide back to the tray after unlock', timeout: 15_000, intervals: [1000] }).toBe(false)
+    await expect(unlockDialogHeading(page)).toHaveCount(0)
+
+    // This only proves the REC pref itself survived the gate/unlock/hide
+    // sequence (the footer's Recording indicator is wired straight to
+    // devicePrefs.typingRecordEnabled with no view-mode or lock-status
+    // condition, so it stays queryable through Playwright's CDP connection
+    // even while the BrowserWindow itself is hidden in the tray — the DOM
+    // keeps running, only the OS window surface is hidden). It does NOT
+    // exercise the ambient matrix-recording pipeline itself (no keystrokes
+    // are simulated here) — see the unit/component suites for that
+    // (useInputModes's ambient-frame tests, use-matrix-tester's polling
+    // tests) — this assertion is scoped to: the gate fired, the window
+    // revealed then hid again, and REC stayed on throughout.
+    await expect(page.locator('[data-testid="recording-status"]')).toHaveCount(1)
+
+    await quitApp(app)
+    app = null
+
+    // Turn the gate back off so the next test (which relies on a boot-hidden
+    // launch producing no dialog at all) isn't re-armed by this test's seed.
+    const postPrefs = readJson(SETTINGS_PATH)
+    if (postPrefs) {
+      postPrefs.typingRecordEnabled = false
+      writeFileSync(SETTINGS_PATH, JSON.stringify(postPrefs, null, 2))
+    }
   })
 
   test('second-instance reveal: relaunching a tray-resident hidden app reveals the running instance\'s window', async () => {

@@ -104,7 +104,7 @@ describe('calcLongestStreak', () => {
   it('respects per-date goal via history', () => {
     // On 2026-04-14 goal was 500 (retired), on 2026-04-15 goal is 1000 (current).
     const history: GoalHistoryEntry[] = [
-      { days: 10, keystrokes: 500, effectiveFrom: '2026-04-15T00:00:00+09:00' },
+      { days: 10, keystrokes: 500, effectiveFrom: '2026-04-15T10:00:00+09:00' },
     ]
     const m = mapOf([
       day('2026-04-14', 700), // hits 500 → goal-met under old rule
@@ -164,7 +164,7 @@ describe('detectGoalAchievements', () => {
   it('goal change mid-run invalidates the in-progress run', () => {
     // goal was 500 until 2026-05-15, then 2000
     const history: GoalHistoryEntry[] = [
-      { days: 3, keystrokes: 500, effectiveFrom: '2026-05-15T00:00:00+09:00' },
+      { days: 3, keystrokes: 500, effectiveFrom: '2026-05-15T10:00:00+09:00' },
     ]
     const current = G(3, 2000)
     const m = mapOf([
