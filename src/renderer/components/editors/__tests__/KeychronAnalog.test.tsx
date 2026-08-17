@@ -28,10 +28,38 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 }
 
+const KEY_DEFAULTS: KleKey = {
+  color: '#cccccc',
+  labels: [],
+  textColor: [],
+  textSize: [],
+  x: 0,
+  y: 0,
+  width: 1,
+  height: 1,
+  x2: 0,
+  y2: 0,
+  width2: 1,
+  height2: 1,
+  rotation: 0,
+  rotationX: 0,
+  rotationY: 0,
+  nub: false,
+  stepped: false,
+  decal: false,
+  ghost: false,
+  row: 0,
+  col: 0,
+  encoderIdx: -1,
+  encoderDir: 0,
+  layoutIndex: -1,
+  layoutOption: -1,
+}
+
 describe('KeychronAnalog', () => {
   const mockKeys: KleKey[] = [
-    { x: 0, y: 0, width: 1, height: 1, row: 0, col: 0, rotation: 0, rotationX: 0, rotationY: 0, x2: 0, y2: 0, width2: 1, height2: 1, encoderIdx: -1, encoderDir: 0 },
-    { x: 1, y: 0, width: 1, height: 1, row: 0, col: 1, rotation: 0, rotationX: 0, rotationY: 0, x2: 0, y2: 0, width2: 1, height2: 1, encoderIdx: -1, encoderDir: 0 },
+    { ...KEY_DEFAULTS, x: 0, row: 0, col: 0 },
+    { ...KEY_DEFAULTS, x: 1, row: 0, col: 1 },
   ]
   const mockKeymap = new Map<string, number>([
     ['0,0,0', 0x0004], // 'A'
