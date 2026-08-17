@@ -19,8 +19,8 @@ function getSystemPrefersDark(): boolean {
   return window.matchMedia(MEDIA_QUERY).matches
 }
 
-function resolveEffectiveTheme(mode: ThemeMode): EffectiveTheme {
-  if (mode === 'system') {
+function resolveEffectiveTheme(mode?: ThemeMode | null): EffectiveTheme {
+  if (!mode || mode === 'system') {
     return getSystemPrefersDark() ? 'dark' : 'light'
   }
   return mode
@@ -65,8 +65,8 @@ function applyPackTheme(
   applyPackColors(pack.colors, pack.colorScheme)
 }
 
-export function isPackTheme(theme: ThemeSelection): theme is `pack:${string}` {
-  return theme.startsWith('pack:')
+export function isPackTheme(theme?: ThemeSelection | null): theme is `pack:${string}` {
+  return typeof theme === 'string' && theme.startsWith('pack:')
 }
 
 export function extractPackId(theme: `pack:${string}`): string {

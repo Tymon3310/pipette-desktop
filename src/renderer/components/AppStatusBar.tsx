@@ -98,6 +98,7 @@ export function AppStatusBar({
         keyboardLayout: devicePrefs.layout,
         onKeyboardLayoutChange: handleKeyboardLayoutSelectChange,
       }}
+      batteryLevel={keyboard.keychron?.batteryLevel}
     />
   )
 }

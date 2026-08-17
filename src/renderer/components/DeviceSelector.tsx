@@ -182,15 +182,23 @@ export function DeviceSelector({
 
         {tab === 'keyboard' && (
           <>
+            {typeof navigator !== 'undefined' && !('hid' in navigator) && (
+              <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                <div className="font-semibold mb-1">Browser Notice (Firefox / Safari)</div>
+                <div>
+                  WebHID is not supported in this browser. To connect to physical keyboards, please use <strong>Chrome, Edge, Brave, Opera</strong>, or another Chromium-based browser. You can still test offline with the dummy keyboard or load .vil files.
+                </div>
+              </div>
+            )}
             <div className="mb-5">
               <p className="mb-2.5 pl-0.5 text-2xs font-semibold uppercase tracking-widest text-content-muted">
                 {t('app.selectDevices')}
               </p>
 
               <div className={LIST_CLASS} data-testid="device-list">
-                {devices.map((device) => (
+                {devices.map((device, index) => (
                   <button
-                    key={`${device.vendorId}:${device.productId}`}
+                    key={`${device.vendorId}:${device.productId}:${device.serialNumber || index}`}
                     type="button"
                     data-testid="device-button"
                     className={`group ${DEVICE_ENTRY_CLASS}`}
@@ -217,6 +225,23 @@ export function DeviceSelector({
                   </div>
                 )}
               </div>
+
+              {typeof window !== 'undefined' && typeof window.vialAPI?.requestDevice === 'function' && (
+                <button
+                  type="button"
+                  data-testid="pair-device-button"
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-contrast shadow-sm transition-all hover:bg-accent-hover disabled:opacity-50"
+                  onClick={async () => {
+                    if (window.vialAPI?.requestDevice) {
+                      const dev = await window.vialAPI.requestDevice()
+                      if (dev) onConnect(dev)
+                    }
+                  }}
+                  disabled={connecting}
+                >
+                  {t('app.pairDevice', 'Connect / Authorize Keyboard')}
+                </button>
+              )}
             </div>
 
             <div className="mb-4 border-t border-edge-subtle" />

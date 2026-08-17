@@ -46,6 +46,7 @@ interface Props {
   typingRecordEnabled?: boolean
   onTypingRecordEnabledChange?: (enabled: boolean) => void
   quickSettings?: QuickSettingsSelectsProps
+  batteryLevel?: number
 }
 
 export function StatusBar({
@@ -72,6 +73,7 @@ export function StatusBar({
   typingRecordEnabled,
   onTypingRecordEnabledChange,
   quickSettings,
+  batteryLevel,
 }: Props) {
   const { t } = useTranslation()
   const [recordModalOpen, setRecordModalOpen] = useState(false)
@@ -158,6 +160,26 @@ export function StatusBar({
             <span className="shrink-0 text-edge">|</span>
             <span className="shrink-0 whitespace-nowrap text-accent" data-testid="recording-status">
               {t('editor.typingTest.recordingIndicator')}
+            </span>
+          </>
+        )}
+        {batteryLevel !== undefined && batteryLevel > 0 && (
+          <>
+            <span className="shrink-0 text-edge">|</span>
+            <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-content-secondary" data-testid="battery-status">
+              <span className="relative inline-flex h-2.5 w-4 items-center rounded-xs border border-edge p-0.5" title={`Battery: ${batteryLevel}%`}>
+                <span
+                  className={`h-full rounded-2xs ${
+                    batteryLevel <= 20
+                      ? 'bg-danger'
+                      : batteryLevel <= 50
+                        ? 'bg-warning'
+                        : 'bg-success'
+                  }`}
+                  style={{ width: `${Math.min(100, Math.max(10, batteryLevel))}%` }}
+                />
+              </span>
+              <span>{batteryLevel}%</span>
             </span>
           </>
         )}

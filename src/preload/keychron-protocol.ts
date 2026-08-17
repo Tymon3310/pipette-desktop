@@ -11,7 +11,7 @@
  * (Usage Page 0xFF60, Usage 0x61). Command ID is data[0].
  */
 
-import { sendReceive } from './hid-transport'
+import { sendReceive } from './transport'
 import { MSG_LEN } from '../shared/constants/protocol'
 import {
   KC_GET_PROTOCOL_VERSION,
@@ -112,14 +112,16 @@ import type {
 import { emptyKeychronState } from '../shared/types/keychron'
 
 // Unify all Keychron debug toggles if a global debug flag is set
-if (process.env.DEBUG_KEYCHRON_ALL || process.env.DEBUG_FAKE_DEVICE) {
-  process.env.DEBUG_KEYCHRON_ANALOG = '1'
-  process.env.DEBUG_KEYCHRON_RGB = '1'
-  process.env.DEBUG_KEYCHRON_SNAP_CLICK = '1'
-  process.env.DEBUG_KEYCHRON_DEBOUNCE = '1'
-  process.env.DEBUG_KEYCHRON_NKRO = '1'
-  process.env.DEBUG_KEYCHRON_REPORT_RATE = '1'
-  process.env.DEBUG_KEYCHRON_WIRELESS = '1'
+if (typeof process !== 'undefined' && process?.env) {
+  if (process.env.DEBUG_KEYCHRON_ALL || process.env.DEBUG_FAKE_DEVICE) {
+    process.env.DEBUG_KEYCHRON_ANALOG = '1'
+    process.env.DEBUG_KEYCHRON_RGB = '1'
+    process.env.DEBUG_KEYCHRON_SNAP_CLICK = '1'
+    process.env.DEBUG_KEYCHRON_DEBOUNCE = '1'
+    process.env.DEBUG_KEYCHRON_NKRO = '1'
+    process.env.DEBUG_KEYCHRON_REPORT_RATE = '1'
+    process.env.DEBUG_KEYCHRON_WIRELESS = '1'
+  }
 }
 
 // --- Packet helpers (match protocol.ts style) ---

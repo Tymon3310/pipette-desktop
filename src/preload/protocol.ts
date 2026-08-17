@@ -10,7 +10,7 @@
  *     Little-endian: vial protocol, keyboard uid, definition block, dynamic entries, QMK settings
  */
 
-import { sendReceive } from './hid-transport'
+import { sendReceive, send } from './transport'
 import {
   MSG_LEN,
   BUFFER_FETCH_CHUNK,
@@ -728,5 +728,9 @@ export async function qmkSettingsReset(): Promise<void> {
 
 /** Send VIA reset command — keyboard will reboot to bootloader. */
 export async function resetDevice(): Promise<void> {
-  await sendReceive(cmd(CMD_VIA_RESET))
+  try {
+    await send(cmd(CMD_VIA_RESET))
+  } catch {
+    // Keyboard reboots and disconnects immediately, which is expected
+  }
 }

@@ -17,6 +17,7 @@ vi.mock('react-i18next', () => ({
         'editor.keyTester.title': 'Key Tester',
         'settings.security': 'Security',
         'security.lock': 'Lock',
+        'security.unlock': 'Unlock',
         'statusBar.locked': 'Locked',
         'statusBar.unlocked': 'Unlocked',
       }
@@ -118,6 +119,30 @@ describe('KeycodesOverlayPanel', () => {
     render(<KeycodesOverlayPanel {...DEFAULT_PROPS} unlocked />)
 
     expect(screen.getByTestId('overlay-lock-status')).toHaveTextContent('Unlocked')
+    expect(screen.getByTestId('overlay-lock-button')).toHaveTextContent('Lock')
+  })
+
+  it('shows lock row with locked status and Unlock button when locked', () => {
+    const onUnlock = vi.fn()
+    render(<KeycodesOverlayPanel {...DEFAULT_PROPS} unlocked={false} onUnlock={onUnlock} />)
+
+    expect(screen.getByTestId('overlay-lock-status')).toHaveTextContent('Locked')
+    const btn = screen.getByTestId('overlay-lock-button')
+    expect(btn).toHaveTextContent('Unlock')
+    expect(btn).toBeEnabled()
+
+    fireEvent.click(btn)
+    expect(onUnlock).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls onLock when Lock button is clicked while unlocked', () => {
+    const onLock = vi.fn()
+    render(<KeycodesOverlayPanel {...DEFAULT_PROPS} unlocked={true} onLock={onLock} />)
+
+    const btn = screen.getByTestId('overlay-lock-button')
+    expect(btn).toHaveTextContent('Lock')
+    fireEvent.click(btn)
+    expect(onLock).toHaveBeenCalledTimes(1)
   })
 
   it('hides lock row when isDummy', () => {

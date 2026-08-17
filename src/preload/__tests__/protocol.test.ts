@@ -2,11 +2,11 @@
 
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 
-vi.mock('../hid-transport', () => ({
+vi.mock('../transport', () => ({
   sendReceive: vi.fn(),
 }))
 
-import { sendReceive } from '../hid-transport'
+import { sendReceive } from '../transport'
 import type { Mock } from 'vitest'
 
 import {

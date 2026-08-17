@@ -115,26 +115,96 @@ export const KeychronDfuFlasher = ({
     if (!originalDevice || !connectDevice) return false
 
     setReconnecting(true)
-    setLogs((prev) => [...prev, 'Waiting for keyboard to reconnect...'])
+    if (typeof window.vialAPI?.requestDevice === 'function') {
+      setLogs((prev) => [
+        ...prev,
+        'Flash successful! The keyboard is rebooting.',
+        "Click 'Reconnect / Authorize Keyboard' below to restore layout & settings.",
+      ])
+    } else {
+      setLogs((prev) => [...prev, 'Waiting for keyboard to reconnect...'])
+    }
 
     const deadline = Date.now() + RECONNECT_TIMEOUT_MS
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, RECONNECT_POLL_MS))
       try {
         const devices = await window.vialAPI.listDevices()
-        const match = devices.find(
-          (d) => d.vendorId === originalDevice.vendorId && d.productId === originalDevice.productId,
-        )
+        console.log('[Flasher] Polling for reconnected devices...', devices)
+        const match =
+          devices.find(
+            (d) => d.vendorId === originalDevice.vendorId && d.productId === originalDevice.productId,
+          ) ||
+          devices.find((d) => d.vendorId === originalDevice.vendorId) ||
+          (devices.length === 1 ? devices[0] : undefined)
+
         if (match) {
+          console.log('[Flasher] Found matching device:', match)
           setLogs((prev) => [...prev, `Device found: ${match.productName}. Reconnecting...`])
           // Release the suppress so the normal poller takes over after connect
           setSuppressDisconnect?.(false)
           const ok = await connectDevice(match)
           if (ok) {
+            console.log('[Flasher] Reconnected successfully! Reloading and restoring backup...')
             setLogs((prev) => [
               ...prev,
               'Reconnected successfully! Restoring layout + settings...',
             ])
+            setReconnecting(false)
+            try {
+              await onReload?.()
+            } catch (e: unknown) {
+              setLogs((prev) => [
+                ...prev,
+                `Warning: Reload failed: ${e instanceof Error ? e.message : String(e)}. Attempting restore anyway...`,
+              ])
+            }
+            if (backupDataRef.current && onRestoreBackup) {
+              try {
+                setLogs((prev) => [
+                  ...prev,
+                  'Applying layout backup (unlock keyboard if prompted)...',
+                ])
+                await onRestoreBackup(backupDataRef.current)
+                setLogs((prev) => [...prev, 'Layout and settings restored successfully.'])
+              } catch (e: unknown) {
+                console.error('[Flasher] Restore layout failed:', e)
+                setLogs((prev) => [
+                  ...prev,
+                  `Warning: Failed to restore layout: ${e instanceof Error ? e.message : String(e)}`,
+                ])
+              }
+            }
+
+            // Wait 3 seconds so the user can read the success message before closing
+            setTimeout(() => {
+              onClose()
+            }, 3000)
+
+            return true
+          }
+        }
+      } catch (err) {
+        console.warn('[Flasher] Polling error:', err)
+      }
+    }
+
+    setLogs((prev) => [...prev, 'Timed out waiting for keyboard. Please reconnect manually.'])
+    setSuppressDisconnect?.(false)
+    setReconnecting(false)
+    return false
+  }, [originalDevice, connectDevice, setSuppressDisconnect, onReload, onRestoreBackup, onClose])
+
+  const handleManualReconnect = useCallback(async () => {
+    if (window.vialAPI?.requestDevice && connectDevice) {
+      try {
+        const dev = await window.vialAPI.requestDevice()
+        if (dev) {
+          setLogs((prev) => [...prev, `Device selected: ${dev.productName}. Connecting...`])
+          setSuppressDisconnect?.(false)
+          const ok = await connectDevice(dev)
+          if (ok) {
+            setLogs((prev) => [...prev, 'Connected successfully! Restoring layout + settings...'])
             setReconnecting(false)
             try {
               await onReload?.()
@@ -155,25 +225,16 @@ export const KeychronDfuFlasher = ({
                 ])
               }
             }
-            
-            // Wait 3 seconds so the user can read the success message before closing
             setTimeout(() => {
               onClose()
             }, 3000)
-            
-            return true
           }
         }
-      } catch {
-        // polling error, try again
+      } catch (err: unknown) {
+        console.warn('Manual reconnect failed:', err)
       }
     }
-
-    setLogs((prev) => [...prev, 'Timed out waiting for keyboard. Please reconnect manually.'])
-    setSuppressDisconnect?.(false)
-    setReconnecting(false)
-    return false
-  }, [originalDevice, connectDevice, setSuppressDisconnect, onReload, onRestoreBackup])
+  }, [connectDevice, setSuppressDisconnect, onReload, onRestoreBackup, onClose])
 
   const handleFlash = async () => {
     if (!selectedFile) return
@@ -421,22 +482,33 @@ export const KeychronDfuFlasher = ({
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-edge px-6 py-4 shrink-0 bg-surface">
+          {reconnecting && typeof window.vialAPI?.requestDevice === 'function' && (
+            <button
+              type="button"
+              className="rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast shadow-sm transition-all hover:bg-accent-hover"
+              onClick={handleManualReconnect}
+            >
+              {t('app.pairDevice', 'Reconnect / Authorize Keyboard')}
+            </button>
+          )}
           <button
             type="button"
             className="rounded px-4 py-2 text-sm font-medium text-content hover:bg-surface-dim border border-edge transition-colors disabled:opacity-50"
             onClick={handleClose}
-            disabled={isBusy}
+            disabled={isFlashing}
           >
             {flashSuccess ? 'Close' : 'Cancel'}
           </button>
-          <button
-            type="button"
-            className="rounded bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger/90 transition-colors disabled:opacity-50"
-            onClick={handleFlash}
-            disabled={!selectedFile || isBusy}
-          >
-            {isFlashing ? 'Flashing...' : reconnecting ? 'Reconnecting...' : 'Flash Firmware'}
-          </button>
+          {!reconnecting && (
+            <button
+              type="button"
+              className="rounded bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger/90 transition-colors disabled:opacity-50"
+              onClick={handleFlash}
+              disabled={!selectedFile || isBusy}
+            >
+              {isFlashing ? 'Flashing...' : 'Flash Firmware'}
+            </button>
+          )}
         </div>
       </div>
     </div>

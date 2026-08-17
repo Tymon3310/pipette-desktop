@@ -438,6 +438,20 @@ describe('StatusBar', () => {
       expect(screen.getByTestId('disconnect-button').className).toContain('shrink-0')
       expect(screen.getByTestId('disconnect-button').className).toContain('whitespace-nowrap')
     })
-  })
 
+    it('renders battery status indicator when batteryLevel is positive', () => {
+      render(<StatusBar {...defaultProps} batteryLevel={85} />)
+      const batteryEl = screen.getByTestId('battery-status')
+      expect(batteryEl).toBeInTheDocument()
+      expect(batteryEl).toHaveTextContent('85%')
+    })
+
+    it('does not render battery status indicator when batteryLevel is 0 or undefined', () => {
+      const { rerender } = render(<StatusBar {...defaultProps} batteryLevel={0} />)
+      expect(screen.queryByTestId('battery-status')).not.toBeInTheDocument()
+
+      rerender(<StatusBar {...defaultProps} batteryLevel={undefined} />)
+      expect(screen.queryByTestId('battery-status')).not.toBeInTheDocument()
+    })
+  })
 })

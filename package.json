@@ -1,6 +1,6 @@
 {
   "name": "pipette-desktop",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Pipette — Vial-compatible keyboard configurator built with Electron and TypeScript",
   "license": "GPL-3.0-or-later",
   "type": "module",
@@ -11,6 +11,9 @@
   "scripts": {
     "dev": "electron-vite dev",
     "dev:linux": "electron-vite dev --noSandbox",
+    "dev:web": "vite --config vite.web.config.ts",
+    "build:web": "vite build --config vite.web.config.ts",
+    "preview:web": "vite preview --config vite.web.config.ts",
     "typecheck": "tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json",
     "build": "rm -rf out && electron-vite build",
     "build:win": "if exist out (rd /s /q \"out\") && electron-vite build",

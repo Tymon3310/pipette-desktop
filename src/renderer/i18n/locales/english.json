@@ -786,7 +786,8 @@
     }
   },
   "security": {
-    "lock": "Lock"
+    "lock": "Lock",
+    "unlock": "Unlock"
   },
   "theme": {
     "label": "Theme",

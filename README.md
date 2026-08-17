@@ -300,6 +300,16 @@ pnpm lint         # ESLint
 pnpm format       # Prettier
 ```
 
+### Web Edition (`pipette-web` / `vial-web v2`)
+
+Pipette can also run directly in modern Chromium-based web browsers (Chrome, Edge, Brave, Opera) using the WebHID API:
+
+```bash
+pnpm dev:web     # Start Vite dev server for Web
+pnpm build:web   # Build static web assets into dist-web/
+pnpm preview:web # Preview production web build locally
+```
+
 ## Build & Distribution
 
 ```bash
@@ -307,6 +317,7 @@ pnpm dist         # Package for all platforms
 pnpm dist:linux   # Linux (AppImage)
 pnpm dist:win     # Windows (NSIS installer)
 pnpm dist:mac     # macOS (dmg)
+pnpm build:web    # Web edition static bundle (dist-web/)
 ```
 
 ## Architecture

@@ -73,6 +73,7 @@ import type { NotificationFetchResult } from './notification'
 export interface VialAPI {
   // Device Management
   listDevices(): Promise<DeviceInfo[]>
+  requestDevice?(): Promise<DeviceInfo | null>
   openDevice(vendorId: number, productId: number, serialNumber?: string): Promise<boolean>
   closeDevice(): Promise<void>
   isDeviceOpen(): Promise<boolean>

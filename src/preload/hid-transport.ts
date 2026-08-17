@@ -9,9 +9,24 @@
 import { ipcRenderer } from 'electron'
 import { IpcChannels } from '../shared/ipc/channels'
 import type { DeviceInfo, ProbeResult } from '../shared/types/protocol'
+import { setTransport, sendReceive as transportSendReceive, send as transportSend } from './transport'
 
 // Cache device-open state to skip IPC round-trip when device is known closed
 let deviceOpen = false
+
+// Initialize default Electron IPC transport
+setTransport({
+  sendReceive: async (data: Uint8Array): Promise<Uint8Array> => {
+    const result: number[] = await ipcRenderer.invoke(
+      IpcChannels.HID_SEND_RECEIVE,
+      Array.from(data),
+    )
+    return new Uint8Array(result)
+  },
+  send: async (data: Uint8Array): Promise<void> => {
+    await ipcRenderer.invoke(IpcChannels.HID_SEND, Array.from(data))
+  },
+})
 
 /**
  * List available Vial/VIA HID devices.

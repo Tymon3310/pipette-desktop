@@ -11,7 +11,7 @@ import { MSG_LEN } from '../../shared/constants/protocol'
 // device's report handler. Uses a dynamic import inside each function body
 // (rather than a module-level import) so it resolves after Vitest's mock
 // hoisting has fully linked the module graph.
-vi.mock('../hid-transport', () => ({
+vi.mock('../transport', () => ({
   sendReceive: async (data: Uint8Array): Promise<Uint8Array> => {
     const { handleVirtualReport } = await import('../../main/virtual-device')
     return Uint8Array.from(handleVirtualReport(Array.from(data)))

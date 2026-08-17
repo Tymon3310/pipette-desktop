@@ -129,7 +129,7 @@ export function UnlockDialog({
   const progress = total > 0 ? total - counter : 0
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
       <div className="w-modal-md max-w-modal-vw rounded-lg bg-surface-alt p-6 shadow-xl">
         <h2 className="mb-4 text-lg font-semibold">{t('unlock.title')}</h2>
         <p className="mb-4 text-sm text-content-secondary">{t('unlock.instructions')}</p>
