@@ -2,7 +2,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { KeychronRGB } from '../KeychronRGB'
 import type { KeychronRGBState } from '../../../../shared/types/keychron'
 import type { KleKey } from '../../../../shared/kle/types'
