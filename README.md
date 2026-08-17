@@ -12,6 +12,7 @@ This is part of the [Keychron Vial ecosystem](https://github.com/tymon3310/keych
 Pipette is an independent, Electron-based keymap editor compatible with [Vial](https://get.vial.today/).  \
 Communicates with Vial keyboards via USB HID to configure keymaps, macros, lighting, and more.
 
+[![Web App](https://img.shields.io/badge/Web_App-pipette.tymon3310.dev-007ACC?style=flat&logo=googlechrome&logoColor=white)](https://pipette.tymon3310.dev)
 [![Electron](https://img.shields.io/badge/Electron-47848F?style=flat&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React_19-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -23,6 +24,7 @@ Communicates with Vial keyboards via USB HID to configure keymaps, macros, light
 
 ## Table of Contents
 
+- [Web App (Zero Install)](#web-app-zero-install)
 - [Installation](#installation)
 - [System Requirements](#system-requirements)
 - [Usage](#usage)
@@ -54,6 +56,14 @@ The Keychron fork adds a **Keychron Settings** panel (shown below) with debounce
   <img width="1200" alt="keychron-settings" src="docs/screenshots/keychron-settings.png" />
 </p>
 
+## Web App (Zero Install)
+
+Use Pipette directly in any Chromium-based browser (Chrome, Edge, Brave, Opera, Arc) with WebHID and WebUSB support:
+
+👉 **[Launch Pipette Web (https://pipette.tymon3310.dev)](https://pipette.tymon3310.dev)**
+
+- Full feature parity with the desktop app (Keychron Settings, Snap Click SOCD, Keychron RGB, Analog Matrix HE, flasher, and battery indicator).
+- Supports both USB cable and 2.4 GHz wireless dongles (Keychron Link).
 
 ## Installation
 
