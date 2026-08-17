@@ -629,29 +629,20 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer:
       </div>
 
       {/* Actuation Tab */}
-      {activeTab === 'actuation' && (() => {
-        const actuationLabels = new Map<string, string>()
-        keys.forEach((key) => {
-          const cfg = analog.profiles[currentProfile]?.keyConfigs.get(`${key.row},${key.col}`)
-          if (cfg) {
-            actuationLabels.set(`${key.row},${key.col}`, `${(cfg.actuationPoint / 10).toFixed(1)}mm`)
-          }
-        })
-        return (
-          <div className="flex flex-col gap-4">
-            {/* Keyboard visualization */}
-            <div ref={kbContainerRef} className="rounded-lg border border-edge bg-surface-dim p-4 flex justify-center overflow-x-hidden">
-              <div data-kb-widget>
-                <KeyboardWidget
-                  keys={keys}
-                  keycodes={widgetKeycodes}
-                  multiSelectedKeys={selectedKeys}
-                  onKeyClick={handleKeyClick}
-                  keyColors={actuationLabels}
-                  scale={kbScale}
-                />
-              </div>
+      {activeTab === 'actuation' && (
+        <div className="flex flex-col gap-4">
+          {/* Keyboard visualization */}
+          <div ref={kbContainerRef} className="rounded-lg border border-edge bg-surface-dim p-4 flex justify-center overflow-x-hidden">
+            <div data-kb-widget>
+              <KeyboardWidget
+                keys={keys}
+                keycodes={widgetKeycodes}
+                multiSelectedKeys={selectedKeys}
+                onKeyClick={handleKeyClick}
+                scale={kbScale}
+              />
             </div>
+          </div>
 
           <div className="flex gap-2">
             <button
@@ -809,8 +800,7 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer:
               )
             })()}
           </div>
-        )
-      })()}
+        )}
 
       {/* DKS Tab */}
       {activeTab === 'dks' && (
@@ -945,7 +935,7 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer:
               <div data-kb-widget>
                 <KeyboardWidget
                   keys={keys}
-                  keycodes={new Map()}
+                  keycodes={widgetKeycodes}
                   multiSelectedKeys={selectedKeys}
                   onKeyClick={handleKeyClick}
                   scale={kbScale}
@@ -1011,22 +1001,24 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer:
 
           {/* Show keyboard widget when in pick mode */}
           {socdPickMode && (
-            <div ref={kbContainerRef} className="rounded-lg border-2 border-accent bg-surface-dim p-4 flex flex-col overflow-x-hidden">
+            <div ref={kbContainerRef} className="w-full rounded-lg border-2 border-accent bg-surface-dim p-4 flex flex-col">
               <p className="mb-2 text-sm font-medium text-accent self-start">
                 Click a key on the keyboard to assign it as Key {socdPickMode.whichKey} for SOCD
                 pair #{socdPickMode.pairIdx + 1}
               </p>
-              <div data-kb-widget>
-                <KeyboardWidget
-                  keys={keys}
-                  keycodes={widgetKeycodes}
-                  multiSelectedKeys={new Set()}
-                  onKeyClick={(key) => handleSocdKeyPick(key)}
-                  scale={kbScale}
-                />
+              <div className="flex justify-center overflow-x-hidden">
+                <div data-kb-widget>
+                  <KeyboardWidget
+                    keys={keys}
+                    keycodes={widgetKeycodes}
+                    multiSelectedKeys={new Set()}
+                    onKeyClick={(key) => handleSocdKeyPick(key)}
+                    scale={kbScale}
+                  />
+                </div>
               </div>
               <button
-                className="mt-2 rounded border border-edge px-3 py-1 text-xs text-content-secondary hover:text-content"
+                className="mt-2 self-center rounded border border-edge px-3 py-1 text-xs text-content-secondary hover:text-content"
                 onClick={() => setSocdPickMode(null)}
               >
                 Cancel

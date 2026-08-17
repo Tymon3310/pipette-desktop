@@ -148,20 +148,6 @@ export function KeychronSocd({ keychron, keys, keymap, onSettingChanged, onClose
                 multiSelectedKeys={new Set()}
                 onKeyClick={handleKeyPick}
                 scale={kbScale}
-                keyColors={(() => {
-                  const labels = new Map<string, string>()
-                  keys.forEach((k) => {
-                    if (k.row !== undefined && k.col !== undefined) {
-                      const posKey = `0,${k.row},${k.col}`
-                      const code = keymap.get(posKey) ?? 0
-                      // Find if it's currently assigned to Key 1 or Key 2 of the picked pair
-                      if (code) {
-                         labels.set(`${k.row},${k.col}`, codeToLabel(code))
-                      }
-                    }
-                  })
-                  return labels
-                })()}
               />
             </div>
           </div>
