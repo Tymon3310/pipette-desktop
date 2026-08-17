@@ -3,8 +3,8 @@
 
 import type { SnapshotMeta } from '../shared/types/snapshot-store'
 import type { AnalyzeFilterSnapshotMeta } from '../shared/types/analyze-filter-store'
-import type { SavedFavoriteMeta, FavoriteImportResult } from '../shared/types/favorite-store'
-import type { KeyLabelMeta, KeyLabelRecord, KeyLabelStoreResult, KeyLabelImportBatchResult } from '../shared/types/key-label-store'
+import type { SavedFavoriteMeta } from '../shared/types/favorite-store'
+import type { KeyLabelMeta, KeyLabelRecord, KeyLabelStoreResult } from '../shared/types/key-label-store'
 import type { TypingTestTextMeta, TypingTestTextRecord, TypingTestTextStoreResult } from '../shared/types/typing-test-text-store'
 import type { I18nPackMeta, I18nPackRecord, I18nPackStoreResult } from '../shared/types/i18n-store'
 import type { ThemePackMeta, ThemePackRecord, ThemePackStoreResult } from '../shared/types/theme-store'
@@ -275,7 +275,7 @@ export async function favoriteStoreSave(type: string, json: string, label: strin
     const items = getJson<StoredFavorite[]>(`${FAVORITES_PREFIX}${type}`, [])
     const entry: SavedFavoriteMeta = {
       id: `fav_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      type: type as any,
+      type: type as SavedFavoriteMeta['type'],
       label,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

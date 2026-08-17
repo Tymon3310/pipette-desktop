@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/* eslint-disable @typescript-eslint/no-namespace, @typescript-eslint/no-explicit-any */
 // WebUSB DFU + STM32 DfuSe implementation for Pipette Web
 // Ported directly from vial-web (https://github.com/vial-kb/vial-gui) / webdfu
 

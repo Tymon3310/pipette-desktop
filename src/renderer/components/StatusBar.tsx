@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SYNC_STATUS_CLASS } from './sync-ui'
 import { QuickSettingsSelects, type QuickSettingsSelectsProps } from './QuickSettingsSelects'
+import { Tooltip } from './ui/Tooltip'
 import { TypingRecordModal } from './TypingRecordModal'
 import type { SyncStatusType } from '../../shared/types/sync'
 
@@ -166,21 +167,23 @@ export function StatusBar({
         {batteryLevel !== undefined && batteryLevel > 0 && (
           <>
             <span className="shrink-0 text-edge">|</span>
-            <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-content-secondary" data-testid="battery-status">
-              <span className="relative inline-flex h-2.5 w-4 items-center rounded-xs border border-edge p-0.5" title={`Battery: ${batteryLevel}%`}>
-                <span
-                  className={`h-full rounded-2xs ${
-                    batteryLevel <= 20
-                      ? 'bg-danger'
-                      : batteryLevel <= 50
-                        ? 'bg-warning'
-                        : 'bg-success'
-                  }`}
-                  style={{ width: `${Math.min(100, Math.max(10, batteryLevel))}%` }}
-                />
+            <Tooltip content={`Battery: ${batteryLevel}%`}>
+              <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-content-secondary" data-testid="battery-status">
+                <span className="relative inline-flex h-2.5 w-4 items-center rounded-xs border border-edge p-0.5">
+                  <span
+                    className={`h-full rounded-2xs ${
+                      batteryLevel <= 20
+                        ? 'bg-danger'
+                        : batteryLevel <= 50
+                          ? 'bg-warning'
+                          : 'bg-success'
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(10, batteryLevel))}%` }}
+                  />
+                </span>
+                <span>{batteryLevel}%</span>
               </span>
-              <span>{batteryLevel}%</span>
-            </span>
+            </Tooltip>
           </>
         )}
       </div>

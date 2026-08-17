@@ -34,7 +34,7 @@ export async function decompressXz(data: Uint8Array): Promise<string | null> {
         controller.close()
       },
     })
-    const stream = new (XzReadableStream as any)(input)
+    const stream = new (XzReadableStream as unknown as new (stream: ReadableStream<Uint8Array>) => ReadableStream<Uint8Array>)(input)
     const reader = stream.getReader()
     const chunks: Uint8Array[] = []
     let totalSize = 0

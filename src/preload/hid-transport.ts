@@ -9,7 +9,7 @@
 import { ipcRenderer } from 'electron'
 import { IpcChannels } from '../shared/ipc/channels'
 import type { DeviceInfo, ProbeResult } from '../shared/types/protocol'
-import { setTransport, sendReceive as transportSendReceive, send as transportSend } from './transport'
+import { setTransport } from './transport'
 
 // Cache device-open state to skip IPC round-trip when device is known closed
 let deviceOpen = false
