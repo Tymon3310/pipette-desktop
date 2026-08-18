@@ -73,6 +73,16 @@ describe('openHidDevice / closeHidDevice', () => {
     await expect(isDeviceOpen()).resolves.toBe(true)
   })
 
+  it('passes serialNumber to IPC when provided', async () => {
+    mockInvoke.mockResolvedValue(true)
+
+    const result = await openHidDevice(0x1234, 0x5678, 'bridge:/dev/hidraw5')
+
+    expect(mockInvoke).toHaveBeenCalledWith('hid:openDevice', 0x1234, 0x5678, 'bridge:/dev/hidraw5')
+    expect(result).toBe(true)
+    await expect(isDeviceOpen()).resolves.toBe(true)
+  })
+
   it('returns false when IPC returns false', async () => {
     mockInvoke.mockResolvedValue(false)
 

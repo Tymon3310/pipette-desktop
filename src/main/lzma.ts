@@ -2,8 +2,11 @@
 // LZMA/XZ decompression with bomb protection — runs in main process
 
 import * as lzmaModule from 'lzma'
-import xzDecompress from 'xz-decompress'
-const { XzReadableStream } = xzDecompress
+import * as xzDecompressModule from 'xz-decompress'
+const XzReadableStream =
+  (xzDecompressModule as { XzReadableStream?: typeof globalThis.ReadableStream }).XzReadableStream ||
+  (xzDecompressModule as { default?: { XzReadableStream?: typeof globalThis.ReadableStream } }).default?.XzReadableStream ||
+  (xzDecompressModule as unknown as { default?: typeof globalThis.ReadableStream }).default
 import { IpcChannels } from '../shared/ipc/channels'
 import { secureHandle } from './ipc-guard'
 import { log } from './logger'
@@ -40,13 +43,17 @@ export function setupLzmaIpc(): void {
 
 export async function decompressXz(buf: Buffer): Promise<string | null> {
   try {
+    if (!XzReadableStream) {
+      log('warn', 'XzReadableStream is unavailable')
+      return null
+    }
     const input = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new Uint8Array(buf))
         controller.close()
       },
     })
-    const stream = new XzReadableStream(input)
+    const stream = new (XzReadableStream as unknown as new (stream: ReadableStream<Uint8Array>) => ReadableStream<Uint8Array>)(input)
     const reader = stream.getReader()
     const chunks: Uint8Array[] = []
     let totalSize = 0
