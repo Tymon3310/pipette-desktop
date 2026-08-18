@@ -33,9 +33,7 @@ jobs:
           cache: pnpm
 
       - name: Install build dependencies
-        run: |
-          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout="15" || true
-          sudo apt-get install -y --no-install-recommends libusb-1.0-0-dev libudev-dev
+        run: sudo apt-get install -y --no-upgrade libusb-1.0-0-dev libudev-dev || true
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
