@@ -42,6 +42,7 @@ interface Props {
   onToggleMatrix?: () => void
   unlocked: boolean
   onLock?: () => void
+  onUnlock?: () => void
   onTypingRecordDisarm?: () => void
   unlockStatusKnown?: boolean
   // REC (Typing Record) armed. Locking directly while REC is armed would
