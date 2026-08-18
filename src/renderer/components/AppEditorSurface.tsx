@@ -266,6 +266,8 @@ export function AppEditorSurface({
         onKeymapApplyCancel={handleKeymapApplyCancel}
         keymapApplyError={keymapApplyError}
         onLock={lifecycle.handleLock}
+        onTypingRecordDisarm={() => devicePrefs.setTypingRecordEnabled(false)}
+        unlockStatusKnown={keyboard.unlockStatusKnown}
         onMatrixModeChange={editorUI.handleMatrixModeChange}
         onOpenLighting={editorUI.lightingSupported ? () => editorUI.setShowLightingModal(true) : undefined}
         onOpenKeychron={onOpenKeychron}
