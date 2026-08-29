@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-import { useCallback, useEffect, useRef, useImperativeHandle, forwardRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useImperativeHandle, forwardRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTileContentOverride } from '../../hooks/useTileContentOverride'
 import { ViewMatrixPanel } from './ViewMatrixPanel'
@@ -29,6 +29,7 @@ import { useKeymapRewrite } from './use-keymap-rewrite'
 import { useKeymapPackTabs } from './use-keymap-pack-tabs'
 import { KeymapPickerRegion } from './KeymapPickerRegion'
 import { KeymapPrimaryPane } from './KeymapPrimaryPane'
+import { sortKeysByViewMatrix } from './view-matrix'
 import type { LineSnapshot } from '../../typing-test/TypingTestView'
 
 export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEditorHandle, Props>(function KeymapEditor(props, ref) {
@@ -110,6 +111,11 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
     layoutPanelOpen, setLayoutPanelOpen, layoutPanelRef, layoutButtonRef,
   } = useLayoutOptionsPanel({ layout, layoutLabels, packedLayoutOptions, onSetLayoutOptions, layoutOptions, scale: scaleProp })
 
+  // This editor's single ordered key domain: auto-advance, popover
+  // follow-along, Shift-range, paste targets, and the picker's live source
+  // all index against this one array.
+  const advancableKeys = useMemo(() => sortKeysByViewMatrix(selectableKeys, viewMatrix), [selectableKeys, viewMatrix])
+
   // --- Multi-selection ---
   const hasActiveSingleSelectionRef = useRef(false)
   const multiSelect = useKeymapMultiSelect({ hasActiveSingleSelectionRef })
@@ -136,7 +142,7 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
     tdModalIndex, macroModalIndex, handleTdModalSave, handleTdModalClose, handleMacroModalClose,
   } = useKeymapSelectionHandlers({
     keymap, encoderLayout, currentLayer,
-    selectableKeys, autoAdvance, viewMatrix,
+    advancableKeys, autoAdvance,
     onSetKey, onSetKeysBulk, onSetEncoder, keyboardContentRef, unlocked, onUnlock,
     multiSelect, history,
     onHistoryApplied: triggerFlash,
@@ -260,7 +266,7 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
   // holds, or start a picker multi-select, regardless of what's selected
   // on THIS surface). Same `packTabReadOnly` gate as every other edit path.
   const { layoutPickerContent } = useLayoutPicker({
-    layout, layers, layerNames, keymap, effectiveLayoutOptions, remapLabel,
+    layout, layers, layerNames, keymap, effectiveLayoutOptions, advancableKeys, remapLabel,
     scale: scaleProp, onScaleChange,
     devices, connectedDevice, onDeviceListActiveChange,
     selectedKey, selectedEncoder,
