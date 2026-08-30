@@ -83,6 +83,8 @@ jobs:
         run: sudo apt-get install -y --no-upgrade libusb-1.0-0-dev libudev-dev || true
 
       - run: pnpm install --frozen-lockfile
+      - name: Rebuild native dependencies for target architecture
+        run: pnpm exec electron-builder install-app-deps --arch=${{ matrix.arch }}
 
       - run: pnpm exec electron-vite build
 
