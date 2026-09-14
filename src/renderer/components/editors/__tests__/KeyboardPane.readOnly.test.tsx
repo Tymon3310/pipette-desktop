@@ -11,6 +11,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
 import { KeyboardPane } from '../KeyboardPane'
 import type { KleKey } from '../../../../shared/kle/types'
+import { posKey } from '../../../../shared/kle/pos-key'
 
 vi.mock('../../../../shared/keycodes/keycodes', () => ({
   keycodeLabel: (kc: string) => kc,
@@ -134,5 +135,18 @@ describe('KeyboardPane — readOnly (Plan-qwerty-select-no-rewrite v7)', () => {
     )
     expect(getByTestId('layer-label')).toHaveTextContent('Layer 0')
     expect(getByTestId('layer-label')).not.toHaveTextContent('Preview')
+  })
+
+  it('threads matrixWires through to KeyboardWidget, rendering the wiring overlay', () => {
+    const matrixWires = new Map([[posKey(0, 0), { row: 0, col: 0 }]])
+    const { container } = render(
+      <KeyboardPane {...baseProps()} matrixWires={matrixWires} />,
+    )
+    expect(container.querySelector('[data-testid="matrix-wires"]')).not.toBeNull()
+  })
+
+  it('renders no wiring overlay when matrixWires is omitted', () => {
+    const { container } = render(<KeyboardPane {...baseProps()} />)
+    expect(container.querySelector('[data-testid="matrix-wires"]')).toBeNull()
   })
 })

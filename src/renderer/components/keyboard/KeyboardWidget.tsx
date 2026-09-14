@@ -6,62 +6,14 @@ import { filterVisibleKeys, repositionLayoutKeys } from '../../../shared/kle/fil
 import { posKey, encoderPosKey } from '../../../shared/kle/pos-key'
 import { KeyWidget } from './KeyWidget'
 import { EncoderWidget } from './EncoderWidget'
-import { KEY_UNIT, KEY_SPACING, KEYBOARD_PADDING } from './constants'
+import { KEY_UNIT, KEY_SPACING, KEYBOARD_PADDING, keyLabelFontSize } from './constants'
 import { innerHeatmapFillForCell, outerHeatmapFillForCell } from './heatmap-fill'
 import type { TypingHeatmapCell } from '../../../shared/types/typing-analytics'
 import { useEffectiveTheme } from '../../hooks/useEffectiveTheme'
 import { flashPropsFor, type KeyFlashState } from './key-flash'
-
-/** Rotate point (px, py) by `angle` degrees around center (cx, cy). */
-export function rotatePoint(
-  px: number,
-  py: number,
-  angle: number,
-  cx: number,
-  cy: number,
-): [number, number] {
-  const rad = (angle * Math.PI) / 180
-  const cos = Math.cos(rad)
-  const sin = Math.sin(rad)
-  const dx = px - cx
-  const dy = py - cy
-  return [cx + dx * cos - dy * sin, cy + dx * sin + dy * cos]
-}
-
-/** Compute bounding-box corners of a key (both rects), accounting for rotation. */
-function keyCorners(
-  key: KleKey,
-  s: number,
-  spacing: number,
-): [number, number][] {
-  const x0 = s * key.x
-  const y0 = s * key.y
-  const x1 = s * (key.x + key.width) - spacing
-  const y1 = s * (key.y + key.height) - spacing
-  const corners: [number, number][] = [
-    [x0, y0],
-    [x1, y0],
-    [x1, y1],
-    [x0, y1],
-  ]
-  // Include secondary rect corners for stepped/ISO keys
-  const has2 =
-    key.width2 !== key.width ||
-    key.height2 !== key.height ||
-    key.x2 !== 0 ||
-    key.y2 !== 0
-  if (has2) {
-    const sx0 = x0 + s * key.x2
-    const sy0 = y0 + s * key.y2
-    const sx1 = s * (key.x + key.x2 + key.width2) - spacing
-    const sy1 = s * (key.y + key.y2 + key.height2) - spacing
-    corners.push([sx0, sy0], [sx1, sy0], [sx1, sy1], [sx0, sy1])
-  }
-  if (key.rotation === 0) return corners
-  const cx = s * key.rotationX
-  const cy = s * key.rotationY
-  return corners.map(([px, py]) => rotatePoint(px, py, key.rotation, cx, cy))
-}
+import { keyCorners } from './key-geometry'
+import { buildMatrixWires, rowLabelPitch, colLabelPitch } from './matrix-wires'
+import { MatrixWiresOverlay } from './MatrixWiresOverlay'
 
 interface Props {
   keys: KleKey[]
@@ -122,6 +74,14 @@ interface Props {
   onKeyHoverEnd?: () => void
   readOnly?: boolean
   scale?: number
+  /** View Matrix wiring overlay: each physical key's effective (row, col)
+   *  — the View Matrix override when one exists, otherwise the physical
+   *  position itself — keyed by `posKey(key.row, key.col)`. Undefined
+   *  turns the overlay off entirely (no gutter, no wires, bounds
+   *  identical to before this prop existed); a Map (even an empty one)
+   *  turns it on. The caller (`useViewMatrixEditing`) owns building this
+   *  Map — this component has no idea what View Matrix mode is. */
+  matrixWires?: ReadonlyMap<string, { row: number; col: number }>
 }
 
 function KeyboardWidgetInner({
@@ -155,6 +115,7 @@ function KeyboardWidgetInner({
   onKeyHoverEnd,
   readOnly = false,
   scale = 1,
+  matrixWires,
 }: Props) {
   const effectiveTheme = useEffectiveTheme()
 
@@ -167,11 +128,51 @@ function KeyboardWidgetInner({
     return filterVisibleKeys(repositionLayoutKeys(keys, opts), opts)
   }, [keys, layoutOptions])
 
+  // Same clamp KeyWidget/EncoderWidget use for their own label text, so the
+  // gutter numbers read at a consistent size relative to the key legends
+  // they sit next to.
+  const matrixWiresFontSize = keyLabelFontSize(scale)
+
+  // Computed before `bounds`: sizing the gutter needs to know how many
+  // label lines each axis actually stacks onto (unbounded — matrix rows/
+  // cols whose labels all collide keep opening new lines rather than a
+  // third label landing back on top of the second), and `bounds` needs
+  // that line count to size the gutter band it reserves.
+  const matrixWiresLayout = useMemo(() => {
+    if (!matrixWires) return null
+    return buildMatrixWires(visibleKeys, matrixWires, scale, matrixWiresFontSize)
+  }, [visibleKeys, matrixWires, scale, matrixWiresFontSize])
+
+  // The label gutter only exists while the overlay is on, and each axis is
+  // sized independently from the other: enough room for that axis's own
+  // stacked label lines (plus one fontSize of breathing room beyond the
+  // last line), or half a key unit, whichever is larger. `gutterLeft`
+  // sizes the row-number gutter on the left (row labels stack
+  // horizontally, using the wider row pitch); `gutterTop` sizes the
+  // col-number gutter on top (col labels stack vertically, the narrower
+  // col pitch). See matrix-wires.ts for the pitch values themselves.
+  const gutterLeft = matrixWiresLayout
+    ? Math.max(KEY_UNIT * 0.5 * scale, matrixWiresLayout.rowLineCount * rowLabelPitch(matrixWiresFontSize) + matrixWiresFontSize)
+    : 0
+  const gutterTop = matrixWiresLayout
+    ? Math.max(KEY_UNIT * 0.5 * scale, matrixWiresLayout.colLineCount * colLabelPitch(matrixWiresFontSize) + matrixWiresFontSize)
+    : 0
+
   // Calculate SVG bounds (track min to normalize position)
   const bounds = useMemo(() => {
-    const pad2 = KEYBOARD_PADDING * 2
+    // Each axis's gutter widens the bounds symmetrically on its own two
+    // sides — even though labels only ever draw into the left/top bands —
+    // so the keyboard stays horizontally/vertically centered inside its
+    // `justify-center` wrapper when the overlay is toggled on and off.
+    const padX = KEYBOARD_PADDING + gutterLeft
+    const padY = KEYBOARD_PADDING + gutterTop
     if (visibleKeys.length === 0) {
-      return { width: pad2, height: pad2, originX: -KEYBOARD_PADDING, originY: -KEYBOARD_PADDING }
+      return {
+        width: padX * 2,
+        height: padY * 2,
+        originX: -padX,
+        originY: -padY,
+      }
     }
     let minX = Infinity
     let minY = Infinity
@@ -188,12 +189,12 @@ function KeyboardWidgetInner({
       }
     }
     return {
-      width: maxX - minX + pad2,
-      height: maxY - minY + pad2,
-      originX: minX - KEYBOARD_PADDING,
-      originY: minY - KEYBOARD_PADDING,
+      width: maxX - minX + padX * 2,
+      height: maxY - minY + padY * 2,
+      originX: minX - padX,
+      originY: minY - padY,
     }
-  }, [visibleKeys, scale])
+  }, [visibleKeys, scale, gutterLeft, gutterTop])
 
   return (
     <svg
@@ -315,6 +316,19 @@ function KeyboardWidgetInner({
           />
         )
       })}
+      {matrixWiresLayout && (
+        <MatrixWiresOverlay
+          layout={matrixWiresLayout}
+          scale={scale}
+          gutter={{
+            originX: bounds.originX,
+            originY: bounds.originY,
+            left: gutterLeft,
+            top: gutterTop,
+            fontSize: matrixWiresFontSize,
+          }}
+        />
+      )}
     </svg>
   )
 }

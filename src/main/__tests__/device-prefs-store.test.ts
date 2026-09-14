@@ -569,6 +569,35 @@ describe('pipette-settings-store', () => {
       expect(result.error).toContain('Invalid prefs')
     })
 
+    it.each([true, false])('round-trips viewMatrixWires=%s (readData() must echo it back, not drop it)', async (value) => {
+      const setter = getHandler(IpcChannels.PIPETTE_SETTINGS_PATCH)
+      const result = await setter(fakeEvent, 'uid-1', {
+        _rev: 1,
+        keyboardLayout: 'qwerty',
+        autoAdvance: true,
+        layerNames: [],
+        viewMatrixWires: value,
+      }) as { success: boolean }
+      expect(result.success).toBe(true)
+
+      const getter = getHandler(IpcChannels.PIPETTE_SETTINGS_GET)
+      const prefs = await getter(fakeEvent, 'uid-1') as { viewMatrixWires: boolean }
+      expect(prefs.viewMatrixWires).toBe(value)
+    })
+
+    it('rejects prefs with non-boolean viewMatrixWires', async () => {
+      const handler = getHandler(IpcChannels.PIPETTE_SETTINGS_PATCH)
+      const result = await handler(fakeEvent, 'uid-1', {
+        _rev: 1,
+        keyboardLayout: 'qwerty',
+        autoAdvance: true,
+        layerNames: [],
+        viewMatrixWires: 'yes',
+      }) as { success: boolean; error: string }
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Invalid prefs')
+    })
+
     it.each([1, 7, 30, 90])('accepts typingSyncSpanDays=%i', async (span) => {
       const setter = getHandler(IpcChannels.PIPETTE_SETTINGS_PATCH)
       const result = await setter(fakeEvent, 'uid-1', {
