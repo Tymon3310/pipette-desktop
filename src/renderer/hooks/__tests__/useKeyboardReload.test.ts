@@ -46,11 +46,17 @@ const KEY_OVERRIDE_ENTRY = {
 }
 const ALT_REPEAT_ENTRY = { lastKey: 0, altKey: 0, allowedMods: 0, options: 0, enabled: false }
 
+/** Builds a qmkSettingsQuery response payload reporting the given supported
+ * qsids, followed by the 0xffff terminator. */
+function qmkQueryPayload(qsids: number[]): number[] {
+  const pairs = qsids.flatMap((qsid) => [qsid & 0xff, (qsid >> 8) & 0xff])
+  return [...pairs, 0xff, 0xff]
+}
+
 /** A qmkSettingsQuery response that reports the given supported qsids and
  * then the 0xffff terminator, ending discovery in a single round trip. */
 function qmkQueryWithSupported(qsids: number[]) {
-  const pairs = qsids.flatMap((qsid) => [qsid & 0xff, (qsid >> 8) & 0xff])
-  return vi.fn().mockResolvedValue([...pairs, 0xff, 0xff])
+  return vi.fn().mockResolvedValue(qmkQueryPayload(qsids))
 }
 
 /** A mock that resolves `entry` for every call except `index`, which rejects. */
@@ -63,6 +69,16 @@ function rejectAtIndex<T>(index: number, entry: T) {
 /** A fresh rejecting mock, standing in for a dropped/timed-out HID read. */
 function noResponse() {
   return vi.fn().mockRejectedValue(new Error('no response'))
+}
+
+const SLOW_READ_MS = 8000
+
+/** A mock that resolves `value` after `ms`, standing in for a slow-but-alive
+ * HID read that still completes rather than timing out. */
+function resolvesAfter<T>(value: T, ms = SLOW_READ_MS) {
+  return vi.fn().mockImplementation(
+    () => new Promise((resolve) => setTimeout(() => resolve(value), ms)),
+  )
 }
 
 /** Full happy-path read surface for window.vialAPI. Each test overrides only
@@ -156,18 +172,6 @@ async function runReload(
   const { promise, getState, refs } = startReload(overrides, initialBaseline)
   const result = await promise
   return { result, getState, refs }
-}
-
-/** Shared assertion for the "QMK settings batch discarded" outcome — reused
- * by the mid-fetch rejection and 5s-timeout cases, which differ only in how
- * the fetch is cut short. */
-function expectQmkDiscarded(
-  getState: () => KeyboardState,
-  refs: Pick<KeyboardRefs, 'qmkSettingsBaselineRef'>,
-) {
-  expect(getState().connectionWarning).toBe('warning.partialLoad')
-  expect(getState().qmkSettingsValues).toEqual({})
-  expect(refs.qmkSettingsBaselineRef.current).toEqual({})
 }
 
 afterEach(() => {
@@ -359,28 +363,9 @@ describe('useKeyboardReload', () => {
       )
 
       expect(result).toEqual({ ok: true, uid: 'uid-1' })
-      expectQmkDiscarded(getState, refs)
-    })
-
-    it('clears qmkSettingsValues when the value fetch is cut off at the 5s timeout after one qsid already succeeded', async () => {
-      vi.useFakeTimers()
-      const { promise, getState, refs } = startReload(
-        {
-          qmkSettingsQuery: qmkQueryWithSupported([1, 2]),
-          qmkSettingsGet: vi.fn().mockImplementation((qsid: number) =>
-            // qsid 1 resolves immediately; qsid 2 never resolves — the 5s
-            // Promise.race timeout must cut it off.
-            qsid === 2 ? new Promise(() => {}) : Promise.resolve([0]),
-          ),
-        },
-        { '99': [1] },
-      )
-
-      await vi.advanceTimersByTimeAsync(5000)
-      const result = await promise
-
-      expect(result).toEqual({ ok: true, uid: 'uid-1' })
-      expectQmkDiscarded(getState, refs)
+      expect(getState().connectionWarning).toBe('warning.partialLoad')
+      expect(getState().qmkSettingsValues).toEqual({})
+      expect(refs.qmkSettingsBaselineRef.current).toEqual({})
     })
 
     it('continues with warning.partialLoad and unlockStatusKnown false when getUnlockStatus rejects', async () => {
@@ -389,6 +374,41 @@ describe('useKeyboardReload', () => {
       expect(result).toEqual({ ok: true, uid: 'uid-1' })
       expect(getState().connectionWarning).toBe('warning.partialLoad')
       expect(getState().unlockStatusKnown).toBe(false)
+    })
+  })
+
+  describe('slow QMK settings reads', () => {
+    it('keeps the value read when qmkSettingsGet takes 8s to resolve', async () => {
+      vi.useFakeTimers()
+      const { promise, getState, refs } = startReload({
+        qmkSettingsQuery: qmkQueryWithSupported([1]),
+        qmkSettingsGet: vi.fn().mockImplementation(
+          (qsid: number) =>
+            new Promise((resolve) => setTimeout(() => resolve([qsid]), SLOW_READ_MS)),
+        ),
+      })
+
+      await vi.advanceTimersByTimeAsync(SLOW_READ_MS)
+      const result = await promise
+
+      expect(result).toEqual({ ok: true, uid: 'uid-1' })
+      expect(getState().connectionWarning).toBeNull()
+      expect(getState().qmkSettingsValues).toEqual({ '1': [1] })
+      expect(refs.qmkSettingsBaselineRef.current).toEqual({ '1': [1] })
+    })
+
+    it('keeps discovery results when qmkSettingsQuery takes 8s to resolve', async () => {
+      vi.useFakeTimers()
+      const { promise, getState } = startReload({
+        qmkSettingsQuery: resolvesAfter(qmkQueryPayload([1])),
+      })
+
+      await vi.advanceTimersByTimeAsync(SLOW_READ_MS)
+      const result = await promise
+
+      expect(result).toEqual({ ok: true, uid: 'uid-1' })
+      expect(getState().connectionWarning).toBeNull()
+      expect(getState().supportedQsids).toEqual(new Set([1]))
     })
   })
 })
