@@ -16,34 +16,58 @@ import {
 import { recreateKeyboardKeycodes } from '../../shared/keycodes/keycodes'
 import { normalizeQmkSettingData } from '../../shared/qmk-settings-normalize'
 import { emptyState, isEchoDetected } from './keyboard-types'
-import type { SetState, KeyboardRefs } from './keyboard-types'
+import type { SetState, KeyboardRefs, ReloadResult } from './keyboard-types'
 import { parseDefinitionLayout } from '../../shared/kle/definition-layout'
 
 export function useKeyboardReload(
   setState: SetState,
-  refs: Pick<KeyboardRefs, 'stateRef' | 'qmkSettingsBaselineRef'>,
-): { reload: () => Promise<string | null> } {
+  refs: Pick<KeyboardRefs, 'qmkSettingsBaselineRef'>,
+): { reload: () => Promise<ReloadResult> } {
   const { qmkSettingsBaselineRef } = refs
 
-  const reload = useCallback(async (): Promise<string | null> => {
-    const progress = (key: string) =>
+  const reload = useCallback(async (): Promise<ReloadResult> => {
+    let currentPhase = ''
+    const progress = (key: string) => {
+      currentPhase = key
       setState((s) => ({ ...s, loading: true, loadingProgress: key }))
+    }
 
     progress('loading.protocol')
     const api = window.vialAPI
 
+    const fail = (reason: 'notVial' | 'loadFailed', err: unknown): ReloadResult => {
+      console.error(`[KB] reload failed during ${currentPhase}:`, err)
+      setState((s) => ({ ...s, loading: false }))
+      return { ok: false, reason }
+    }
+
+    // Phase 1: Protocol + identity. getKeyboardId() doesn't validate
+    // anything, so a VIA-only board can echo it back and "succeed" —
+    // the definition load below is what actually proves Vial support.
+    // A failure here, or a null definition, is classified notVial; any
+    // other failure past that point is loadFailed.
+    let viaProtocol: number
+    let vialProtocol: number
+    let uid: string
+    try {
+      viaProtocol = await api.getProtocolVersion()
+      const kbId = await api.getKeyboardId()
+      vialProtocol = kbId.vialProtocol
+      uid = kbId.uid
+
+      // Publish UID early so cloud sync can start in parallel with reload
+      setState((s) => ({ ...s, uid, loading: true }))
+    } catch (err) {
+      return fail('notVial', err)
+    }
+
     try {
       const newState = emptyState()
       newState.loading = true
-
-      // Phase 1: Protocol + identity
-      newState.viaProtocol = await api.getProtocolVersion()
-      const kbId = await api.getKeyboardId()
-      newState.vialProtocol = kbId.vialProtocol
-      newState.uid = kbId.uid
-
-      // Publish UID early so cloud sync can start in parallel with reload
-      setState((s) => ({ ...s, uid: newState.uid, loading: true }))
+      qmkSettingsBaselineRef.current = {}
+      newState.viaProtocol = viaProtocol
+      newState.vialProtocol = vialProtocol
+      newState.uid = uid
 
       // Phase 2: Layer count + macros metadata
       progress('loading.definition')
@@ -56,26 +80,20 @@ export function useKeyboardReload(
       newState.macroCount = await api.getMacroCount()
       newState.macroBufferSize = await api.getMacroBufferSize()
 
-      // Phase 2.5: Definition load + KLE parse
-      try {
-        newState.definition = await api.getDefinition()
-        if (newState.definition) {
-          newState.rows = newState.definition.matrix.rows
-          newState.cols = newState.definition.matrix.cols
-          const { layout, encoderCount } = parseDefinitionLayout(newState.definition)
-          newState.layout = layout
-          newState.encoderCount = encoderCount
-        }
-      } catch (err) {
-        console.error('[KB] definition fetch failed:', err)
-      }
-
-      // Phase 2.5 guard: definition is required to continue
+      // Phase 2.5: Definition load + KLE parse. getDefinition() never
+      // throws — it swallows transport, LZMA, and JSON failures into a
+      // null return — but a null definition means the board never
+      // proved it speaks Vial, so this reports notVial directly
+      // instead of routing through the loadFailed catch below.
+      newState.definition = await api.getDefinition()
       if (!newState.definition) {
-        console.error('[KB] definition load failed — aborting reload')
-        setState((s) => ({ ...s, loading: false }))
-        return null
+        return fail('notVial', new Error('definition load failed'))
       }
+      newState.rows = newState.definition.matrix.rows
+      newState.cols = newState.definition.matrix.cols
+      const { layout, encoderCount } = parseDefinitionLayout(newState.definition)
+      newState.layout = layout
+      newState.encoderCount = encoderCount
 
       // Phase 2.6: Lighting data load
       const lt = newState.definition.lighting
@@ -117,6 +135,10 @@ export function useKeyboardReload(
         }
       } catch (err) {
         console.error('[KB] lighting data load failed:', err)
+        // echo outranks partialLoad: a plain partial-load warning never
+        // replaces an earlier echo (see the dynamic-entry-count and QMK
+        // discovery catches below, which assign echoDetected unconditionally).
+        newState.connectionWarning ??= 'warning.partialLoad'
       }
 
       // Phase 3: Layout options
@@ -127,30 +149,21 @@ export function useKeyboardReload(
       if (newState.rows > 0 && newState.cols > 0 && newState.layers > 0) {
         const totalSize = newState.layers * newState.rows * newState.cols * 2
         const buffer: number[] = []
-        let fetchFailed = false
         for (let offset = 0; offset < totalSize; offset += BUFFER_FETCH_CHUNK) {
           const chunkSize = Math.min(BUFFER_FETCH_CHUNK, totalSize - offset)
-          try {
-            const chunk = await api.getKeymapBuffer(offset, chunkSize)
-            buffer.push(...chunk)
-          } catch (err) {
-            console.error('[KB] keymap buffer fetch failed at offset', offset, err)
-            fetchFailed = true
-            break
-          }
+          const chunk = await api.getKeymapBuffer(offset, chunkSize)
+          buffer.push(...chunk)
         }
-        if (!fetchFailed) {
-          for (let layer = 0; layer < newState.layers; layer++) {
-            for (let row = 0; row < newState.rows; row++) {
-              for (let col = 0; col < newState.cols; col++) {
-                const idx =
-                  (layer * newState.rows * newState.cols + row * newState.cols + col) * 2
-                if (idx + 1 < buffer.length) {
-                  newState.keymap.set(
-                    `${layer},${row},${col}`,
-                    (buffer[idx] << 8) | buffer[idx + 1],
-                  )
-                }
+        for (let layer = 0; layer < newState.layers; layer++) {
+          for (let row = 0; row < newState.rows; row++) {
+            for (let col = 0; col < newState.cols; col++) {
+              const idx =
+                (layer * newState.rows * newState.cols + row * newState.cols + col) * 2
+              if (idx + 1 < buffer.length) {
+                newState.keymap.set(
+                  `${layer},${row},${col}`,
+                  (buffer[idx] << 8) | buffer[idx + 1],
+                )
               }
             }
           }
@@ -161,13 +174,9 @@ export function useKeyboardReload(
       if (newState.encoderCount > 0 && newState.layers > 0) {
         for (let layer = 0; layer < newState.layers; layer++) {
           for (let idx = 0; idx < newState.encoderCount; idx++) {
-            try {
-              const [cw, ccw] = await api.getEncoder(layer, idx)
-              newState.encoderLayout.set(`${layer},${idx},0`, cw)
-              newState.encoderLayout.set(`${layer},${idx},1`, ccw)
-            } catch {
-              // skip
-            }
+            const [cw, ccw] = await api.getEncoder(layer, idx)
+            newState.encoderLayout.set(`${layer},${idx},0`, cw)
+            newState.encoderLayout.set(`${layer},${idx},1`, ccw)
           }
         }
       }
@@ -180,19 +189,15 @@ export function useKeyboardReload(
           if (isEchoDetected(err)) {
             newState.connectionWarning = 'warning.echoDetected'
           } else {
-            console.error('[KB] dynamic entry count failed:', err)
+            throw err
           }
         }
       }
 
-      // Phase 5: Macro buffer (non-fatal: empty buffer if fetch fails)
+      // Phase 5: Macro buffer
       progress('loading.macros')
       if (newState.macroBufferSize > 0) {
-        try {
-          newState.macroBuffer = await api.getMacroBuffer(newState.macroBufferSize)
-        } catch (err) {
-          console.error('[KB] macro buffer fetch failed:', err)
-        }
+        newState.macroBuffer = await api.getMacroBuffer(newState.macroBufferSize)
       }
 
       // Phase 6: Dynamic entries (Vial protocol >= 4)
@@ -201,32 +206,16 @@ export function useKeyboardReload(
         const { tapDance, combo, keyOverride, altRepeatKey } = newState.dynamicCounts
 
         for (let i = 0; i < tapDance; i++) {
-          try {
-            newState.tapDanceEntries.push(await api.getTapDance(i))
-          } catch {
-            // Skip failed entry
-          }
+          newState.tapDanceEntries.push(await api.getTapDance(i))
         }
         for (let i = 0; i < combo; i++) {
-          try {
-            newState.comboEntries.push(await api.getCombo(i))
-          } catch {
-            // Skip failed entry
-          }
+          newState.comboEntries.push(await api.getCombo(i))
         }
         for (let i = 0; i < keyOverride; i++) {
-          try {
-            newState.keyOverrideEntries.push(await api.getKeyOverride(i))
-          } catch {
-            // Skip failed entry
-          }
+          newState.keyOverrideEntries.push(await api.getKeyOverride(i))
         }
         for (let i = 0; i < altRepeatKey; i++) {
-          try {
-            newState.altRepeatKeyEntries.push(await api.getAltRepeatKey(i))
-          } catch {
-            // Skip failed entry
-          }
+          newState.altRepeatKeyEntries.push(await api.getAltRepeatKey(i))
         }
       }
 
@@ -252,78 +241,59 @@ export function useKeyboardReload(
         supportedFeatures,
       })
 
-      // Phase 8a: QMK Settings discovery (matches Python reload_settings)
+      // Phase 8a: QMK Settings discovery (matches Python reload_settings).
       progress('loading.settings')
+      // Phases 8a and 8b both run to completion: each HID command is
+      // bounded by the transport's own retry loop (read timeout × retry
+      // count in the main process), and an issued HID command cannot be
+      // cancelled, so a slow-but-alive keyboard is worth waiting for.
       if (newState.vialProtocol >= VIAL_PROTOCOL_QMK_SETTINGS) {
         try {
           const supported = new Set<number>()
-          await Promise.race([
-            (async () => {
-              let cur = 0
-              while (cur !== 0xffff) {
-                const result = await api.qmkSettingsQuery(cur)
-                const prevCur = cur
-                for (let i = 0; i + 1 < result.length; i += 2) {
-                  const qsid = result[i] | (result[i + 1] << 8)
-                  cur = Math.max(cur, qsid)
-                  if (qsid !== 0xffff) {
-                    supported.add(qsid)
-                  }
-                }
-                if (cur === prevCur) break
+          let cur = 0
+          while (cur !== 0xffff) {
+            const result = await api.qmkSettingsQuery(cur)
+            const prevCur = cur
+            for (let i = 0; i + 1 < result.length; i += 2) {
+              const qsid = result[i] | (result[i + 1] << 8)
+              cur = Math.max(cur, qsid)
+              if (qsid !== 0xffff) {
+                supported.add(qsid)
               }
-            })(),
-            new Promise<void>((_, reject) =>
-              setTimeout(() => reject(new Error('QMK settings discovery timeout')), 5000),
-            ),
-          ])
+            }
+            if (cur === prevCur) break
+          }
           newState.supportedQsids = supported
         } catch (err) {
           if (isEchoDetected(err)) {
             newState.connectionWarning = 'warning.echoDetected'
           } else {
             console.error('[KB] QMK settings discovery failed:', err)
+            newState.connectionWarning ??= 'warning.partialLoad'
           }
         }
 
-        // Phase 8b: Fetch current values for each supported QSID.
+        // Phase 8b: Fetch current values for each supported QSID. A qsid
+        // that fails to read discards the whole batch rather than keeping
+        // a partial record — backfillQmkSettings() copies these values
+        // into a snapshot only while the snapshot has none, and never
+        // touches it again once it has any, so a partial record here would
+        // freeze the missing qsids out of that snapshot for good.
         if (newState.supportedQsids.size > 0) {
           const values: Record<string, number[]> = {}
-          let cancelled = false
-          let timer: ReturnType<typeof setTimeout> | undefined
           try {
-            await Promise.race([
-              (async () => {
-                for (const qsid of newState.supportedQsids) {
-                  if (cancelled) break
-                  try {
-                    const data = await api.qmkSettingsGet(qsid)
-                    if (!cancelled) {
-                      values[String(qsid)] = normalizeQmkSettingData(qsid, data)
-                    }
-                  } catch {
-                    console.warn(`[KB] Failed to read QMK setting ${qsid}, skipping`)
-                  }
-                }
-              })(),
-              new Promise<void>((_, reject) => {
-                timer = setTimeout(() => reject(new Error('QMK settings value fetch timeout')), 5000)
-              }),
-            ])
+            for (const qsid of newState.supportedQsids) {
+              const data = await api.qmkSettingsGet(qsid)
+              values[String(qsid)] = normalizeQmkSettingData(qsid, data)
+            }
+            newState.qmkSettingsValues = values
+            qmkSettingsBaselineRef.current = Object.fromEntries(
+              Object.entries(values).map(([k, v]) => [k, [...v]]),
+            )
           } catch {
-            cancelled = true
-            console.warn('[KB] QMK settings value fetch timed out, using partial data')
-          } finally {
-            clearTimeout(timer)
+            console.warn('[KB] QMK settings value fetch failed, discarding partial data')
+            newState.connectionWarning ??= 'warning.partialLoad'
           }
-          newState.qmkSettingsValues = values
-          qmkSettingsBaselineRef.current = Object.fromEntries(
-            Object.entries(values).map(([k, v]) => [k, [...v]]),
-          )
-        } else {
-          // No supported QSIDs — clear stale baseline from prior reload
-          newState.qmkSettingsValues = {}
-          qmkSettingsBaselineRef.current = {}
         }
       }
 
@@ -334,6 +304,7 @@ export function useKeyboardReload(
           newState.unlockStatusKnown = true
         } catch (err) {
           console.error('[KB] unlock status fetch failed:', err)
+          newState.connectionWarning ??= 'warning.partialLoad'
         }
       } else {
         // VIA-only keyboards are always unlocked
@@ -353,11 +324,9 @@ export function useKeyboardReload(
 
       newState.loading = false
       setState(newState)
-      return newState.uid
+      return { ok: true, uid: newState.uid }
     } catch (err) {
-      console.error('[KB] reload failed:', err)
-      setState((s) => ({ ...s, loading: false }))
-      return null
+      return fail('loadFailed', err)
     }
   }, [setState, qmkSettingsBaselineRef])
 

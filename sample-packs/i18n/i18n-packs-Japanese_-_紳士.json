@@ -1,5 +1,5 @@
 {
-  "version": "0.1.89",
+  "version": "0.1.95",
   "name": "Japanese - 紳士",
   "common": {
     "save": "保存を承る",
@@ -43,6 +43,8 @@
     "updatedNamed": "{{name}} を更新いたしました",
     "importBatchFailed_one": "誠に恐縮ながら、{{count}} 件のファイルをお受け取りできませんでした。",
     "importBatchFailed_other": "誠に恐縮ながら、{{count}} 件のファイルをお受け取りできませんでした。",
+    "importBatchHubSyncFailed_one": "誠に恐縮ながら、{{count}} 件は保存いたしましたが、Hub とは揃えられませんでした。",
+    "importBatchHubSyncFailed_other": "誠に恐縮ながら、{{count}} 件は保存いたしましたが、Hub とは揃えられませんでした。",
     "importSummary_one": "{{count}} 件のファイルをお受け取りいたしました (成功 {{success}} 件、失敗 {{failure}} 件)。",
     "importSummary_other": "{{count}} 件のファイルをお受け取りいたしました (成功 {{success}} 件、失敗 {{failure}} 件)。",
     "pullFromCloud": "Google Drive より頂戴する",
@@ -83,7 +85,9 @@
       "done": "完了",
       "rowLabel": "行",
       "colLabel": "列",
-      "blankOption": "—"
+      "blankOption": "—",
+      "wires": "配線図",
+      "notice": "座標表はPipette内のみの設定であり、キーボード本体には何ら変更を加えるものではございません。カスタム位置が変えるのはPipetteがキーを辿る順序のみでございます — Auto Move（キーポップオーバーの次のキーも含む）、Shift+クリックによる範囲選択、複数キーの一括貼り付けの順序でございます。配線図はそれに合わせて描き直されますが、キーボード本体の実際の配線はそのままでございます。"
     },
     "keymap": {
       "title": "地図",
@@ -106,6 +110,7 @@
       "oneShotKeysLabel": "一撃鍵",
       "comboSettings": "組手",
       "comboLabel": "組手",
+      "qmkSettingsSaveFailed": "設定の保存に失敗いたしました。つながりをお確かめのうえ、今一度お試しください。",
       "previousLayers": "前の階層",
       "nextLayers": "次の階層",
       "layerN": "階層 {{n}}",
@@ -667,10 +672,14 @@
     "exportPdfFailed": "PDFの作成に失敗いたしました",
     "sideloadFailed": "JSON定義の読み取りに失敗いたしました",
     "sideloadInvalidDefinition": "機材の定義が不完全でございます",
-    "notVialCompatible": "Vialに対応していないやもしれませぬ"
+    "notVialCompatible": "Vialに対応していないやもしれませぬ",
+    "deviceLoadFailed": "キーボードよりデータを読み取ることが叶いませんでした。USBの紐をご確認の上、再びお繋ぎくださいませ。",
+    "applyRolledBack": "キーボードへの書き込みに失敗いたしました。以前の設定へと復元いたしましてございます。",
+    "applyNotRolledBack": "キーボードへの書き込みに失敗し、以前の設定を復元することも叶いませんでした。キーボードを再びお繋ぎの上、保存されたスナップショットをお読み込みくださいませ。"
   },
   "warning": {
-    "echoDetected": "お声がうまく届きませぬ。紐（ケーブル）を確認し、繋ぎ直していただけますか？"
+    "echoDetected": "お声がうまく届きませぬ。紐（ケーブル）を確認し、繋ぎ直していただけますか？",
+    "partialLoad": "一部の設定を読み取ることが叶いませんでした。再接続いただければ、読み直すことができまする。"
   },
   "keycodes": {
     "basic": "基本",
@@ -892,6 +901,13 @@
       "keystoreUnavailable": "OSの錠前が使えぬため、ここでは Google Drive より取り寄せられませぬ。",
       "remoteCheckFailed": "あちらへ繋がりませんでした。しばし後にもう一度お試しを。",
       "partial": "一部の包みが取り寄せられませんでした。今一度お試しくださいませ。"
+    },
+    "readiness": {
+      "unauthenticated": "同期を有効にするには、まず Google へ御挨拶を",
+      "noPasswordFile": "同期を有効にするには、合言葉を定めてくださいませ",
+      "decryptFailed": "保管された合言葉を読み取れませんでした",
+      "keystoreUnavailable": "OSの錠前が使えぬため、ここでは同期がかないませぬ",
+      "remoteCheckFailed": "あちらへ繋がらぬため、同期を控えております"
     }
   },
   "settings": {
@@ -1886,6 +1902,7 @@
     "authDisplayNameConflict": "既存のお名前と重複しております。別のお名前をお決めください。",
     "accountDeactivated": "お席が無効になっております。お問い合わせください。",
     "rateLimited": "少々お急ぎすぎのようです。一息ついてからお試しください。",
+    "notSignedIn": "Hub と同期するには、まず Google へ御挨拶を。",
     "error": {
       "keystrokesBelow": "打鍵が少なすぎます（百回以上は必要かと）。",
       "rangeExceeds": "期間が長すぎます。三十日以内におさめてくださいませ。",

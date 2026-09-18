@@ -15,6 +15,10 @@ vi.mock('react-i18next', () => ({
         'editorSettings.keyEditorZoom': 'Key Editor Zoom',
         'editor.autoAdvance': 'Auto Move',
         'editor.keyTester.title': 'Key Tester',
+        'editor.viewMatrix.label': 'View Matrix',
+        'editor.viewMatrix.edit': 'Edit',
+        'editor.viewMatrix.done': 'Done',
+        'editor.viewMatrix.wires': 'Wires',
         'settings.security': 'Security',
         'security.lock': 'Lock',
         'security.unlock': 'Unlock',
@@ -301,6 +305,83 @@ describe('KeycodesOverlayPanel', () => {
     render(<KeycodesOverlayPanel {...DEFAULT_PROPS} hasMatrixTester onToggleMatrix={vi.fn()} />)
 
     expect(screen.getByTestId('overlay-matrix-row')).toBeInTheDocument()
+  })
+
+  describe('View Matrix row (Edit button + wiring toggle, independent)', () => {
+    const viewMatrixProps = {
+      ...DEFAULT_PROPS,
+      onToggleViewMatrixMode: vi.fn(),
+      onViewMatrixWiresChange: vi.fn(),
+    }
+
+    it('exposes the wiring toggle by accessible name only, with no visible label', () => {
+      render(<KeycodesOverlayPanel {...viewMatrixProps} viewMatrixWires={false} />)
+
+      const toggle = screen.getByTestId('overlay-view-matrix-wires-toggle')
+      expect(toggle).toHaveAttribute('aria-label', 'Wires')
+      expect(screen.queryByText('Wires')).not.toBeInTheDocument()
+    })
+
+    it('clicking Edit calls onToggleViewMatrixMode without touching the wires toggle', () => {
+      const onToggleViewMatrixMode = vi.fn()
+      const onViewMatrixWiresChange = vi.fn()
+      render(
+        <KeycodesOverlayPanel
+          {...viewMatrixProps}
+          onToggleViewMatrixMode={onToggleViewMatrixMode}
+          onViewMatrixWiresChange={onViewMatrixWiresChange}
+          viewMatrixWires={false}
+        />,
+      )
+
+      fireEvent.click(screen.getByTestId('overlay-view-matrix-edit-button'))
+
+      expect(onToggleViewMatrixMode).toHaveBeenCalledTimes(1)
+      expect(onViewMatrixWiresChange).not.toHaveBeenCalled()
+    })
+
+    it('clicking the wires toggle calls onViewMatrixWiresChange without touching Edit mode', () => {
+      const onToggleViewMatrixMode = vi.fn()
+      const onViewMatrixWiresChange = vi.fn()
+      render(
+        <KeycodesOverlayPanel
+          {...viewMatrixProps}
+          onToggleViewMatrixMode={onToggleViewMatrixMode}
+          onViewMatrixWiresChange={onViewMatrixWiresChange}
+          viewMatrixWires={false}
+        />,
+      )
+
+      fireEvent.click(screen.getByTestId('overlay-view-matrix-wires-toggle'))
+
+      expect(onViewMatrixWiresChange).toHaveBeenCalledWith(true)
+      expect(onToggleViewMatrixMode).not.toHaveBeenCalled()
+    })
+
+    it('aria-checked on the wires toggle reflects the viewMatrixWires prop', () => {
+      const { rerender } = render(
+        <KeycodesOverlayPanel {...viewMatrixProps} viewMatrixWires={false} />,
+      )
+      expect(screen.getByTestId('overlay-view-matrix-wires-toggle')).toHaveAttribute('aria-checked', 'false')
+
+      rerender(<KeycodesOverlayPanel {...viewMatrixProps} viewMatrixWires />)
+      expect(screen.getByTestId('overlay-view-matrix-wires-toggle')).toHaveAttribute('aria-checked', 'true')
+    })
+
+    it('clicking the toggle while on sends false (negation, not a fixed value)', () => {
+      const onViewMatrixWiresChange = vi.fn()
+      render(
+        <KeycodesOverlayPanel
+          {...viewMatrixProps}
+          onViewMatrixWiresChange={onViewMatrixWiresChange}
+          viewMatrixWires
+        />,
+      )
+
+      fireEvent.click(screen.getByTestId('overlay-view-matrix-wires-toggle'))
+
+      expect(onViewMatrixWiresChange).toHaveBeenCalledWith(false)
+    })
   })
 
   it('resets to tools tab when hasLayoutOptions becomes false', () => {

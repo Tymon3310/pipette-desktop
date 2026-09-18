@@ -6,6 +6,7 @@ import { renderHook, act } from '@testing-library/react'
 import { useDeviceLifecycle } from '../useDeviceLifecycle'
 import type { DeviceInfo, KeyboardDefinition, VilFile } from '../../../shared/types/protocol'
 import type { SyncScope, SyncOperationResult } from '../../../shared/types/sync'
+import type { ReloadResult } from '../keyboard-types'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
@@ -22,7 +23,7 @@ const mockDevice: DeviceInfo = {
 interface Mocks {
   connectDevice: Mock<(dev: DeviceInfo) => Promise<boolean>>
   disconnectDevice: Mock<() => Promise<void>>
-  keyboardReload: Mock<() => Promise<string | null>>
+  keyboardReload: Mock<() => Promise<ReloadResult>>
   applyDevicePrefs: Mock<(uid: string) => Promise<void>>
   syncNow: Mock<(direction: 'download' | 'upload', scope?: SyncScope) => Promise<SyncOperationResult>>
 }
@@ -32,6 +33,9 @@ function makeOptions(overrides: Partial<{
   autoSync: boolean
   hasPassword: boolean
   reloadUid: string | undefined
+  // When set, keyboardReload resolves to this failure instead of the
+  // default success — replaces hand-building a keyboardReload mock per test.
+  reloadFailure: 'notVial' | 'loadFailed'
   // Defaults to true so the pre-existing suite below (written before the
   // packs auto-fire existed) doesn't need to account for an extra
   // syncNow('download', 'packs') call it never asserts on. The dedicated
@@ -41,8 +45,11 @@ function makeOptions(overrides: Partial<{
 }> = {}, mocks?: Partial<Mocks> & { markPacksPulledOnce?: Mock<() => void> }) {
   const connectDevice = mocks?.connectDevice ?? vi.fn().mockResolvedValue(true)
   const disconnectDevice = mocks?.disconnectDevice ?? vi.fn().mockResolvedValue(undefined)
-  const keyboardReload = mocks?.keyboardReload ??
-    vi.fn().mockResolvedValue(overrides.reloadUid ?? 'uid-1')
+  const keyboardReload = mocks?.keyboardReload ?? vi.fn().mockResolvedValue(
+    overrides.reloadFailure
+      ? { ok: false, reason: overrides.reloadFailure }
+      : { ok: true, uid: overrides.reloadUid ?? 'uid-1' },
+  )
   const applyDevicePrefs = mocks?.applyDevicePrefs ?? vi.fn().mockResolvedValue(undefined)
   const syncNow = mocks?.syncNow ?? vi.fn().mockResolvedValue(undefined)
   const markPacksPulledOnce = mocks?.markPacksPulledOnce ?? vi.fn()
@@ -165,9 +172,7 @@ describe('useDeviceLifecycle.handleConnect — issue #190 regression', () => {
   })
 
   it('records the last device on a genuine connect, and keeps it through the not-Vial-compatible bailout', async () => {
-    // makeOptions' reloadUid default swallows undefined (?? 'uid-1'), so
-    // the no-uid bailout needs an explicit reload mock.
-    const { options } = makeOptions({}, { keyboardReload: vi.fn().mockResolvedValue(undefined) })
+    const { options } = makeOptions({ reloadFailure: 'notVial' })
     const { result } = renderHook(() => useDeviceLifecycle(options))
 
     await act(async () => {
@@ -178,6 +183,7 @@ describe('useDeviceLifecycle.handleConnect — issue #190 regression', () => {
     // disconnect must not forget a previously remembered device.
     expect(options.saveLastDevice).not.toHaveBeenCalled()
     expect(options.clearLastDevice).not.toHaveBeenCalled()
+    expect(result.current.deviceLoadError).toBe('error.notVialCompatible')
 
     const genuine = makeOptions()
     const { result: result2 } = renderHook(() => useDeviceLifecycle(genuine.options))
@@ -196,6 +202,24 @@ describe('useDeviceLifecycle.handleConnect — issue #190 regression', () => {
     })
 
     expect(options.clearLastDevice).toHaveBeenCalled()
+  })
+})
+
+describe('useDeviceLifecycle.handleConnect — reload failure message split', () => {
+  it.each([
+    ['notVial', 'error.notVialCompatible'],
+    ['loadFailed', 'error.deviceLoadFailed'],
+  ] as const)('shows the %s message and disconnects', async (reason, message) => {
+    const { options, mocks } = makeOptions({ reloadFailure: reason })
+    const { result } = renderHook(() => useDeviceLifecycle(options))
+
+    await act(async () => {
+      await result.current.handleConnect(mockDevice)
+    })
+
+    expect(result.current.deviceLoadError).toBe(message)
+    expect(options.keyboardReset).toHaveBeenCalled()
+    expect(mocks.disconnectDevice).toHaveBeenCalled()
   })
 })
 

@@ -1,5 +1,5 @@
 {
-  "version": "0.1.89",
+  "version": "0.1.95",
   "name": "Japanese - 京言葉",
   "common": {
     "save": "保存しますえ",
@@ -43,6 +43,8 @@
     "updatedNamed": "{{name}} を更新しましたえ",
     "importBatchFailed_one": "{{count}} 件、インポートできまへんでしたわ",
     "importBatchFailed_other": "{{count}} 件、インポートできまへんでしたわ",
+    "importBatchHubSyncFailed_one": "{{count}} 件は保存しましたが、Hubへの同期があきまへんでしたえ",
+    "importBatchHubSyncFailed_other": "{{count}} 件は保存しましたが、Hubへの同期があきまへんでしたえ",
     "importSummary_one": "{{count}} 件インポートしましたえ (成功{{success}}、失敗{{failure}})",
     "importSummary_other": "{{count}} 件インポートしましたえ (成功{{success}}、失敗{{failure}})",
     "pullFromCloud": "Google Driveから取ってきますえ",
@@ -83,7 +85,9 @@
       "done": "完了しましたえ",
       "rowLabel": "行",
       "colLabel": "列",
-      "blankOption": "—"
+      "blankOption": "—",
+      "wires": "配線どすえ",
+      "notice": "View Matrixはこのアプリの中だけの設定どすえ、キーボード本体は何も変わりまへん。カスタム位置で変わりますのはPipetteがキーを辿る順番だけどす — Auto Move（キーポップオーバーの次のキーも含みますえ）、Shift+クリックの範囲選択、複数キーの一括貼り付けの順番どす。配線（Wires）はそれに合わせて描き直されますけど、キーボード本体のほんまの配線はそのままどすえ。"
     },
     "keymap": {
       "title": "キーマップ",
@@ -106,6 +110,7 @@
       "oneShotKeysLabel": "One Shot Keys",
       "comboSettings": "Combo",
       "comboLabel": "Combo",
+      "qmkSettingsSaveFailed": "設定の保存があきまへんでした。つながりを確かめてもういっぺんお試しやす。",
       "previousLayers": "前のレイヤーどすえ",
       "nextLayers": "次のレイヤーどすえ",
       "layerN": "Layer {{n}}",
@@ -667,10 +672,14 @@
     "exportPdfFailed": "PDFの書き出しがあきまへんでしたえ",
     "sideloadFailed": "JSONの読み込みがあきまへんでしたえ",
     "sideloadInvalidDefinition": "キーボード定義がちゃいますえ。必須のもんが足りまへん。",
-    "notVialCompatible": "Vial対応やないかもしれまへんなぁ"
+    "notVialCompatible": "Vial対応やないかもしれまへんなぁ",
+    "deviceLoadFailed": "キーボードからのデータ読み込みがあきまへんでしたえ。USBケーブルを確認して、もういっぺん繋いどくれやす。",
+    "applyRolledBack": "キーボードへの書き込みがあきまへんどした。以前の設定に戻させてもろてます。",
+    "applyNotRolledBack": "キーボードへの書き込みがあきまへんどして、以前の設定にも戻せまへんどした。キーボードを繋ぎ直して、保存しといたスナップショットを読み込んどくれやす。"
   },
   "warning": {
-    "echoDetected": "通信がおかしゅうなりましたえ。USBケーブルを確認して差し直しておくれやす。"
+    "echoDetected": "通信がおかしゅうなりましたえ。USBケーブルを確認して差し直しておくれやす。",
+    "partialLoad": "一部の設定が読み込めしまへんどした。繋ぎ直すとよろしいえ。"
   },
   "keycodes": {
     "basic": "Basic",
@@ -892,6 +901,13 @@
       "keystoreUnavailable": "OSのキーチェーンが使えへんさかい、ここではGoogle Driveから取ってこれまへんなぁ。",
       "remoteCheckFailed": "Google Driveにつながりまへんでした。また後でやっておくれやす。",
       "partial": "一部のパックの取得があきまへんでしたえ。もういっぺん試しておくれやす。"
+    },
+    "readiness": {
+      "unauthenticated": "同期を使うにはGoogleにつないでおくれやす",
+      "noPasswordFile": "同期を使うには同期パスワードを設定しておくれやす",
+      "decryptFailed": "保存してあるパスワードが読めまへんでしたえ",
+      "keystoreUnavailable": "OSのキーチェーンが使えへんさかい、ここでは同期できまへんなぁ",
+      "remoteCheckFailed": "Google Driveにつながらへんさかい、同期を止めてますえ"
     }
   },
   "settings": {
@@ -1886,6 +1902,7 @@
     "authDisplayNameConflict": "Googleアカウント名が既存の投稿者名とかぶってますえ。別の名前にしておくれやす。",
     "accountDeactivated": "アカウントが無効になってますえ。サポートに問い合わせておくれやす。",
     "rateLimited": "リクエストが多すぎますえ。ちょっと待ってからもういっぺんやっておくれやす。",
+    "notSignedIn": "Hubと同期するにはGoogleにつないでおくれやす。",
     "error": {
       "keystrokesBelow": "この期間の打鍵数が足りまへんなぁ（100打鍵以上が要りますえ）。",
       "rangeExceeds": "選んだ期間が30日を超えてますえ。短こうしておくれやす。",

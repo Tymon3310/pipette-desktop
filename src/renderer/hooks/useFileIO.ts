@@ -6,13 +6,14 @@ import type { VilFile } from '../../shared/types/protocol'
 import { isVilFile } from '../../shared/vil-file'
 import { isVialGuiFile, vialGuiToVil } from '../../shared/vil-compat'
 import { serializeMacro, jsonToMacroActions } from '../../preload/macro'
+import { applyVilErrorKey, type ApplyVilResult } from './keyboard-types'
 
 export interface UseFileIOOptions {
   deviceUid: string
   deviceName: string
   serialize: () => VilFile
   serializeVialGui?: () => string
-  applyVilFile: (vil: VilFile) => Promise<void>
+  applyVilFile: (vil: VilFile) => Promise<ApplyVilResult>
   keymapCGenerator?: () => string
   pdfGenerator?: () => string
 }
@@ -107,7 +108,11 @@ export function useFileIO({
         }
       }
 
-      await applyVilFile(vil)
+      const r = await applyVilFile(vil)
+      if (!r.ok) {
+        setError(t(applyVilErrorKey(r)))
+        return false
+      }
       return true
     } catch {
       setError(t('error.loadFailed'))

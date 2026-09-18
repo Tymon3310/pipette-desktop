@@ -6,6 +6,7 @@ import type { Matrix } from 'jspdf'
 import type { KleKey } from './kle/types'
 import { hasSecondaryRect } from './kle/filter-keys'
 import { computeUnionPolygon, insetAxisAlignedPolygon } from './kle/rect-union'
+import { rotatePoint } from './kle/rotate-point'
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -44,22 +45,6 @@ export function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 export function degreesToRadians(degrees: number): number {
   return (degrees * Math.PI) / 180
-}
-
-/** Rotate point (px,py) by `angle` degrees around center (cx,cy). */
-export function rotatePoint(
-  px: number,
-  py: number,
-  angle: number,
-  cx: number,
-  cy: number,
-): [number, number] {
-  const rad = degreesToRadians(angle)
-  const cos = Math.cos(rad)
-  const sin = Math.sin(rad)
-  const dx = px - cx
-  const dy = py - cy
-  return [cx + dx * cos - dy * sin, cy + dx * sin + dy * cos]
 }
 
 /** Compute bounding-box corners of a key, accounting for rotation. */

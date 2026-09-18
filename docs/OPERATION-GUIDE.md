@@ -158,6 +158,15 @@ Click a keyboard name in the list to open the keymap editor. A connecting overla
 
 If Cloud Sync is configured, sync progress is also displayed during connection (favorites first, then keyboard-specific data).
 
+**If connection fails**
+
+Selecting a device can fail before the editor opens. In that case the connection is aborted — never opened with only partial data — and a message appears under the device list on the device-selection screen; selecting the device again retries:
+
+- **"This device may not be a Vial-compatible keyboard."** — the keyboard never identified itself as Vial, or reported no usable keyboard definition
+- **"Failed to read data from the keyboard. Check the USB cable and try connecting again."** — the keyboard did identify itself as Vial, but reading its keymap, encoders, macros, or Tap Dance / Combo / Key Override / Alt Repeat Key entries failed partway through
+
+If the editor does open but lighting data, QMK settings, or the lock status couldn't be read, a yellow banner appears at the top of the editor instead: **"Some settings could not be read from the keyboard. Reconnect to try again."** (If it was the QMK settings that could not be read completely, their values are left empty rather than partially filled.) The existing **"Communication error detected. Please check your USB cable and reconnect the device."** banner takes priority over this one when both happen during the same connection, since an echoed request usually means the whole connection is unreliable rather than one section.
+
 ### 1.3 Data
 
 The Data button on the device selection screen opens the Data panel for centralized management of keyboards, favorites, sync data, and Hub posts.
@@ -170,9 +179,12 @@ The left sidebar provides a **tree navigation** with the following structure:
   - **Keyboards**: Browse saved keyboard snapshots. Click a keyboard to view, load, export, or delete entries
   - **Typing**: Recorded typing-analytics data per keyboard — a per-day list (date, keystrokes, active time) with day selection for deleting, plus export / import of the recorded days
   - **Favorites**: Tap Dance, Macro, Combo, Key Override, Alt Repeat Key — each type shows its saved entries with rename, delete, export, and Hub actions
-  - **Application**: Import/export local data, or reset application settings
+  - **Application**: Import/export local data, or reset application settings. Cancelling the Import file picker changes nothing — local data is untouched and whatever result was already shown stays displayed. A failed import rolls back everything it already wrote, leaving local data unchanged, and shows the underlying error text under **Import failed** (if the rollback itself also fails, that failure is folded into the same message)
 - **Sync** (when Cloud Sync is configured): Lists keyboards that exist only in Google Drive (not yet downloaded on this device). Each entry is labeled with the keyboard's real name, resolved from the synced name index rather than from the raw UID. Click a remote-only keyboard to download it on demand — a spinner is shown while fetching, and a failure message appears inline if the download cannot complete. Once downloaded, the keyboard moves into the **Local › Keyboards** branch
   - **Cloud Data**: Reset targets that aren't tied to one keyboard — Favorites, Language Packs, Theme Packs, Key Labels, and imported Typing Test Texts. Only the targets actually present on Google Drive are listed. Each row has its own **Reset** button with a two-step confirmation (click Reset, then confirm or cancel); resetting removes that target's data from Google Drive only — local copies on this device are untouched, and a local copy that still exists re-uploads on the next sync (the same behavior Favorites already has). This is also where **Undecryptable Files** are listed and cleaned up: files that cannot be decrypted with the current password (e.g. encrypted with a forgotten previous password) appear as their own rows with a filename and a **Delete** button (two-step confirmation, one file at a time)
+
+![Data — Sync](screenshots/data-sidebar-sync.png)
+
 - **Hub** (when Hub is connected): Manage Hub posts grouped by keyboard name
 
 Keyboards are shown by display name everywhere in this panel: on connect, a keyboard that has no saved name yet is automatically named from its USB product name, so even keyboards that never saved anything show a real name instead of a raw uid — including in the **Sync** list. Every keyboard list is sorted A–Z by display name (case-insensitive).
@@ -240,6 +252,8 @@ When the **Source** dimension is set to **TypingTest** and its **Results** drill
 
 **Filter conditions modal**
 
+![Analyze — Filter conditions modal](screenshots/analyze-app-filter.png)
+
 The modal edits a draft copy of the filters — nothing on the page changes until you press **Save**. **Reset** returns the Device and Source rows (and the App/TypingTest toggle) to their defaults — the Keyboard, Keymap, and Period rows keep their current draft values. Pressing Esc, the close button, or clicking outside the modal discards the whole draft instead. Rows, top to bottom:
 
 - **Keyboard** — see **Keyboard selector** above
@@ -254,6 +268,8 @@ The modal edits a draft copy of the filters — nothing on the page changes unti
 Individual tabs still add their own filters above the chart (view mode, granularity, unit, etc.), outside the modal; those are described per tab in the sections below. The Heatmap tab keeps its **Normalize** / **Aggregate** / **Group** / **Top N** controls with the ranking row underneath the keyboard itself.
 
 **Saved search conditions**
+
+![Analyze — Save panel](screenshots/analyze-filter-store.png)
 
 The bookmark icon in the panel header opens the **Saved search conditions** side panel. Save the active filters under a label, restore a saved set later, rename / delete entries, or export the current condition's chart data as CSV. Each saved entry shows a one-line summary of the filters (device, app, snapshot, range) under its label; the entry itself captures the full filter state — including the App / TypingTest dimension and its test / run selections — and restores all of it on Load.
 
@@ -281,6 +297,8 @@ The Summary tab is the default landing view. It collects four read-only cards bu
   - **Error mix** — substitution / omission / insertion rates (each a share of the target characters classified), char-weighted the same way as KSPC across every saved Typing Test result in the window. Each rate's population average is shown alongside as plain text — unlike Speed and KSPC, this card doesn't show a position label here: with three rates packed into one grid cell, three long labels (Far below average / Below average / Average / Above average / Far above average) would triple the cell's height, and there's no compact form to fall back on. Each rate's position label is shown instead in the Typing Test's own History → Error mix rows (see below). Reads `Not enough data` when no saved result in the window carries this figure. Like KSPC, it's **not filtered by Device/App**, and Romaji-input runs are excluded — a Romaji run's committed text is always one of the accepted spellings for its target, so there's no target/typed difference left to classify
   - **Typing style** — the nearest population typing-style profile to your recent speed, rhythm, and error patterns (rollover is not part of the comparison). Shows one of a small set of named styles, `No match` (your typing doesn't closely resemble any reference profile) or `Between styles` (it sits about equally between two of them), or `Not enough data` when there isn't yet enough speed/rhythm data to compare. The tooltip notes when a match didn't use any error data (e.g. no qualifying saved Typing Test results in the window)
 - **Goal streak record** — Current cycle progress (`current / goalDays`), longest historical streak, and editable Goal settings (consecutive days × keystrokes/day). Changing the goal clears the current cycle counter. The **Achievement history** button opens a modal that lists every completed cycle with period, goal, days, total keystrokes, and average per day
+
+![Analyze — Goal achievement history](screenshots/analyze-goal-achievements.png)
 
 The Summary tab respects the App filter — selecting one or more apps narrows every card to minutes tagged with those apps (the Typing profile card's KSPC and Error mix read-outs are the exception — see above; Typing style sits in between, since its speed/rhythm inputs follow the App filter but its error-pattern input comes from the same unfiltered History source as Error mix).
 
@@ -677,6 +695,8 @@ The **Export** button on the panel header opens a category-pick modal that write
 - **Layer** — per-layer keystroke or activation counts
 - **Layout Comparison** — per-finger / row / hand deltas (snapshot-bound; reflects manual finger overrides)
 
+![Analyze — Export categories](screenshots/analyze-export-modal.png)
+
 The modal lists the active conditions (Device, App, Keymap, Period) above the category list so the file you save is unambiguous about which slice it captures. Heatmap, Ergonomics, and Layout Comparison entries are unavailable when the range has no overlapping snapshot — the modal shows a "snapshot missing" notice for those categories. Manual finger overrides are noted next to the Ergonomics row.
 
 **Upload mode**
@@ -832,6 +852,7 @@ To edit the View Matrix, open the Keycodes Overlay Panel (§3.14) and click **Ed
 - Ctrl-click (or Cmd-click on macOS) adds or removes a key from the selection; Shift-click selects a contiguous range. All selected keys stay highlighted. With 2 or more keys selected, the **Row** / **Col** selects show a blank placeholder — picking a value bulk-applies that row (or column) to every selected key in one step, each key keeping its own value on the other axis. A reminder of these Ctrl-click / Shift-click shortcuts is shown below the keymap, just above the relocated zoom controls
 - If two or more keys resolve to the same effective view position, those keys are flagged with a shared highlight color on the keymap until the collision is resolved. Editing isn't blocked, but the Auto Move order between those keys becomes ambiguous
 - The layer label normally shown below the keymap is hidden while the mode is active — the View Matrix has no layer concept
+- A notice at the very bottom of the keymap area, below the relocated zoom controls, reminds you that the View Matrix is a Pipette-only setting: it changes nothing on the keyboard itself, only the order Pipette walks keys in for Auto Move (including the key popover's next key), Shift+click range selection, and multi-key paste — the Wires overlay redraws to match, but the keyboard's real matrix wiring is unaffected
 - Click **Done** in the **View Matrix** panel to exit the mode (it also exits automatically when switching or disconnecting the keyboard)
 
 ![View Matrix — Key Selected](screenshots/view-matrix-selected.png)
@@ -847,6 +868,14 @@ To edit the View Matrix, open the Keycodes Overlay Panel (§3.14) and click **Ed
 - On a direct-pin keyboard the physical matrix is a single row or column (here 1×6), yet both axes still span the larger matrix dimension — the **Row** and **Col** selects each offer `0`–`5`
 
 Only keys you change are stored — every other key keeps its physical matrix position in the ordering. Encoders and decorative keys are not part of the Auto Move order and cannot be edited in this mode. The View Matrix is saved per keyboard and included in cloud sync (§6.1).
+
+**Wires**
+
+The View Matrix row (§3.14) also has a toggle switch at its right edge (its accessible name is **Wires**; the switch itself carries no text label). Turning it on draws the keyboard's matrix wiring over the keymap: a hollow dot at the center of every key, one line per matrix row joining that row's keys in column order, and one line per matrix column joining that column's keys in row order, with row numbers in a gutter on the left and column numbers along the top. Column numbers are shown above the keys of the top row, so on a split keyboard whose halves share matrix columns the same numbers appear above both halves; different numbers that would overlap stack in ascending order. Row and column wires are drawn in distinct colors that follow the active theme pack (§6.4).
+
+![View Matrix Wires](screenshots/view-matrix-wires.png)
+
+The wiring follows each key's *effective* View Matrix position — the custom position from an override when one exists, otherwise the physical matrix position — so the overlay updates immediately as you edit the View Matrix. It's a display-only overlay: keys underneath stay fully clickable, and turning it on doesn't gate or change anything else about editing. It also keeps showing while View Matrix Edit mode is active, on top of the `R`/`C` legends. The toggle itself is saved per keyboard, but it isn't reachable while Edit mode is active — the Settings/Import tab (and with it, the toggle) is hidden for the duration — so turn Wires on or off before clicking **Edit**, not during.
 
 ---
 
@@ -958,6 +987,12 @@ The Tap Dance section displays a **tile grid preview** showing all entries at a 
 - Configure tap, hold, double-tap, and other actions for each entry
 - **Edit JSON** button at the bottom opens a JSON editor for bulk editing all entries (see §5.6)
 
+**Tap-Hold Settings**
+
+![Tap-Hold Settings](screenshots/tap-hold-settings.png)
+
+A **Tap-Hold** button next to Edit JSON opens the **Tap-Hold Settings** modal for QMK tap-hold behavior (e.g. Tapping Term, Permissive Hold). It's one of seven QMK settings modals that share the same layout and Save behavior — the others are Mouse Keys, Magic, Grave Escape, Auto Shift, One Shot Keys, and the Combo timeout modal (§3.8, §5.2). **Reset** and **Revert** each need a second click to confirm; **Save** writes the changed fields to the keyboard. All three buttons are disabled while a save or reset is in progress, and the result of the last Save is shown to their left: a brief "Saved" that fades after about 2 seconds, or an error message that stays until the next edit, Save, or a confirmed Reset/Revert.
+
 ### 3.7 Macro
 
 Macro keycodes.
@@ -980,6 +1015,10 @@ Opening a macro action brings up the Macro Modal with two display modes that sha
 
 - **List mode** (default): The action's keycodes are shown as clickable tiles followed by a dashed **add slot**. Single-click a keycode tile to switch that index into edit mode. Single-click the dashed add slot to select it; double-click the dashed slot to open the keycode popover with an empty query (mirrors the keymap editor). The pencil "edit" icon from earlier versions is gone — clicking is the only affordance
 - **Edit mode**: The keycode picker stays visible below the row. Each keycode tile shows a hover **X** button to delete that index, and the Tap row exposes a **Close** button to leave edit mode. Picker and popover selections are **staged** — they update the row visually but are not committed until you press the bottom **Save** button or **Enter**. The footer also shows a **Revert** ConfirmButton when you are editing an action that already existed (it is hidden when you just added the action via Add Action, since there is nothing prior to revert to). Save and Revert are disabled until a pick actually changes something. Pressing **Escape**, the per-row **Close** button, **Revert**, or clicking outside the picker / action list / footer / key popover rolls back the entire in-flight edit — including newly-appended Add-keycode slots or an entirely newly-added action — and leaves edit mode. Deleting a slot during edit shifts the selection so the session continues rather than exiting.
+
+![Macro Modal — List Mode](screenshots/macro-list-mode.png)
+
+![Macro Modal — Edit Mode](screenshots/macro-edit-mode.png)
 
 Empty keycode actions are tolerated while editing; they are normalized out silently when the macro is saved or exported to a favorite.
 
@@ -1005,7 +1044,10 @@ The Combo tab displays a **tile grid preview** showing all entries. A note reads
 - Click a tile to open the Combo edit modal directly to that entry (§5.2)
 - Combo keycodes (CMB_000–CMB_031) can be assigned to keys for triggering combos
 - **Settings: Configuration** button at the bottom opens a settings modal for combo-related timeout configuration (e.g., Combo time out period)
+- Saving in that timeout modal shows the same Save-result display described for the Tap-Hold Settings modal (§3.6) — a brief confirmation, or an error message, to the left of the Reset / Revert / Save buttons
 - **Edit JSON** button at the bottom opens a JSON editor for bulk editing all entries (see §5.6)
+
+![Combo Tile Grid](screenshots/combo-tile-grid.png)
 
 ### 3.9 Key Override
 
@@ -1019,6 +1061,8 @@ The Key Override tab displays a **tile grid preview** showing all entries and a 
 - Click a tile to open the Key Override edit modal directly to that entry (§5.3)
 - **Edit JSON** button at the bottom opens a JSON editor for bulk editing all entries (see §5.6)
 
+![Key Override Tile Grid](screenshots/ko-tile-grid.png)
+
 ### 3.10 Alt Repeat Key
 
 Alt Repeat Key keycodes for context-aware alternate repeat key bindings.
@@ -1031,9 +1075,13 @@ The Alt Repeat Key tab displays a **tile grid preview** showing all entries and 
 - Click a tile to open the Alt Repeat Key edit modal directly to that entry (§5.4)
 - **Edit JSON** button at the bottom opens a JSON editor for bulk editing all entries (see §5.6)
 
+![Alt Repeat Key Tile Grid](screenshots/ar-tile-grid.png)
+
 ### 3.11 Behavior
 
 Keycodes for advanced QMK behavior features.
+
+![Behavior Tab](screenshots/tab-behavior.png)
 
 - **Magic**: Magic keycodes for swapping and toggling keyboard behaviors
 - **Mode**: NKRO toggle, mode switching keycodes
@@ -1099,12 +1147,12 @@ The Keycodes Overlay Panel provides quick access to editor tools and save functi
 
 - **Key Editor Zoom**: Set the UI zoom level (50–200%) applied while in key editor mode. Defaults to the global UI zoom (§6.5) when not configured. Saved and synced per keyboard
 - **Auto Move**: Toggle automatic advancement to the next key after assigning a keycode
-- **View Matrix**: Enter or leave View Matrix mode (**Edit** / **Done**) to customize the Auto Move key order (see §2.6)
+- **View Matrix**: **Edit** / **Done** enters or leaves View Matrix mode to customize the Auto Move key order; the unlabelled toggle switch at the right edge of the same row (**Wires**) shows or hides the matrix wiring overlay on the keymap, independently of Edit mode (see §2.6)
 - **Instant Key Selection**: Toggle instant key selection mode (see §2.2 for behavior details)
 - **Separate Shift in Key Picker**: Toggle split display for combined keycodes (e.g., show Mod-Tap as two halves)
 - **Key Tester**: Toggle Matrix Tester mode (supported keyboards only)
 - **Security**: Shows lock status (Locked/Unlocked) with a button that follows it — **Unlock** while locked, **Lock** while unlocked. Unlock opens the Unlock dialog (stays disabled until the lock status has been confirmed, to avoid opening it against a stale placeholder state). Lock locks immediately if Typing Record (§4.3) is off; if Typing Record is on, it instead asks for confirmation ("Turn off Record and lock?") and, once confirmed, turns Record off before locking
-- **Import**: Restore from `.vil` files or sideload custom JSON definitions
+- **Import**: Restore from `.vil` files or sideload custom JSON definitions. Restoring a `.vil` file writes it to the keyboard field by field; if a write fails partway through, Pipette writes back the keyboard state it was holding just before the restore started — the state shown in the editor, not a fresh read from the device (this assumes the keyboard's shape hasn't changed — it is not a guaranteed byte-exact restore) and shows one of two messages depending on whether that write-back itself succeeded: **"Writing to the keyboard failed. The previous settings were restored."**, or, if the write-back also failed, **"Writing to the keyboard failed and the previous settings could not be restored. Reconnect the keyboard and load a saved snapshot."**
 - **Reset Keyboard Data**: Reset keyboard to factory defaults
 
 **Save Tab**
@@ -1113,7 +1161,7 @@ The Keycodes Overlay Panel provides quick access to editor tools and save functi
 
 - **Export Current State**: Download keymap as `.vil`, `keymap.c`, PDF keymap cheat sheet, or PDF layout export (key outlines with summary pages for Tap Dance, Macro, Combo, Key Override, and Alt Repeat Key entries)
 - **Save Current State**: Save a snapshot of the current keyboard state with a label
-- **Synced Data**: List of saved snapshots with Load, Rename, Delete, and Export actions
+- **Synced Data**: List of saved snapshots with Load, Rename, Delete, and Export actions. A Load that fails partway through is handled the same way as `.vil` Import above — the same pre-load write-back, and the same two possible messages
 - This is the same Save panel as the standalone editor settings (§6)
 
 **Layout Tab** (when available)
@@ -1158,6 +1206,8 @@ The keymap editor automatically records a history of keycode changes. You can na
 A typing practice feature. Test your typing with the current keymap while viewing the keyboard layout below. The layout highlights key presses in real time, so you can verify that your physical keymap matches the on-screen display.
 
 Click the **Typing Test** button in the status bar to enter typing test mode.
+
+![Typing Test](screenshots/typing-test.png)
 
 #### Settings Panel
 
@@ -1553,7 +1603,7 @@ Configure simultaneous key press combinations to trigger different keys. The Com
 
 ![Combo List](screenshots/combo-modal.png)
 
-The Combo tab shows entries as a numbered list (0--31). Configured entries display a summary (e.g., "A + B → C"). Click an entry to open the detail editor. Combo keycodes (Combo On, Combo Off, Combo Toggle) are shown below the list. A **Settings: Configuration** button at the bottom opens a settings modal for QMK Combo timeout configuration (e.g., Combo time out period).
+The Combo tab shows entries as a numbered list (0--31). Configured entries display a summary (e.g., "A + B → C"). Click an entry to open the detail editor. Combo keycodes (Combo On, Combo Off, Combo Toggle) are shown below the list. A **Settings: Configuration** button at the bottom opens a settings modal for QMK Combo timeout configuration (e.g., Combo time out period). Saving here behaves the same as the Tap-Hold Settings modal (§3.6): a brief confirmation next to the Reset / Revert / Save buttons, or an error message if the write fails.
 
 **Detail Editor**
 
@@ -1662,7 +1712,7 @@ The editor settings panel now provides a single **Save** panel with the followin
 
 - **Export Current State**: Download keymap as `.vil`, `keymap.c`, PDF keymap cheat sheet, or PDF layout export (key outlines with summary pages for Tap Dance, Macro, Combo, Key Override, and Alt Repeat Key entries). An "Exported" inline feedback message appears after a successful export.
 - **Save Current State**: Save a snapshot of the current keyboard state with a label. Enter a name in the Label field and click Save. If the Label field is left empty, the Save button is disabled. Saved snapshots appear in the Synced Data list below and can be loaded or deleted later
-- **Synced Data**: List of saved snapshots. Click to load, rename, or delete entries
+- **Synced Data**: List of saved snapshots. Click to load, rename, or delete entries. A Load that fails partway through is handled the same way as `.vil` Import (§3.14) — the same pre-load write-back, and the same two possible messages
 - **Reset Keyboard Data**: Reset keyboard to factory defaults (use with caution)
 
 > **Note**: Tool settings (auto advance, key tester, security) are in the Keycodes Overlay Panel (§3.14). Keyboard layout is available in the status bar quick settings (§9); Basic tab view type is selectable at the bottom of the Basic tab. Zoom is available in the toolbar (§4.1). Layer settings are managed directly via the layer panel on the left side of the editor.
@@ -1727,9 +1777,9 @@ If sync cannot run because the client is not ready, a specific readiness reason 
 
 | Reason | Message |
 |--------|---------|
-| `unauthenticated` | "Sign in to Google to sync." |
-| `noPasswordFile` | "Set a sync password to start syncing." |
-| `remoteCheckFailed` | "Couldn't reach Google Drive — sync is paused." |
+| `unauthenticated` | "Connect your Google account to enable sync" |
+| `noPasswordFile` | "Set a sync password to enable sync" |
+| `remoteCheckFailed` | "Couldn't reach Google Drive; sync is paused" |
 
 #### Sync Unavailable Alert
 
@@ -1924,7 +1974,7 @@ Drag the grip handle to reorder the list, including built-in English — the ord
 
 The Name button's three states (ascending/descending triangle, or a plain "Name" once you drag a row by hand) and what happens on a **single**-file import or Hub download — the new pack is inserted at its correct alphabetical position while a triangle is showing, an overwrite of an existing pack keeps its position, and a brief "Imported {name}" / "Updated {name}" message appears next to the Name button with the row scrolled into view — work exactly as described for Key Labels (§6.2); downloading from Hub follows the same placement rule.
 
-The **Import** button in the toolbar opens a file dialog that accepts **one or more** `.json` language packs at once. Re-importing a pack with the same `name` overwrites the existing entry. While the import runs, the list locks and the toolbar shows an **Importing…** indicator; a batch of two or more files shows a summary once it finishes — "Imported N files (success N, failure N)" — instead of the per-name feedback, and no row is auto-scrolled into view (see Key Labels §6.2 for the full behavior).
+The **Import** button in the toolbar opens a file dialog that accepts **one or more** `.json` language packs at once. Re-importing a pack with the same `name` overwrites the existing entry. While the import runs, the list locks and the toolbar shows an **Importing…** indicator; a batch of two or more files shows a summary once it finishes — "Imported N files (success N, failure N)" — instead of the per-name feedback, and no row is auto-scrolled into view (see Key Labels §6.2 for the full behavior). If any files fail, an error banner appears below the toolbar: files that could not be parsed or saved are listed under "N files could not be imported:" (one `file: reason` line each), while files that saved locally but whose linked Hub post failed to update are listed separately under "N files were saved but could not be synced to the Hub:" — for example with the reason "Connect your Google account to sync with the Hub." when Google isn't connected.
 
 A **Pull from Google Drive** button sits next to Import (installed tab only). It runs a one-off download of every language and theme pack from Google Drive, so a pack another device already synced but this device hasn't seen yet shows up immediately, without waiting for the periodic background sync — it fails with an error if Cloud Sync isn't configured. The button shows a **Pulling…** state while it runs and disables during an in-flight import. The app also runs this same pull automatically, once, the first time a keyboard connects after Cloud Sync credentials are ready — after that first successful pull it doesn't run again automatically (a failure is retried on the next connection). Either path only affects language/theme packs — favorites, keyboard data, and other synced content are unaffected.
 
@@ -1991,7 +2041,7 @@ Drag the grip handle on the left of each row to reorder theme packs — the orde
 
 The Name button's three states (ascending/descending triangle, or a plain "Name" once you drag a row by hand) and what happens on a **single**-file import or Hub download — the new pack is inserted at its correct alphabetical position while a triangle is showing, an overwrite of an existing pack keeps its position, and a brief "Imported {name}" / "Updated {name}" message appears next to the Name button with the row scrolled into view — work exactly as described for Key Labels (§6.2); downloading from Hub follows the same placement rule.
 
-The **Import** button in the toolbar opens a file dialog that accepts **one or more** `.json` theme packs at once. Re-importing a pack with the same `name` overwrites the existing entry. While the import runs, the list locks and the toolbar shows an **Importing…** indicator; a batch of two or more files shows a summary once it finishes — "Imported N files (success N, failure N)" — instead of the per-name feedback, and no row is auto-scrolled into view (see Key Labels §6.2 for the full behavior).
+The **Import** button in the toolbar opens a file dialog that accepts **one or more** `.json` theme packs at once. Re-importing a pack with the same `name` overwrites the existing entry. While the import runs, the list locks and the toolbar shows an **Importing…** indicator; a batch of two or more files shows a summary once it finishes — "Imported N files (success N, failure N)" — instead of the per-name feedback, and no row is auto-scrolled into view (see Key Labels §6.2 for the full behavior). If any files fail, an error banner appears below the toolbar: files that could not be parsed or saved are listed under "N files could not be imported:" (one `file: reason` line each), while files that saved locally but whose linked Hub post failed to update are listed separately under "N files were saved but could not be synced to the Hub:" — for example with the reason "Connect your Google account to sync with the Hub." when Google isn't connected.
 
 A **Pull from Google Drive** button sits next to Import, with the same one-off download behavior (and the same automatic first-connection pull) described for Language Packs in §6.3 — a single pull refreshes both language and theme packs together.
 
@@ -2060,7 +2110,7 @@ A theme pack `.json` defines a `name`, `version`, and a `colors` object mapping 
 | `colorScheme` | Yes | `"light"` or `"dark"` — declares the intended brightness of the pack |
 | `colors` | Yes | Object mapping colour tokens to CSS colour values (`#hex`, `rgb()`, or `hsl()`) |
 
-35 colour tokens are required — export any installed pack (row → `.json`) to get a complete template. One additional token, `key-label-simulated` (the permutation-pack Display Only tint — see §6.2 above), is **optional**: if a pack omits it, Pipette automatically derives one from that pack's `key-label-remap` (a hue-rotated complement, clamped for readability against the pack's own `colorScheme`) so every pack still gets a distinct simulated tint even without authoring one by hand. Ready-to-use example theme packs (Kanagawa Wave / Dragon / Lotus and Solarized Light / Dark) are also available in the [`sample-packs/themes/`](../sample-packs/themes/) directory in the repository — every sample pack defines its own `key-label-simulated` explicitly.
+35 colour tokens are required — export any installed pack (row → `.json`) to get a complete template. Three additional tokens are **optional**: `key-label-simulated` (the permutation-pack Display Only tint — see §6.2 above), and `wire-row` / `wire-col` (the View Matrix Wires overlay's row and column line + gutter-number colors — see §2.6). If a pack omits `key-label-simulated`, Pipette automatically derives one from that pack's `key-label-remap` (a hue-rotated complement, clamped for readability against the pack's own `colorScheme`). If a pack omits `wire-row`, it falls back to that pack's `accent`; if it omits `wire-col`, it falls back to the same hue-rotated-complement derivation applied to `accent` instead. This means every pack still gets distinct simulated, row-wire, and column-wire tints even without authoring them by hand. Ready-to-use example theme packs (Kanagawa Wave / Dragon / Lotus and Solarized Light / Dark) are also available in the [`sample-packs/themes/`](../sample-packs/themes/) directory in the repository — every sample pack defines its own `key-label-simulated` explicitly (none currently define `wire-row` / `wire-col`, so they use the fallback).
 
 ### 6.5 Zoom (UI Scale)
 
@@ -2109,6 +2159,8 @@ To upload a keymap to Hub:
 1. Connect to your keyboard and open the editor settings (gear icon in the keymap editor)
 2. Switch to the **Data** tab
 3. Save the current state with a label (e.g., "Default")
+
+![Save current state](screenshots/hub-01-save-default.png)
 
 ![Upload Button](screenshots/hub-03-upload-button.png)
 

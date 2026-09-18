@@ -1,5 +1,5 @@
 {
-  "version": "0.1.89",
+  "version": "0.1.95",
   "name": "English",
   "common": {
     "save": "Save",
@@ -43,6 +43,8 @@
     "updatedNamed": "Updated {{name}}",
     "importBatchFailed_one": "{{count}} file could not be imported:",
     "importBatchFailed_other": "{{count}} files could not be imported:",
+    "importBatchHubSyncFailed_one": "{{count}} file was saved but could not be synced to the Hub:",
+    "importBatchHubSyncFailed_other": "{{count}} files were saved but could not be synced to the Hub:",
     "importSummary_one": "Imported {{count}} file (success {{success}}, failure {{failure}})",
     "importSummary_other": "Imported {{count}} files (success {{success}}, failure {{failure}})",
     "pullFromCloud": "Pull from Google Drive",
@@ -83,7 +85,9 @@
       "done": "Done",
       "rowLabel": "Row",
       "colLabel": "Col",
-      "blankOption": "—"
+      "blankOption": "—",
+      "wires": "Wires",
+      "notice": "The View Matrix lives only in Pipette and changes nothing on the keyboard. Custom positions only change the order Pipette walks keys in — Auto Move (including the key popover's next key), Shift+click range selection, and multi-key paste. The Wires overlay redraws to match, but the keyboard's real matrix wiring stays as it is."
     },
     "keymap": {
       "title": "Keymap",
@@ -106,6 +110,7 @@
       "oneShotKeysLabel": "One Shot Keys",
       "comboSettings": "Combo",
       "comboLabel": "Combo",
+      "qmkSettingsSaveFailed": "Failed to save settings. Check the connection and try again.",
       "previousLayers": "Previous layers",
       "nextLayers": "Next layers",
       "layerN": "Layer {{n}}",
@@ -667,10 +672,14 @@
     "exportPdfFailed": "Failed to export Keymap PDF",
     "sideloadFailed": "Failed to load JSON definition file",
     "sideloadInvalidDefinition": "Invalid keyboard definition: missing required fields (matrix, layouts)",
-    "notVialCompatible": "This device may not be a Vial-compatible keyboard."
+    "notVialCompatible": "This device may not be a Vial-compatible keyboard.",
+    "deviceLoadFailed": "Failed to read data from the keyboard. Check the USB cable and try connecting again.",
+    "applyRolledBack": "Writing to the keyboard failed. The previous settings were restored.",
+    "applyNotRolledBack": "Writing to the keyboard failed and the previous settings could not be restored. Reconnect the keyboard and load a saved snapshot."
   },
   "warning": {
-    "echoDetected": "Communication error detected. Please check your USB cable and reconnect the device."
+    "echoDetected": "Communication error detected. Please check your USB cable and reconnect the device.",
+    "partialLoad": "Some settings could not be read from the keyboard. Reconnect to try again."
   },
   "keycodes": {
     "basic": "Basic",
@@ -902,6 +911,13 @@
       "keystoreUnavailable": "OS keychain is not available; Google Drive pull is disabled here.",
       "remoteCheckFailed": "Couldn't reach Google Drive. Try again later.",
       "partial": "Some packs failed to pull. Try again."
+    },
+    "readiness": {
+      "unauthenticated": "Connect your Google account to enable sync",
+      "noPasswordFile": "Set a sync password to enable sync",
+      "decryptFailed": "Couldn't read the saved sync password",
+      "keystoreUnavailable": "OS keychain is not available; sync is disabled here",
+      "remoteCheckFailed": "Couldn't reach Google Drive; sync is paused"
     }
   },
   "settings": {
@@ -1920,6 +1936,7 @@
     "authDisplayNameConflict": "Your Google account name conflicts with an existing display name. Please choose a different display name to continue.",
     "accountDeactivated": "Your account has been deactivated. Please contact support for assistance.",
     "rateLimited": "Too many requests. Please try again later.",
+    "notSignedIn": "Connect your Google account to sync with the Hub.",
     "error": {
       "keystrokesBelow": "Not enough keystrokes recorded for this period (at least 100 are required).",
       "rangeExceeds": "The selected period is longer than 30 days. Pick a shorter range and save the condition again.",

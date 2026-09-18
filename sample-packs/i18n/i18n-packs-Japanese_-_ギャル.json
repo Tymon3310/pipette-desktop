@@ -1,5 +1,5 @@
 {
-  "version": "0.1.89",
+  "version": "0.1.95",
   "name": "Japanese - ギャル",
   "common": {
     "save": "保存☆",
@@ -43,6 +43,8 @@
     "updatedNamed": "{{name}} 更新したよん☆",
     "importBatchFailed_one": "{{count}}個、入れられんかったよ…",
     "importBatchFailed_other": "{{count}}個、入れられんかったよ…",
+    "importBatchHubSyncFailed_one": "{{count}}個は保存したけどHubへの同期は失敗…サゲ。。",
+    "importBatchHubSyncFailed_other": "{{count}}個は保存したけどHubへの同期は失敗…サゲ。。",
     "importSummary_one": "{{count}}個入れたよん☆(成功{{success}}、失敗{{failure}})",
     "importSummary_other": "{{count}}個入れたよん☆(成功{{success}}、失敗{{failure}})",
     "pullFromCloud": "Google Driveから取ってくる☆",
@@ -83,7 +85,9 @@
       "done": "完了っしょ☆",
       "rowLabel": "行",
       "colLabel": "列",
-      "blankOption": "—"
+      "blankOption": "—",
+      "wires": "配線っしょ☆",
+      "notice": "View Matrixっしょ、Pipetteの中だけの設定でキーボード本体には何も変わんないっしょ☆ カスタム位置が変えるのはPipetteがキーをたどる順番だけっしょ — Auto Move（キーポップオーバーの次のキーもね）、Shift+クリックの範囲選択、複数キーまとめてペーストする時の順番のことね。配線（Wires）はそれに合わせて描き直されるけど、キーボード本体のホントの配線はそのままっしょ☆"
     },
     "keymap": {
       "title": "キーマップっしょ",
@@ -106,6 +110,7 @@
       "oneShotKeysLabel": "One Shot Keys",
       "comboSettings": "Combo",
       "comboLabel": "Combo",
+      "qmkSettingsSaveFailed": "設定保存できなかったっしょ…接続確認してもっかい試して☆",
       "previousLayers": "前のレイヤーっしょ",
       "nextLayers": "次のレイヤー☆",
       "layerN": "レイヤー {{n}}",
@@ -667,10 +672,14 @@
     "exportPdfFailed": "PDF書き出せなかった…マジサゲ。。",
     "sideloadFailed": "JSON読み込めなかったっしょ…",
     "sideloadInvalidDefinition": "定義バグってるっぽい？必須項目なくね？",
-    "notVialCompatible": "Vial対応してなくね？ワンチャンある☆"
+    "notVialCompatible": "Vial対応してなくね？ワンチャンある☆",
+    "deviceLoadFailed": "キーボードからデータ読み込めなかった…ケーブル確認してもう一回繋いで〜！",
+    "applyRolledBack": "キーボードへの書き込み失敗したー！でも前の設定に戻せたから安心して〜",
+    "applyNotRolledBack": "キーボードへの書き込み失敗して、前の設定にも戻せなかった…マジサゲ。。もう一回繋ぎ直して、保存してたスナップショット読み込んでみて！"
   },
   "warning": {
-    "echoDetected": "通信エラー！？ケーブル確認して差し直して〜！"
+    "echoDetected": "通信エラー！？ケーブル確認して差し直して〜！",
+    "partialLoad": "一部の設定読み込めてないかも…再接続したら直るかもよ？"
   },
   "keycodes": {
     "basic": "Basic☆",
@@ -892,6 +901,13 @@
       "keystoreUnavailable": "OSのキーチェーン使えなくて、ここじゃGoogle Driveから取ってこれないっぽい…",
       "remoteCheckFailed": "Google Driveにつながんない…また後でやってみて！",
       "partial": "一部のパック取得失敗…サゲ。。もっかい試して！"
+    },
+    "readiness": {
+      "unauthenticated": "同期オンにするにはGoogle入ってから☆",
+      "noPasswordFile": "同期オンにするには同期パスワード決めてよｗ",
+      "decryptFailed": "保存したパスワード読めないんですけどｗ",
+      "keystoreUnavailable": "OSのキーチェーン使えなくて、ここじゃ同期できないっぽい…",
+      "remoteCheckFailed": "Google Driveにつながんない…同期ストップ中！"
     }
   },
   "settings": {
@@ -1886,6 +1902,7 @@
     "authDisplayNameConflict": "Googleの名前とかぶってるんだけど！変えてよｗ",
     "accountDeactivated": "アカウント死んでるっぽいｗサポートに言って☆",
     "rateLimited": "リクエスト多すぎｗちょっと待ってからにして☆",
+    "notSignedIn": "Hubと同期するにはGoogle入ってから☆",
     "error": {
       "keystrokesBelow": "打鍵数足りなくね？（100打鍵以上してｗ）",
       "rangeExceeds": "期間長すぎｗ 30日以内にして☆",

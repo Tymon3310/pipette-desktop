@@ -11,9 +11,14 @@
 
 import { useState, useCallback } from 'react'
 
+/** A single union state, since 'success' and 'error' only ever change
+ *  together — an error message is only meaningful alongside the 'error'
+ *  status, never left over once the outcome switches to 'success'. */
+type ImportOutcome = { status: 'success' } | { status: 'error'; message: string }
+
 export function useTroubleshooting() {
   const [busy, setBusy] = useState(false)
-  const [importResult, setImportResult] = useState<'success' | 'error' | null>(null)
+  const [importOutcome, setImportOutcome] = useState<ImportOutcome | null>(null)
 
   const handleExport = useCallback(async () => {
     setBusy(true)
@@ -28,7 +33,14 @@ export function useTroubleshooting() {
     setBusy(true)
     try {
       const result = await window.vialAPI.importLocalData()
-      setImportResult(result.success ? 'success' : 'error')
+      if (result.success) {
+        // A cancelled file picker isn't an outcome — leave whatever outcome
+        // (success/error) is already displayed from a previous import alone.
+        if (result.cancelled) return
+        setImportOutcome({ status: 'success' })
+      } else {
+        setImportOutcome({ status: 'error', message: result.error })
+      }
     } finally {
       setBusy(false)
     }
@@ -36,7 +48,7 @@ export function useTroubleshooting() {
 
   return {
     busy,
-    importResult,
+    importOutcome,
     handleExport,
     handleImport,
   }

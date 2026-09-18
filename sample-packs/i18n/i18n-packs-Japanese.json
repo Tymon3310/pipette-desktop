@@ -1,5 +1,5 @@
 {
-  "version": "0.1.89",
+  "version": "0.1.95",
   "name": "Japanese",
   "common": {
     "save": "保存",
@@ -43,6 +43,8 @@
     "updatedNamed": "{{name}} を更新しました",
     "importBatchFailed_one": "{{count}} 件のファイルをインポートできませんでした：",
     "importBatchFailed_other": "{{count}} 件のファイルをインポートできませんでした：",
+    "importBatchHubSyncFailed_one": "{{count}} 件は保存しましたが Hub への同期に失敗しました：",
+    "importBatchHubSyncFailed_other": "{{count}} 件は保存しましたが Hub への同期に失敗しました：",
     "importSummary_one": "{{count}} 件インポートしました (成功 {{success}}, 失敗 {{failure}})",
     "importSummary_other": "{{count}} 件インポートしました (成功 {{success}}, 失敗 {{failure}})",
     "pullFromCloud": "Google Drive から取得",
@@ -83,7 +85,9 @@
       "done": "完了",
       "rowLabel": "行",
       "colLabel": "列",
-      "blankOption": "—"
+      "blankOption": "—",
+      "wires": "配線",
+      "notice": "View Matrix は Pipette 内だけの設定で、キーボード本体には何も変更を加えません。カスタム位置が変えるのは Pipette がキーを辿る順序だけです — Auto Move（キーポップオーバーの次のキーも含む）、Shift+クリックの範囲選択、複数キーの一括ペーストの順序です。配線（Wires）オーバーレイはそれに合わせて再描画されますが、キーボード本体の実際のマトリクス配線はそのままです。"
     },
     "keymap": {
       "title": "キーマップ",
@@ -106,6 +110,7 @@
       "oneShotKeysLabel": "One Shot Keys",
       "comboSettings": "Combo",
       "comboLabel": "Combo",
+      "qmkSettingsSaveFailed": "設定の保存に失敗しました。接続を確認して再度お試しください。",
       "previousLayers": "前のレイヤー",
       "nextLayers": "次のレイヤー",
       "layerN": "Layer {{n}}",
@@ -667,10 +672,14 @@
     "exportPdfFailed": "キーマップPDFのエクスポートに失敗しました",
     "sideloadFailed": "JSON定義ファイルの読み込みに失敗しました",
     "sideloadInvalidDefinition": "無効なキーボード定義: 必須フィールド（matrix, layouts）がありません",
-    "notVialCompatible": "Vial対応キーボードではない可能性があります"
+    "notVialCompatible": "Vial対応キーボードではない可能性があります",
+    "deviceLoadFailed": "キーボードからのデータ読み込みに失敗しました。USBケーブルを確認し、再接続してください。",
+    "applyRolledBack": "キーボードへの書き込みに失敗しました。以前の設定に復元されました。",
+    "applyNotRolledBack": "キーボードへの書き込みに失敗し、以前の設定を復元できませんでした。キーボードを再接続し、保存したスナップショットを読み込んでください。"
   },
   "warning": {
-    "echoDetected": "通信エラーが検出されました。USBケーブルを確認し、デバイスを再接続してください。"
+    "echoDetected": "通信エラーが検出されました。USBケーブルを確認し、デバイスを再接続してください。",
+    "partialLoad": "キーボードから一部の設定を読み込めませんでした。再接続すると読み込み直せます。"
   },
   "keycodes": {
     "basic": "Basic",
@@ -902,6 +911,13 @@
       "keystoreUnavailable": "OSキーチェーンが利用できないため、ここでは Google Drive からの取得を行えません。",
       "remoteCheckFailed": "Google Drive に接続できませんでした。しばらくしてから再試行してください。",
       "partial": "一部のパックの取得に失敗しました。もう一度お試しください。"
+    },
+    "readiness": {
+      "unauthenticated": "同期を有効にするには Google アカウントを接続してください",
+      "noPasswordFile": "同期を有効にするには同期パスワードを設定してください",
+      "decryptFailed": "保存された同期パスワードを読み取れませんでした",
+      "keystoreUnavailable": "OSキーチェーンが利用できないため、ここでは同期が無効です",
+      "remoteCheckFailed": "Google Drive に接続できないため、同期を一時停止しています"
     }
   },
   "settings": {
@@ -1920,6 +1936,7 @@
     "authDisplayNameConflict": "Googleアカウント名が既存の投稿者名と重複しています。別の投稿者名を設定してください。",
     "accountDeactivated": "アカウントが無効化されています。サポートにお問い合わせください。",
     "rateLimited": "リクエストが多すぎます。しばらくしてからもう一度お試しください。",
+    "notSignedIn": "Hub と同期するには Google アカウントを接続してください。",
     "error": {
       "keystrokesBelow": "この期間の打鍵数が足りません（100 打鍵以上が必要です）。",
       "rangeExceeds": "選択した期間が 30 日を超えています。期間を短くして条件を保存し直してください。",

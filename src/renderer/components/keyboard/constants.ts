@@ -23,6 +23,13 @@ export const KEY_FACE_INSET =
 // Widget padding
 export const KEYBOARD_PADDING = 5
 
+/** Shared label font-size clamp used by `KeyWidget`, `EncoderWidget`, and
+ *  the View Matrix wiring overlay's gutter numbers, so every legend on the
+ *  keyboard scales together and stays within a readable 8-12px range. */
+export function keyLabelFontSize(scale: number): number {
+  return Math.max(8, Math.min(12, 12 * scale))
+}
+
 // Colors — use CSS custom properties for theme-aware rendering
 export const KEY_BG_COLOR = 'var(--key-bg)'
 export const KEY_BORDER_COLOR = 'var(--key-border)'
@@ -38,6 +45,12 @@ export const KEY_INVERTED_TEXT_COLOR = 'var(--content-inverse)'
 export const KEY_REMAP_COLOR = 'var(--key-label-remap)'
 export const KEY_MASK_RECT_COLOR = 'var(--key-mask-bg)'
 export const KEY_HOVER_COLOR = 'var(--key-bg-hover)'
+
+// View Matrix wiring overlay: row wires, column wires, and the hollow
+// per-key node dot drawn where they cross.
+export const WIRE_ROW_COLOR = 'var(--wire-row)'
+export const WIRE_COL_COLOR = 'var(--wire-col)'
+export const WIRE_NODE_COLOR = 'var(--content-secondary)'
 
 /** Which remap tint the active keymap surface uses. `'actual'` (the
  *  default) is the existing `key-label-remap` tint — JIS-type display

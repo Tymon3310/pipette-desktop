@@ -21,6 +21,7 @@ vi.mock('react-i18next', () => ({
         'editor.viewMatrix.rowLabel': 'Row',
         'editor.viewMatrix.colLabel': 'Col',
         'editor.viewMatrix.blankOption': '—',
+        'editor.viewMatrix.notice': 'The View Matrix lives only in Pipette and changes nothing on the keyboard.',
         'editor.keymap.pickerHint': 'Ctrl+click: multi-select / Shift+click: range select → click a key to paste',
       }
       if (key === 'editor.keymap.layer' && opts) return `Layer ${opts.number ?? ''}`
@@ -228,6 +229,14 @@ describe('KeymapEditor — View Matrix mode', () => {
     expect(screen.getByText('Ctrl+click: multi-select / Shift+click: range select → click a key to paste')).toBeInTheDocument()
   })
 
+  it('shows the Pipette-only notice under the keymap while the mode is active, and hides it otherwise', () => {
+    render(<KeymapEditor {...defaultProps} />)
+    expect(screen.queryByTestId('view-matrix-notice')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('overlay-view-matrix-edit-button'))
+    expect(screen.getByTestId('view-matrix-notice')).toBeInTheDocument()
+  })
+
   it('hides undo/redo while the mode is active and restores them on exit', () => {
     render(<KeymapEditor {...defaultProps} />)
 
@@ -424,6 +433,25 @@ describe('KeymapEditor — View Matrix mode', () => {
     expect(capturedKeyColors?.size).toBe(2)
 
     rerender(<KeymapEditor {...defaultProps} viewMatrix={undefined} />)
+    expect(capturedKeyColors).toBeUndefined()
+  })
+
+  it('does not flag two layout-option alternates sharing a physical position as colliding', () => {
+    // Only one of a pair of layout-option alternates is ever visible at a
+    // time, but `effectiveCells` is built from the full `layout.keys` list
+    // (not the filtered/visible set) and keyed by physical "row,col" — so
+    // two alternates occupying the same physical position collapse into a
+    // single map entry instead of tripping the duplicate-fill warning.
+    const layout = {
+      keys: [
+        { ...KEY_DEFAULTS, x: 0, row: 0, col: 0, layoutIndex: 0, layoutOption: 0 },
+        { ...KEY_DEFAULTS, x: 0, row: 0, col: 0, layoutIndex: 0, layoutOption: 1 },
+        makeKey(2, 2),
+      ],
+    }
+    render(<KeymapEditor {...defaultProps} layout={layout} />)
+    fireEvent.click(screen.getByTestId('overlay-view-matrix-edit-button'))
+
     expect(capturedKeyColors).toBeUndefined()
   })
 })
