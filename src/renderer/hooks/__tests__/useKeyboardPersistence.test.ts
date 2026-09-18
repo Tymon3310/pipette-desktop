@@ -20,7 +20,7 @@ import { emptyState, type KeyboardState, type SetState, type KeyboardRefs, type 
 import { emptyKeychronState } from '../../../shared/types/keychron'
 import type { VilFile } from '../../../shared/types/protocol'
 import * as keychronSerialize from '../../../shared/keychron-serialize'
-import { VALID_VIL, MODIFIED_VIL } from './fixtures/valid-vil'
+import { VALID_VIL } from './fixtures/valid-vil'
 
 function createState(overrides?: Partial<KeyboardState>): KeyboardState {
   return {
