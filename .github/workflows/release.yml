@@ -42,6 +42,9 @@ jobs:
       - name: Install Linux build dependencies for native modules
         run: sudo apt-get install -y --no-upgrade libusb-1.0-0-dev libudev-dev || true
 
+      - name: Install node-gyp
+        run: npm install -g node-gyp
+
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
@@ -81,6 +84,9 @@ jobs:
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
         run: sudo apt-get install -y --no-upgrade libusb-1.0-0-dev libudev-dev || true
+
+      - name: Install node-gyp
+        run: npm install -g node-gyp
 
       - run: pnpm install --frozen-lockfile
       - name: Rebuild native dependencies for target architecture
