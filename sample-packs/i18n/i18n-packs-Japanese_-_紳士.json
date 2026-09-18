@@ -759,6 +759,7 @@
       "swapHands": "左右の入れ替え",
       "sequencer": "順序立て",
       "joystick": "操縦桿",
+      "programmableButton": "プログラム可能なボタン",
       "ledMatrix": "LEDの陣"
     }
   },

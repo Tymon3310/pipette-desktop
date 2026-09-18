@@ -683,6 +683,10 @@ function buildV5(): VersionedKeycodeMap {
     QK_AUTOCORRECT_OFF: 0x99a29,
     QK_AUTOCORRECT_TOGGLE: 0x99a2a,
     QK_VELOCIKEY_TOGGLE: 0x99a2b,
+
+    // Programmable Button (not in v5, fake base address; PB_1-PB_32 generated below)
+    QK_PROGRAMMABLE_BUTTON: 0x99a30,
+    QK_PROGRAMMABLE_BUTTON_MAX: 0x99a4f,
   }
 
   // Generate macro keycodes M0-M255
@@ -715,6 +719,12 @@ function buildV5(): VersionedKeycodeMap {
   // Generate joystick keycodes JS_0-JS_31
   for (let x = 0; x < 32; x++) {
     kc[`JS_${x}`] = kc.QK_JOYSTICK + x
+  }
+
+  // Generate programmable button keycodes PB_1-PB_32
+  for (let x = 1; x <= 32; x++) {
+    kc[`PB_${x}`] = kc.QK_PROGRAMMABLE_BUTTON + (x - 1)
+    kc[`QK_PROGRAMMABLE_BUTTON_${x}`] = kc.QK_PROGRAMMABLE_BUTTON + (x - 1)
   }
 
   // Generate user keycodes USER00-USER63

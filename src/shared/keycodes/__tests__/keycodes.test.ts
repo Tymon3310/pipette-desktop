@@ -55,6 +55,7 @@ import {
   KEYCODES_BEHAVIOR_SWAP_HANDS_TAP,
   KEYCODES_MIDI_SEQUENCER,
   KEYCODES_SYSTEM_JOYSTICK,
+  KEYCODES_PROGRAMMABLE_BUTTON,
   KEYCODES_LIGHTING_LED_MATRIX,
   KEYCODES_MOD_MASK,
   isModMaskKeycode,
@@ -1269,6 +1270,49 @@ describe('Joystick keycodes', () => {
     recreateKeycodes()
     expect(serialize(0x7400)).toBe('JS_0')
     expect(serialize(0x741f)).toBe('JS_31')
+  })
+})
+
+describe('Programmable Button keycodes', () => {
+  it('has 32 programmable button keycodes', () => {
+    expect(KEYCODES_PROGRAMMABLE_BUTTON).toHaveLength(32)
+  })
+
+  it('v6 addresses are correct', () => {
+    expect(keycodesV6.kc.PB_1).toBe(0x7440)
+    expect(keycodesV6.kc.PB_32).toBe(0x745f)
+    expect(keycodesV6.kc.QK_PROGRAMMABLE_BUTTON_1).toBe(0x7440)
+    expect(keycodesV6.kc.QK_PROGRAMMABLE_BUTTON_32).toBe(0x745f)
+  })
+
+  it('v5 has fake addresses', () => {
+    expect(keycodesV5.kc.PB_1).toBe(0x99a30)
+    expect(keycodesV5.kc.PB_32).toBe(0x99a4f)
+    expect(keycodesV5.kc.QK_PROGRAMMABLE_BUTTON_1).toBe(0x99a30)
+    expect(keycodesV5.kc.QK_PROGRAMMABLE_BUTTON_32).toBe(0x99a4f)
+  })
+
+  it('serializes programmable button keycodes in v6', () => {
+    setProtocol(6)
+    recreateKeycodes()
+    expect(serialize(0x7440)).toBe('PB_1')
+    expect(serialize(0x745f)).toBe('PB_32')
+  })
+
+  it('deserializes PB_ and QK_PROGRAMMABLE_BUTTON_ aliases', () => {
+    setProtocol(6)
+    recreateKeycodes()
+    expect(deserialize('PB_1')).toBe(0x7440)
+    expect(deserialize('QK_PROGRAMMABLE_BUTTON_1')).toBe(0x7440)
+    expect(deserialize('PB_32')).toBe(0x745f)
+    expect(deserialize('QK_PROGRAMMABLE_BUTTON_32')).toBe(0x745f)
+  })
+
+  it('serializes for C export', () => {
+    setProtocol(6)
+    recreateKeycodes()
+    expect(serializeForCExport(0x7440)).toBe('PB_1')
+    expect(serializeForCExport(0x745f)).toBe('PB_32')
   })
 })
 

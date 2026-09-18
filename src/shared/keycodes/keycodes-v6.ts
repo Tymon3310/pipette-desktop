@@ -663,6 +663,10 @@ function buildV6(): VersionedKeycodeMap {
     // Joystick (base address, JS_0-JS_31 generated below)
     QK_JOYSTICK: 0x7400,
 
+    // Programmable Button (base address, PB_1-PB_32 generated below)
+    QK_PROGRAMMABLE_BUTTON: 0x7440,
+    QK_PROGRAMMABLE_BUTTON_MAX: 0x747F,
+
     // LED Matrix
     LM_ON: 0x7810,
     LM_OFF: 0x7811,
@@ -705,6 +709,12 @@ function buildV6(): VersionedKeycodeMap {
   // Generate joystick keycodes JS_0-JS_31
   for (let x = 0; x < 32; x++) {
     kc[`JS_${x}`] = kc.QK_JOYSTICK + x
+  }
+
+  // Generate programmable button keycodes PB_1-PB_32
+  for (let x = 1; x <= 32; x++) {
+    kc[`PB_${x}`] = kc.QK_PROGRAMMABLE_BUTTON + (x - 1)
+    kc[`QK_PROGRAMMABLE_BUTTON_${x}`] = kc.QK_PROGRAMMABLE_BUTTON + (x - 1)
   }
 
   // Generate user keycodes USER00-USER63

@@ -1033,6 +1033,12 @@ export const KEYCODES_SYSTEM_JOYSTICK: Keycode[] = Array.from({ length: 32 }, (_
   K(`JS_${i}`, `JS\n${i}`, `Joystick button ${i}`),
 )
 
+export const KEYCODES_PROGRAMMABLE_BUTTON: Keycode[] = Array.from({ length: 32 }, (_, i) =>
+  K(`PB_${i + 1}`, `PB\n${i + 1}`, `Programmable button ${i + 1}`, {
+    alias: [`QK_PROGRAMMABLE_BUTTON_${i + 1}`],
+  }),
+)
+
 export const KEYCODES_SYSTEM: Keycode[] = [
   ...KEYCODES_SYSTEM_FKEYS,
   ...KEYCODES_SYSTEM_CONTROL,
@@ -1042,6 +1048,7 @@ export const KEYCODES_SYSTEM: Keycode[] = [
   ...KEYCODES_SYSTEM_MOUSE,
   ...KEYCODES_SYSTEM_LOCK,
   ...KEYCODES_SYSTEM_JOYSTICK,
+  ...KEYCODES_PROGRAMMABLE_BUTTON,
 ]
 
 export let KEYCODES_TAP_DANCE: Keycode[] = []

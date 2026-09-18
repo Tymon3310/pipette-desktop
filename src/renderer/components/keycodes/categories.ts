@@ -76,6 +76,7 @@ import {
   KEYCODES_BEHAVIOR_SWAP_HANDS_TAP,
   KEYCODES_MIDI_SEQUENCER,
   KEYCODES_SYSTEM_JOYSTICK,
+  KEYCODES_PROGRAMMABLE_BUTTON,
   KEYCODES_LIGHTING_LED_MATRIX,
   type Keycode,
 } from '../../../shared/keycodes/keycodes'
@@ -245,6 +246,7 @@ export const KEYCODE_CATEGORIES: KeycodeCategory[] = [
       { labelKey: 'keycodes.group.mouse', keycodes: KEYCODES_SYSTEM_MOUSE, layoutRow: 0 },
       { labelKey: 'keycodes.group.boot', keycodes: KEYCODES_BOOT, layoutRow: 0 },
       { labelKey: 'keycodes.group.joystick', keycodes: KEYCODES_SYSTEM_JOYSTICK },
+      { labelKey: 'keycodes.group.programmableButton', keycodes: KEYCODES_PROGRAMMABLE_BUTTON },
       { labelKey: 'keycodes.group.audio', keycodes: KEYCODES_BEHAVIOR_AUDIO, layoutRow: 1 },
       { labelKey: 'keycodes.group.haptic', keycodes: KEYCODES_BEHAVIOR_HAPTIC, layoutRow: 1 },
       { labelKey: 'keycodes.group.mediaPlayback', keycodes: KEYCODES_SYSTEM_PLAYBACK, layoutRow: 2 },

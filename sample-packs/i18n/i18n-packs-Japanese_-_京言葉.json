@@ -759,6 +759,7 @@
       "swapHands": "Swap Hands",
       "sequencer": "Sequencer",
       "joystick": "Joystick",
+      "programmableButton": "Programmable Button",
       "ledMatrix": "LED Matrix"
     }
   },
