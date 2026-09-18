@@ -155,6 +155,28 @@ export type ReloadResult =
   | { ok: true; uid: string }
   | { ok: false; reason: 'notVial' | 'loadFailed' }
 
+/** Outcome of `applyVilFile`. `rolledBack` is only meaningful when
+ *  `ok: false`: `true` means the pre-apply backup was written back to the
+ *  device without a further HID error — not a guaranteed byte-exact
+ *  restore. The rollback only rewrites the positions/entries the backup
+ *  itself held, so it assumes the applied file and the device share the
+ *  same shape (the same keyboard); `false` means the restore write itself
+ *  also failed — the device and the screen may now disagree, and the
+ *  caller must tell the user rather than silently treating it as a normal
+ *  load failure. */
+export type ApplyVilResult =
+  | { ok: true }
+  | { ok: false; rolledBack: boolean }
+
+/** Maps a failed `applyVilFile` result to the i18n key describing whether
+ *  the device was restored. Every call site that surfaces an
+ *  `ApplyVilResult` failure to the user (useFileIO, useLayoutStore) shares
+ *  this instead of re-deriving the same ternary, so the two keys can't
+ *  drift out of sync between call sites. */
+export function applyVilErrorKey(r: Extract<ApplyVilResult, { ok: false }>): 'error.applyRolledBack' | 'error.applyNotRolledBack' {
+  return r.rolledBack ? 'error.applyRolledBack' : 'error.applyNotRolledBack'
+}
+
 export interface KeyboardRefs {
   stateRef: React.MutableRefObject<KeyboardState>
   qmkSettingsBaselineRef: React.MutableRefObject<Record<string, number[]>>

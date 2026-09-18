@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useLayoutStore, type UseLayoutStoreOptions } from '../useLayoutStore'
+import type { ApplyVilResult } from '../keyboard-types'
 import {
   VALID_VIL,
   VALID_VIL_JSON,
@@ -53,7 +54,7 @@ function createHookOptions(overrides?: Partial<UseLayoutStoreOptions>) {
     deviceUid: VALID_VIL.uid,
     deviceName: 'Test Keyboard',
     serialize: vi.fn(() => VALID_VIL),
-    applyVilFile: vi.fn(async () => {}),
+    applyVilFile: vi.fn(async (): Promise<ApplyVilResult> => ({ ok: true })),
     currentDefinition: null,
     ...overrides,
   }
@@ -202,6 +203,42 @@ describe('useLayoutStore – loadLayout', () => {
     expect(ok).toBe(false)
     expect(result.current.error).toBe('layoutStore.loadFailed')
     expect(opts.applyVilFile).not.toHaveBeenCalled()
+  })
+
+  // Task-irr-5 (Plan-import-restore-rollback.md §B call-site table, B6):
+  // applyVilFile resolving { ok: false, ... } (a failed-and-possibly-rolled-
+  // back HID apply) is distinct from the parse/format-error path above,
+  // which always maps to the generic layoutStore.loadFailed.
+  it('sets error.applyRolledBack when applyVilFile resolves rolledBack: true', async () => {
+    mockSnapshotStoreLoad.mockResolvedValueOnce({ success: true, data: VALID_VIL_JSON })
+    const opts = createHookOptions({
+      applyVilFile: vi.fn(async (): Promise<ApplyVilResult> => ({ ok: false, rolledBack: true })),
+    })
+    const { result } = renderHook(() => useLayoutStore(opts))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.loadLayout('entry-1')
+    })
+
+    expect(ok).toBe(false)
+    expect(result.current.error).toBe('error.applyRolledBack')
+  })
+
+  it('sets error.applyNotRolledBack when applyVilFile resolves rolledBack: false', async () => {
+    mockSnapshotStoreLoad.mockResolvedValueOnce({ success: true, data: VALID_VIL_JSON })
+    const opts = createHookOptions({
+      applyVilFile: vi.fn(async (): Promise<ApplyVilResult> => ({ ok: false, rolledBack: false })),
+    })
+    const { result } = renderHook(() => useLayoutStore(opts))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.loadLayout('entry-1')
+    })
+
+    expect(ok).toBe(false)
+    expect(result.current.error).toBe('error.applyNotRolledBack')
   })
 
   it('manages loading flag', async () => {

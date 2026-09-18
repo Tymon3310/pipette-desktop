@@ -10,8 +10,10 @@ import { isValidFavoriteType, isValidVialProtocol, isFavoriteDataFile, FAV_EXPOR
 import { serialize as serializeKeycode, deserialize as deserializeKeycode } from '../shared/keycodes/keycodes'
 import { withDeserializeProtocol, withSerializeProtocol } from '../shared/keycodes/with-protocol'
 import { notifyChange } from './sync/sync-service'
+import { withWriteLock } from './per-uid-write-lock'
 import { secureHandle } from './ipc-guard'
 import { isSafePathSegment, tsForFilename, tsForExportFilename } from './utils/safe-filename'
+import { writeFileAtomic } from './utils/write-file-atomic'
 import type { FavoriteType, SavedFavoriteMeta, FavoriteIndex, FavoriteExportEntry, FavoriteImportResult } from '../shared/types/favorite-store'
 import type { HubPrivateLink } from '../shared/types/hub-private'
 
@@ -48,7 +50,7 @@ async function readIndex(type: FavoriteType): Promise<FavoriteIndex> {
 async function writeIndex(type: FavoriteType, index: FavoriteIndex): Promise<void> {
   const dir = getFavoriteDir(type)
   await mkdir(dir, { recursive: true })
-  await writeFile(getIndexPath(type), JSON.stringify(index, null, 2), 'utf-8')
+  await writeFileAtomic(getIndexPath(type), JSON.stringify(index, null, 2))
 }
 
 async function findEntry(type: FavoriteType, entryId: string): Promise<{ index: FavoriteIndex; entry: SavedFavoriteMeta } | null> {
@@ -56,6 +58,35 @@ async function findEntry(type: FavoriteType, entryId: string): Promise<{ index: 
   const entry = index.entries.find((e) => e.id === entryId)
   if (!entry) return null
   return { index, entry }
+}
+
+/** Locked find → mutate → write → notify for a single entry, mirroring
+ *  `snapshot-store.ts`'s `updateEntry`. Locking every mutation (not just
+ *  SAVE) against the same `favorites/{type}` key closes the other half of
+ *  the race SAVE was already locked against: without this, a RENAME/
+ *  DELETE/SET_HUB_* read-modify-write of the index could still land
+ *  between a concurrent SAVE's or import's own read and write. `type` is
+ *  the caller's already-validated `FavoriteType`, matching SAVE's own
+ *  validate-then-lock order. */
+async function updateEntry(
+  type: FavoriteType,
+  entryId: string,
+  mutate: (entry: SavedFavoriteMeta) => void,
+): Promise<{ success: boolean; error?: string }> {
+  return withWriteLock(`favorites/${type}`, async () => {
+    try {
+      const found = await findEntry(type, entryId)
+      if (!found) return { success: false, error: 'Entry not found' }
+
+      mutate(found.entry)
+      found.entry.updatedAt = new Date().toISOString()
+      await writeIndex(type, found.index)
+      notifyChange(`favorites/${type}`)
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: String(err) }
+    }
+  })
 }
 
 export function setupFavoriteStore(): void {
@@ -82,31 +113,37 @@ export function setupFavoriteStore(): void {
     ): Promise<{ success: boolean; entry?: SavedFavoriteMeta; error?: string }> => {
       try {
         validateType(type)
-        const dir = getFavoriteDir(type)
-        await mkdir(dir, { recursive: true })
+        // Locked against a concurrent local-data import touching the same
+        // `favorites/{type}` unit — both read-modify-write the index, and
+        // without the shared lock one writer's read can be stale by the
+        // time it writes, silently dropping the other's entry.
+        return await withWriteLock(`favorites/${type}`, async () => {
+          const dir = getFavoriteDir(type)
+          await mkdir(dir, { recursive: true })
 
-        const now = new Date()
-        const timestamp = tsForFilename(now)
-        const filename = `${type}_${timestamp}_${randomUUID().slice(0, 8)}.json`
-        const filePath = getSafeFilePath(type, filename)
+          const now = new Date()
+          const timestamp = tsForFilename(now)
+          const filename = `${type}_${timestamp}_${randomUUID().slice(0, 8)}.json`
+          const filePath = getSafeFilePath(type, filename)
 
-        await writeFile(filePath, json, 'utf-8')
+          await writeFile(filePath, json, 'utf-8')
 
-        const nowIso = now.toISOString()
-        const entry: SavedFavoriteMeta = {
-          id: randomUUID(),
-          label,
-          filename,
-          savedAt: nowIso,
-          updatedAt: nowIso,
-        }
+          const nowIso = now.toISOString()
+          const entry: SavedFavoriteMeta = {
+            id: randomUUID(),
+            label,
+            filename,
+            savedAt: nowIso,
+            updatedAt: nowIso,
+          }
 
-        const index = await readIndex(type)
-        index.entries.unshift(entry)
-        await writeIndex(type, index)
+          const index = await readIndex(type)
+          index.entries.unshift(entry)
+          await writeIndex(type, index)
 
-        notifyChange(`favorites/${type}`)
-        return { success: true, entry }
+          notifyChange(`favorites/${type}`)
+          return { success: true, entry }
+        })
       } catch (err) {
         return { success: false, error: String(err) }
       }
@@ -136,17 +173,10 @@ export function setupFavoriteStore(): void {
     async (_event, type: unknown, entryId: string, newLabel: string): Promise<{ success: boolean; error?: string }> => {
       try {
         validateType(type)
-        const found = await findEntry(type, entryId)
-        if (!found) return { success: false, error: 'Entry not found' }
-
-        found.entry.label = newLabel
-        found.entry.updatedAt = new Date().toISOString()
-        await writeIndex(type, found.index)
-        notifyChange(`favorites/${type}`)
-        return { success: true }
       } catch (err) {
         return { success: false, error: String(err) }
       }
+      return updateEntry(type, entryId, (entry) => { entry.label = newLabel })
     },
   )
 
@@ -155,18 +185,10 @@ export function setupFavoriteStore(): void {
     async (_event, type: unknown, entryId: string): Promise<{ success: boolean; error?: string }> => {
       try {
         validateType(type)
-        const found = await findEntry(type, entryId)
-        if (!found) return { success: false, error: 'Entry not found' }
-
-        const now = new Date().toISOString()
-        found.entry.deletedAt = now
-        found.entry.updatedAt = now
-        await writeIndex(type, found.index)
-        notifyChange(`favorites/${type}`)
-        return { success: true }
       } catch (err) {
         return { success: false, error: String(err) }
       }
+      return updateEntry(type, entryId, (entry) => { entry.deletedAt = new Date().toISOString() })
     },
   )
 
@@ -309,24 +331,19 @@ export function setupFavoriteStore(): void {
     async (_event, type: unknown, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }> => {
       try {
         validateType(type)
-        const found = await findEntry(type, entryId)
-        if (!found) return { success: false, error: 'Entry not found' }
-
-        const normalized = hubPostId?.trim() || null
-        if (normalized === null) {
-          delete found.entry.hubPostId
-        } else {
-          found.entry.hubPostId = normalized
-          // public and private linkage are mutually exclusive
-          delete found.entry.hubPrivate
-        }
-        found.entry.updatedAt = new Date().toISOString()
-        await writeIndex(type, found.index)
-        notifyChange(`favorites/${type}`)
-        return { success: true }
       } catch (err) {
         return { success: false, error: String(err) }
       }
+      const normalized = hubPostId?.trim() || null
+      return updateEntry(type, entryId, (entry) => {
+        if (normalized === null) {
+          delete entry.hubPostId
+        } else {
+          entry.hubPostId = normalized
+          // public and private linkage are mutually exclusive
+          delete entry.hubPrivate
+        }
+      })
     },
   )
 
@@ -335,22 +352,17 @@ export function setupFavoriteStore(): void {
     async (_event, type: unknown, entryId: string, link: HubPrivateLink | null): Promise<{ success: boolean; error?: string }> => {
       try {
         validateType(type)
-        const found = await findEntry(type, entryId)
-        if (!found) return { success: false, error: 'Entry not found' }
-
-        if (link === null) {
-          delete found.entry.hubPrivate
-        } else {
-          found.entry.hubPrivate = link
-          delete found.entry.hubPostId
-        }
-        found.entry.updatedAt = new Date().toISOString()
-        await writeIndex(type, found.index)
-        notifyChange(`favorites/${type}`)
-        return { success: true }
       } catch (err) {
         return { success: false, error: String(err) }
       }
+      return updateEntry(type, entryId, (entry) => {
+        if (link === null) {
+          delete entry.hubPrivate
+        } else {
+          entry.hubPrivate = link
+          delete entry.hubPostId
+        }
+      })
     },
   )
 
@@ -438,50 +450,56 @@ export function setupFavoriteStore(): void {
           const favType = FAV_EXPORT_KEY_MAP[exportKey]
           if (!favType) { skipped += entries.length; continue }
 
-          const index = await readIndex(favType)
-          const dir = getFavoriteDir(favType)
-          await mkdir(dir, { recursive: true })
+          // Locked against a concurrent save/rename/delete/import of the
+          // same type — see FAVORITE_STORE_SAVE's lock comment.
+          const typeChanged = await withWriteLock(`favorites/${favType}`, async () => {
+            const index = await readIndex(favType)
+            const dir = getFavoriteDir(favType)
+            await mkdir(dir, { recursive: true })
 
-          for (const entry of entries) {
-            const normalizedData = withDeserializeProtocol(parsed.vial_protocol, () =>
-              deserializeFavData(favType, entry.data, deserializeKeycode),
-            )
-            if (!isFavoriteDataFile({ type: favType, data: normalizedData }, favType)) {
-              skipped++
-              continue
+            let changed = false
+            for (const entry of entries) {
+              const normalizedData = withDeserializeProtocol(parsed.vial_protocol, () =>
+                deserializeFavData(favType, entry.data, deserializeKeycode),
+              )
+              if (!isFavoriteDataFile({ type: favType, data: normalizedData }, favType)) {
+                skipped++
+                continue
+              }
+
+              const isDuplicate = index.entries.some(
+                (existing) => !existing.deletedAt && existing.label === entry.label && existing.savedAt === entry.savedAt,
+              )
+              if (isDuplicate) {
+                skipped++
+                continue
+              }
+
+              const now = new Date()
+              const timestamp = tsForFilename(now)
+              const filename = `${favType}_${timestamp}_${randomUUID().slice(0, 8)}.json`
+              const filePath = getSafeFilePath(favType, filename)
+
+              await writeFile(filePath, JSON.stringify({ type: favType, data: normalizedData }), 'utf-8')
+
+              const meta: SavedFavoriteMeta = {
+                id: randomUUID(),
+                label: entry.label,
+                filename,
+                savedAt: entry.savedAt,
+                updatedAt: now.toISOString(),
+              }
+
+              index.entries.unshift(meta)
+              imported++
+              changed = true
             }
 
-            const isDuplicate = index.entries.some(
-              (existing) => !existing.deletedAt && existing.label === entry.label && existing.savedAt === entry.savedAt,
-            )
-            if (isDuplicate) {
-              skipped++
-              continue
-            }
+            if (changed) await writeIndex(favType, index)
+            return changed
+          })
 
-            const now = new Date()
-            const timestamp = tsForFilename(now)
-            const filename = `${favType}_${timestamp}_${randomUUID().slice(0, 8)}.json`
-            const filePath = getSafeFilePath(favType, filename)
-
-            await writeFile(filePath, JSON.stringify({ type: favType, data: normalizedData }), 'utf-8')
-
-            const meta: SavedFavoriteMeta = {
-              id: randomUUID(),
-              label: entry.label,
-              filename,
-              savedAt: entry.savedAt,
-              updatedAt: now.toISOString(),
-            }
-
-            index.entries.unshift(meta)
-            imported++
-            changedTypes.add(favType)
-          }
-
-          if (changedTypes.has(favType)) {
-            await writeIndex(favType, index)
-          }
+          if (typeChanged) changedTypes.add(favType)
         }
 
         for (const favType of changedTypes) {

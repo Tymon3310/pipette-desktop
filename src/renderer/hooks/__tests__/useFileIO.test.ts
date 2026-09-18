@@ -6,6 +6,7 @@ import { renderHook, act } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { useFileIO, type UseFileIOOptions } from '../useFileIO'
+import type { ApplyVilResult } from '../keyboard-types'
 import { isVilFile } from '../../../shared/vil-file'
 import {
   VALID_VIL,
@@ -45,7 +46,7 @@ function createHookOptions(overrides?: Partial<UseFileIOOptions>) {
     deviceUid: VALID_VIL.uid,
     deviceName: 'Test Keyboard',
     serialize: vi.fn(() => VALID_VIL),
-    applyVilFile: vi.fn(async () => {}),
+    applyVilFile: vi.fn(async (): Promise<ApplyVilResult> => ({ ok: true })),
     ...overrides,
   }
 }
@@ -283,6 +284,42 @@ describe('useFileIO – loadLayout', () => {
 
     expect(ok).toBe(false)
     expect(result.current.error).toBe('error.loadFailed')
+  })
+
+  // Task-irr-5 (Plan-import-restore-rollback.md §B call-site table, B6):
+  // applyVilFile resolving { ok: false, ... } is a distinct outcome from it
+  // throwing (the parse/format-error catch above) — the message must say
+  // whether the device was restored.
+  it('sets error.applyRolledBack when applyVilFile resolves rolledBack: true', async () => {
+    mockLoadLayout.mockResolvedValueOnce({ success: true, data: VALID_VIL_JSON })
+    const opts = createHookOptions({
+      applyVilFile: vi.fn(async (): Promise<ApplyVilResult> => ({ ok: false, rolledBack: true })),
+    })
+    const { result } = renderHook(() => useFileIO(opts))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.loadLayout()
+    })
+
+    expect(ok).toBe(false)
+    expect(result.current.error).toBe('error.applyRolledBack')
+  })
+
+  it('sets error.applyNotRolledBack when applyVilFile resolves rolledBack: false', async () => {
+    mockLoadLayout.mockResolvedValueOnce({ success: true, data: VALID_VIL_JSON })
+    const opts = createHookOptions({
+      applyVilFile: vi.fn(async (): Promise<ApplyVilResult> => ({ ok: false, rolledBack: false })),
+    })
+    const { result } = renderHook(() => useFileIO(opts))
+
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.loadLayout()
+    })
+
+    expect(ok).toBe(false)
+    expect(result.current.error).toBe('error.applyNotRolledBack')
   })
 
   it('sets error when IPC returns success but data is undefined', async () => {
