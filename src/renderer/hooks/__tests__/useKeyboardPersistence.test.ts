@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // @vitest-environment jsdom
 //
-// Focuses on `applyVilFile`'s `keymapRestoreSeq` bump — the single signal
-// App.tsx's restore-cleanup effect watches for (Plan-qwerty-select-no-rewrite
-// §snapshot/.vil 復元時のクリーンアップ, D1). Snapshot/layout-store restore
-// and `.vil` import both converge on this function, so proving the bump
-// fires here covers both call sites without needing App.tsx's own harness.
+// Covers two things `applyVilFile` does on every restore:
+//  - the `keymapRestoreSeq` bump — the single signal App.tsx's
+//    restore-cleanup effect watches for (Plan-qwerty-select-no-rewrite
+//    §snapshot/.vil 復元時のクリーンアップ, D1). Snapshot/layout-store
+//    restore and `.vil` import both converge on this function, so proving
+//    the bump fires here covers both call sites without needing App.tsx's
+//    own harness.
+//  - QMK settings restore only applying qsids the connected firmware
+//    supports, and keeping local state in sync with what was actually
+//    written to the device.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
@@ -92,5 +97,54 @@ describe('useKeyboardPersistence — applyVilFile keymapRestoreSeq bump', () => 
     expect(result.current.state.keymapRestoreSeq).toBe(1)
     // Everything else is wiped back to the empty-state defaults.
     expect(result.current.state.keymap.size).toBe(0)
+  })
+})
+
+describe('applyVilFile qmk settings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('skips qmk settings qsids the connected firmware does not report as supported (HID path), and only stores the applied qsid in local state', async () => {
+    const originalVialAPI = window.vialAPI
+    const qmkSettingsSet = vi.fn(async () => {})
+    window.vialAPI = {
+      setKeycode: vi.fn(async () => {}),
+      setEncoder: vi.fn(async () => {}),
+      setMacroBuffer: vi.fn(async () => {}),
+      setLayoutOptions: vi.fn(async () => {}),
+      setTapDance: vi.fn(async () => {}),
+      setCombo: vi.fn(async () => {}),
+      setKeyOverride: vi.fn(async () => {}),
+      setAltRepeatKey: vi.fn(async () => {}),
+      qmkSettingsSet,
+    } as unknown as typeof window.vialAPI
+
+    try {
+      // VALID_VIL carries qsids '1' and '2'; only qsid 1 is reported as
+      // supported by the (mocked) connected keyboard.
+      const { result } = renderHook(() =>
+        useHarness({
+          isDummy: false,
+          supportedQsids: new Set([1]),
+          unlockStatus: { unlocked: true, inProgress: false, keys: [] },
+        }),
+      )
+
+      await act(async () => {
+        await result.current.applyVilFile(VALID_VIL)
+      })
+
+      expect(qmkSettingsSet).toHaveBeenCalledTimes(1)
+      expect(qmkSettingsSet).toHaveBeenCalledWith(1, [0])
+
+      // qsid 2 was never written to the device, so it must not be claimed
+      // by local state either — otherwise serialize()/resolveTappingTerm
+      // would report a value the device never accepted.
+      expect(result.current.state.qmkSettingsValues).toEqual({ '1': [0] })
+      expect(result.current.state.qmkSettingsValues).not.toHaveProperty('2')
+    } finally {
+      window.vialAPI = originalVialAPI
+    }
   })
 })
