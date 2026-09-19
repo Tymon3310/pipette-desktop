@@ -9,6 +9,7 @@ import type {
 } from '../../shared/types/protocol'
 import type { MacroAction } from '../../preload/macro'
 import type { BootGuardRef, BulkKeyEntry, SetState, KeyboardState } from './keyboard-types'
+import { BulkKeyWriteError } from './keyboard-types'
 import { isResetKeycode } from '../../shared/keycodes/keycodes'
 
 export function useKeyboardSetters(
@@ -19,15 +20,28 @@ export function useKeyboardSetters(
   bootGuardRef: React.MutableRefObject<BootGuardRef>,
   waitForUnlock: () => Promise<void>,
 ) {
-  const guardedCall = useCallback(
-    async (keycode: number, fn: () => Promise<void>) => {
-      if (isResetKeycode(keycode) && stateRef.current.unlockStatus.unlocked === false) {
+  // Shared by every write path that can include a reset keycode: if the
+  // device is locked and at least one of `keycodes` is a reset keycode,
+  // trigger the boot-guard prompt and wait for the unlock before writing
+  // anything. A single-key call passes its one keycode; setKeysBulk passes
+  // the whole entry list so the gate runs once for the batch instead of
+  // per entry.
+  const ensureUnlockedFor = useCallback(
+    async (keycodes: number[]) => {
+      if (stateRef.current.unlockStatus.unlocked === false && keycodes.some(isResetKeycode)) {
         bootGuardRef.current.onUnlock?.()
         await waitForUnlock()
       }
-      await fn()
     },
     [stateRef, bootGuardRef, waitForUnlock],
+  )
+
+  const guardedCall = useCallback(
+    async (keycode: number, fn: () => Promise<void>) => {
+      await ensureUnlockedFor([keycode])
+      await fn()
+    },
+    [ensureUnlockedFor],
   )
 
   const setKey = useCallback(
@@ -45,24 +59,48 @@ export function useKeyboardSetters(
     [setState, stateRef, bumpActivity, guardedCall],
   )
 
+  /** Commits `entries` (or a landed prefix of them) into `state.keymap`. */
+  const applyBulkKeymap = useCallback((entries: BulkKeyEntry[]) => {
+    setState((s) => {
+      const newKeymap = new Map(s.keymap)
+      for (const { layer, row, col, keycode } of entries) {
+        newKeymap.set(`${layer},${row},${col}`, keycode)
+      }
+      return { ...s, keymap: newKeymap }
+    })
+    bumpActivity()
+  }, [setState, bumpActivity])
+
+  // Invariant callers rely on: every failure of the non-dummy path below
+  // (preflight unlock or a write mid-loop) rejects with a
+  // `BulkKeyWriteError`, never a bare error.
   const setKeysBulk = useCallback(
     async (entries: BulkKeyEntry[]) => {
       if (entries.length === 0) return
       if (!stateRef.current.isDummy) {
-        for (const { layer, row, col, keycode } of entries) {
-          await guardedCall(keycode, () => window.vialAPI.setKeycode(layer, row, col, keycode))
+        // Preflight: a reset keycode on a locked device waits for the
+        // unlock BEFORE anything is written, so a cancelled unlock fails
+        // with nothing applied. Past this point the loop writes directly —
+        // no entry needs an unlock wait of its own.
+        try {
+          await ensureUnlockedFor(entries.map(({ keycode }) => keycode))
+        } catch (err) {
+          throw new BulkKeyWriteError(0, err)
+        }
+        let appliedCount = 0
+        try {
+          for (const { layer, row, col, keycode } of entries) {
+            await window.vialAPI.setKeycode(layer, row, col, keycode)
+            appliedCount++
+          }
+        } catch (err) {
+          if (appliedCount > 0) applyBulkKeymap(entries.slice(0, appliedCount))
+          throw new BulkKeyWriteError(appliedCount, err)
         }
       }
-      setState((s) => {
-        const newKeymap = new Map(s.keymap)
-        for (const { layer, row, col, keycode } of entries) {
-          newKeymap.set(`${layer},${row},${col}`, keycode)
-        }
-        return { ...s, keymap: newKeymap }
-      })
-      bumpActivity()
+      applyBulkKeymap(entries)
     },
-    [setState, stateRef, bumpActivity, guardedCall],
+    [stateRef, ensureUnlockedFor, applyBulkKeymap],
   )
 
   const setEncoder = useCallback(
