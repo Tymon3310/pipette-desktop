@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import type {
   TapDanceEntry,
   ComboEntry,
@@ -11,6 +11,7 @@ import type { MacroAction } from '../../preload/macro'
 import type { BootGuardRef, BulkKeyEntry, SetState, KeyboardState } from './keyboard-types'
 import { BulkKeyWriteError } from './keyboard-types'
 import { isResetKeycode } from '../../shared/keycodes/keycodes'
+import { padMacroBuffer } from './pad-macro-buffer'
 
 export function useKeyboardSetters(
   setState: SetState,
@@ -131,13 +132,74 @@ export function useKeyboardSetters(
     bumpActivity()
   }, [setState, stateRef, bumpActivity])
 
+  // Serializes macro writes: a call in flight — its save and, if that fails,
+  // the write-back it triggers — always finishes before the next call's own
+  // HID write starts. Two overlapping saves (e.g. the macro editor's Save
+  // button pressed twice) would otherwise interleave their 28-byte chunk
+  // writes, or an earlier call's write-back would land on the device after a
+  // later call's save already succeeded.
+  const macroWriteChainRef = useRef<Promise<void>>(Promise.resolve())
+  // How many `setMacroBuffer` calls are currently queued on or running
+  // through the chain above. A call queued while this is already nonzero
+  // resumes its chain turn within a microtask or two of the call ahead of
+  // it settling — well before `setState`'s effect reaches `stateRef`, which
+  // only happens on this component's next render (`stateRef.current = state`
+  // in useKeyboard.ts). `deviceMacroBufferRef` tracks what the device holds
+  // independently of any render for exactly that case.
+  const macroWritesInFlightRef = useRef(0)
+  const deviceMacroBufferRef = useRef<number[]>([])
+
+  /** Writes `buffer` over HID and, if that fails, best-effort restores what
+   *  the device held before, padded/truncated to its real buffer length (see
+   *  padMacroBuffer). The caller always sees the original error — a failed
+   *  write-back only adds a log line, since the caller can't act differently
+   *  on it and the device may simply be disconnected by then.
+   *
+   *  `chainWasIdle` is whether the chain was empty when this call queued.
+   *  If so, no other call's write could have moved the device past
+   *  `stateRef.current.macroBuffer` yet, so that's the buffer to restore.
+   *  Otherwise a call ahead of this one in the chain already ran (and this
+   *  one's own render may not have happened yet), so `deviceMacroBufferRef`
+   *  — updated synchronously below, not on a render — is what actually
+   *  reflects the device. */
+  const writeMacroBufferToDevice = useCallback(async (buffer: number[], chainWasIdle: boolean) => {
+    const previousBuffer = chainWasIdle ? stateRef.current.macroBuffer : deviceMacroBufferRef.current
+    const previousSize = stateRef.current.macroBufferSize
+
+    try {
+      await window.vialAPI.setMacroBuffer(buffer)
+      deviceMacroBufferRef.current = buffer
+    } catch (err) {
+      if (previousSize > 0) {
+        const restored = padMacroBuffer(previousBuffer, previousSize)
+        try {
+          await window.vialAPI.setMacroBuffer(restored)
+          deviceMacroBufferRef.current = restored
+        } catch (writeBackErr) {
+          console.error('[KB] macro buffer write-back failed:', writeBackErr)
+        }
+      }
+      throw err
+    }
+  }, [stateRef])
+
   const setMacroBuffer = useCallback(async (buffer: number[], parsedMacros?: MacroAction[][]) => {
     if (!stateRef.current.isDummy) {
-      await window.vialAPI.setMacroBuffer(buffer)
+      const chainWasIdle = macroWritesInFlightRef.current === 0
+      macroWritesInFlightRef.current++
+      const write = macroWriteChainRef.current.then(() => writeMacroBufferToDevice(buffer, chainWasIdle))
+      // The chain itself never rejects, so a failed write doesn't reject
+      // every call queued behind it.
+      macroWriteChainRef.current = write.catch(() => {})
+      try {
+        await write
+      } finally {
+        macroWritesInFlightRef.current--
+      }
     }
     setState((s) => ({ ...s, macroBuffer: buffer, parsedMacros: parsedMacros ?? null }))
     bumpActivity()
-  }, [setState, stateRef, bumpActivity])
+  }, [setState, stateRef, bumpActivity, writeMacroBufferToDevice])
 
   const setTapDanceEntry = useCallback(
     async (index: number, entry: TapDanceEntry) => {
