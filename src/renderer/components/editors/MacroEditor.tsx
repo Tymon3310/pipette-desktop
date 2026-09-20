@@ -15,50 +15,15 @@ import {
   jsonToMacroActions,
   isValidMacroText,
 } from '../../../preload/macro'
-import type { TapDanceEntry } from '../../../shared/types/protocol'
 import { useUnlockGate } from '../../hooks/useUnlockGate'
-import { BTN_PRIMARY } from '../../constants/ui-tokens'
 import { useConfirmAction } from '../../hooks/useConfirmAction'
 import { useEscapeClose } from '../../hooks/useEscapeClose'
 import { useFavoriteStore } from '../../hooks/useFavoriteStore'
 import { useMacroKeycodeSelection } from '../../hooks/useMacroKeycodeSelection'
-import { ConfirmButton } from './ConfirmButton'
-import { FavoriteStoreContent } from './FavoriteStoreContent'
-import type { FavHubEntryResult } from './FavoriteHubActions'
-import type { BasicViewType, SplitKeyMode } from '../../../shared/types/app-config'
 import { parseMacroBuffer, isKeycodeAction, normalizeMacros, normalizeMacroActions } from './macro-editor-utils'
-
-interface Props {
-  macroCount: number
-  macroBufferSize: number
-  macroBuffer: number[]
-  vialProtocol: number
-  onSaveMacros: (buffer: number[], parsedMacros?: MacroAction[][]) => Promise<void>
-  parsedMacros?: MacroAction[][] | null
-  onClose?: () => void
-  initialMacro?: number
-  unlocked?: boolean
-  onUnlock?: () => void
-  isDummy?: boolean
-  onEditingChange?: (editing: boolean) => void
-  onRecordingChange?: (recording: boolean) => void
-  tapDanceEntries?: TapDanceEntry[]
-  deserializedMacros?: MacroAction[][]
-  // Hub integration (optional)
-  hubOrigin?: string
-  hubNeedsDisplayName?: boolean
-  hubUploading?: string | null
-  hubUploadResult?: FavHubEntryResult | null
-  onUploadToHub?: (entryId: string) => void
-  onUpdateOnHub?: (entryId: string) => void
-  onRemoveFromHub?: (entryId: string) => void
-  onRenameOnHub?: (entryId: string, hubPostId: string, newLabel: string) => void
-  quickSelect?: boolean
-  autoAdvance?: boolean
-  splitKeyMode?: SplitKeyMode
-  basicViewType?: BasicViewType
-  layers?: number
-}
+import type { Props } from './macro-editor-types'
+import { MacroEditorFooter } from './MacroEditorFooter'
+import { MacroFavoritesPanel } from './MacroFavoritesPanel'
 
 export function MacroEditor({
   macroCount,
@@ -423,52 +388,19 @@ export function MacroEditor({
           />
         </div>
 
-        {/* Fixed footer: Clear / Revert (list mode only) / Save (always visible) */}
-          <div data-macro-footer="true" className="shrink-0 px-6 py-3">
-            <div className="flex justify-end gap-2">
-              {!isEditing && (
-                <>
-                  <ConfirmButton
-                    testId="macro-clear"
-                    confirming={clearAction.confirming}
-                    onClick={() => { revertAction.reset(); clearAction.trigger() }}
-                    labelKey="common.clear"
-                    confirmLabelKey="common.confirmClear"
-                    disabled={isRecording}
-                  />
-                  <ConfirmButton
-                    testId="macro-revert"
-                    confirming={revertAction.confirming}
-                    onClick={() => { clearAction.reset(); revertAction.trigger() }}
-                    labelKey="common.revert"
-                    confirmLabelKey="common.confirmRevert"
-                    disabled={isRecording}
-                  />
-                </>
-              )}
-              {isEditing && isExistingEdit && (
-                <ConfirmButton
-                  testId="macro-edit-revert"
-                  confirming={editRevertAction.confirming}
-                  onClick={editRevertAction.trigger}
-                  labelKey="common.revert"
-                  confirmLabelKey="common.confirmRevert"
-                  disabled={isRecording || !hasPendingEdit}
-                />
-              )}
-              <button
-                type="button"
-                data-testid="macro-save"
-                className={BTN_PRIMARY}
-                onClick={isEditing ? commitAndDeselect : handleSave}
-                disabled={isEditing
-                  ? (isRecording || !hasPendingEdit)
-                  : (!dirty || hasInvalidText || isRecording)}
-              >
-                {t('common.save')}
-              </button>
-            </div>
-          </div>
+        <MacroEditorFooter
+          isEditing={isEditing}
+          isExistingEdit={isExistingEdit}
+          isRecording={isRecording}
+          hasPendingEdit={hasPendingEdit}
+          dirty={dirty}
+          hasInvalidText={hasInvalidText}
+          clearAction={clearAction}
+          revertAction={revertAction}
+          editRevertAction={editRevertAction}
+          commitAndDeselect={commitAndDeselect}
+          handleSave={handleSave}
+        />
 
         {popoverState !== null && (() => {
           const action = currentActions[popoverState.actionIndex]
@@ -498,38 +430,21 @@ export function MacroEditor({
       </div>
 
       {!isDummy && (
-        <div
-          className={`w-macro-editor shrink-0 flex flex-col ${isEditing ? 'hidden' : isRecording ? 'invisible' : ''}`}
-          data-testid="macro-favorites-panel"
-        >
-          <FavoriteStoreContent
-            entries={favStore.entries}
-            loading={favStore.loading}
-            saving={favStore.saving}
-            canSave={currentActions.length > 0 && !hasInvalidText}
-            onSave={favStore.saveFavorite}
-            onLoad={favStore.loadFavorite}
-            onRename={favStore.renameEntry}
-            onDelete={favStore.deleteEntry}
-            onExport={favStore.exportFavorites}
-            onExportEntry={favStore.exportEntry}
-            onImport={favStore.importFavorites}
-            onExportCurrent={favStore.exportCurrent}
-            onImportCurrent={favStore.importCurrent}
-            exporting={favStore.exporting}
-            importing={favStore.importing}
-            importResult={favStore.importResult}
-            hubOrigin={hubOrigin}
-            hubNeedsDisplayName={hubNeedsDisplayName}
-            hubUploading={hubUploading}
-            hubUploadResult={hubUploadResult}
-            onUploadToHub={onUploadToHub}
-            onUpdateOnHub={onUpdateOnHub}
-            onRemoveFromHub={onRemoveFromHub}
-            onRenameOnHub={onRenameOnHub}
-            onRefreshEntries={favStore.refreshEntries}
-          />
-        </div>
+        <MacroFavoritesPanel
+          isEditing={isEditing}
+          isRecording={isRecording}
+          favStore={favStore}
+          currentActions={currentActions}
+          hasInvalidText={hasInvalidText}
+          hubOrigin={hubOrigin}
+          hubNeedsDisplayName={hubNeedsDisplayName}
+          hubUploading={hubUploading}
+          hubUploadResult={hubUploadResult}
+          onUploadToHub={onUploadToHub}
+          onUpdateOnHub={onUpdateOnHub}
+          onRemoveFromHub={onRemoveFromHub}
+          onRenameOnHub={onRenameOnHub}
+        />
       )}
     </>
   )
