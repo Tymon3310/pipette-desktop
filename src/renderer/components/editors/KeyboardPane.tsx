@@ -72,17 +72,25 @@ export interface KeyboardPaneProps {
   /** Extra content rendered next to `layerLabel` in the footer row — the
    *  simulation tab's Apply button (Plan-qwerty-select-no-rewrite v7). */
   footerExtra?: React.ReactNode
-  /** Blocks every edit path into this pane: no key/encoder click or
-   *  double-click handlers reach `KeyboardWidget` regardless of what's
-   *  passed in `onKeyClick`/etc below (see `KeyboardWidget`'s own
-   *  `readOnly`). Used by the simulation tab, which must stay completely
-   *  view-only — clicks, the popover, and multi-select all route through
-   *  those same handlers, so gating them here is the single choke point. */
+  /** Blocks every edit path into this pane: no key/encoder click,
+   *  double-click, or middle-click undo handler reaches `KeyboardWidget`
+   *  regardless of what's passed in `onKeyClick`/`onKeyAuxClick`/etc below
+   *  (see `KeyboardWidget`'s own `readOnly`). Used by the simulation tab,
+   *  which must stay completely view-only — clicks, the popover,
+   *  multi-select, and middle-click undo all route through those same
+   *  handlers, so gating them here is the single choke point. */
   readOnly?: boolean
   onKeyClick?: (key: KleKey, maskClicked: boolean, event?: { ctrlKey: boolean; shiftKey: boolean }) => void
   onKeyDoubleClick?: (key: KleKey, rect: DOMRect, maskClicked: boolean) => void
   onEncoderClick?: (key: KleKey, dir: number, maskClicked: boolean) => void
   onEncoderDoubleClick?: (key: KleKey, dir: number, rect: DOMRect, maskClicked: boolean) => void
+  /** Middle-click undo — see `KeyboardWidget`'s `onKeyAuxClick`. Reaches
+   *  `KeyboardWidget` only when `isActive`, the same gate `onKeyClick` etc.
+   *  already go through below. */
+  onKeyAuxClick?: (pos: { row: number; col: number }) => void
+  /** Encoder analogue of `onKeyAuxClick` — see `KeyboardWidget`'s
+   *  `onEncoderAuxClick`. */
+  onEncoderAuxClick?: (pos: { idx: number; dir: number }) => void
   onKeyHover?: (key: KleKey, keycode: string, rect: DOMRect) => void
   onKeyHoverEnd?: () => void
   onDeselect?: () => void
@@ -124,6 +132,8 @@ export function KeyboardPane({
   onKeyDoubleClick,
   onEncoderClick,
   onEncoderDoubleClick,
+  onKeyAuxClick,
+  onEncoderAuxClick,
   onKeyHover,
   onKeyHoverEnd,
   onDeselect,
@@ -169,6 +179,8 @@ export function KeyboardPane({
           onKeyDoubleClick={isActive ? onKeyDoubleClick : undefined}
           onEncoderClick={isActive ? onEncoderClick : undefined}
           onEncoderDoubleClick={isActive ? onEncoderDoubleClick : undefined}
+          onKeyAuxClick={isActive ? onKeyAuxClick : undefined}
+          onEncoderAuxClick={isActive ? onEncoderAuxClick : undefined}
           onKeyHover={onKeyHover}
           onKeyHoverEnd={onKeyHoverEnd}
         />
