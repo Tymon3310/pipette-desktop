@@ -39,42 +39,50 @@ interface FinishedSectionProps {
     at the bottom of the completion screen so the timeline/stats
     content reads first.
 
-    FLEX-HEIGHT CHAIN (codex safety review of an earlier, fixed-vh
-    `rowsMaxHeightClass` cap — replaced because a fixed vh figure
-    can't adapt to how much OTHER chrome a given run actually has:
-    Lines=1 leaves less sidebar height claimed, an IME-composition
-    warning or the Missed-chars line adds MORE panel-internal
-    content, and the editor's own content pane doesn't reserve a
-    fixed fraction of the window either — any single vh number is
-    right for some combination of these and wrong for others). This
-    wrapper (`isFinished`-only) is the top of a chain that makes the
-    rows area the ONLY thing that scrolls, by making every link
-    between it and the nearest real bounded ancestor stretch instead
-    of taking its natural content height:
-      KeymapEditor.tsx's own `overflow-auto` content-pane row (the
-      true bound — pre-existing, unrelated to typing-test) → its
-      `keymap-surface` child (pre-existing `min-h-0 flex-1`) →
-      TypingTestPane.tsx's outer `items-stretch` row (pre-existing
-      `min-h-0 flex-1`) → TypingTestPane.tsx's `items-center` column
-      (now ALSO `min-h-0`, alongside its pre-existing `flex-1`) →
-      TypingTestView's own root (`min-h-0 flex-1`, but ONLY once
-      `isFinished` — see the className comment above its root div in
-      TypingTestView.tsx) → THIS
-      wrapper (`min-h-0 flex-1 flex-col`) → the timeline panel
-      (`min-h-0 flex-1`) → KeystrokeTimelinePanel's OWN root (already
-      `flex min-h-0 flex-1 flex-col gap-3` — unchanged) → its stat
-      grid / Missed-chars / legend / zoom (unchanged, naturally
-      sized — `shrink-0` by simply never being given `flex-1`) → the
-      rows scrollport (already `flex-1 min-h-0 overflow-auto` —
-      unchanged, this is the only element that actually scrolls).
-    The controls row below stays naturally sized (no flex-1) — it's
-    the last child of a `flex-col` wrapper, so it just takes
-    whatever height its own content needs and never grows, i.e. it
-    is `shrink-0` in effect without needing the class name (a flex
-    item's default `flex-shrink: 1` only matters when its siblings'
-    combined natural height already exceeds the wrapper — since the
-    rows area is the one absorbing the slack via its own `flex-1`,
-    the controls row is never asked to shrink below its content). */
+    FLEX-HEIGHT CHAIN: how much OTHER chrome sits around the timeline
+    rows varies per run on the completion screen — whether the panel's
+    correctness-markers note is showing above the stat grid
+    (`activeCharCorrelationUnavailable`), whether its Missed box is
+    showing below the rows (`hasMistakes`), and the editor's own
+    content pane doesn't reserve a fixed fraction of the window for
+    typing-test content either — so a fixed-vh height cap on the rows
+    can't fit every combination. This wrapper (`isFinished`-only) is
+    instead one link in a chain that stretches every ancestor between
+    the rows scrollport and the nearest real bounded ancestor, so the
+    rows scrollport ends up sized to the actual remaining space and
+    scrolls internally:
+      KeymapEditor.tsx's content row in typing-test mode, non-view-only
+      (`flex min-h-0 flex-1 items-stretch gap-2 overflow-auto` — the
+      outermost link named here, sized by `editor-content`
+      (AppEditorSurface.tsx) up to App.tsx's `h-screen` root) → its
+      `keymap-surface` child (`flex min-h-0 min-w-0 flex-1 flex-col
+      gap-3`) → TypingTestPane.tsx's outer `items-stretch` row (`flex
+      min-h-0 w-full flex-1 items-stretch gap-2`) → TypingTestPane.tsx's
+      `items-center` column (`flex min-h-0 min-w-0 flex-1 flex-col
+      items-center`) → TypingTestView's own root (`min-h-0 flex-1`,
+      appended to its other classes only once `isFinished` — see the
+      comment above its root div in TypingTestView.tsx) → THIS wrapper
+      (`flex min-h-0 w-full flex-1 flex-col items-center gap-4`) → the
+      div wrapping KeystrokeTimelinePanel (`flex min-h-0 w-full flex-1
+      flex-col`) → KeystrokeTimelinePanel's own root (`flex min-h-0
+      flex-1 flex-col gap-3`) → its bordered box (`flex min-h-0 flex-1
+      flex-col gap-3 rounded-md border border-edge bg-surface p-3`,
+      `typing-test-timeline-box`) → the rows scrollport
+      (`keystroke-timeline-scrollport`, `min-h-0 flex-1 overflow-auto`).
+      The comment above that bordered box — including its HEIGHT
+      PRIORITY section — covers how it and the Missed box below it
+      share the remaining height; the scrollport's own comment
+      explains why it is the one that scrolls internally. The Missed
+      box's own wrapper (`min-h-0`, `typing-test-missed-box`) keeps its
+      content size — the timeline box above it is the one carrying
+      `flex-1` and taking the remaining space — but being `min-h-0`
+      it can still shrink when space runs short; only its rows use a
+      separately capped scrollport (`missed-table-scrollport`,
+      `overflow-y-auto` with a `maxHeightClass`) in `MissedTable`
+      (mistake-summary.tsx).
+    The controls row below has no `flex-1` — it takes its own content
+    height as the last child of this flex-col wrapper, while the
+    timeline area's `flex-1` above it takes the remaining space. */
 export function TypingTestFinishedSection({
   state,
   wpm,
