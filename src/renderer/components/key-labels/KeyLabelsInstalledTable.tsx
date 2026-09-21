@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Installed/Hub tab row + table components for KeyLabelsModal, split
-// out per file-splitting.md (KeyLabelsModal.tsx exceeded the 750-line
-// "split immediately" threshold once Phase 2/3 added the sort button,
-// Author/Updated semantics, and cascade delete). Converged onto the
-// shared PackHubActions/PackDeleteActions in the Phase-3 follow-up
-// review, once the asymmetries that originally kept Key Labels'
-// HubLineActions/InstalledActions separate had all dissolved (see
-// `canWrite`/`hideOthersWhileConfirmingRemove` in PackHubActions.tsx
-// for the two that remained real and got promoted to opt-in props).
+// Installed/Hub tab row + table components for KeyLabelsModal.tsx:
+// `InstalledTable`/`InstalledRowView` for the Installed tab (rename,
+// Hub upload/update/remove, delete, drag reorder) and `HubTable` for
+// the Find on Hub tab (open/download). Only `InstalledRowView` builds on
+// the shared PackHubActions/PackDeleteActions — `canWrite` and
+// `hideOthersWhileConfirmingRemove` (PackHubActions.tsx) are the two
+// opt-in props Key Labels passes beyond their defaults; `HubTable` renders
+// its own open/download controls directly.
 
 import { useTranslation } from 'react-i18next'
 import { GripVertical } from 'lucide-react'
@@ -36,10 +35,10 @@ export interface InstalledRow {
   isQwerty: boolean
   /** True when this pack can bulk-rewrite the keymap — the same
    *  `keymapApplicable && buildKeymapRewriteTable(map).ok` predicate
-   *  `useDevicePrefs.remapKind` uses for the active pack, re-derived
-   *  per row here (see `KeyLabelsModal.isKeymapWritable`). Drives the
-   *  "Keymap Write" / "View Only" type label at the left end of the
-   *  second line. */
+   *  `useDevicePrefs.remapKind` uses for the active pack, re-derived per
+   *  row by `buildInstalledRows` (key-labels-modal-rows.ts) via
+   *  `useKeyLabelLookup`'s `isKeymapWritable`. Drives the "Keymap Write"
+   *  / "View Only" type label at the left end of the second line. */
   keymapWritable: boolean
   meta?: KeyLabelMeta
 }

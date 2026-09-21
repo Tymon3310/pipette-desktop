@@ -37,7 +37,9 @@ interface Options {
   }>
   activityCount: number
   pipetteFileSavedActivityRef: React.MutableRefObject<number>
-  /** Vial protocol of the live keyboard. Forwarded to favorite Hub uploads (v3 export). */
+  /** Vial protocol of the live keyboard. Sanitized into `favVialProtocol`
+   *  below and forwarded to useHubFavoriteHandlers's favorite Hub upload
+   *  handlers (use-hub-favorite-handlers.ts). */
   vialProtocol: number
 }
 
@@ -68,8 +70,9 @@ export function useHubState(options: Options) {
   // keyboard connected) passes the emptyState sentinel -1 here, which the
   // Hub server rejects outright — substitute the shared fallback protocol
   // in that case. Any other value (a real connected protocol, e.g. 5 or 6)
-  // passes through unchanged. Reusing the same predicate `hub-ipc.ts`
-  // validates with keeps this sanitizer from drifting out of lockstep.
+  // passes through unchanged. Reusing the same predicate
+  // `hub-ipc-favorite.ts` validates with keeps this sanitizer from
+  // drifting out of lockstep.
   const favVialProtocol = isValidHubVialProtocol(vialProtocol) ? vialProtocol : FALLBACK_VIAL_PROTOCOL
 
   const [hubMyPosts, setHubMyPosts] = useState<HubMyPost[]>([])
@@ -477,7 +480,8 @@ export function useHubState(options: Options) {
     return ok
   }, [layoutStoreEntries, getHubPostId, layoutStoreRenameEntry, hubReady, runHubOperation, refreshHubPosts, t])
 
-  // --- Favorite Hub handlers ---
+  // --- Favorite Hub handlers (delegated to useHubFavoriteHandlers,
+  //     use-hub-favorite-handlers.ts) ---
 
   const { handleFavUploadToHub, handleFavUpdateOnHub, handleFavRemoveFromHub, handleFavRenameOnHub } = useHubFavoriteHandlers({
     requestUploadOptions,

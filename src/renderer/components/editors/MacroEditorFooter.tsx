@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+//
+// Fixed footer for the macro editor (Clear / Revert / Save), rendered by
+// MacroEditor.tsx below the action list and the keycode picker. It holds no
+// state of its own — the confirm actions, the save/commit handlers, and the
+// flags its disabled expressions read (isEditing, isRecording, hasPendingEdit,
+// dirty, hasInvalidText) all arrive from MacroEditor.tsx as props.
 
 import { useTranslation } from 'react-i18next'
 import { BTN_PRIMARY } from '../../constants/ui-tokens'
@@ -36,6 +42,8 @@ export function MacroEditorFooter({
   const { t } = useTranslation()
 
   return (
+    // `data-macro-footer` lets useMacroKeycodeSelection.ts's outside-click
+    // guard recognize a click inside this footer as not "outside" the picker.
     <div data-macro-footer="true" className="shrink-0 px-6 py-3">
       <div className="flex justify-end gap-2">
         {!isEditing && (
@@ -73,6 +81,9 @@ export function MacroEditorFooter({
           data-testid="macro-save"
           className={BTN_PRIMARY}
           onClick={isEditing ? commitAndDeselect : handleSave}
+          // The isEditing branch here is mirrored by MacroEditor.tsx's
+          // pickerEnterCommit, so Enter in the picker only commits the
+          // staged edit when this button would also be enabled.
           disabled={isEditing
             ? (isRecording || !hasPendingEdit)
             : (!dirty || hasInvalidText || isRecording)}

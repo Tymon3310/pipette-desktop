@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Types, small helpers, and buffer caps backing run-log-recorder.ts's
+// in-memory run-log buffer. "The module doc comment" in the doc comments
+// below means run-log-recorder.ts's own doc comment, which carries the
+// actual PRIVACY / CHAR CORRELATION / ASYMMETRIC STALENESS notes these
+// types point back to.
 
 import type { RunKeystroke } from '../../shared/types/typing-run-log'
 
@@ -86,9 +91,9 @@ export interface RunLogFinishMeta {
    *  - 1`), since a line break can never legitimately land on the run's
    *  own final word. Omitted (not `undefined`-then-dropped — it's
    *  already optional) for a run with no known line structure, same
-   *  convention as this module's other optional fields; an explicit `[]`
-   *  is preserved as-is (see that field's own doc comment for why it
-   *  must not collapse to omitted). */
+   *  convention as `RunLogFinishMeta`'s other optional fields; an
+   *  explicit `[]` is preserved as-is (see that field's own doc comment
+   *  for why it must not collapse to omitted). */
   lineBreaks?: number[]
 }
 
@@ -222,9 +227,10 @@ export function pressKey(row: number, col: number, keycode: number): string {
   return `${row},${col},${keycode}`
 }
 
-/** Rough per-keystroke byte estimate for the {@link MAX_RUN_LOG_BYTES}
- *  running total — doesn't need to be exact, only a cheap, monotonic
- *  proxy for the final serialized size. A flat constant (the fields
+/** Rough per-keystroke byte estimate for the running total against
+ *  `MAX_RUN_LOG_BYTES` (defined in `src/shared/types/typing-run-log.ts`)
+ *  — doesn't need to be exact, only a cheap, monotonic proxy for the
+ *  final serialized size. A flat constant (the fields
  *  other than `expectedChar`/`typedChar`/`mistakeKey` vary little in
  *  width) plus the fields whose length actually varies, rather than
  *  paying for a real `JSON.stringify` on every keystroke just to measure

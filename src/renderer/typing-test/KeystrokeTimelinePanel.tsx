@@ -147,7 +147,8 @@ export function KeystrokeTimelinePanel({ log, result }: Props) {
 
   // Substitution/Omission/Insertion now render as three more stat cards in
   // `summaryItems` (see keystroke-timeline-stats.ts), not as their own
-  // line below — see the module's own doc comment for the fallback rule.
+  // line below — see keystroke-timeline-stats.ts's own doc comment for
+  // the fallback rule.
   const summaryItems = useMemo(() => buildTimelineStatItems(result, summary, log), [result, summary, log])
   // Per-key detail for the Missed table below — derived from this run's
   // own raw log (see buildMissedDetails's own doc comment for why this is
@@ -283,8 +284,9 @@ export function KeystrokeTimelinePanel({ log, result }: Props) {
             is the at-a-glance key. Every item shows only its head
             word ("Overlapped" / "Unjudged" / "Pause") — the former
             parenthetical explanation moved into a per-item hover
-            tooltip (`LegendSwatch`'s own `tooltipKey`), rendered PLAIN
-            with no visual affordance on the label itself (matching every
+            tooltip (`LegendSwatch`'s own `tooltipKey`, defined in
+            keystroke-timeline-parts.tsx), rendered PLAIN with no
+            visual affordance on the label itself (matching every
             other tooltip trigger in this codebase — ErrorMixSection's
             row labels, CoverageBadge, the Missed table's own bar rows —
             none of which carry an underline or a special cursor; the

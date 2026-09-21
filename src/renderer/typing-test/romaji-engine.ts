@@ -29,17 +29,9 @@
 // the forced double-tap form for that context (see the retroactive-commit
 // branch of `tryConsume`).
 //
-// The tables below mirror Google mozc's own romaji input table
-// (mozc/src/data/preedit/romanji-hiragana.tsv) — IME keystroke input, not
-// romanization orthography — so every accepted spelling here is something
-// a real IME actually accepts, not merely a valid way to transliterate the
-// finished word: mozc's table (not orthography guides) is the single
-// source of truth for what counts as an accepted spelling, so a
-// spelling that's correct romanization but not IME-typable (e.g. ぢ's
-// orthographic "ji", which mozc's IME resolves to じ instead) is
-// deliberately excluded even though it looks valid on paper. See
-// `__tests__/romaji-engine-mozc.test.ts` for the compliance sweep
-// against that table.
+// The spelling tables KANA_TABLE and PUNCTUATION_TABLE live in
+// romaji-tables.ts; the source-of-truth rule for what KANA_TABLE may
+// contain is in that file's header.
 
 import { toHiragana } from './kana-script'
 import { isRomajiPunctuation } from '../../shared/kana-purity'

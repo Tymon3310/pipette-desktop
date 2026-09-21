@@ -1,4 +1,23 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+//
+// KANA_TABLE, PUNCTUATION_TABLE, and the spelling-style tags they carry.
+// `romaji-engine.ts` imports these tables to match typed keystrokes against
+// kana; this file holds only the data and the styles, not the matching
+// logic.
+//
+// KANA_TABLE mirrors Google mozc's own romaji input table
+// (mozc/src/data/preedit/romanji-hiragana.tsv) — IME keystroke input, not
+// romanization orthography — so every accepted spelling in KANA_TABLE is
+// something a real IME actually accepts, not merely a valid way to
+// transliterate the finished word: mozc's table (not orthography guides)
+// is the single source of truth for what counts as an accepted spelling,
+// so a spelling that's correct romanization but not IME-typable (e.g. ぢ's
+// orthographic "ji", which mozc's IME resolves to じ instead) is
+// deliberately excluded even though it looks valid on paper. See
+// `__tests__/romaji-engine-mozc.test.ts` for the compliance sweep against
+// that table — kana spellings only; PUNCTUATION_TABLE's ASCII
+// punctuation spellings sit outside that sweep (see PUNCTUATION_TABLE's
+// own comment below).
 
 import { ROMAJI_PUNCTUATION } from '../../shared/kana-purity'
 
@@ -214,10 +233,10 @@ export const KANA_TABLE: Record<string, readonly string[]> = {
   // -- extended い/え-row digraphs, one consonant-pair per row (きぃ/きぇ,
   // ぎぃ/ぎぇ, ...). Most of these have no toggleable family and no
   // decomposition fallback beyond the digraph spelling itself, so they're
-  // deliberately left untagged in SPELLING_STYLES below (see that file's
-  // header comment for the untagged-IME-extension policy) — the few that
-  // do share a family with an existing style (cyi/cye, jyi/jye) are tagged
-  // individually where they occur. --
+  // deliberately left untagged in SPELLING_STYLES below (see the comment
+  // directly above SPELLING_STYLES for the untagged-IME-extension policy)
+  // — the few that do share a family with an existing style (cyi/cye,
+  // jyi/jye) are tagged individually where they occur. --
   きぃ: ['kyi'],
   きぇ: ['kye'],
   ぎぃ: ['gyi'],
@@ -533,7 +552,8 @@ export const SPELLING_STYLES: Record<string, RomajiStyle> = {
   // separate preference from standalone small-kana spellings). 'nApos' is
   // the "n'" IME-style separator that disambiguates ん before a vowel
   // (kan'i) without forcing a double tap. See SOKUON_EXPLICIT_PATTERNS and
-  // N_PATTERNS_SINGLE_OR_DOUBLE below for the full pattern lists. --
+  // N_PATTERNS_SINGLE_OR_DOUBLE in romaji-engine.ts for the full pattern
+  // lists. --
   'ん|xn': 'xn',
   "ん|n'": 'nApos',
 }
