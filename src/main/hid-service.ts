@@ -26,7 +26,7 @@ import {
   CMD_VIAL_GET_DEFINITION,
   CMD_VIAL_GET_ENCODER,
 } from '../shared/constants/protocol'
-import { logHidPacket } from './logger'
+import { log, logHidPacket } from './logger'
 import type { DeviceInfo, DeviceType, KeyboardDefinition, ProbeResult } from '../shared/types/protocol'
 import { decompressLzma, decompressXz, hasXzMagic } from './lzma'
 import { parseDefinitionLayout } from '../shared/kle/definition-layout'
@@ -160,6 +160,23 @@ function isTransientError(err: Error): boolean {
 }
 
 /**
+ * Record an open failure — either enumeration (HID.devicesAsync()) or the final
+ * retry of HID.HIDAsync.open() — so the raw cause isn't lost behind the
+ * renderer's translated message. Wrapped in try/catch so a logging failure
+ * never masks the original error.
+ */
+function logOpenFailure(vendorId: number, productId: number, err: unknown): void {
+  try {
+    const vid = vendorId.toString(16).padStart(4, '0')
+    const pid = productId.toString(16).padStart(4, '0')
+    const message = err instanceof Error ? err.message : String(err)
+    log('error', `Failed to open HID device 0x${vid}:0x${pid}: ${message}`)
+  } catch {
+    // Ignore logging failures.
+  }
+}
+
+/**
  * Open a HID device by vendorId and productId.
  * Uses device path for precise matching.
  * Retries with a delay to work around transient open failures on all platforms.
@@ -172,7 +189,13 @@ export async function openHidDevice(vendorId: number, productId: number): Promis
     return true
   }
 
-  const devices = await HID.devicesAsync()
+  let devices: Awaited<ReturnType<typeof HID.devicesAsync>>
+  try {
+    devices = await HID.devicesAsync()
+  } catch (err) {
+    logOpenFailure(vendorId, productId, err)
+    throw err
+  }
   const deviceInfo = devices.find(
     (d) =>
       d.vendorId === vendorId &&
@@ -191,9 +214,10 @@ export async function openHidDevice(vendorId: number, productId: number): Promis
     } catch (err) {
       if (attempt < HID_OPEN_RETRY_COUNT - 1) {
         await delay(HID_OPEN_RETRY_DELAY_MS)
-      } else {
-        throw err
+        continue
       }
+      logOpenFailure(vendorId, productId, err)
+      throw err
     }
   }
 
