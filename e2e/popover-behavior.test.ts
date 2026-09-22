@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Regression coverage for PR #316: Auto Move carries the key popover to the
-// next key without unmounting it. This drives the real Auto Move path
-// through the software-emulated Virtual Keyboard device (no real hardware
-// required) and asserts against internal popover state that only resets on
-// a genuine remount — a plain `keymap`/props assertion would pass whether
-// or not the fix is in place, since the displayed value is always resolved
-// from the (correct) target position regardless of remount.
+// Regression coverage: Auto Move carries the key popover to the next key
+// without unmounting it. This drives the real Auto Move path through the
+// software-emulated Virtual Keyboard device (no real hardware required) and
+// asserts against internal popover state that only resets on a genuine
+// remount — a plain `keymap`/props assertion would pass whether or not the
+// fix is in place, since the displayed value is always resolved from the
+// (correct) target position regardless of remount.
 
 import { test, expect } from '@playwright/test'
 import type { ElectronApplication, Page } from '@playwright/test'
@@ -146,9 +146,9 @@ test.describe('Key popover behavior', { tag: '@virtual' }, () => {
     // follow-along (no remount), so switching into Mod-Mask on the source
     // key would still show the Mod-Mask checkbox strip after landing on a
     // key whose own current keycode is plain — the exact "still showing
-    // the previous one" bug PR #316 describes, just on the mode-button
-    // wrapper instead of the Code-tab value (which is prop-driven and
-    // would look correct either way).
+    // the previous one" bug, just on the mode-button wrapper instead of
+    // the Code-tab value (which is prop-driven and would look correct
+    // either way).
     await ensureAutoMoveOn()
     await openPopoverOnFirstKey()
     const popover = page.locator('[data-testid="key-popover"]')
