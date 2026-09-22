@@ -156,13 +156,10 @@ describe('IntervalChart distribution mode layout', () => {
     expect(chartWrapper?.className).not.toContain('flex-1')
   })
 
-  // Regression guard: this branch used to render a visible `<h3>`
-  // section title, but AnalyzePane's "Section" filter-row select
-  // already labels the section with the same `sectionTitle` key, so
-  // the in-body heading was pure duplication and got removed. The name
-  // must still reach assistive tech though — via `aria-label` on the
-  // section itself — since there's no longer a visible heading to
-  // navigate to.
+  // Regression guard: AnalyzePane's "Section" filter-row select already
+  // labels the section with the same `sectionTitle` key. The name must
+  // still reach assistive tech though — via `aria-label` on the
+  // section itself — since there's no visible heading to navigate to.
   it('has no visible section title, but exposes the same name via aria-label', async () => {
     renderChart({ viewMode: 'distribution' })
     const root = await waitFor(() => screen.getByTestId('analyze-interval-distribution'))

@@ -415,8 +415,7 @@ describe('KeystrokeTimelinePanel', () => {
     expect(box.contains(missedTable)).toBe(false)
   })
 
-  // Coordinator-requested layout tweak (real-device screenshot review):
-  // the Missed section used to sit outside any container. Wrapped here
+  // The Missed section used to sit outside any container. Wrapped here
   // (at THIS call site only — see the wrapper's own doc comment in
   // KeystrokeTimelinePanel.tsx) in the exact same bordered-box treatment
   // as the timeline box above. `MistakeRankingSection` (History's "Most
