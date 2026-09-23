@@ -36,10 +36,9 @@ function makeOptions(overrides: Partial<{
   // When set, keyboardReload resolves to this failure instead of the
   // default success — replaces hand-building a keyboardReload mock per test.
   reloadFailure: 'notVial' | 'loadFailed'
-  // Defaults to true so the pre-existing suite below (written before the
-  // packs auto-fire existed) doesn't need to account for an extra
-  // syncNow('download', 'packs') call it never asserts on. The dedicated
-  // "packs auto-fire" describe block below overrides this to false.
+  // Defaults to true so the suite below doesn't need to account for an
+  // extra syncNow('download', 'packs') call it never asserts on. The
+  // dedicated "packs auto-fire" describe block below overrides this to false.
   packsPulledOnce: boolean
   typingRecordEnabled: boolean
 }> = {}, mocks?: Partial<Mocks> & { markPacksPulledOnce?: Mock<() => void> }) {
@@ -102,7 +101,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('useDeviceLifecycle.handleConnect — issue #190 regression', () => {
+describe('useDeviceLifecycle.handleConnect', () => {
   it('downloads cloud settings BEFORE applying device prefs when sync is ready', async () => {
     const callOrder: string[] = []
     const syncNow = vi.fn().mockImplementation(async () => {

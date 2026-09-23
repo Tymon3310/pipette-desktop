@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // @vitest-environment jsdom
 
-// Plan-qwerty-select-no-rewrite v7 review follow-up (FIX A): the picker
-// panel's "Keyboard" tab (`LayoutPickerContent`'s secondary `KeyboardPane`,
-// built by `useLayoutPicker`) has its own click handler
+// The picker panel's "Keyboard" tab (`LayoutPickerContent`'s secondary
+// `KeyboardPane`, built by `useLayoutPicker`) has its own click handler
 // (`handlePickerKeyClick`), entirely separate from `TabbedKeycodes`'
-// `onKeycodeSelect`/`onKeycodeMultiSelect`. Gating those alone left this
-// surface able to select/paste while the simulation tab was showing —
-// `KemapEditor` now gates `handleKeycodeSelect`/`handlePickerMultiSelect`
-// themselves (passing `undefined` when `packTabReadOnly`), which is what
-// this exercises directly against the real `useLayoutPicker` + real
-// `KeyboardWidget` click path (not mocked).
+// `onKeycodeSelect`/`onKeycodeMultiSelect`. `KemapEditor` gates
+// `handleKeycodeSelect`/`handlePickerMultiSelect` themselves (passing
+// `undefined` when `packTabReadOnly`), which is what this exercises
+// directly against the real `useLayoutPicker` + real `KeyboardWidget`
+// click path (not mocked).
 
 import { describe, it, expect, vi } from 'vitest'
 import { render, fireEvent, act } from '@testing-library/react'
@@ -68,7 +66,7 @@ function renderKeyboardView(props: Partial<UseLayoutPickerOptions>) {
   return utils
 }
 
-describe('useLayoutPicker — Keyboard tab read-only enforcement (Plan-qwerty-select-no-rewrite v7, FIX A)', () => {
+describe('useLayoutPicker — Keyboard tab read-only enforcement', () => {
   it('a plain click on the picker key does nothing when handleKeycodeSelect/handlePickerMultiSelect are both omitted (simulation tab)', () => {
     const handleKeycodeSelect = vi.fn()
     const handlePickerMultiSelect = vi.fn()

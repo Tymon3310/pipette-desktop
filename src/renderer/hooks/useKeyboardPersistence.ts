@@ -9,8 +9,9 @@ import { serializeKeychronState, restoreKeychronSettings } from '../../shared/ke
 import { splitMacroBuffer, deserializeMacro, macroActionsToJson, jsonToMacroActions } from '../../preload/macro'
 import type { KeychronState } from '../../shared/types/keychron'
 import { parseDefinitionLayout } from '../../shared/kle/definition-layout'
-import type { SetState, KeyboardRefs, BootGuardRef, ApplyVilResult } from './keyboard-types'
+import type { SetState, KeyboardRefs, BootGuardRef, ApplyVilResult, KeyboardState } from './keyboard-types'
 import { emptyState } from './keyboard-types'
+import { padMacroBuffer } from './pad-macro-buffer'
 
 /** The subset of `VilFile` that `writeVilToDevice` actually writes over
  *  HID. `serializeDeviceFields()` produces exactly this — the fields
@@ -63,9 +64,7 @@ async function writeVilToDevice(
   }
 
   if (opts?.padMacrosTo && opts.padMacrosTo > 0) {
-    const padded = vil.macros.slice(0, opts.padMacrosTo)
-    while (padded.length < opts.padMacrosTo) padded.push(0)
-    await api.setMacroBuffer(padded)
+    await api.setMacroBuffer(padMacroBuffer(vil.macros, opts.padMacrosTo))
   } else if (vil.macros.length > 0) {
     await api.setMacroBuffer(vil.macros)
   }
@@ -102,11 +101,11 @@ export function useKeyboardPersistence(
 ) {
   const { stateRef, qmkSettingsBaselineRef, saveLayerNamesRef } = refs
 
-  // Exactly the fields `writeVilToDevice` needs — split out of `serialize()`
-  // so an apply's pre-write backup (and `serialize()` itself) don't pay for
-  // building `macroJson` (a split + deserialize + JSON round trip per
-  // macro) on every apply, including the success path, when only a failed
-  // apply's rollback ever reads the backup.
+  // Exactly the fields `writeVilToDevice` needs, so an apply's pre-write
+  // backup (and `serialize()` itself) don't pay for building `macroJson`
+  // (a split + deserialize + JSON round trip per macro) on every apply,
+  // including the success path, when only a failed apply's rollback ever
+  // reads the backup.
   const serializeDeviceFields = useCallback((): DeviceVilFields => {
     const s = stateRef.current
     return {
@@ -275,14 +274,27 @@ export function useKeyboardPersistence(
     const layerNames = Array.from({ length: currentLayers }, (_, i) => vil.layerNames?.[i] ?? '')
     saveLayerNamesRef.current?.(layerNames)
 
+    // writeVilToDevice skips the macro buffer write when vil.macros is empty,
+    // so on a real device the two macro fields keep what they had: replacing
+    // them would show no macros on screen while the device still holds
+    // whatever it had before this restore. In dummy/file mode there is no
+    // device to diverge from, so the file's macros are always the new truth.
+    const macroWriteSkipped = !isDummy && vil.macros.length === 0
+    const macroFields: Partial<Pick<KeyboardState, 'macroBuffer' | 'parsedMacros'>> =
+      macroWriteSkipped
+        ? {}
+        : {
+            macroBuffer: vil.macros,
+            parsedMacros: vil.macroJson
+              ? vil.macroJson.map((m) => jsonToMacroActions(JSON.stringify(m)) ?? [])
+              : null,
+          }
+
     setState((s) => ({
       ...s,
       keymap,
       encoderLayout,
-      macroBuffer: vil.macros,
-      parsedMacros: vil.macroJson
-        ? vil.macroJson.map((m) => jsonToMacroActions(JSON.stringify(m)) ?? [])
-        : null,
+      ...macroFields,
       layoutOptions: vil.layoutOptions,
       tapDanceEntries: vil.tapDance,
       comboEntries: vil.combo,
@@ -291,8 +303,7 @@ export function useKeyboardPersistence(
       qmkSettingsValues: appliedQmkSettings,
       layerNames,
       // Snapshot/layout-store restore and .vil import both converge here —
-      // bump so App.tsx's restore-cleanup effect (Plan-qwerty-select-no-rewrite
-      // §snapshot/.vil 復元時のクリーンアップ) notices even though uid and
+      // bump so App.tsx's restore-cleanup effect notices even though uid and
       // keymap size are unchanged (the two things KeymapEditor's own clear
       // effect keys off of).
       keymapRestoreSeq: s.keymapRestoreSeq + 1,

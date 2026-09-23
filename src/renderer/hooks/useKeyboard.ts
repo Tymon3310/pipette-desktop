@@ -12,6 +12,7 @@ import { useKeyboardPersistence } from './useKeyboardPersistence'
 import type { KeychronState } from '../../shared/types/keychron'
 
 export type { BulkKeyEntry, KeyboardState } from './keyboard-types'
+export { BulkKeyWriteError } from './keyboard-types'
 
 export function useKeyboard() {
   const [state, setState] = useState<KeyboardState>(emptyState())

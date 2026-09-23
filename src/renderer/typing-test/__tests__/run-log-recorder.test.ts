@@ -168,7 +168,7 @@ describe('RunLogRecorder', () => {
     })
   })
 
-  describe('finish() runId check (P2)', () => {
+  describe('finish() runId check', () => {
     it('refuses to finish (and clears the buffer) when meta.runId does not match the buffered run', () => {
       const recorder = new RunLogRecorder()
       register(recorder, 'run-A', 0, 0, 1000, 0, 'a')
@@ -292,9 +292,10 @@ describe('RunLogRecorder', () => {
       const recorder = new RunLogRecorder()
       // A keystroke buffered before meta.startedAtMs — the shape a
       // pause/resume startTime rebase would produce if the recorder's
-      // buffer were ever resurrected across a pause (it no longer is,
-      // see pauseTypingTest's discard() call, but this guard stays as
-      // defense in depth).
+      // buffer were ever resurrected across a pause. It never is:
+      // useInputModes's pauseTypingTest calls discardRun(), which poisons
+      // the runId so it can't be re-buffered — but this guard stays as
+      // defense in depth.
       register(recorder, 'run-1', 0, 0, 900, 0, 'a')
       recorder.record(ctx(), matrixPress({ ts: 900 }))
       register(recorder, 'run-1', 0, 1, 1100, 0, 'b')
@@ -317,8 +318,8 @@ describe('RunLogRecorder', () => {
       // event arrives via ~20ms HID polling — so a char USUALLY precedes
       // its own matrix press, not the other way around. This is the
       // primary case (see the module doc comment's char-correlation
-      // note) — it used to be mishandled as a permanent off-by-one
-      // (every char confirmed the NEXT press instead of its own).
+      // note — a permanent off-by-one: every char confirms the NEXT
+      // press instead of its own).
       const recorder = new RunLogRecorder()
       register(recorder, 'run-1', 0, 0, 1000, 0, 'a')
       recorder.record(ctx(), charEvent('a', 995))
@@ -678,7 +679,7 @@ describe('RunLogRecorder', () => {
     })
   })
 
-  describe('lineBreaks passthrough (line timeline PR1)', () => {
+  describe('lineBreaks passthrough', () => {
     it('forwards a non-empty meta.lineBreaks verbatim into the saved log', () => {
       const recorder = new RunLogRecorder()
       register(recorder, 'run-1', 0, 0, 1000, 0, 'a')

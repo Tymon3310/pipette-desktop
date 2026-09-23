@@ -26,7 +26,7 @@ import {
   CMD_VIAL_GET_DEFINITION,
   CMD_VIAL_GET_ENCODER,
 } from '../shared/constants/protocol'
-import { logHidPacket } from './logger'
+import { log, logHidPacket } from './logger'
 import type { DeviceInfo, DeviceType, KeyboardDefinition, ProbeResult } from '../shared/types/protocol'
 import { decompressLzma, decompressXz, hasXzMagic } from './lzma'
 import * as bridgeService from './bridge-service'
@@ -192,11 +192,42 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/**
+ * Thrown when a read comes back empty: the HID_TIMEOUT_MS window passed with no
+ * report (hidapi on Linux also maps EAGAIN/EINPROGRESS to an empty read).
+ * This is the only condition worth retrying — see isTransientError.
+ */
+class HidReadTimeoutError extends Error {
+  constructor() {
+    super('HID read timeout')
+    this.name = 'HidReadTimeoutError'
+  }
+}
+
+// Only an empty read is retryable. Every hidapi rejection — write failure,
+// disconnect, I/O error — fails immediately whatever its message says: disconnect
+// errors on Linux, macOS and Windows all embed the hidapi function name
+// hid_read_timeout, so matching on the word "timeout" would retry a dead device
+// for ~10s and flood the mutex queue.
 function isTransientError(err: Error): boolean {
-  const msg = err.message.toLowerCase()
-  // "cannot write" and "could not read" on a disconnected device are NOT transient —
-  // retrying just floods the mutex queue. Only timeout is worth retrying.
-  return msg.includes('timeout')
+  return err instanceof HidReadTimeoutError
+}
+
+/**
+ * Record an open failure — either enumeration (HID.devicesAsync()) or the final
+ * retry of HID.HIDAsync.open() — so the raw cause isn't lost behind the
+ * renderer's translated message. Wrapped in try/catch so a logging failure
+ * never masks the original error.
+ */
+function logOpenFailure(vendorId: number, productId: number, err: unknown): void {
+  try {
+    const vid = vendorId.toString(16).padStart(4, '0')
+    const pid = productId.toString(16).padStart(4, '0')
+    const message = err instanceof Error ? err.message : String(err)
+    log('error', `Failed to open HID device 0x${vid}:0x${pid}: ${message}`)
+  } catch {
+    // Ignore logging failures.
+  }
 }
 
 /**
@@ -232,7 +263,13 @@ export async function openHidDevice(
   }
 
   // Standard direct device open
-  const devices = await HID.devicesAsync()
+  let devices: Awaited<ReturnType<typeof HID.devicesAsync>>
+  try {
+    devices = await HID.devicesAsync()
+  } catch (err) {
+    logOpenFailure(vendorId, productId, err)
+    throw err
+  }
   const deviceInfo = devices.find(
     (d) =>
       d.vendorId === vendorId &&
@@ -252,9 +289,10 @@ export async function openHidDevice(
     } catch (err) {
       if (attempt < HID_OPEN_RETRY_COUNT - 1) {
         await delay(HID_OPEN_RETRY_DELAY_MS)
-      } else {
-        throw err
+        continue
       }
+      logOpenFailure(vendorId, productId, err)
+      throw err
     }
   }
 
@@ -344,6 +382,10 @@ export function sendReceive(data: number[]): Promise<number[]> {
       if (!openDevice) {
         throw new Error('No HID device is open')
       }
+      // Pin the handle for the whole operation, retries included: openHidDevice() /
+      // closeHidDevice() reassign openDevice outside this mutex, so re-reading it
+      // after an await could aim a retry at a closed or replaced handle.
+      const device = openDevice
 
       const padded = padToMsgLen(data)
       logHidPacket('TX', new Uint8Array(padded))
@@ -351,11 +393,11 @@ export function sendReceive(data: number[]): Promise<number[]> {
       let lastError: Error | undefined
       for (let attempt = 0; attempt < HID_RETRY_COUNT; attempt++) {
         try {
-          await openDevice.write([HID_REPORT_ID, ...padded])
+          await device.write([HID_REPORT_ID, ...padded])
 
-          const response = await openDevice.read(HID_TIMEOUT_MS)
+          const response = await device.read(HID_TIMEOUT_MS)
           if (!response || response.length === 0) {
-            throw new Error('HID read timeout')
+            throw new HidReadTimeoutError()
           }
 
           const result = normalizeResponse(response, MSG_LEN)
@@ -409,10 +451,13 @@ export function send(data: number[]): Promise<void> {
       if (!openDevice) {
         throw new Error('No HID device is open')
       }
+      // Pin the handle for this write, same rationale as sendReceive: openHidDevice() /
+      // closeHidDevice() reassign openDevice outside this mutex.
+      const device = openDevice
 
       const padded = padToMsgLen(data)
       logHidPacket('TX', new Uint8Array(padded))
-      await openDevice.write([HID_REPORT_ID, ...padded])
+      await device.write([HID_REPORT_ID, ...padded])
     } finally {
       release()
     }
@@ -480,7 +525,7 @@ export async function probeDevice(vendorId: number, productId: number, serialNum
     // Local send/receive helper for the temp device
     async function probeSendReceive(data: number[]): Promise<number[]> {
       const padded = padToMsgLen(data)
-      tempDevice.write([HID_REPORT_ID, ...padded])
+      await tempDevice.write([HID_REPORT_ID, ...padded])
       const response = await tempDevice.read(HID_TIMEOUT_MS)
       if (!response || response.length === 0) {
         throw new Error('HID read timeout during probe')

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { DeviceInfo } from '../../shared/types/protocol'
 
 export interface DeviceConnectionState {
@@ -31,6 +32,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 export function useDeviceConnection() {
+  const { t } = useTranslation()
+  // Read t through a ref so refreshDevices/connectDevice keep [] deps: the mount
+  // effect depends on refreshDevices, so listing t as a dependency would re-fetch
+  // the device list on every language switch — and on every render wherever t has
+  // no stable identity.
+  const tRef = useRef(t)
+  tRef.current = t
+
   const [state, setState] = useState<DeviceConnectionState>({
     devices: [],
     connectedDevice: null,
@@ -65,11 +74,11 @@ export function useDeviceConnection() {
     try {
       const devices = await window.vialAPI.listDevices()
       if (mountedRef.current) {
-        setState((s) => ({ ...s, devices, error: null }))
+        setState((s) => ({ ...s, devices }))
       }
-    } catch (err) {
+    } catch {
       if (mountedRef.current) {
-        setState((s) => ({ ...s, error: String(err) }))
+        setState((s) => ({ ...s, error: tRef.current('error.deviceListFailed') }))
       }
     }
   }, [])
@@ -93,14 +102,14 @@ export function useDeviceConnection() {
           setState((s) => ({
             ...s,
             connecting: false,
-            error: 'Failed to open device',
+            error: tRef.current('error.deviceOpenFailed'),
           }))
         }
       }
       return success
-    } catch (err) {
+    } catch {
       if (mountedRef.current) {
-        setState((s) => ({ ...s, connecting: false, error: String(err) }))
+        setState((s) => ({ ...s, connecting: false, error: tRef.current('error.deviceOpenFailed') }))
       }
       return false
     }
@@ -209,7 +218,7 @@ export function useDeviceConnection() {
             POLL_TIMEOUT_MS,
           )
           if (mountedRef.current) {
-            setState((s) => ({ ...s, devices, error: null }))
+            setState((s) => ({ ...s, devices }))
           }
         } catch {
           // Ignore polling errors (including timeouts) to avoid flooding the UI
@@ -249,6 +258,9 @@ export function useDeviceConnection() {
   }, [])
   const setDeviceListActive = useCallback((active: boolean) => { deviceListActiveRef.current = active }, [])
   const setPollSuspended = useCallback((suspended: boolean) => { pollSuspendedRef.current = suspended }, [])
+  const clearError = useCallback(() => {
+    if (mountedRef.current) setState((s) => ({ ...s, error: null }))
+  }, [])
 
   return {
     ...state,
@@ -260,5 +272,6 @@ export function useDeviceConnection() {
     setDeviceListActive,
     setPollSuspended,
     setSuppressDisconnect,
+    clearError,
   }
 }

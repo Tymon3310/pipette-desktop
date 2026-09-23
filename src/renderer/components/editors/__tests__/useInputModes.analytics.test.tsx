@@ -20,16 +20,15 @@ const mockTypingRunLogGet = vi.fn<(uid: string, runId: string) => Promise<{ succ
 let includeMatrixReleaseEvents = false
 
 /** (Re)installs the mocked `vialAPI` used by useInputModes. Mirrors
- *  useTypingTest.test.ts's `analyticsOptions` filtering: `matrix-release`
- *  events are excluded from `mockTypingAnalyticsEvent` by default so every
- *  pre-existing assertion in this file (exact call counts, nth-call
- *  content) keeps meaning what it meant before release events existed,
- *  regardless of whether a given test happens to advance the clock
- *  between a press and its release. Tests that specifically cover
- *  release/duration wiring opt in explicitly instead of relying on
+ *  useTypingTest.test.ts's `analyticsOptions` filtering: with the flag off
+ *  (the default), `matrix-release` events are excluded from
+ *  `mockTypingAnalyticsEvent`, so the exact call counts / nth-call content
+ *  asserted in this file aren't perturbed by whether a given test advances
+ *  the clock between a press and its release. Tests that specifically
+ *  cover release/duration wiring opt in explicitly instead of relying on
  *  incidental zero-duration suppression (a frozen clock still produces
  *  durationMs === 0, which the tracker itself discards, but this filter
- *  no longer depends on that coincidence). Excluded releases resolve
+ *  doesn't depend on that coincidence). Excluded releases resolve
  *  immediately — the IPC call still "happens", it's just not observed by
  *  the mock callers assert against. */
 function installVialApi(options?: { includeReleases?: boolean }): void {
@@ -171,7 +170,7 @@ describe('useInputModes — typing analytics dispatch', () => {
     expect(mockTypingAnalyticsEvent).not.toHaveBeenCalled()
   })
 
-  it('does not tag (or even send) a per-minute analytics event for a press made while genuinely armed-waiting (gate split: P2 restored)', async () => {
+  it('does not tag (or even send) a per-minute analytics event for a press made while genuinely armed-waiting', async () => {
     // Distinct from the "pristine, never-restarted" case above: this
     // scenario has ALREADY gone through the mount-time config-sync effect
     // (flushed below), so `runLogLabelRef` (the run-log's own, broader
@@ -179,9 +178,9 @@ describe('useInputModes — typing analytics dispatch', () => {
     // genuinely-armed 'waiting', not the untouched pristine value. The
     // per-minute analytics pipeline must still see nothing at all: no
     // per-minute pre-start cutoff would otherwise let a modifier/no-op
-    // press during armed-waiting leak into the heatmap (codex safety
-    // review P2) — testLabelRef (this pipeline's OWN, narrower tag) stays
-    // 'running'-only regardless of runLogLabelRef.
+    // press during armed-waiting leak into the heatmap — testLabelRef
+    // (this pipeline's OWN, narrower tag) stays 'running'-only regardless
+    // of runLogLabelRef.
     const { result } = renderHook(() => useInputModes({
       rows: 1,
       cols: 1,

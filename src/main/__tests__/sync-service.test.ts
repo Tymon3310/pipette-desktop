@@ -50,10 +50,10 @@ const mockDeleteFile = vi.fn(async (_fileId: string): Promise<void> => {})
 vi.mock('../sync/google-drive', async () => {
   // `driveFileName`/`syncUnitFromFileName` are imported via `importActual`
   // (not hand-rolled) so this mock can never drift out of sync with the
-  // real filename ↔ sync-unit mapping again — a stale hand-rolled regex
-  // here previously hid a fresh-machine discovery gap for several stores
-  // (see Task-sync-unit-filename-gap.md) because the test mock silently
-  // kept "supporting" a narrower set of filenames than production code.
+  // real filename ↔ sync-unit mapping — a stale hand-rolled regex
+  // here hides a fresh-machine discovery gap for several stores because
+  // the test mock silently keeps "supporting" a narrower set of filenames
+  // than production code.
   const actual = await vi.importActual<typeof import('../sync/google-drive')>('../sync/google-drive')
   return {
     listFiles: (...args: unknown[]) => mockListFiles(...args),
@@ -246,24 +246,50 @@ async function flushIO(): Promise<void> {
   }
 }
 
+// Fake timers replace `Date` (see FAKE_TIMER_OPTS), so wait deadlines use
+// `performance.now`, which they leave alone. `setImmediate` is not faked
+// either, so yielding with it lets real fs I/O callbacks run between checks.
+const realNow = performance.now.bind(performance)
+const realSetImmediate = setImmediate
+// Kept below vitest's default 5 s test timeout so flushUntil's own
+// "timed out waiting for …" error fires before vitest aborts the test.
+const WAIT_TIMEOUT_MS = 3_000
+
 /**
- * Drains event-loop turns until `predicate` is true, then lets a couple
- * more turns run so any bookkeeping chained after the awaited condition
- * (e.g. remote-state updates that follow a download) settles too.
+ * Yields to the real event loop until `predicate` is true, then lets a
+ * couple more turns run so any bookkeeping chained after the awaited
+ * condition (e.g. remote-state updates that follow a download) settles too.
  *
- * `flushIO`'s fixed 10-turn drain assumes every awaited step resolves on
- * the microtask/`setImmediate` queue. Polling paths that hit real fs I/O
- * (the tests use a real mkdtemp userData dir) resolve via the libuv
- * threadpool instead, so under load a fixed drain can come up short.
- * This does not throw on timeout — it just falls through so the
- * caller's own assertion produces the meaningful failure message.
+ * Polling paths hit real fs I/O (the tests use a real mkdtemp userData
+ * dir), which resolves via the libuv threadpool and is not advanced by
+ * fake timers, so how many turns a pass needs depends on the machine.
+ * The bound is wall-clock time instead, and running out of it throws so a
+ * slow pass fails here rather than as a misleading assertion later.
  */
-async function flushUntil(predicate: () => boolean, maxTurns = 500): Promise<void> {
-  for (let i = 0; i < maxTurns && !predicate(); i++) {
-    await new Promise<void>((resolve) => setImmediate(resolve))
+async function flushUntil(
+  predicate: () => boolean,
+  description = 'condition',
+  timeoutMs = WAIT_TIMEOUT_MS,
+): Promise<void> {
+  const deadline = realNow() + timeoutMs
+  while (!predicate()) {
+    if (realNow() > deadline) {
+      throw new Error(`flushUntil: timed out after ${timeoutMs}ms waiting for ${description}`)
+    }
+    await new Promise<void>((resolve) => realSetImmediate(resolve))
   }
-  await new Promise<void>((resolve) => setImmediate(resolve))
-  await new Promise<void>((resolve) => setImmediate(resolve))
+  await new Promise<void>((resolve) => realSetImmediate(resolve))
+  await new Promise<void>((resolve) => realSetImmediate(resolve))
+}
+
+/**
+ * Waits until no poll pass (or other sync) holds the sync lock.
+ * `setInterval` starts each poll with `void pollForRemoteChanges()`, so
+ * advancing fake time never awaits the pass itself; the lock is released
+ * in the pass's `finally`, which makes it the observable end of a pass.
+ */
+async function waitForSyncIdle(): Promise<void> {
+  await flushUntil(() => !isSyncInProgress(), 'the sync lock to be released')
 }
 
 function makeRemoteEnvelope(
@@ -375,9 +401,19 @@ describe('sync-service', () => {
   })
 
   afterEach(async () => {
-    _resetForTests()
-    vi.useRealTimers()
-    await rm(mockUserDataPath, { recursive: true, force: true })
+    // A poll pass started by the test may still be doing real fs I/O;
+    // let it finish before the shared state and the tmp dir go away, or
+    // it can touch the next test's mocks.
+    // The reset, timer restore and tmp-dir removal run even when that
+    // wait times out, so a stuck pass does not leak into the next test.
+    stopPolling()
+    try {
+      await waitForSyncIdle()
+    } finally {
+      _resetForTests()
+      vi.useRealTimers()
+      await rm(mockUserDataPath, { recursive: true, force: true })
+    }
   })
 
   describe('notifyChange', () => {
@@ -488,7 +524,7 @@ describe('sync-service', () => {
 
       await vi.advanceTimersByTimeAsync(200)
       const firstResult = await first
-      // M1/M2: the busy race must surface as a real, checkable status —
+      // The busy race must surface as a real, checkable status —
       // not a silent no-op indistinguishable from a completed sync.
       const secondResult = await second
       expect(firstResult).toEqual({ status: 'completed' })
@@ -602,9 +638,9 @@ describe('sync-service', () => {
       startPolling()
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockDownloadFile.mock.calls.some((call) => call[0] === 'pc-1'))
-      // Settle the rest of the tick so a hypothetical late data-file
+      // Wait for the whole pass so a hypothetical late data-file
       // download can't land after the count assertion below.
-      await flushIO()
+      await waitForSyncIdle()
 
       // Password-check downloaded for validation, but data file NOT downloaded
       expect(mockDownloadFile).toHaveBeenCalledTimes(1)
@@ -623,13 +659,13 @@ describe('sync-service', () => {
       // First poll: records state, no data download
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockListFiles.mock.calls.length >= 1)
-      await flushIO()
+      await waitForSyncIdle()
 
       // Second poll: detects modifiedTime change, downloads
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockDownloadFile.mock.calls.some((call) => call[0] === 'file-1'))
-      // Settle the tick before the exact listFiles count assertion.
-      await flushIO()
+      // Wait for the whole pass before the exact listFiles count assertion.
+      await waitForSyncIdle()
 
       expect(mockListFiles).toHaveBeenCalledTimes(2)
       expect(mockDownloadFile).toHaveBeenCalledWith('file-1')
@@ -637,10 +673,10 @@ describe('sync-service', () => {
       stopPolling()
     })
 
-    // Task-sync-unit-filename-gap: themes/i18n only match scope 'all',
-    // which the 3-minute poll always uses (see matchesScope) — so once
-    // syncUnitFromFileName recognizes their filenames, polling picks up
-    // changes for them exactly like any other scope-'all' unit.
+    // themes/i18n only match scope 'all', which the 3-minute poll always
+    // uses (see matchesScope) — so once syncUnitFromFileName recognizes
+    // their filenames, polling picks up changes for them exactly like
+    // any other scope-'all' unit.
     it('detects a changed themes/packs file on a subsequent poll and downloads it', async () => {
       const themePackFile = (modifiedTime: string): DriveFile =>
         ({ id: 'theme-pack-1', name: 'themes_packs_pack-a.enc', modifiedTime })
@@ -664,13 +700,13 @@ describe('sync-service', () => {
       startPolling()
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockListFiles.mock.calls.length >= 1)
-      await flushIO()
+      await waitForSyncIdle()
 
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockDownloadFile.mock.calls.some((call) => call[0] === 'theme-pack-1'))
       // The merge's file write is real disk I/O — wait for the poll's own
       // sync-lock release rather than a fixed tick count.
-      await flushUntil(() => !isSyncInProgress())
+      await waitForSyncIdle()
 
       expect(mockDownloadFile).toHaveBeenCalledWith('theme-pack-1')
       await expect(
@@ -680,11 +716,10 @@ describe('sync-service', () => {
       stopPolling()
     })
 
-    // A key-labels-specific variant of this test previously lived here.
-    // Dropped as redundant: key-labels rides the same generic index-based
-    // poll-merge path already exercised above by favorites (this file's
-    // own "detects remote changes on subsequent polls and downloads"),
-    // and its filename recognition is pinned at the unit level in
+    // Key-labels rides the same generic index-based poll-merge path
+    // already exercised above by favorites (this file's own "detects
+    // remote changes on subsequent polls and downloads"), and its
+    // filename recognition is pinned at the unit level in
     // google-drive.test.ts's round-trip coverage.
 
     it('skips when no remote changes detected', async () => {
@@ -696,13 +731,13 @@ describe('sync-service', () => {
       // tick completed and false-pass the negative count check below.
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockListFiles.mock.calls.length >= 1)
-      await flushIO()
+      await waitForSyncIdle()
 
       const downloadCallCount = mockDownloadFile.mock.calls.length
 
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockListFiles.mock.calls.length >= 2)
-      await flushIO()
+      await waitForSyncIdle()
 
       expect(mockDownloadFile.mock.calls.length).toBe(downloadCallCount)
 
@@ -788,12 +823,12 @@ describe('sync-service', () => {
       startPolling()
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockListFiles.mock.calls.length >= 1)
-      await flushIO()
+      await waitForSyncIdle()
       expect(mockRunPackGcAfterPass).not.toHaveBeenCalled() // first poll: seed-only, no merge
 
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockDownloadFile.mock.calls.some((call) => call[0] === 'theme-pack-1'))
-      await flushUntil(() => !isSyncInProgress())
+      await waitForSyncIdle()
 
       expect(mockRunPackGcAfterPass).toHaveBeenCalledTimes(1)
       expect(mockRunPackGcAfterPass.mock.calls[0][0]).toContain('themes/packs/pack-a')
@@ -811,7 +846,7 @@ describe('sync-service', () => {
       expect(mockRunPackGcAfterPass.mock.calls[0][0]).toEqual(['favorites/tapDance'])
     })
 
-    // M3: a unit that failed to merge this pass must be threaded through
+    // A unit that failed to merge this pass must be threaded through
     // as the second argument so pack-gc.ts can skip that store's sweep
     // (see pack-gc.test.ts for the skipSweep-per-store behavior itself).
     it('passes the failed sync unit as the second argument on a download pass', async () => {
@@ -838,11 +873,11 @@ describe('sync-service', () => {
       startPolling()
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockListFiles.mock.calls.length >= 1)
-      await flushIO()
+      await waitForSyncIdle()
 
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockDownloadFile.mock.calls.some((call) => call[0] === 'theme-pack-1'))
-      await flushUntil(() => !isSyncInProgress())
+      await waitForSyncIdle()
 
       expect(mockRunPackGcAfterPass).toHaveBeenCalledTimes(1)
       expect(mockRunPackGcAfterPass.mock.calls[0][1]).toEqual(['themes/packs/pack-a'])
@@ -1048,11 +1083,11 @@ describe('sync-service', () => {
     })
   })
 
-  // M1/M2: executeSync's own return value must distinguish a real
-  // completion from a silent skip (busy race, missing credentials) or a
-  // partial failure — callers (useDeviceLifecycle's packsPulledOnce
-  // once-flag, usePackCloudPull's error state) branch on this instead of
-  // assuming any non-throwing call succeeded.
+  // executeSync's own return value must distinguish a real completion
+  // from a silent skip (busy race, missing credentials) or a partial
+  // failure — callers (useDeviceLifecycle's packsPulledOnce once-flag,
+  // usePackCloudPull's error state) branch on this instead of assuming
+  // any non-throwing call succeeded.
   describe('executeSync return value contract (M1/M2)', () => {
     it('returns status: completed when every unit succeeds', async () => {
       mockListFiles.mockResolvedValue([])
@@ -1291,7 +1326,7 @@ describe('sync-service', () => {
       expect(result.undecryptable[0].fileId).toBe('f5')
     })
 
-    // C2: the index file can outlive every pack id it once listed (all
+    // The index file can outlive every pack id it once listed (all
     // tombstoned and GC'd) — hasI18nData/hasThemesData must still report
     // `true` from the index file's own presence alone in that dead zone.
     it('reports hasI18nData/hasThemesData true from the index file alone, with zero pack ids', async () => {
@@ -1372,11 +1407,10 @@ describe('sync-service', () => {
       expect(result.undecryptable).toEqual([])
     })
 
-    // Task-sync-unit-filename-gap: scanRemoteData categorizes purely from
-    // syncUnitFromFileName — these previously fell through as unrecognized
-    // filenames (syncUnit === null) and were silently dropped from every
-    // category, including keyboards (for a uid that only has this file)
-    // and themePacks.
+    // scanRemoteData categorizes purely from syncUnitFromFileName —
+    // unrecognized filenames (syncUnit === null) are silently dropped
+    // from every category, including keyboards (for a uid that only has
+    // this file) and themePacks.
     it('surfaces a uid whose only remote file is analyze_filters as a cloud keyboard', async () => {
       mockListFiles.mockResolvedValue([
         { id: 'f1', name: 'keyboards_uid-only-filters_analyze_filters.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
@@ -1647,11 +1681,11 @@ describe('sync-service', () => {
         expect(matchesScope(null, 'packs')).toBe(false)
       })
 
-      // C.1 / codex ordering trap: 'packs' must be checked BEFORE the
-      // unconditional key-labels/typing-test-texts `true`s below it in
-      // matchesScope — otherwise a 'packs'-scoped download would also
-      // pull those unrelated global units in, since their own checks
-      // don't care what scope was asked for.
+      // Ordering trap: 'packs' must be checked BEFORE the unconditional
+      // key-labels/typing-test-texts `true`s below it in matchesScope —
+      // otherwise a 'packs'-scoped download would also pull those unrelated
+      // global units in, since their own checks don't care what scope was
+      // asked for.
       describe('scope "packs"', () => {
         it('admits i18n and theme sync units', () => {
           expect(matchesScope('i18n/index', 'packs')).toBe(true)
@@ -1682,7 +1716,7 @@ describe('sync-service', () => {
         expect(isAnalyticsSyncUnit('keyboards/0x1234/settings')).toBe(false)
         expect(isAnalyticsSyncUnit('keyboards/0x1234/snapshots')).toBe(false)
         expect(isAnalyticsSyncUnit('keyboards/0x1234')).toBe(false)
-        // Legacy flat device form (no `/days/...`) is no longer recognised.
+        // Legacy flat device form (no `/days/...`) is not recognised.
         expect(isAnalyticsSyncUnit('keyboards/uid-a/devices/machineHash-xyz')).toBe(false)
       })
 
@@ -1726,11 +1760,9 @@ describe('sync-service', () => {
         expect(shouldDownloadSyncUnit(runLogUnit, connectScope, local)).toBe(false)
       })
 
-      // Task-sync-unit-filename-gap: these three stores are discovery-included
-      // ("それ以外" column in settings-persistence.md's trigger matrix — no
-      // dedicated exclusion predicate like analytics/run-logs) — the fix here
-      // is purely that syncUnitFromFileName now recognizes their filenames at
-      // all; shouldDownloadSyncUnit's own logic needs no changes for them.
+      // These three stores are discovery-included (no dedicated
+      // exclusion predicate like analytics/run-logs) —
+      // shouldDownloadSyncUnit's own logic needs no changes for them.
       it('keeps key-labels, typing-test-texts, and analyze_filters under the connect-time scope shape', () => {
         const connectScope = { favorites: true as const, keyboard: 'uid-a' }
         expect(shouldDownloadSyncUnit('key-labels', connectScope, local)).toBe(true)
@@ -1743,9 +1775,7 @@ describe('sync-service', () => {
     })
 
     describe('executeSync with scope', () => {
-      // Task-sync-unit-filename-gap: fresh-machine discovery — a remote-only
-      // unit for these stores previously could never be found because
-      // syncUnitFromFileName didn't recognize their filenames at all.
+      // Fresh-machine discovery.
       it.each([
         {
           label: 'key-labels',
@@ -1916,7 +1946,7 @@ describe('sync-service', () => {
         const listCallsAfterSync = mockListFiles.mock.calls.length
         await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
         await flushUntil(() => mockListFiles.mock.calls.length > listCallsAfterSync)
-        await flushIO()
+        await waitForSyncIdle()
         expect(mockDownloadFile).not.toHaveBeenCalledWith('f2')
 
         // Second poll after the keyboard file's modifiedTime changes:
@@ -1965,7 +1995,7 @@ describe('sync-service', () => {
         const listCallsBeforePoll = mockListFiles.mock.calls.length
         await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
         await flushUntil(() => mockListFiles.mock.calls.length > listCallsBeforePoll)
-        await flushIO()
+        await waitForSyncIdle()
 
         expect(mockDownloadFile).not.toHaveBeenCalledWith('f2')
         stopPolling()
@@ -2721,7 +2751,7 @@ describe('sync-service', () => {
     })
   })
 
-  // Task-sync-unit-filename-gap / bundle-variant merge crash regression.
+  // Bundle-variant merge crash regression.
   // i18n-index / i18n-pack / theme-index / theme-pack bundles carry
   // `{ metas: [...] }` or a raw pack body, never `{ entries }` — so before
   // dedicated branches existed, mergeSyncUnit's generic index-based branch
@@ -2731,9 +2761,7 @@ describe('sync-service', () => {
   // asserts the fixed LWW behavior.
   describe('bundle-variant merge (i18n/theme index + pack)', () => {
     /** Builds a mock decrypted SyncEnvelope for any bundle shape (index
-     *  or pack-body). Replaces the four near-identical `make*Envelope`
-     *  factories this describe block used to carry, one per
-     *  i18n/theme × index/pack combination. */
+     *  or pack-body). */
     function makeBundleEnvelope(
       syncUnit: string,
       updatedAt: string,
@@ -2806,14 +2834,9 @@ describe('sync-service', () => {
         meta: { id: 't1', name: 'Ocean', version: '1.0.0', savedAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z' },
       },
     ])('$label-index: remote-only id merges alongside the pre-existing local id (union, not wholesale replace)', async ({ syncUnit, fileName, fileId, bundleType, dir, meta }) => {
-      // M1 fix: index merge used to be file-level LWW — "newer roster
-      // wins wholesale" — which meant a remote index arriving with a
-      // different id than local's simply erased the local-only entry
-      // forever (its body file became an orphan, unreachable because
-      // collectAllSyncUnits only walks ids present in the index). This
-      // is now entry-level LWW: both ids survive as a union, and since
-      // local has an id remote doesn't have yet, the merged index is
-      // marked for re-upload so remote converges too.
+      // Index merge is entry-level LWW: both ids survive as a union, and
+      // since local has an id remote doesn't have yet, the merged index
+      // is marked for re-upload so remote converges too.
       await mkdir(join(mockUserDataPath, 'sync', dir), { recursive: true })
       await writeFile(
         join(mockUserDataPath, 'sync', dir, 'index.json'),
@@ -2845,13 +2868,13 @@ describe('sync-service', () => {
     })
 
     it('two machines each install a different pack while offline: next sync converges to the union, neither pack is lost', async () => {
-      // The headline M1 scenario: machine A installs pack 'pack-a'
-      // (already on remote); machine B (this process) independently
-      // installed 'pack-b' locally before ever syncing. A naive
-      // file-level LWW would have machine B's later local timestamp win
-      // wholesale, permanently erasing 'pack-a' from both the local
-      // index AND — once B uploads — from remote too, orphaning its
-      // pack body forever. Entry-level LWW must instead keep both.
+      // Machine A installs pack 'pack-a' (already on remote); machine B
+      // (this process) independently installed 'pack-b' locally before
+      // ever syncing. A naive file-level LWW would have machine B's
+      // later local timestamp win wholesale, permanently erasing
+      // 'pack-a' from both the local index AND — once B uploads — from
+      // remote too, orphaning its pack body forever. Entry-level LWW
+      // must instead keep both.
       await mkdir(join(mockUserDataPath, 'sync', 'i18n'), { recursive: true })
       await writeFile(
         join(mockUserDataPath, 'sync', 'i18n', 'index.json'),
@@ -3175,7 +3198,7 @@ describe('sync-service', () => {
       // First poll: records baseline state only (no download attempts).
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockListFiles.mock.calls.length >= 1)
-      await flushIO()
+      await waitForSyncIdle()
 
       // Second poll: badFile is now present and wasn't in the baseline,
       // so it's treated as "changed" — the merge fails with
@@ -3188,11 +3211,9 @@ describe('sync-service', () => {
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockDownloadFile.mock.calls.some((c) => c[0] === 'bad1'))
       // The failing merge itself is real disk I/O (readIndexFile against a
-      // real tmp dir), which resolves via the libuv threadpool rather than
-      // the microtask queue `flushIO` drains — wait for the poll's own
-      // sync-lock release, not just a fixed tick count, so poll 3 below
-      // never races a still-in-flight poll 2.
-      await flushUntil(() => !isSyncInProgress())
+      // real tmp dir) — wait for the poll's own sync-lock release so
+      // poll 3 below never races a still-in-flight poll 2.
+      await waitForSyncIdle()
       const attemptsAfterSecondPoll = mockDownloadFile.mock.calls.filter((c) => c[0] === 'bad1').length
       expect(attemptsAfterSecondPoll).toBeGreaterThan(0)
       // Contained per-unit with a warn naming only the sync unit — never
@@ -3202,7 +3223,7 @@ describe('sync-service', () => {
       // Third poll, same revision still on Drive — must NOT retry again.
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockListFiles.mock.calls.length >= 3)
-      await flushUntil(() => !isSyncInProgress())
+      await waitForSyncIdle()
       const attemptsAfterThirdPoll = mockDownloadFile.mock.calls.filter((c) => c[0] === 'bad1').length
       expect(attemptsAfterThirdPoll).toBe(attemptsAfterSecondPoll)
 
@@ -3218,17 +3239,17 @@ describe('sync-service', () => {
     })
 
     it('S1: a hostile packId is contained on the poll path too — not retried every 3 minutes', async () => {
-      // Task M2's hostile-packId test above only exercises the manual
-      // sync path (executeSync). S1: applySyncedPackBody now THROWS
+      // The hostile-packId test above only exercises the manual
+      // sync path (executeSync). applySyncedPackBody THROWS
       // MalformedSyncBundleError for a rejected packId instead of
       // returning false as a bare Error would — this lets the poll's
       // `instanceof MalformedSyncBundleError` branch recognize the
       // rejection as permanent and skip retrying it, exactly like the
-      // malformed-generic-bundle poll test above. Before this fix, a
-      // bare Error looked identical to a transient I/O failure, which
-      // the poll deliberately DOES keep retrying — so a hostile remote
-      // filename would have triggered a fresh download+decrypt attempt
-      // every 3 minutes forever.
+      // malformed-generic-bundle poll test above. A bare Error looks
+      // identical to a transient I/O failure, which the poll
+      // deliberately DOES keep retrying — so a hostile remote filename
+      // would trigger a fresh download+decrypt attempt every 3 minutes
+      // forever.
       const evilFile = { id: 'evil1', name: 'i18n_packs_../evil.enc', modifiedTime: '2026-06-01T00:00:00.000Z' }
       const evilEnvelope = makeBundleEnvelope('i18n/packs/../evil', '2026-06-01T00:00:00.000Z', {
         type: 'i18n-pack',
@@ -3241,19 +3262,19 @@ describe('sync-service', () => {
       startPolling()
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockListFiles.mock.calls.length >= 1)
-      await flushIO()
+      await waitForSyncIdle()
 
       mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE, evilFile])
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockDownloadFile.mock.calls.some((c) => c[0] === 'evil1'))
-      await flushUntil(() => !isSyncInProgress())
+      await waitForSyncIdle()
       const attemptsAfterSecondPoll = mockDownloadFile.mock.calls.filter((c) => c[0] === 'evil1').length
       expect(attemptsAfterSecondPoll).toBeGreaterThan(0)
 
       // Same revision still on Drive on the next poll — must NOT retry.
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await flushUntil(() => mockListFiles.mock.calls.length >= 3)
-      await flushUntil(() => !isSyncInProgress())
+      await waitForSyncIdle()
       const attemptsAfterThirdPoll = mockDownloadFile.mock.calls.filter((c) => c[0] === 'evil1').length
       expect(attemptsAfterThirdPoll).toBe(attemptsAfterSecondPoll)
 
@@ -3313,8 +3334,8 @@ describe('sync-service', () => {
       // separator, producing a syncUnit like 'favorites/../../evil'.
       // Every `/`-split segment of `syncUnit` must be validated before
       // mergeSyncUnit's settings / generic branches join it into a
-      // filesystem path — this is the pre-existing exposure M2 closes
-      // centrally, independent of the i18n/theme pack-index fix above.
+      // filesystem path — this is the exposure, independent of the
+      // i18n/theme pack-index fix above.
       const hostileFile = { id: 'evil1', name: 'favorites_../../evil.enc', modifiedTime: '2026-06-01T00:00:00.000Z' }
       mockListFiles.mockResolvedValue([hostileFile, PASSWORD_CHECK_DRIVE_FILE])
       mockDownloadFile

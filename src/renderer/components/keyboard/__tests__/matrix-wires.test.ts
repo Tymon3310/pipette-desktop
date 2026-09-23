@@ -234,7 +234,7 @@ describe('buildMatrixWires — label placement', () => {
   it('stacks three row labels anchored at the exact same y onto three separate lines', () => {
     // Three single-key rows, all sharing y=0 — every pair collides, so
     // each one needs its own line rather than the third landing back on
-    // top of the second (the old two-line cap this replaces).
+    // top of the second.
     const keys = [
       makeKey({ row: 0, col: 0, x: 0, y: 0 }),
       makeKey({ row: 1, col: 1, x: 1, y: 0 }),
@@ -385,9 +385,9 @@ describe('buildMatrixWires — split-board label order regression', () => {
   const layout = loadSplitThumbLayout()
 
   it('keeps every colliding row-label pair on the split-thumb fixture in ascending index order', () => {
-    // Regression guard: the fixture's thumb rows (3 and 7) have label
-    // anchors a fraction of a pixel apart, which used to render row 7
-    // before row 3 in the left gutter.
+    // The fixture's thumb rows (3 and 7) have label anchors a fraction of
+    // a pixel apart; row index order, not raw coordinate order, must
+    // decide the left gutter order, so row 3 must not come after row 7.
     const fontSize = 12
     const { rows } = buildMatrixWires(layout.keys, IDENTITY_CELLS, 1, fontSize)
     const pitch = rowLabelPitch(fontSize)

@@ -1,22 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // @vitest-environment jsdom
-//
-// FLAG (coordinator-requested layout changes, cumulative history):
-//  1. MissedCharsList's original chip+tooltip presentation was replaced
-//     by a column TABLE (MissedTable) for KeystrokeTimelinePanel's use.
-//     MissedCharsList itself was reverted to its original plain-chip
-//     shape (no `details` prop) since TypingTestStatsRow, its only
-//     remaining caller, never had detail data to show in the first
-//     place.
-//  2. The table gained internal scrolling + a sticky header (no more
-//     top-N truncation).
-//  3. THIS REWRITE: the column-table presentation (headers, a separate
-//     Moved-on column) was replaced by the approved bar-graph mockup —
-//     Word / "→ typed chars" / stacked red-gray bar / Cnt, no header row
-//     at all. Every table-era test below (header assertions, the
-//     separate `-movedon` cell, `formatTypedInstead`-with-counts in the
-//     row itself) was rewritten to the bar-graph's own shape; none were
-//     silently dropped.
 
 import { describe, it, expect } from 'vitest'
 import { render, screen, within, fireEvent } from '@testing-library/react'
@@ -66,8 +49,6 @@ describe('MissedTable (bar-graph rows: Word / typed chars / stacked bar / Cnt)',
     expect(screen.getByText('Missed')).toBeInTheDocument()
   })
 
-  // FLAG: replaces the old "renders a 4-column header row" test — the
-  // mockup has no header row at all.
   it('renders no header row', () => {
     renderWithI18n(<MissedTable mistakes={{ h: 1 }} />)
     expect(screen.queryByTestId('missed-table-header')).toBeNull()
@@ -173,11 +154,11 @@ describe('MissedTable (bar-graph rows: Word / typed chars / stacked bar / Cnt)',
       expect(screen.getByTestId('missed-table-row-h-bar-corrected').style.width).toBe('0%')
     })
 
-    // FLAGGED CHOICE (unknown-split rendering): a row with no detail data
-    // at all renders IDENTICALLY to a genuinely all-corrected row (100%
-    // gray) — there's no third "unknown" visual state. The tooltip is
-    // what actually distinguishes the two cases (see the tooltip
-    // describe block below).
+    // A row with no detail data at all renders IDENTICALLY to a
+    // genuinely all-corrected row (100% gray) — there's no third
+    // "unknown" visual state. The tooltip is what actually
+    // distinguishes the two cases (see the tooltip describe block
+    // below).
     it('a legacy/no-detail row renders its bar entirely gray — identical to a confirmed all-corrected row', () => {
       renderWithI18n(<MissedTable mistakes={{ h: 1 }} details={new Map()} />)
       expect(screen.getByTestId('missed-table-row-h-bar-movedon').style.width).toBe('0%')
@@ -214,9 +195,9 @@ describe('MissedTable (bar-graph rows: Word / typed chars / stacked bar / Cnt)',
       expect(tooltip.textContent).toContain('Moved on uncorrected: 3')
     })
 
-    // FLAGGED CHOICE, continued: the tooltip is where a legacy/no-detail
-    // row's bar becomes distinguishable from a confirmed all-corrected
-    // one, even though the bar itself renders identically for both.
+    // The tooltip is where a legacy/no-detail row's bar becomes
+    // distinguishable from a confirmed all-corrected one, even though
+    // the bar itself renders identically for both.
     it('a legacy/no-detail row shows a single distinct sentence instead of the normal 3-line breakdown', () => {
       renderWithI18n(<MissedTable mistakes={{ h: 1 }} details={new Map()} />)
       const tooltip = hoverBar('h')
@@ -251,7 +232,7 @@ describe('MissedTable (bar-graph rows: Word / typed chars / stacked bar / Cnt)',
     })
   })
 
-  // `bordered`/`maxHeightClass` (timeline-panel polish items 2 & 3):
+  // `bordered`/`maxHeightClass`:
   // KeystrokeTimelinePanel passes `maxHeightClass="max-h-40"
   // bordered={false}` for its own bounded-modal instance (see
   // KeystrokeTimelinePanel.test.tsx) — this describe block covers the

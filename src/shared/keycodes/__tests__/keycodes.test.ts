@@ -251,7 +251,7 @@ describe('keycodesV6', () => {
   })
 })
 
-// --- Newly exposed firmware keycodes (issue #205 batch) ---
+// --- Exposed firmware keycodes ---
 
 describe('firmware keycodes added to the picker (v6)', () => {
   beforeEach(() => {

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { buildKeymapRewriteTable } from '../../../../shared/keymap/keymap-apply'
 
 vi.mock('react-i18next', () => ({
@@ -102,6 +102,7 @@ vi.mock('../../../hooks/useKeyLabelLookup', () => ({
 }))
 
 import { KeyLabelsModal } from '../KeyLabelsModal'
+import { ERROR_DISMISS_MS } from '../../ui/DismissibleError'
 import { HUB_ERROR_RATE_LIMITED } from '../../../../shared/types/hub'
 
 function meta(over: Partial<{ id: string; name: string; uploaderName: string; hubPostId: string }> = {}) {
@@ -332,7 +333,7 @@ describe('KeyLabelsModal', () => {
     await waitFor(() => expect(remove).toHaveBeenCalledWith('mine'))
   })
 
-  // --- Phase 3: Delete = Hub cascade (aligns Key Labels with Language/Theme Packs) ---
+  // --- Delete = Hub cascade (aligns Key Labels with Language/Theme Packs) ---
 
   it('Delete on a hub-linked entry cascades to hubDelete before the local remove', async () => {
     metas = [meta({ id: 'linked', name: 'Linked', uploaderName: 'me', hubPostId: 'hub-1' })]
@@ -387,14 +388,9 @@ describe('KeyLabelsModal', () => {
     expect(remove).not.toHaveBeenCalled()
   })
 
-  // --- regression: Delete must not cascade to Hub for entries the user
-  // does not own (fix/delete-ownership-gate). A downloaded label also
-  // carries hubPostId (for Sync/freshness linkage) but is never
-  // deletable on Hub by this user — the old code attempted the Hub
-  // delete regardless of ownership, which failed for a foreign post
-  // (or a deactivated uploader account, e.g. "Brazilian (QWERTY)" by
-  // pipette) and then blocked the local delete too, leaving the user
-  // unable to remove a downloaded label at all. ---
+  // --- Delete must not cascade to Hub for entries the user does not own.
+  // A downloaded label also carries hubPostId (for Sync/freshness
+  // linkage) but is never deletable on Hub by this user. ---
 
   it('a label downloaded from someone else deletes locally only — no Hub call at all (THE regression)', async () => {
     metas = [meta({ id: 'foreign-del', name: 'Foreign Label', uploaderName: 'pipette', hubPostId: 'hub-foreign' })]
@@ -429,7 +425,7 @@ describe('KeyLabelsModal', () => {
     await waitFor(() => expect(importFromFile).toHaveBeenCalled())
   })
 
-  it('P1-b: starting a rename then triggering an import cancels the edit instead of letting it commit mid-batch', async () => {
+  it('starting a rename then triggering an import cancels the edit instead of letting it commit mid-batch', async () => {
     metas = [meta({ id: 'r2', name: 'Old Name', uploaderName: 'me' })]
     let resolveImport!: (value: { success: boolean; data?: { imported: unknown[]; rejections: unknown[] } }) => void
     importFromFile.mockImplementationOnce(() => new Promise((resolve) => { resolveImport = resolve }))
@@ -701,7 +697,7 @@ describe('KeyLabelsModal', () => {
     expect(screen.queryByTestId('key-labels-import-feedback')).toBeNull()
   })
 
-  it('P1 fix: importing files that interleave with existing rows (existing A,D; import B,C) lands fully sorted A,B,C,D in one reorder call', async () => {
+  it('importing files that interleave with existing rows (existing A,D; import B,C) lands fully sorted A,B,C,D in one reorder call', async () => {
     metas = [
       meta({ id: 'a', name: 'Alpha', uploaderName: 'me' }),
       meta({ id: 'd', name: 'Delta', uploaderName: 'me' }),
@@ -808,7 +804,7 @@ describe('KeyLabelsModal', () => {
     await waitFor(() => expect(hubUpdate).toHaveBeenCalledWith('existing'))
   })
 
-  it('shows error when hub auto-sync fails after import, reported against the originating filename (P2a)', async () => {
+  it('shows error when hub auto-sync fails after import, reported against the originating filename', async () => {
     const importedMeta = meta({ id: 'existing', name: 'Existing', hubPostId: 'hub-55' })
     importFromFile.mockResolvedValueOnce({ success: true, data: { imported: [{ fileName: 'existing.json', meta: importedMeta }], rejections: [] } })
     // An unrecognized raw error string falls back to the generic
@@ -825,7 +821,7 @@ describe('KeyLabelsModal', () => {
     expect(screen.getByTestId('key-labels-error').textContent).toContain('existing.json')
   })
 
-  // --- Phase 2: Name sort (drag reorder itself predates this phase) -------
+  // --- Name sort -------
 
   it('the Name sort button sorts installed labels ascending on first click, including QWERTY', async () => {
     metas = [
@@ -845,5 +841,84 @@ describe('KeyLabelsModal', () => {
     await waitFor(() => expect(reorder).toHaveBeenCalledWith(['a', 'z']))
     fireEvent.click(screen.getByTestId('key-labels-sort-button'))
     await waitFor(() => expect(reorder).toHaveBeenLastCalledWith(['z', 'a']))
+  })
+
+  describe('error auto-dismiss', () => {
+    beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }) })
+    afterEach(() => { vi.useRealTimers() })
+
+    async function advance(ms: number): Promise<void> {
+      await act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+    }
+
+    it('removes the error banner after ERROR_DISMISS_MS', async () => {
+      importFromFile.mockResolvedValueOnce({
+        success: true,
+        data: { imported: [], rejections: [{ fileName: 'dup.json', errorCode: 'DUPLICATE_NAME', error: 'dup' }] },
+      })
+      render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+      fireEvent.click(screen.getByTestId('key-labels-import-button'))
+      await waitFor(() => expect(screen.getByTestId('key-labels-error')).toBeTruthy())
+      await advance(ERROR_DISMISS_MS)
+      expect(screen.queryByTestId('key-labels-error')).toBeNull()
+    })
+
+    it('removes a row error badge after ERROR_DISMISS_MS', async () => {
+      metas = [meta({ id: 'mine', name: 'Mine', uploaderName: 'me' })]
+      hubUpload.mockResolvedValueOnce({ success: false, error: 'network error' })
+      render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+      fireEvent.click(screen.getByTestId('key-labels-upload-mine'))
+      await waitFor(() => expect(screen.getByTestId('key-labels-result-mine')).toBeTruthy())
+      await advance(ERROR_DISMISS_MS)
+      expect(screen.queryByTestId('key-labels-result-mine')).toBeNull()
+    })
+
+    it('batch import: the banner goes away while the success badge stays', async () => {
+      metas = [meta({ id: 'a', name: 'Alpha', uploaderName: 'me' })]
+      const newMetaB = meta({ id: 'b', name: 'Beta' })
+      importFromFile.mockImplementationOnce(async () => {
+        metas = [...metas, newMetaB]
+        return {
+          success: true,
+          data: {
+            imported: [{ fileName: 'beta.json', meta: newMetaB }],
+            rejections: [{ fileName: 'broken.json', errorCode: 'INVALID_FILE', error: 'Invalid key label file' }],
+          },
+        }
+      })
+      render(<KeyLabelsModal open onClose={vi.fn()} currentDisplayName="me" hubCanWrite />)
+      fireEvent.click(screen.getByTestId('key-labels-import-button'))
+      await waitFor(() => expect(screen.getByTestId('key-labels-result-b').textContent).toBe('common.saved'))
+      expect(screen.getByTestId('key-labels-error')).toBeTruthy()
+      await advance(ERROR_DISMISS_MS)
+      expect(screen.queryByTestId('key-labels-error')).toBeNull()
+      expect(screen.getByTestId('key-labels-result-b').textContent).toBe('common.saved')
+    })
+
+    it('closing and reopening the modal shows no stale error banner', async () => {
+      importFromFile.mockResolvedValueOnce({
+        success: true,
+        data: { imported: [], rejections: [{ fileName: 'dup.json', errorCode: 'DUPLICATE_NAME', error: 'dup' }] },
+      })
+      const onClose = vi.fn()
+      const { rerender } = render(<KeyLabelsModal open onClose={onClose} currentDisplayName="me" hubCanWrite />)
+      fireEvent.click(screen.getByTestId('key-labels-import-button'))
+      await waitFor(() => expect(screen.getByTestId('key-labels-error')).toBeTruthy())
+      rerender(<KeyLabelsModal open={false} onClose={onClose} currentDisplayName="me" hubCanWrite />)
+      rerender(<KeyLabelsModal open onClose={onClose} currentDisplayName="me" hubCanWrite />)
+      expect(screen.queryByTestId('key-labels-error')).toBeNull()
+    })
+
+    it('closing and reopening the modal shows no stale row error badge', async () => {
+      metas = [meta({ id: 'mine', name: 'Mine', uploaderName: 'me' })]
+      hubUpload.mockResolvedValueOnce({ success: false, error: 'network error' })
+      const onClose = vi.fn()
+      const { rerender } = render(<KeyLabelsModal open onClose={onClose} currentDisplayName="me" hubCanWrite />)
+      fireEvent.click(screen.getByTestId('key-labels-upload-mine'))
+      await waitFor(() => expect(screen.getByTestId('key-labels-result-mine')).toBeTruthy())
+      rerender(<KeyLabelsModal open={false} onClose={onClose} currentDisplayName="me" hubCanWrite />)
+      rerender(<KeyLabelsModal open onClose={onClose} currentDisplayName="me" hubCanWrite />)
+      expect(screen.queryByTestId('key-labels-result-mine')).toBeNull()
+    })
   })
 })

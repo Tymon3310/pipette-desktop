@@ -160,23 +160,24 @@ describe('useInputModes — run-log recording', () => {
   })
 
   it('captures the run\'s very first keystroke — the one that transitions waiting -> running — not just the ones after it', async () => {
-    // Regression coverage for the missing-first-bar bug (user report: a
-    // run's first word always renders one bar short in the keystroke
-    // timeline). Root cause: useInputModes's testLabelRef gate (feeding
-    // both onNoteKeystrokeRegistration and prepareAnalyticsEvent) used to
-    // read `typingTest.state.status === 'running'` only — while status is
-    // still 'waiting' (true for every keystroke up to and including the
-    // one that flips it to 'running'), noteRegistration/prepare see a null
-    // label and drop the press outright, so the very first matrix press of
-    // any run was never buffered at all. Drives matrix-then-char per
-    // character (the same order the P1 test above uses) so this reliably
-    // exercises the registration gate, not just char-correlation.
+    // The run-log registration gate (runLogLabelRef, computeRecordingTags
+    // — see its own armed-waiting comment in compute-recording-tags.ts for
+    // why a 'running'-only gate would drop it) must admit the run's very
+    // first keystroke, the one that transitions 'waiting' -> 'running' —
+    // otherwise onNoteKeystrokeRegistration/prepareAnalyticsEvent see a
+    // null label and drop the press outright, so the run's first matrix
+    // press — driven here ahead of its char — is never buffered. Drives
+    // matrix-then-char per character (the same order the config-switch
+    // test below uses) so this reliably exercises the registration gate,
+    // not just char-correlation.
     const { result } = renderRunLogHook({ consent: true, wordCount: 1 })
     const keymap = buildKeymap()
 
     // Let useInputModes's mount-time "sync saved config" effect settle
-    // first — same reason the P1 test above does this: it fires once per
-    // mount and calls typingTest.setConfig(), which mints a fresh runId
+    // first — same reason the config-switch test below does this: it
+    // fires on mount (and again whenever the saved config changes) and,
+    // unless that config is already synced, calls typingTest.setConfig(),
+    // which mints a fresh runId
     // asynchronously (see pristineRunIdRef's own comment in
     // useInputModes.ts). A real user's first keystroke always lands well
     // after this microtask-scale async settles (human reaction time
@@ -208,11 +209,11 @@ describe('useInputModes — run-log recording', () => {
     expect(savedLog.words[0].keystrokes).toHaveLength(word.length)
   })
 
-  it('a config switch\'s async word-list load window never lets a phantom keystroke leak into the next real run\'s saved log (gate split: P1 verified safe)', async () => {
-    // codex safety review P1: setConfig updates `typingTest.config`
-    // synchronously, but `typingTest.state` (status/runId/words) stays
-    // whatever it was until the async createWordsForConfig() call
-    // resolves and calls setState(freshState(...)). During that narrow
+  it('a config switch\'s async word-list load window never lets a phantom keystroke leak into the next real run\'s saved log', async () => {
+    // setConfig updates `typingTest.config` synchronously, but
+    // `typingTest.state` (status/runId/words) stays whatever it was until
+    // the async createWordsForConfig() call resolves and calls
+    // setState(freshState(...)). During that narrow
     // window, runLogLabelRef's `isArmedWaiting` can read true pairing the
     // OLD (already non-pristine) runId with the NEW config's label — a
     // transient phantom combination. This test proves that combination
@@ -255,12 +256,11 @@ describe('useInputModes — run-log recording', () => {
     // Switch config — `typingTest.config` updates towards configB
     // essentially immediately (setConfigState is synchronous), but
     // `typingTest.state` (status/runId/words) stays configA's until
-    // createWordsForConfig resolves. This is the P1 window.
+    // createWordsForConfig resolves.
     rerender({ savedTypingTestConfig: configB })
     expect(result.current.typingTest.state.runId).toBe(runIdBeforeSwitch)
 
-    // A press RIGHT NOW, before awaiting anything — the phantom-tag
-    // window the P1 review flagged.
+    // A press RIGHT NOW, before awaiting anything — the phantom-tag window.
     act(() => {
       result.current.typingTest.processMatrixFrame(new Set(['0,0']), keymap)
     })
@@ -381,7 +381,7 @@ describe('useInputModes — run-log recording', () => {
     expect(mockTypingRunLogSave).not.toHaveBeenCalled()
   })
 
-  it('does not attribute matrix keystrokes registered while unfocused, but resumes once refocused (P1)', async () => {
+  it('does not attribute matrix keystrokes registered while unfocused, but resumes once refocused', async () => {
     // Two words: the first is typed and submitted entirely while
     // focused, which puts the run solidly mid-'running' (regardless of
     // either word's length) before the unfocused phase.
@@ -469,7 +469,7 @@ describe('useInputModes — run-log recording', () => {
     expect(totalKeystrokes).toBe(word1.length + word2.length)
   })
 
-  it('discards the buffer on pause, so a resumed-then-finished run saves no raw log (P3)', async () => {
+  it('discards the buffer on pause, so a resumed-then-finished run saves no raw log', async () => {
     // Pause/resume (memory mode) only exists for imported fileImport
     // text — captureMemory() returns null for every other mode, so
     // pauseTypingTest() is a no-op there. Set up a one-word fileImport

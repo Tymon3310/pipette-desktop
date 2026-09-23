@@ -28,6 +28,7 @@ import { useTypingRecordingTray } from './hooks/use-typing-recording-tray'
 import { useFileGenerators } from './hooks/use-file-generators'
 import { formatDeviceId } from './app-types'
 import { AppBanners } from './components/AppBanners'
+import { AppErrorBanner } from './components/AppErrorBanner'
 import { AppDisconnectedView } from './components/AppDisconnectedView'
 import { AppModals } from './components/AppModals'
 import { AppEditorSurface } from './components/AppEditorSurface'
@@ -105,7 +106,7 @@ export function App() {
     currentDefinition: keyboard.definition,
   })
 
-  // --- Extracted hooks ---
+  // --- hooks ---
 
   const { deviceSyncing, phase2SyncPending } = useDeviceAutoSync({
     connectedDevice: device.connectedDevice,
@@ -351,18 +352,18 @@ export function App() {
     return await (keymapEditorRef.current?.applyKeymapRewrite(table) ?? Promise.resolve({ appliedCount: 0 }))
   }, [])
 
-  // Plan-qwerty-select-no-rewrite v7 — シミュレーションタブ方式: lifted out of
-  // QuickSettingsSelects (the footer's Keyboard Layout select) because the
-  // Apply button that now opens this modal lives on KeymapEditor's
-  // simulation tab instead — both need the same pending/apply state, so it
-  // is owned here and threaded down to each. `handleKeyboardLayoutChange`
-  // still goes to the select as a plain display switch; `requestApply` goes
-  // to KeymapEditor's Apply button. `isApplying` (aliased `keymapApplyBusy`
-  // below) is also what gates the footer's Analyze button while a rewrite
-  // is mid-flight (see its own comment at the `analyzeDisabled` prop) — its
-  // true window fully contains the actual `applyKeymapRewrite` call (it
-  // flips true just before `onApplyKeymapRewrite` is invoked and clears
-  // only once that call settles), so no separate in-flight flag is needed.
+  // Owned here because two separate consumers share the same pending/apply
+  // state: the footer's Keyboard Layout select (QuickSettingsSelects, via
+  // AppStatusBar → StatusBar) and the Apply button on KeymapEditor's
+  // simulation tab (via AppEditorSurface). `handleKeyboardLayoutChange`
+  // goes to the select as a plain display switch; `requestApply` goes to
+  // KeymapEditor's Apply button.
+  // `isApplying` (aliased `keymapApplyBusy` below) is also what gates the
+  // footer's Analyze button while a rewrite is mid-flight (see its own
+  // comment at the `analyzeDisabled` prop) — its true window fully
+  // contains the actual `applyKeymapRewrite` call (it flips true just
+  // before `onApplyKeymapRewrite` is invoked and clears only once that
+  // call settles), so no separate in-flight flag is needed.
   const {
     handleKeyboardLayoutChange: handleKeyboardLayoutSelectChange,
     requestApply: requestKeymapApply,
@@ -400,8 +401,7 @@ export function App() {
     keymapEditorRef,
   })
 
-  // Restore cleanup (Plan-qwerty-select-no-rewrite §snapshot/.vil 復元時の
-  // クリーンアップ): snapshot/layout-store restore and .vil import both
+  // Restore cleanup: snapshot/layout-store restore and .vil import both
   // converge on `applyVilFile`, which bumps `keymapRestoreSeq` on success.
   // Reacting here (rather than inside KeymapEditor) is what reaches the
   // Keyboard Layout select's confirm modal in QuickSettingsSelects (see its
@@ -505,11 +505,7 @@ export function App() {
           />
         )}
 
-        {(fileIO.error || sideload.error || layoutStore.error) && (
-          <div className="bg-danger/10 px-4 py-1.5 text-xs text-danger">
-            {fileIO.error || sideload.error || layoutStore.error}
-          </div>
-        )}
+        <AppErrorBanner fileIO={fileIO} sideload={sideload} layoutStore={layoutStore} />
       </div>
 
       <AppStatusBar

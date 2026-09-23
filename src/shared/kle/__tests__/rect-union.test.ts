@@ -64,7 +64,7 @@ describe('computeUnionPolygon', () => {
     expect(verts).toHaveLength(4)
   })
 
-  it('returns 6 vertices for BAE key with y2 offset (issue #60)', () => {
+  it('returns 6 vertices for BAE key with y2 offset', () => {
     // BAE: primary w=1.5 h=2, secondary w2=2.25 h2=1 x2=-0.75 y2=1
     // Simulates the exact pixel coordinates that trigger FP precision bug:
     // r1b = 54*2 - spacing  vs  r2b = 54 + (54 - spacing)
@@ -92,7 +92,7 @@ describe('computeUnionPolygon', () => {
   })
 
   it('snaps near-equal coordinates (FP noise) without merging distant ones', () => {
-    // L-shape where shared bottom differs by ~1e-14 (same mechanism as #60)
+    // L-shape where shared bottom differs by ~1e-14
     // Rect1: narrow tall (0,0)→(10,30), Rect2: wide lower (0,10)→(15,30+ε)
     const verts = computeUnionPolygon(
       0, 0, 10, 30,              // r1b = 30

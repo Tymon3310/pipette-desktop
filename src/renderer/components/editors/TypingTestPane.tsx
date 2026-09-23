@@ -128,14 +128,14 @@ export function TypingTestPane({
     onViewOnlyChange,
   })
 
-  // Completion screen (Plan-completion-timeline-view PR-B): the keymap
-  // pane + its layer-tracking note describe the KEYMAP, which is no
-  // longer the point once a run finishes and the reading window gives
-  // way to the inline keystroke timeline (see TypingTestView) — hidden
-  // alongside it. Editor-only: view-only's own keyboard display is
-  // deliberately independent of both `hideKeymap` and this (see the
-  // existing "Keymap hidden only in the editor view" comment below), so
-  // a view-only run reaching 'finished' keeps showing its keyboard.
+  // Completion screen: the keymap pane + its layer-tracking note describe
+  // the KEYMAP, which is no longer the point once a run finishes and the
+  // reading window gives way to the inline keystroke timeline (see
+  // TypingTestView) — hidden alongside it. Editor-only: view-only's own
+  // keyboard display is deliberately independent of both `hideKeymap` and
+  // this (see the existing "Keymap hidden only in the editor view" comment
+  // below), so a view-only run reaching 'finished' keeps showing its
+  // keyboard.
   const hideKeyboardForFinish = !viewOnly && typingTest.state.status === 'finished'
 
   return (
@@ -188,10 +188,10 @@ export function TypingTestPane({
           handleComparisonChange={handleComparisonChange}
         />
       )}
-      {/* `min-h-0` (added alongside the pre-existing `flex-1`) is part of
-          the completion screen's flex-height chain — see
-          TypingTestView.tsx's own "Completion screen" comment for the
-          full chain this is one link of. Without it, this flex item
+      {/* `min-h-0` alongside `flex-1` is part of the completion screen's
+          flex-height chain — see the FLEX-HEIGHT CHAIN comment in
+          TypingTestFinishedSection.tsx for the full chain this is one
+          link of. Without it, this flex item
           defaults to `min-height: auto` (its own content's natural
           height), which can grow past what its parent (KeymapEditor's
           `overflow-auto` content pane, several levels up) actually has
@@ -304,17 +304,16 @@ export function TypingTestPane({
         </div>
         </div>
       </div>
-      {/* Non-finished controls row (Next Test / Pause / Resume / Restart) —
-          moved here, BELOW the keyboard pane and its layer note, so the
+      {/* Non-finished controls row (Next Test / Pause / Resume / Restart)
+          renders BELOW the keyboard pane and its layer note, so the
           reading window sits directly above the keyboard the user is
-          actually typing on. The finished-state row is unaffected — it
-          still renders inside TypingTestView, at the very bottom of the
-          completion screen (below the timeline panel), since the keyboard
-          itself is hidden once finished (hideKeyboardForFinish). Gated the
-          same way the old in-TypingTestView row was: !viewOnly (view-only
-          never showed this row) and !hideControls (the "operation"
-          toggle), plus the finished check TypingTestView itself no longer
-          needs to make since this row never renders for it. */}
+          actually typing on. The finished-state row renders separately,
+          inside TypingTestView (via TypingTestFinishedSection.tsx), at
+          the very bottom of the completion screen (below the timeline
+          panel), since the keyboard itself is
+          hidden once finished (hideKeyboardForFinish). Gated: !viewOnly
+          (view-only never shows this row) and !hideControls (the
+          "operation" toggle), plus the finished check. */}
       {!viewOnly && typingTest.state.status !== 'finished' && !hideControls && (
         <div className="mt-2 flex w-full justify-center">
           <TypingTestControlsRow

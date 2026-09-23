@@ -98,13 +98,14 @@ export function buildResultNameChips(result: TypingTestResult, t: (key: string) 
  *  unconditional segment (e.g. `|${result.kanaInput ?? false}`): this key
  *  is also the storage key for persisted comparison-baseline preferences
  *  (`TypingTestComparisonBaselines`, keyed by this exact string — see
- *  `use-typing-test-pane-comparison.ts`'s `conditionKey` call). Appending
- *  an unconditional new segment would change the key for every existing
- *  result at once, silently orphaning every baseline saved before that
- *  field existed. Appending only when true keeps every pre-existing key
- *  byte-identical to its prior shape while still giving the new condition
- *  its own distinct key (no legacy key can end with the literal `|kana`
- *  or `|weakspot` — the fields they replace are stringified booleans).
+ *  `use-typing-test-pane-comparison.ts`'s `conditionKey` call). An
+ *  unconditional segment would change the key for every result, orphaning
+ *  any baseline persisted from before these fields existed. Appending only
+ *  when true keeps a non-kana, non-weak-spot result's key matching those
+ *  older persisted keys (a stored key without these segments ends with
+ *  the stringified `romajiInput` boolean, so it never ends with `|kana`
+ *  or `|weakspot`), while a kana or weak-spot run still gets its own
+ *  distinct key.
  *  `weakSpotTrainingMode` is checked on the ALREADY-kana-extended key (chained
  *  after `|kana`, not independently off `base`) so a hypothetical kana +
  *  weak-spot run still gets its own distinct 3-segment-deep key rather
@@ -164,10 +165,10 @@ export interface BuildTypingTestResultInput {
   runId?: string
   /** Whether romaji-keystroke judging was actually in effect for this run
    *  (see `isRomajiInputActive`) — not the raw `config.romajiInput` flag,
-   *  since that now defaults to on and must still be gated by capability.
+   *  since that defaults to on and must still be gated by capability.
    *  Recorded verbatim as `romajiInput` below, so a run under every mode
-   *  (including tatoeba/fileImport, which never recorded this before) is
-   *  now grouped/labeled consistently with words/time runs. */
+   *  (including tatoeba/fileImport) is grouped/labeled consistently with
+   *  words/time runs. */
   romajiActive: boolean
   /** Whether kana direct-input judging (kana-input.ts) was actually in
    *  effect for this run (see `isKanaInputActive`) — the sibling of

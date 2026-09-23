@@ -3,11 +3,10 @@
 //
 // Covers two things `applyVilFile` does on every restore:
 //  - the `keymapRestoreSeq` bump — the single signal App.tsx's
-//    restore-cleanup effect watches for (Plan-qwerty-select-no-rewrite
-//    §snapshot/.vil 復元時のクリーンアップ, D1). Snapshot/layout-store
-//    restore and `.vil` import both converge on this function, so proving
-//    the bump fires here covers both call sites without needing App.tsx's
-//    own harness.
+//    restore-cleanup effect watches for. Snapshot/layout-store restore and
+//    `.vil` import both converge on this function, so proving the bump
+//    fires here covers both call sites without needing App.tsx's own
+//    harness.
 //  - QMK settings restore only applying qsids the connected firmware
 //    supports, and keeping local state in sync with what was actually
 //    written to the device.
@@ -452,10 +451,10 @@ describe('applyVilFile qmk settings', () => {
   })
 })
 
-// Task-irr-4 (Plan-import-restore-rollback.md §B tests B1-B5): applyVilFile's
-// backup-before-write / rollback-on-failure behavior for a real (non-dummy)
-// device. Each test installs its own window.vialAPI mock since the write
-// sequence itself — and where it's made to fail — is the point under test.
+// applyVilFile's backup-before-write / rollback-on-failure behavior for a
+// real (non-dummy) device. Each test installs its own window.vialAPI mock
+// since the write sequence itself — and where it's made to fail — is the
+// point under test.
 describe('applyVilFile HID backup and rollback', () => {
   const originalVialAPI = window.vialAPI
 
@@ -655,5 +654,52 @@ describe('applyVilFile HID backup and rollback', () => {
     expect(applyResult).toEqual({ ok: true })
     expect(setKeycode).not.toHaveBeenCalled()
     expect(result.current.state.keymap.get('0,0,0')).toBe(0x4f)
+  })
+
+  it('a restored file with an empty macro array skips the macro write and leaves state\'s macro fields untouched', async () => {
+    const setKeycode = vi.fn(async () => {})
+    const setMacroBuffer = vi.fn(async () => {})
+    window.vialAPI = stubVialAPI({ setKeycode, setMacroBuffer })
+
+    const previousMacros = [1, 2, 3]
+    const previousParsedMacros = [[{ type: 'text', text: 'hi' }]] as unknown as KeyboardState['parsedMacros']
+    const { result } = renderHook(() =>
+      useHarness(baseHidState({
+        macroBuffer: previousMacros,
+        macroBufferSize: 3,
+        parsedMacros: previousParsedMacros,
+      })),
+    )
+
+    await act(async () => {
+      await result.current.applyVilFile({ ...VALID_VIL, macros: [] })
+    })
+
+    expect(setMacroBuffer).not.toHaveBeenCalled()
+    expect(result.current.state.macroBuffer).toBe(previousMacros)
+    expect(result.current.state.parsedMacros).toBe(previousParsedMacros)
+    // Everything else in the file is still applied as normal.
+    expect(result.current.state.keymap.get('0,0,0')).toBe(0x4f)
+  })
+
+  it('a restored file with a non-empty macro array still writes and updates state (regression)', async () => {
+    const setKeycode = vi.fn(async () => {})
+    const setMacroBuffer = vi.fn(async () => {})
+    window.vialAPI = stubVialAPI({ setKeycode, setMacroBuffer })
+
+    const { result } = renderHook(() =>
+      useHarness(baseHidState({
+        macroBuffer: [9, 9],
+        macroBufferSize: 2,
+        parsedMacros: [],
+      })),
+    )
+
+    await act(async () => {
+      await result.current.applyVilFile(VALID_VIL)
+    })
+
+    expect(setMacroBuffer).toHaveBeenCalledWith(VALID_VIL.macros)
+    expect(result.current.state.macroBuffer).toEqual(VALID_VIL.macros)
   })
 })

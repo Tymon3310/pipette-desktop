@@ -67,6 +67,7 @@ import {
   validateHidData,
   probeDevice,
 } from '../hid-service'
+import { log } from '../logger'
 
 function createMockDeviceInfo(overrides?: Record<string, unknown>) {
   return {
@@ -81,11 +82,16 @@ function createMockDeviceInfo(overrides?: Record<string, unknown>) {
   }
 }
 
-function createMockOpenDevice() {
+function createMockOpenDevice(overrides?: {
+  write?: (...args: unknown[]) => unknown
+  read?: (...args: unknown[]) => unknown
+  close?: (...args: unknown[]) => unknown
+}) {
   return {
     write: mockWrite,
     read: mockRead,
     close: mockClose,
+    ...overrides,
   }
 }
 
@@ -93,7 +99,15 @@ function createMockOpenDevice() {
 
 beforeEach(async () => {
   vi.clearAllMocks()
-  mockWrite.mockReturnValue(MSG_LEN + 1)
+  // clearAllMocks() only resets call history — a mockImplementation() (or an
+  // unconsumed …Once queue) set by an earlier test survives it and can leak
+  // into a later one. Reset these explicitly since several tests below set a
+  // throwing mockHIDAsyncOpen.mockImplementation.
+  mockHIDAsyncOpen.mockReset()
+  mockDevicesAsync.mockReset()
+  vi.mocked(log).mockReset()
+  // HIDAsync.write() resolves with the byte count written; it never returns synchronously.
+  mockWrite.mockResolvedValue(MSG_LEN + 1)
   await closeHidDevice()
 })
 
@@ -195,6 +209,7 @@ describe('openHidDevice / closeHidDevice', () => {
 
     expect(result).toBe(false)
     await expect(isDeviceOpen()).resolves.toBe(false)
+    expect(log).not.toHaveBeenCalledWith('error', expect.anything())
   })
 
   it('returns false when device has no path', async () => {
@@ -205,6 +220,19 @@ describe('openHidDevice / closeHidDevice', () => {
     const result = await openHidDevice(0x1234, 0x5678)
 
     expect(result).toBe(false)
+    expect(log).not.toHaveBeenCalledWith('error', expect.anything())
+  })
+
+  it('logs and rethrows the same error object when device enumeration throws', async () => {
+    const err = new Error('cannot enumerate devices')
+    mockDevicesAsync.mockRejectedValue(err)
+
+    await expect(openHidDevice(0x1234, 0x5678)).rejects.toBe(err)
+
+    expect(mockHIDAsyncOpen).not.toHaveBeenCalled()
+    const errorCalls = vi.mocked(log).mock.calls.filter(([level]) => level === 'error')
+    expect(errorCalls).toHaveLength(1)
+    expect(errorCalls[0][1]).toBe('Failed to open HID device 0x1234:0x5678: cannot enumerate devices')
   })
 
   it('closes existing device before opening a new one', async () => {
@@ -243,14 +271,61 @@ describe('openHidDevice / closeHidDevice', () => {
   it('openHidDevice throws after exhausting retries', async () => {
     vi.useFakeTimers()
     mockDevicesAsync.mockResolvedValue([createMockDeviceInfo()])
-    mockHIDAsyncOpen.mockImplementation(() => { throw new Error('cannot open device') })
+    const err = new Error('cannot open device')
+    mockHIDAsyncOpen.mockImplementation(() => { throw err })
 
     const promise = openHidDevice(0x1234, 0x5678)
-    const assertion = expect(promise).rejects.toThrow('cannot open device')
+    const assertion = expect(promise).rejects.toBe(err)
     await vi.runAllTimersAsync()
 
     await assertion
     expect(mockHIDAsyncOpen).toHaveBeenCalledTimes(HID_OPEN_RETRY_COUNT)
+  })
+
+  it('logs the exact open-failure message once, at error level, when every open attempt fails', async () => {
+    vi.useFakeTimers()
+    mockDevicesAsync.mockResolvedValue([
+      createMockDeviceInfo({ vendorId: 0x1, productId: 0xab }),
+    ])
+    mockHIDAsyncOpen.mockImplementation(() => { throw new Error('cannot open device') })
+
+    const promise = openHidDevice(0x1, 0xab)
+    const assertion = expect(promise).rejects.toThrow('cannot open device')
+    await vi.runAllTimersAsync()
+    await assertion
+
+    const errorCalls = vi.mocked(log).mock.calls.filter(([level]) => level === 'error')
+    expect(errorCalls).toHaveLength(1)
+    expect(errorCalls[0][1]).toBe('Failed to open HID device 0x0001:0x00ab: cannot open device')
+  })
+
+  it('does not log an error when a retry eventually succeeds', async () => {
+    vi.useFakeTimers()
+    mockDevicesAsync.mockResolvedValue([createMockDeviceInfo()])
+    mockHIDAsyncOpen
+      .mockRejectedValueOnce(new Error('cannot open device'))
+      .mockResolvedValueOnce(createMockOpenDevice())
+
+    const promise = openHidDevice(0x1234, 0x5678)
+    await vi.advanceTimersByTimeAsync(HID_OPEN_RETRY_DELAY_MS)
+    await promise
+
+    const errorCalls = vi.mocked(log).mock.calls.filter(([level]) => level === 'error')
+    expect(errorCalls).toHaveLength(0)
+  })
+
+  it('still rejects with the original open error when log() itself throws', async () => {
+    vi.useFakeTimers()
+    mockDevicesAsync.mockResolvedValue([createMockDeviceInfo()])
+    const err = new Error('cannot open device')
+    mockHIDAsyncOpen.mockImplementation(() => { throw err })
+    vi.mocked(log).mockImplementationOnce(() => { throw new Error('disk full') })
+
+    const promise = openHidDevice(0x1234, 0x5678)
+    const assertion = expect(promise).rejects.toBe(err)
+    await vi.runAllTimersAsync()
+
+    await assertion
   })
 
   it('closeHidDevice resets state', async () => {
@@ -317,10 +392,12 @@ describe('sendReceive', () => {
   })
 
   it('retries on timeout', async () => {
+    // A genuine timeout is read() resolving empty; sendReceive raises the timeout
+    // error itself from that empty response, read() never rejects with one.
     vi.useFakeTimers()
     mockRead
-      .mockRejectedValueOnce(new Error('HID read timeout'))
-      .mockRejectedValueOnce(new Error('HID read timeout'))
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(Buffer.alloc(0))
       .mockResolvedValueOnce(Buffer.alloc(MSG_LEN))
 
     const promise = sendReceive([0x01])
@@ -339,11 +416,48 @@ describe('sendReceive', () => {
     expect(mockWrite).toHaveBeenCalledTimes(1)
   })
 
-  it('throws immediately on write errors (not transient)', async () => {
-    mockWrite.mockImplementation(() => { throw new Error('Cannot write to hid device') })
+  it.each([
+    ['Linux', 'could not read data from device: hid_read_timeout: unexpected poll error (device disconnected)'],
+    ['macOS', 'could not read data from device: hid_read_timeout: device disconnected'],
+    ['Windows', 'could not read data from device: hid_read_timeout/GetOverlappedResult'],
+  ])('throws immediately on a %s disconnect error, despite its "timeout" function name', async (_platform, message) => {
+    mockRead.mockRejectedValue(new Error(message))
 
-    await expect(sendReceive([0x01])).rejects.toThrow('Cannot write')
+    await expect(sendReceive([0x01])).rejects.toThrow(message)
     expect(mockWrite).toHaveBeenCalledTimes(1)
+    expect(mockRead).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws immediately on write errors (not transient), with no unhandled rejection', async () => {
+    // node-hid's write() rejects on failure (it never throws synchronously); sendReceive
+    // must await it so the rejection is caught here instead of becoming unhandled.
+    //
+    // A vi.fn() spy is not used for the rejecting write: vitest attaches its own handler
+    // to the promise a mock returns, so a rejection from mockRejectedValue() never surfaces
+    // as an unhandled rejection even if sendReceive fails to await the write. A plain
+    // function's returned promise carries no such handler, so it actually exercises the
+    // await.
+    await closeHidDevice()
+    let plainWriteCalls = 0
+    const plainWrite = () => {
+      plainWriteCalls++
+      return Promise.reject(new Error('Cannot write to hid device'))
+    }
+    mockDevicesAsync.mockResolvedValue([createMockDeviceInfo()])
+    mockHIDAsyncOpen.mockResolvedValue(createMockOpenDevice({ write: plainWrite }))
+    await openHidDevice(0x1234, 0x5678)
+
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+    try {
+      await expect(sendReceive([0x01])).rejects.toThrow('Cannot write')
+      expect(plainWriteCalls).toBe(1)
+      expect(mockRead).not.toHaveBeenCalled()
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(unhandled).not.toHaveBeenCalled()
+    } finally {
+      process.off('unhandledRejection', unhandled)
+    }
   })
 
   it('throws immediately on non-transient errors', async () => {
@@ -356,7 +470,7 @@ describe('sendReceive', () => {
   it('adds delay between retries', async () => {
     vi.useFakeTimers()
     mockRead
-      .mockRejectedValueOnce(new Error('HID read timeout'))
+      .mockResolvedValueOnce(Buffer.alloc(0))
       .mockResolvedValueOnce(Buffer.alloc(MSG_LEN))
 
     const promise = sendReceive([0x01])
@@ -375,7 +489,7 @@ describe('sendReceive', () => {
 
   it('throws after exhausting retries', async () => {
     vi.useFakeTimers()
-    mockRead.mockImplementation(() => { throw new Error('HID read timeout') })
+    mockRead.mockResolvedValue(Buffer.alloc(0))
 
     const promise = sendReceive([0x01])
     const assertion = expect(promise).rejects.toThrow('timeout')
@@ -446,6 +560,72 @@ describe('sendReceive', () => {
 
     expect(mockWrite).toHaveBeenCalledTimes(2)
   })
+
+  it('fails immediately when the device is closed mid-operation without a reopen', async () => {
+    // The device opened in this suite's beforeEach — backed by mockWrite / mockRead — is
+    // the handle sendReceive pins when the operation starts.
+    let resolveFirstRead: ((buf: Buffer) => void) | null = null
+    mockRead.mockImplementationOnce(
+      () =>
+        new Promise<Buffer>((resolve) => {
+          resolveFirstRead = resolve
+        }),
+    )
+
+    const srPromise = sendReceive([0x01])
+    await new Promise((r) => setTimeout(r, 10))
+
+    // Close with no reopen: node-hid rejects further writes to the closed handle.
+    await closeHidDevice()
+    mockWrite.mockRejectedValueOnce(new Error('device has been closed'))
+
+    // The pinned handle's first read resolves empty, forcing a retry against the
+    // now-closed handle.
+    resolveFirstRead!(Buffer.alloc(0))
+
+    await expect(srPromise).rejects.toThrow('device has been closed')
+    expect(mockWrite).toHaveBeenCalledTimes(2)
+  })
+
+  it('pins a retry to the handle the operation started with, not a device swapped in mid-flight', async () => {
+    // The device opened in beforeEach — backed by mockWrite / mockRead — is the
+    // handle sendReceive pins when the operation starts.
+    mockRead.mockResolvedValue(Buffer.alloc(MSG_LEN))
+    let resolveFirstRead: ((buf: Buffer) => void) | null = null
+    mockRead.mockImplementationOnce(
+      () =>
+        new Promise<Buffer>((resolve) => {
+          resolveFirstRead = resolve
+        }),
+    )
+
+    const srPromise = sendReceive([0x01])
+    await new Promise((r) => setTimeout(r, 10))
+
+    // Swap in a second device while the first read is still pending.
+    await closeHidDevice()
+    const secondWrite = vi.fn().mockResolvedValue(MSG_LEN + 1)
+    const secondRead = vi.fn().mockResolvedValue(Buffer.alloc(MSG_LEN))
+    mockDevicesAsync.mockResolvedValue([
+      createMockDeviceInfo({ vendorId: 0xaaaa, productId: 0xbbbb, path: '/dev/hidraw1' }),
+    ])
+    mockHIDAsyncOpen.mockResolvedValueOnce(
+      createMockOpenDevice({ write: secondWrite, read: secondRead }),
+    )
+    await openHidDevice(0xaaaa, 0xbbbb)
+
+    // The original (first) device's read now resolves empty, forcing a retry.
+    resolveFirstRead!(Buffer.alloc(0))
+    const result = await srPromise
+
+    expect(result.length).toBe(MSG_LEN)
+    // Both the initial attempt and its retry went to the original device's mocks.
+    expect(mockWrite).toHaveBeenCalledTimes(2)
+    expect(mockRead).toHaveBeenCalledTimes(2)
+    // The device swapped in mid-flight was never touched by this operation.
+    expect(secondWrite).not.toHaveBeenCalled()
+    expect(secondRead).not.toHaveBeenCalled()
+  })
 })
 
 describe('send', () => {
@@ -499,6 +679,46 @@ describe('send', () => {
 
     // Now send should proceed
     await sendPromise
+    expect(mockWrite).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects when write rejects', async () => {
+    mockDevicesAsync.mockResolvedValue([createMockDeviceInfo()])
+    mockHIDAsyncOpen.mockResolvedValue(createMockOpenDevice())
+    await openHidDevice(0x1234, 0x5678)
+
+    mockWrite.mockRejectedValue(new Error('Cannot write to hid device'))
+
+    await expect(send([0x01])).rejects.toThrow('Cannot write')
+  })
+
+  it('does not release the mutex, and does not start the next write, until its own write settles', async () => {
+    mockDevicesAsync.mockResolvedValue([createMockDeviceInfo()])
+    mockHIDAsyncOpen.mockResolvedValue(createMockOpenDevice())
+    await openHidDevice(0x1234, 0x5678)
+
+    let resolveFirstWrite: ((n: number) => void) | null = null
+    mockWrite.mockImplementationOnce(
+      () =>
+        new Promise<number>((resolve) => {
+          resolveFirstWrite = resolve
+        }),
+    )
+    mockRead.mockResolvedValue(Buffer.alloc(MSG_LEN))
+
+    const sendPromise = send([0x01])
+    const srPromise = sendReceive([0x02])
+
+    // Yield so the second operation has queued behind the first on the mutex.
+    await new Promise((r) => setTimeout(r, 10))
+
+    // The second operation's write must not run while the first write is still pending.
+    expect(mockWrite).toHaveBeenCalledTimes(1)
+
+    resolveFirstWrite!(MSG_LEN + 1)
+    await sendPromise
+    await srPromise
+
     expect(mockWrite).toHaveBeenCalledTimes(2)
   })
 })
@@ -664,5 +884,17 @@ describe('probeDevice', () => {
     expect(result.encoderCount).toBe(0)
     expect(result.encoderLayout).toEqual({})
     expect(findEncoderWrite()).toBeUndefined()
+  })
+
+  it('rejects and closes the temp device when its first write rejects', async () => {
+    const tempWrite = vi.fn().mockRejectedValue(new Error('Cannot write to hid device'))
+    const tempRead = vi.fn()
+    const tempClose = vi.fn()
+    mockHIDAsyncOpen.mockResolvedValue(createMockOpenDevice({ write: tempWrite, read: tempRead, close: tempClose }))
+
+    await expect(probeDevice(0x1234, 0x5678)).rejects.toThrow('Cannot write')
+
+    expect(tempRead).not.toHaveBeenCalled()
+    expect(tempClose).toHaveBeenCalled()
   })
 })

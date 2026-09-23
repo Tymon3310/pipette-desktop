@@ -1,20 +1,46 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import { useCallback, useMemo, useEffect, useRef } from 'react'
+import { BulkKeyWriteError } from '../../hooks/useKeyboard'
 import type { BulkKeyEntry } from '../../hooks/useKeyboard'
 import type { PopoverState } from './keymap-editor-types'
 import type { UseKeymapHistoryReturn, SingleHistoryEntry, HistoryEntry } from './useKeymapHistory'
 
-/** Match a history entry against the current popover position, returning the keycode if matched. */
-function matchPopoverEntry(
-  popoverState: PopoverState | null,
+/** Why applying one undo/redo step failed; `null` means it succeeded.
+ *  `landed: true` means at least one of the entry's device writes reached
+ *  the device (and state) before the failure, so the undo/redo trail for
+ *  that entry can no longer be trusted and must be discarded rather than
+ *  retried. */
+interface ApplyHistoryFailure {
+  landed: boolean
+  error: unknown
+}
+
+/** A key or encoder position to match a history entry against — shared by
+ *  the popover's top-only undo/redo and the keyboard's middle-click undo,
+ *  so both read the exact same matching rule. */
+type HistoryMatchPosition =
+  | { kind: 'key'; row: number; col: number }
+  | { kind: 'encoder'; idx: number; dir: number }
+
+/** `PopoverState`'s position fields in `HistoryMatchPosition` shape. */
+function popoverPosition(popoverState: PopoverState | null): HistoryMatchPosition | null {
+  if (!popoverState) return null
+  return popoverState.kind === 'key'
+    ? { kind: 'key', row: popoverState.row, col: popoverState.col }
+    : { kind: 'encoder', idx: popoverState.idx, dir: popoverState.dir }
+}
+
+/** Match a history entry against a position, returning the keycode if matched. */
+function matchEntryAtPosition(
+  position: HistoryMatchPosition | null,
   entry: HistoryEntry | null,
   currentLayer: number,
   field: 'oldKeycode' | 'newKeycode',
 ): number | undefined {
-  if (!popoverState || !entry || entry.kind === 'batch') return undefined
-  if (popoverState.kind === 'key' && entry.kind === 'key' && entry.layer === currentLayer && entry.row === popoverState.row && entry.col === popoverState.col) return entry[field]
-  if (popoverState.kind === 'encoder' && entry.kind === 'encoder' && entry.layer === currentLayer && entry.idx === popoverState.idx && entry.dir === popoverState.dir) return entry[field]
+  if (!position || !entry || entry.kind === 'batch') return undefined
+  if (position.kind === 'key' && entry.kind === 'key' && entry.layer === currentLayer && entry.row === position.row && entry.col === position.col) return entry[field]
+  if (position.kind === 'encoder' && entry.kind === 'encoder' && entry.layer === currentLayer && entry.idx === position.idx && entry.dir === position.dir) return entry[field]
   return undefined
 }
 
@@ -60,12 +86,12 @@ export function useKeymapHistoryActions({
 }: UseKeymapHistoryActionsOptions) {
   // --- History-derived popover undo ---
   const popoverUndoKeycode = useMemo(
-    () => matchPopoverEntry(popoverState, history.peekUndo, currentLayer, 'oldKeycode'),
+    () => matchEntryAtPosition(popoverPosition(popoverState), history.peekUndo, currentLayer, 'oldKeycode'),
     [popoverState, currentLayer, history.peekUndo],
   )
 
   // --- Undo / redo ---
-  const applyHistoryEntry = useCallback(async (entry: HistoryEntry, isUndo: boolean) => {
+  const applyHistoryEntry = useCallback(async (entry: HistoryEntry, isUndo: boolean): Promise<ApplyHistoryFailure | null> => {
     if (entry.kind === 'batch') {
       const items = isUndo ? [...entry.entries].reverse() : entry.entries
       const keyEntries: BulkKeyEntry[] = []
@@ -75,13 +101,33 @@ export function useKeymapHistoryActions({
         if (e.kind === 'key') keyEntries.push({ layer: e.layer, row: e.row, col: e.col, keycode: code })
         else encoderOps.push({ layer: e.layer, idx: e.idx, dir: e.dir, code })
       }
-      if (keyEntries.length > 0) await onSetKeysBulk(keyEntries)
-      for (const op of encoderOps) await onSetEncoder(op.layer, op.idx, op.dir, op.code)
-    } else {
-      const code = isUndo ? entry.oldKeycode : entry.newKeycode
+      // Flips as soon as one write in the sequence completes; the bulk call
+      // either lands every key entry or reports its own landed prefix
+      // through `BulkKeyWriteError.appliedCount`.
+      let landed = false
+      try {
+        if (keyEntries.length > 0) {
+          await onSetKeysBulk(keyEntries)
+          landed = true
+        }
+        for (const op of encoderOps) {
+          await onSetEncoder(op.layer, op.idx, op.dir, op.code)
+          landed = true
+        }
+      } catch (error) {
+        if (error instanceof BulkKeyWriteError && error.appliedCount > 0) landed = true
+        return { landed, error }
+      }
+      return null
+    }
+    const code = isUndo ? entry.oldKeycode : entry.newKeycode
+    try {
       if (entry.kind === 'key') await onSetKey(entry.layer, entry.row, entry.col, code)
       else await onSetEncoder(entry.layer, entry.idx, entry.dir, code)
+    } catch (error) {
+      return { landed: false, error }
     }
+    return null
   }, [onSetKey, onSetKeysBulk, onSetEncoder])
 
   // In-flight guard to prevent concurrent undo/redo
@@ -106,24 +152,32 @@ export function useKeymapHistoryActions({
     // `tryAdvancePopover`, `applySelectionChange`): a stale completion
     // must never clobber something newer.
     const epoch = getPopoverEpoch()
+    let failure: ApplyHistoryFailure | null
     try {
-      await applyHistoryEntry(entry, isUndo)
-      // Commit only after successful apply.
-      if (isUndo) history.undo()
-      else history.redo()
+      failure = await applyHistoryEntry(entry, isUndo)
     } finally { undoRedoInFlightRef.current = false }
+    if (failure) {
+      // A step that landed only some of its writes leaves the rest of the
+      // stack describing keycodes the device no longer has, so the whole
+      // trail is dropped rather than replayed later — the same "the undo
+      // trail is no longer trustworthy" rule the Key Label rewrite
+      // follows. A step that landed nothing (e.g. a cancelled unlock)
+      // stays put so it can simply be retried.
+      if (failure.landed) history.clear()
+      throw failure.error
+    }
+    // Commit only after successful apply.
+    if (isUndo) history.undo()
+    else history.redo()
     closePopoverIfEpochMatches(epoch)
-    // Fire outside the try/finally above: a throw from `applyHistoryEntry`
-    // or the commit call propagates out of the `try` (after `finally`
-    // resets the in-flight guard) and skips everything below, so reaching
-    // this line already guarantees the apply + commit succeeded — no flag
-    // needed to gate it. Placement after the commit is what guarantees
-    // `onHistoryApplied` can no longer un-commit the undo/redo or leave the
-    // in-flight guard stuck. The flash it triggers is purely cosmetic, so a
-    // throw from the callback itself is swallowed here rather than
-    // rejecting `runHistoryStep`'s promise — the undo/redo already
-    // succeeded and must not be reported as failed just because the flash
-    // visual couldn't be shown.
+    // A failed apply returns (rather than throws) an `ApplyHistoryFailure`,
+    // which is handled above: `history.clear()` when it landed, then a
+    // rethrow — both happen before the commit, the popover close, and this
+    // callback. So reaching this line already guarantees the apply and the
+    // commit succeeded; the callback can no longer un-commit the undo/redo
+    // or leave the in-flight guard stuck. The flash it triggers is purely
+    // cosmetic, so a throw from the callback itself is swallowed here
+    // rather than rejecting `runHistoryStep`'s promise.
     try {
       onHistoryApplied?.(entry.kind === 'batch' ? entry.entries : [entry])
     } catch {
@@ -141,7 +195,7 @@ export function useKeymapHistoryActions({
 
   // --- History-derived popover redo (top-only) ---
   const popoverRedoKeycode = useMemo(
-    () => matchPopoverEntry(popoverState, history.peekRedo, currentLayer, 'newKeycode'),
+    () => matchEntryAtPosition(popoverPosition(popoverState), history.peekRedo, currentLayer, 'newKeycode'),
     [popoverState, currentLayer, history.peekRedo],
   )
 
@@ -149,6 +203,20 @@ export function useKeymapHistoryActions({
     if (popoverRedoKeycode == null) return
     void handleRedo()
   }, [popoverRedoKeycode, handleRedo])
+
+  // --- Middle-click undo (keyboard/encoder widget) — the same top-only
+  // match as the popover's Undo button, keyed by the clicked position
+  // instead of the open popover's. `== null` (not truthiness) because a
+  // matched old keycode of 0 (KC_NO) is a valid undo target. ---
+  const handleKeyAuxUndo = useCallback((pos: { row: number; col: number }) => {
+    if (matchEntryAtPosition({ kind: 'key', ...pos }, history.peekUndo, currentLayer, 'oldKeycode') == null) return
+    void handleUndo()
+  }, [history.peekUndo, currentLayer, handleUndo])
+
+  const handleEncoderAuxUndo = useCallback((pos: { idx: number; dir: number }) => {
+    if (matchEntryAtPosition({ kind: 'encoder', ...pos }, history.peekUndo, currentLayer, 'oldKeycode') == null) return
+    void handleUndo()
+  }, [history.peekUndo, currentLayer, handleUndo])
 
   // --- Keyboard shortcuts for undo/redo ---
   useEffect(() => {
@@ -174,5 +242,7 @@ export function useKeymapHistoryActions({
     handlePopoverRedo,
     handleUndo,
     handleRedo,
+    handleKeyAuxUndo,
+    handleEncoderAuxUndo,
   }
 }

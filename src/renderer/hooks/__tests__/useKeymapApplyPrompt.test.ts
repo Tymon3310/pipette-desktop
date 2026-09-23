@@ -7,15 +7,14 @@ import { useKeymapApplyPrompt, type UseKeymapApplyPromptOptions } from '../useKe
 import { buildKeymapRewriteTable } from '../../../shared/keymap/keymap-apply'
 import { BUILTIN_QWERTY_LAYOUT_ID } from '../../data/keyboard-layouts'
 
-// Real rewrite-table engine (not mocked) — this suite exercises the v7
-// シミュレーションタブ方式 semantics from Plan-qwerty-select-no-rewrite: the
-// select's onChange (`handleKeyboardLayoutChange`) is a plain display
-// switch for every value, never a lookup or a modal. `requestApply` is the
-// ONLY entry point into the confirm modal now — called by KeymapEditor's
-// simulation-tab Apply button, which is only reachable while
-// `useDevicePrefs.remapKind === 'simulated'`. Task-kaw-requestApply-reuse:
-// the hook no longer resolves the target's map/table itself — callers pass
-// in `activeRewriteTable`/`activeLayoutName` (mirroring `useDevicePrefs`'s
+// Real rewrite-table engine (not mocked) — this suite exercises the
+// select's onChange semantics: `handleKeyboardLayoutChange` is a plain
+// display switch for every value, never a lookup or a modal. `requestApply`
+// is the ONLY entry point into the confirm modal — called by
+// KeymapEditor's simulation-tab Apply button, which is only reachable
+// while `useDevicePrefs.remapKind === 'simulated'`. The hook does not
+// resolve the target's map/table itself — callers pass in
+// `activeRewriteTable`/`activeLayoutName` (mirroring `useDevicePrefs`'s
 // own already-resolved values), so `requestApply` reads them synchronously
 // instead of running its own `useKeyLabelLookup` fetch + build.
 const COLEMAK: Record<string, string> = {
@@ -48,16 +47,16 @@ function dvorakTable() {
 
 // Computed ONCE and reused by identity everywhere a test passes
 // `activeRewriteTable` as a prop (as opposed to `.toEqual()`-comparing a
-// freshly-built one, where identity doesn't matter): the hook now watches
-// `activeRewriteTable`'s own identity (P2 fix below) to close the modal
-// when the active pack's data changes — calling `colemakTable()`/
-// `dvorakTable()` fresh at both `setup()` and a later `rerender()` for
-// what a test intends as "the same, unchanged pack" would produce two
-// different `Map` instances and spuriously trip that watcher.
+// freshly-built one, where identity doesn't matter): the hook watches
+// `activeRewriteTable`'s own identity to close the modal when the active
+// pack's data changes — calling `colemakTable()`/`dvorakTable()` fresh at
+// both `setup()` and a later `rerender()` for what a test intends as "the
+// same, unchanged pack" would produce two different `Map` instances and
+// spuriously trip that watcher.
 const COLEMAK_TABLE = colemakTable()
 const DVORAK_TABLE = dvorakTable()
 
-describe('useKeymapApplyPrompt — simulation tab Apply flow (Plan-qwerty-select-no-rewrite v7)', () => {
+describe('useKeymapApplyPrompt — simulation tab Apply flow', () => {
   const onKeyboardLayoutChange = vi.fn()
   const onApplyKeymapRewrite = vi.fn().mockResolvedValue({ appliedCount: 2 })
 
@@ -191,7 +190,7 @@ describe('useKeymapApplyPrompt — simulation tab Apply flow (Plan-qwerty-select
 
   // --- C1 / C2: apply-result handling ---
 
-  it('C1: partial failure leaves the select untouched (no forced QWERTY reset) and surfaces the error', async () => {
+  it('partial failure leaves the select untouched (no forced QWERTY reset) and surfaces the error', async () => {
     onApplyKeymapRewrite.mockResolvedValueOnce({ appliedCount: 1, error: 'device write failed' })
     const { result } = setup({ keyboardLayout: 'dvorak-id', activeRewriteTable: DVORAK_TABLE, activeLayoutName: 'Dvorak' })
     act(() => { result.current.requestApply() })
@@ -203,7 +202,7 @@ describe('useKeymapApplyPrompt — simulation tab Apply flow (Plan-qwerty-select
     expect(result.current.pendingApply).toBeNull()
   })
 
-  it('C2: a zero-count success (keymap already matched the target — Apply intent satisfied) still resets the select to QWERTY', async () => {
+  it('a zero-count success (keymap already matched the target — Apply intent satisfied) still resets the select to QWERTY', async () => {
     onApplyKeymapRewrite.mockResolvedValueOnce({ appliedCount: 0 })
     const { result } = setup({ keyboardLayout: 'dvorak-id', activeRewriteTable: DVORAK_TABLE, activeLayoutName: 'Dvorak' })
     act(() => { result.current.requestApply() })
@@ -287,11 +286,10 @@ describe('useKeymapApplyPrompt — simulation tab Apply flow (Plan-qwerty-select
     })
   })
 
-  // --- RACE (Plan-qwerty-select-no-rewrite v7, new/mandatory): the select
-  // no longer routes through this hook's onChange-time lookup, so a
-  // `keyboardLayout` change can land at any time — while the modal for a
-  // DIFFERENT pack is already open. Must be caught by watching the value
-  // itself. ---
+  // --- RACE: the select does not route through this hook's onChange-time
+  // lookup, so a `keyboardLayout` change can land at any time — while the
+  // modal for a DIFFERENT pack is already open. Must be caught by watching
+  // the value itself. ---
 
   describe('layout-change race', () => {
     it('a layout change while the confirm modal is open for a DIFFERENT pack closes it (open Colemak, select Dvorak, Confirm must not fire)', () => {
@@ -319,13 +317,13 @@ describe('useKeymapApplyPrompt — simulation tab Apply flow (Plan-qwerty-select
       expect(result.current.pendingApply).not.toBeNull()
     })
 
-    // --- FIX B (external review): a layout change WHILE Confirm's own
-    // onApplyKeymapRewrite is still awaiting must discard that apply's
-    // result entirely, not just close the (already-closed) modal — a clean
-    // success arriving after the user has already moved on to a different
-    // pack must never clobber that new selection back to QWERTY. ---
+    // --- A layout change WHILE Confirm's own onApplyKeymapRewrite is
+    // still awaiting must discard that apply's result entirely, not just
+    // close the (already-closed) modal — a clean success arriving after
+    // the user has already moved on to a different pack must never
+    // clobber that new selection back to QWERTY. ---
 
-    it('FIX B: a layout change mid-apply discards a later clean success — no QWERTY reset, the new selection stands', async () => {
+    it('a layout change mid-apply discards a later clean success — no QWERTY reset, the new selection stands', async () => {
       const { promise, resolve } = pendingApplyResult()
       onApplyKeymapRewrite.mockImplementationOnce(() => promise)
 
@@ -355,7 +353,7 @@ describe('useKeymapApplyPrompt — simulation tab Apply flow (Plan-qwerty-select
       expect(result.current.applyError).toBeNull()
     })
 
-    it('FIX B: a layout change mid-apply also discards a later partial failure — no stray error surfaced against the abandoned pack', async () => {
+    it('a layout change mid-apply also discards a later partial failure — no stray error surfaced against the abandoned pack', async () => {
       const { promise, resolve } = pendingApplyResult()
       onApplyKeymapRewrite.mockImplementationOnce(() => promise)
 
@@ -376,7 +374,7 @@ describe('useKeymapApplyPrompt — simulation tab Apply flow (Plan-qwerty-select
       expect(onKeyboardLayoutChange).not.toHaveBeenCalled()
     })
 
-    it('FIX B control: an unchanged layout still resets to QWERTY on clean success (baseline, unaffected by the new guard)', async () => {
+    it('an unchanged layout still resets to QWERTY on clean success (baseline, unaffected by the new guard)', async () => {
       const { result } = setup({ keyboardLayout: 'dvorak-id', activeRewriteTable: DVORAK_TABLE, activeLayoutName: 'Dvorak' })
       act(() => { result.current.requestApply() })
       expect(result.current.pendingApply).not.toBeNull()
@@ -386,14 +384,14 @@ describe('useKeymapApplyPrompt — simulation tab Apply flow (Plan-qwerty-select
     })
   })
 
-  // --- P2 (external review): the active pack's OWN data can change while
-  // its confirm modal is open, without `keyboardLayout` itself changing —
-  // e.g. the same pack is edited or deleted (Key Labels modal, a Hub sync,
-  // or another window) while the modal is up. `activeRewriteTable` must be
-  // watched by its own identity so Confirm can never fire a table that no
-  // longer matches what `useDevicePrefs` currently resolves for this id. ---
+  // --- The active pack's OWN data can change while its confirm modal is
+  // open, without `keyboardLayout` itself changing — e.g. the same pack
+  // is edited or deleted (Key Labels modal, a Hub sync, or another
+  // window) while the modal is up. `activeRewriteTable` must be watched
+  // by its own identity so Confirm can never fire a table that no longer
+  // matches what `useDevicePrefs` currently resolves for this id. ---
 
-  describe('activeRewriteTable identity race (P2 fix)', () => {
+  describe('activeRewriteTable identity race', () => {
     it('the pack is deleted while the modal is open (activeRewriteTable becomes undefined): modal closes, Confirm cannot fire the stale table', () => {
       const { result, rerender } = setup({ keyboardLayout: 'colemak-id', activeRewriteTable: COLEMAK_TABLE, activeLayoutName: 'Colemak' })
       act(() => { result.current.requestApply() })
@@ -433,8 +431,7 @@ describe('useKeymapApplyPrompt — simulation tab Apply flow (Plan-qwerty-select
     })
   })
 
-  // --- D3: keymapRestoreSeq defensively closes an open confirm modal
-  // (Plan-qwerty-select-no-rewrite §snapshot/.vil 復元時のクリーンアップ) ---
+  // --- keymapRestoreSeq defensively closes an open confirm modal ---
 
   describe('keymapRestoreSeq (restore cleanup, D3)', () => {
     it('a change closes an open confirm modal', () => {

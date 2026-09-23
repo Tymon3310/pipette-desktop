@@ -7,9 +7,9 @@
 //
 // The row model (installed + Hub browse), Hub preview, the per-row
 // actions, and the import surface each live in their own sibling hook
-// (Task-split-pack-modals) — this shell only owns the 7 top-level
-// state atoms, the (non-preview) on-close reset, the built-in
-// System/Light/Dark selector, and the JSX.
+// — this shell only owns the 7 top-level state atoms, the
+// (non-preview) on-close reset, the built-in System/Light/Dark
+// selector, and the JSX.
 
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -27,6 +27,7 @@ import { PackHubTab } from '../pack-modal/PackHubTab'
 import { PackSortButton } from '../pack-modal/PackSortButton'
 import { useHubOrigin } from '../pack-modal/useHubOrigin'
 import type { PackActionResult, PackManagerTabId } from '../pack-modal/pack-modal-types'
+import { useDismissErrorResult } from '../pack-modal/use-dismiss-error-result'
 import { useThemePreview } from './use-theme-preview'
 import { useThemePackList } from './use-theme-pack-list'
 import { useThemePackActions } from './use-theme-pack-actions'
@@ -65,6 +66,7 @@ export function ThemePacksModal({
   const [actionError, setActionError] = useState<string | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<PackActionResult | PackActionResult[] | null>(null)
+  useDismissErrorResult(lastResult, setLastResult)
   const [previewPostId, setPreviewPostId] = useState<string | null>(null)
 
   const activeTheme = appConfig.config.theme
@@ -193,6 +195,7 @@ export function ThemePacksModal({
       )}
       importFeedback={importing ? t('common.importing') : (importSummary ?? placement.feedback)}
       actionError={actionError}
+      onDismissError={() => setActionError(null)}
     >
       {activeTab === 'installed' ? (
         <div className="space-y-2">

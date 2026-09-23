@@ -11,7 +11,7 @@ export interface ComputeRecordingTagsOptions {
   typingTestViewOnly: boolean | undefined
   /** The REC toggle's own effective condition (`typingRecordEnabled ?? false`),
    *  computed by useInputModes.ts (this function's only caller) before this
-   *  call — see its own comment there for why REC's scope no longer needs
+   *  call — see its own comment there for why REC's scope doesn't need
    *  the view-only qualifier. */
   recordingActive: boolean
   /** The runId useInputModes.ts's own `pristineRunIdRef` captured on this
@@ -47,8 +47,7 @@ export interface ComputeRecordingTagsOptions {
  * decide which keystrokes get recorded and how they're labeled: REC's own
  * on/off flag, the editor typing-test's per-minute-analytics label, the
  * run-log recorder's own (broader) label, the shared run id, and kana-input
- * mode. Called from useInputModes.ts in the exact spot these assignments
- * used to sit inline — same render, same order, same refs — so
+ * mode. Called render-phase from useInputModes.ts (its only caller), so
  * `prepareAnalyticsEvent` (use-typing-analytics-sink.ts) always sees this
  * render's values by the time any of useTypingTest's own effects run. See
  * the call site in useInputModes.ts for why this must stay render-phase
@@ -79,19 +78,16 @@ export function computeRecordingTags({
   // ('finished' is intentionally excluded so idle presses after a test can't
   // re-introduce a phantom record.)
   //
-  // GATE SPLIT (codex safety review of an earlier, broader-gate attempt at
-  // the missing-first-keystroke fix — see runLogLabelRef below for the
-  // actual fix): this condition is deliberately restored to EXACTLY its
-  // original (#203) shape. Broadening it to also cover armed-waiting (as
-  // a first attempt did) tags the per-minute analytics pipeline too
-  // eagerly in two ways that pipeline was never meant to tolerate:
-  //  - P1: `setConfig`/`setLanguage` update `config` synchronously but
+  // GATE SPLIT: Broadening it to also cover armed-waiting tags the
+  // per-minute analytics pipeline too eagerly in two ways that pipeline
+  // was never meant to tolerate:
+  //  - `setConfig`/`setLanguage` update `config` synchronously but
   //    the STATE stays whatever it was (old runId, possibly already
   //    non-pristine from an earlier session) until their async word-list
   //    load resolves and calls `setState(freshState(...))` — during that
   //    window a broadened gate would tag the STALE run with the NEW
   //    config's label, producing a phantom/orphan analytics run.
-  //  - P2: the per-minute pipeline has no notion of "pre-start" content
+  //  - the per-minute pipeline has no notion of "pre-start" content
   //    filtering — a broadened gate would tag every modifier/no-op press
   //    made while armed-waiting (before the user's first real character)
   //    into the heatmap unboundedly, not just the one keystroke that
@@ -114,7 +110,7 @@ export function computeRecordingTags({
   //  - a 'waiting' that is still the component's untouched, pristine
   //    initial mount value, OR one whose config just changed but whose
   //    async word-list load (setConfig/setLanguage) hasn't resolved yet
-  //    (P1 above) — `runId !== pristineRunId` catches the mount case; the
+  //    — `runId !== pristineRunId` catches the mount case; the
   //    in-flight-reconfigure case is caught for free too, since
   //    `state.runId` doesn't change until that same async load itself
   //    calls `setState(freshState(...))` — until then, `state` (config,
@@ -136,18 +132,19 @@ export function computeRecordingTags({
   // any keystroke preceding the run's own startedAtMs via the negative-
   // pressMs filter, so pre-start junk let in by this wider gate (a
   // modifier key pressed while still armed-waiting, say) is filtered out
-  // downstream rather than needing to never enter the buffer at all. This
-  // is what fixes the run's own first keystroke: previously, gating on
-  // 'running' alone (i.e. reusing testLabelRef) meant the exact keystroke
-  // that flips 'waiting' -> 'running' was processed (both its matrix
-  // registration in useTypingTestMatrix and its own char-side prepare()
-  // in processKeyEvent) while that ref still read null from the render
-  // before — a one-render-late ref can never catch up to the very state
-  // transition it is itself gating, so that keystroke was silently
-  // dropped every single run (user report: a run's first word always
-  // renders one keystroke bar short in KeystrokeTimelinePanel).
-  // 'finished' stays excluded too, so idle presses after a test can't
-  // re-introduce a phantom record.
+  // downstream rather than needing to never enter the buffer at all.
+  // Gating on 'running' alone (i.e. reusing testLabelRef) would drop the
+  // run's own first keystroke: the keystroke that flips 'waiting' ->
+  // 'running' is itself processed against whatever this function wrote on
+  // the render before, when status still read 'waiting' — its char-side
+  // prepare() in processKeyEvent (when one runs; Enter flips the status
+  // without it) runs before that setState, and a matrix frame arriving
+  // ahead of the char is registered in useTypingTestMatrix on the same
+  // stale values. A render-phase ref can't retroactively
+  // see the state transition it is itself gating, so admitting
+  // armed-waiting here is what lets that first keystroke's registration
+  // see a non-null label. 'finished' stays excluded too, so idle presses
+  // after a test can't re-introduce a phantom record.
   const isArmedWaiting = typingTest.state.status === 'waiting' && typingTest.state.runId !== pristineRunId
   runLogLabelRef.current = typingTestMode && !typingTestViewOnly
     && (typingTest.state.status === 'running' || isArmedWaiting)

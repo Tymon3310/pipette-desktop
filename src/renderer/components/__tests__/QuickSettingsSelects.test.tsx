@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // @vitest-environment jsdom
 
-// Plan-qwerty-select-no-rewrite v7: the Rewrite confirm modal and its
-// lookup/validation live in `useKeymapApplyPrompt`, lifted to App.tsx now
-// that the Apply button is on KeymapEditor's simulation tab — see
-// `useKeymapApplyPrompt.test.ts` for that coverage. This component's own
-// contract shrank to a plain passthrough: the Keyboard Layout select's
+// The Rewrite confirm modal and its lookup/validation live in
+// `useKeymapApplyPrompt` — see `useKeymapApplyPrompt.test.ts` for that
+// coverage. This component's own contract: the Keyboard Layout select's
 // onChange is called with the raw selection, nothing more.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -85,7 +83,7 @@ vi.mock('../key-labels/KeyLabelsModal', () => ({ KeyLabelsModal: () => null }))
 
 import { QuickSettingsSelects } from '../QuickSettingsSelects'
 
-describe('QuickSettingsSelects — Keyboard Layout select passthrough (Plan-qwerty-select-no-rewrite v7)', () => {
+describe('QuickSettingsSelects — Keyboard Layout select passthrough', () => {
   const onKeyboardLayoutChange = vi.fn()
 
   beforeEach(() => {
@@ -155,7 +153,7 @@ describe('QuickSettingsSelects — Keyboard Layout select passthrough (Plan-qwer
     })
   })
 
-  describe('Keyboard Layout select — closed trigger hides the "(Default)" suffix (Task-qwerty-trigger-hide-default)', () => {
+  describe('Keyboard Layout select — closed trigger hides the "(Default)" suffix', () => {
     it('shows plain "QWERTY" on the closed trigger while the open list keeps "QWERTY (Default)"', () => {
       renderComponent()
       const trigger = screen.getByRole('button', { name: 'keyLabels.title' })
@@ -182,7 +180,7 @@ describe('QuickSettingsSelects — Keyboard Layout select passthrough (Plan-qwer
     })
   })
 
-  describe('footer overflow (Task-typing-record-footer min-width fix)', () => {
+  describe('footer overflow', () => {
     it('lets the select row shrink (min-w-0, no wrap) instead of forcing the footer onto two lines', () => {
       const { container } = renderComponent()
       const row = container.firstElementChild as HTMLElement

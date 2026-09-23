@@ -147,28 +147,25 @@ export function BigramsChart({
 
   // Finger IKI has no defined meaning for trigrams (a 3-key finger pair
   // isn't a thing), so gram === 3 renders Top + Slow only. Dropping to a
-  // single row keeps the two quadrants full-height instead of leaving an
-  // empty grid cell where Finger IKI used to sit.
+  // single row keeps the two quadrants full-height instead of leaving the
+  // second row empty.
   const showFingerIki = gram === 2
   const gridClass = showFingerIki
     ? 'grid h-full min-h-0 grid-cols-2 grid-rows-2 gap-3'
     : 'grid h-full min-h-0 grid-cols-2 grid-rows-1 gap-3'
 
   // Classes (hand-usage) aggregate — computed once here rather than
-  // separately inside BigramClassesCoverage and BigramClassesTable,
-  // which used to each run useKeycodeFingerMap + aggregateBigramClasses
-  // on their own, doubling the work whenever either sibling quadrant
-  // re-rendered. Both `snapshot` and `entries` fall back to a stable
-  // empty value while the quadrant is hidden (gram === 3) so the memo
-  // below settles on an empty aggregate instead of doing the fold for a
-  // quadrant nobody sees.
+  // separately inside BigramClassesCoverage and BigramClassesTable. Both
+  // `snapshot` and `entries` fall back to a stable empty value while the
+  // quadrant is hidden (gram === 3) so the memo below settles on an empty
+  // aggregate instead of doing the fold for a quadrant nobody sees.
   const classesFingerMap = useKeycodeFingerMap(showFingerIki ? snapshot : null, fingerOverrides)
   const classesEntries = showFingerIki ? entries : EMPTY_CLASSES_ENTRIES
 
   // Snapshot's own `code -> qmkId` map — threaded into Top/Slow pair
   // labels below so they resolve from the snapshot's own recorded
   // keymap strings instead of the session's `RAWCODES_MAP` (see
-  // analyze-snapshot-codes.ts / Task-speed-ranking-snapshot-labels.md).
+  // analyze-snapshot-codes.ts).
   const qmkByCode = useSnapshotQmkByCode(snapshot)
   const classesAggregate = useMemo(
     () => aggregateBigramClasses(classesEntries, classesFingerMap),

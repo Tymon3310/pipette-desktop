@@ -654,7 +654,7 @@ async function captureAnalyzePage(page: Page): Promise<void> {
     console.log('  [skip] analyze-tab-summary not found')
   }
 
-  // App filter popover — the multi-select now lives in the staged filter
+  // App filter popover — the multi-select lives in the staged filter
   // modal behind the summary chip. Captured as a full-page screenshot so
   // the open popover and the modal context land together, then both are
   // closed (Escape may close popover+modal together depending on event
@@ -698,11 +698,6 @@ async function captureAnalyzePage(page: Page): Promise<void> {
   } else {
     console.log('  [skip] analyze-filter-store-toggle not found')
   }
-
-  // The standalone snapshot-timeline capture was removed with the inline
-  // quick-selector: the snapshot pick now lives in the filter modal's
-  // Keymap row and `analyze-snapshot-timeline.png` was never referenced
-  // by the operation guides.
 
   // Heatmap: requires a snapshot; empty state is captured if none exists.
   const heatmapTab = page.locator('[data-testid="analyze-tab-keyHeatmap"]')
@@ -1410,11 +1405,10 @@ async function captureStatusBar(page: Page): Promise<void> {
   }
 }
 
-// --- Phase 8b: Simulation/Base tabs + Key Label "Apply to Keymap" confirm
-// modal (Plan-qwerty-select-no-rewrite v7 — シミュレーションタブ方式) ---
+// --- Phase 8b: Simulation/Base tabs + Key Label "Apply to Keymap" confirm modal ---
 
 // Drives the footer's Keyboard Layout select to the seeded `keymapApplicable`
-// Colemak entry (see seedDummyKeyLabel above). Selecting it no longer opens
+// Colemak entry (see seedDummyKeyLabel above). Selecting it does not open
 // any modal by itself — it switches the display and reveals the vertical
 // simulation/Base tabs on the keymap. This waits for the simulation tab,
 // clicks the Apply button on its layer-indicator row (the only way left to

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // The disconnected-view shell (device picker + settings/data modals that
-// remain reachable without a live keyboard). Split out of App.tsx
-// (Task-split-app-tsx).
+// remain reachable without a live keyboard).
 
 import { ConnectingOverlay } from './ConnectingOverlay'
 import { DeviceSelector } from './DeviceSelector'
@@ -53,7 +52,8 @@ export function AppDisconnectedView({
       <DeviceSelector
         devices={device.devices}
         connecting={device.connecting}
-        error={lifecycle.fileLoadError || device.error}
+        fileLoadError={lifecycle.fileLoadError}
+        deviceError={device.error}
         onConnect={lifecycle.handleConnect}
         onLoadDummy={onLoadDummy ?? lifecycle.handleLoadDummy}
         onLoadPipetteFile={lifecycle.handleLoadPipetteFile}
@@ -66,7 +66,8 @@ export function AppDisconnectedView({
         onOpenData={lifecycle.handleOpenDataModal}
         syncStatus={sync.syncStatus}
         deviceWarning={lifecycle.deviceLoadError}
-        onClearError={lifecycle.clearFileLoadError}
+        onClearFileLoadError={lifecycle.clearFileLoadError}
+        onClearDeviceError={device.clearError}
       />
       {lifecycle.showSettings && (
         <SettingsModal

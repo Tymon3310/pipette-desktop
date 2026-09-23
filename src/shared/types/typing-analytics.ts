@@ -509,8 +509,7 @@ export interface TypingDurationCell {
   sumSq: number
 }
 
-/** Phase 1 metrics for the Layout Comparison. Bigram-derived ones
- * (travel distance / SFB) are added in Phase 2. */
+/** Metrics for the Layout Comparison. */
 export type LayoutComparisonMetric =
   | 'fingerLoad'
   | 'handBalance'
@@ -538,7 +537,12 @@ export interface LayoutComparisonInputLayout {
 
 export interface LayoutComparisonOptions {
   source: LayoutComparisonInputLayout
-  /** 1〜3 layouts in Phase 1; UI guard but main accepts any length. */
+  /** Target layouts to compare against `source`. Main's parser
+   *  (`parseLayoutComparisonOptions`, typing-analytics-ipc-range.ts)
+   *  imposes no length limit; every renderer call site
+   *  (`LayoutComparisonView`, the CSV export builder) sends exactly
+   *  `[source, target]`, the source first so the table gets a baseline
+   *  column. */
   targets: LayoutComparisonInputLayout[]
   /** Subset of metrics to compute. Empty array yields just the
    * total / skipped event counts. */

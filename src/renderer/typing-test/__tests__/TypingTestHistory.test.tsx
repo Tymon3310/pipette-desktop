@@ -49,10 +49,12 @@ function textMeta(id: string, name: string, source?: { provider: string; workId:
 }
 
 beforeEach(() => {
-  // TypingTestHistory now calls useTypingTestTexts() to classify fileImport
-  // rows into Aozora vs File Import — default to no imported texts so
-  // pre-existing tests (which don't care about the Aozora split) are
-  // unaffected. Tests below override this per-case.
+  // TypingTestHistory calls useTypingTestTexts() to classify fileImport
+  // rows into Aozora vs File Import (see classifyResultTab in
+  // TypingTestHistory.tsx). Defaulting to no imported texts here means a
+  // fileImport row with no matching textMeta classifies as File Import,
+  // not Aozora, in tests that don't care about that split. Tests below
+  // override this per-case.
   window.vialAPI = {
     ...window.vialAPI,
     typingTestTextStoreList: vi.fn().mockResolvedValue({ success: true, data: [] }),
@@ -214,7 +216,7 @@ describe('TypingTestHistory', () => {
     expect(cellsFor(5)).toEqual(['—', '100 ms', '160 ms'])
   })
 
-  // Header polish: the Avg Key Hold column header abbreviates to "AKH" (the
+  // The Avg Key Hold column header abbreviates to "AKH" (the
   // full column gained width pressure once KPM/Accuracy/Avg Hold all landed
   // side by side), with the full label available via hover tooltip so the
   // abbreviation isn't a dead end. Sorting must keep working off the same
@@ -256,10 +258,19 @@ describe('TypingTestHistory', () => {
   // "Tatoeba 10 Lines (japanese_hiragana)" label) that must ellipsis-
   // truncate instead of wrapping/stretching the table, with the full text
   // reachable via hover tooltip — same treatment as the Name column. The
-  // table is `table-fixed` with a proportional width on each header cell
-  // (not a hard max-w cap on the td — see COL_MODE in HistoryResultsPanel)
-  // so the column, and thus the truncation point, scales with the modal's
-  // actual width instead of stopping at a fixed rem value.
+  // table is `table-fixed`, and every other header cell (`date`, `wpm`,
+  // `kpm`, `accuracy`, `akh`, `duration`, `pb`, plus the label-less
+  // `timeline`/`delete` header cells that only exist when `uid`/`onDelete` are
+  // passed — the code-side column names, not their display labels) carries
+  // a width — measured px once `useHistoryColumnWidths` resolves, a
+  // `FALLBACK_*` class whenever that measurement isn't available (before
+  // it resolves, or when layout measurement itself is unavailable, e.g.
+  // jsdom). The Name and Mode header cells carry no width at all (not a
+  // hard max-w cap on the td in HistoryResultsCells.tsx's ModeCell either
+  // — see the Mode header cell in HistoryResultsPanel.tsx) and split
+  // whatever width the other columns leave over, 1:1 — so the Mode
+  // column, and thus the truncation point, tracks the modal's actual
+  // width instead of stopping at a fixed rem value.
   it('truncates a long Mode cell and exposes the full text via tooltip', () => {
     const results = [
       makeResult({
@@ -638,11 +649,9 @@ describe('TypingTestHistory', () => {
   // the tabs above and the results table below, so a tall stack of sections
   // can't push the table past the modal's bottom edge.
   //
-  // Updated for the Results/Analysis secondary-tab split: the three lower
-  // sections now render only under the Analysis view tab (the sparkline/
-  // stats moved into the Results view alongside the table), so this test
-  // checks the Results-view table floor first, then switches to Analysis to
-  // check the scroll wrapper.
+  // The three lower sections render only under the Analysis view tab,
+  // so this test checks the Results-view table floor first,
+  // then switches to Analysis to check the scroll wrapper.
   it('wraps the Analysis sections in their own scroll container, and gives the Results table a min-height floor', () => {
     const results = [
       makeResult({ wpm: 60, accuracy: 90, mistakes: { a: 3, b: 2 } }),
@@ -682,7 +691,7 @@ describe('TypingTestHistory', () => {
     expect(sections.querySelector('[data-testid="typing-test-mistake-ranking"]')).toBeTruthy()
     expect(sections.querySelector('[data-testid="typing-test-error-mix"]')).toBeTruthy()
 
-    // The condition select itself now lives in the header's right-end
+    // The condition select itself lives in the header's right-end
     // group (sibling of the Results/Analysis tabs), not inside this scroll
     // wrapper — only the "ACCURACY TREND" heading + chart stay here.
     expect(sections.querySelector('[data-testid="history-condition-filter"]')).toBeNull()
@@ -858,17 +867,14 @@ describe('TypingTestHistory', () => {
       expect(analysisPanel?.getAttribute('aria-labelledby')).toBe(analysisTab.id)
     })
 
-    // Regression guard: an earlier version of this split wrapped each panel
-    // component in its own plain `<div role="tabpanel" ...>` in
-    // TypingTestHistory, with the panel component's real content nested one
-    // level inside it. That extra div's default `display: block` broke the
-    // flex min-h-0/shrink chain HistorySections relies on for its
-    // overflow-y-auto scroll region to actually engage, silently
-    // reintroducing the #377 modal-overflow bug (caught via screenshot, not
-    // by DOM presence/absence assertions — hence this structural check).
-    // The fix makes each panel component apply role=tabpanel/id/
-    // aria-labelledby directly to its OWN existing root div, so the
-    // tabpanel element IS the flex/scroll container, not a wrapper around it.
+    // Each panel component applies role=tabpanel/id/aria-labelledby
+    // directly to its OWN existing root div, so the tabpanel element IS
+    // the flex/scroll container, not a wrapper around it. A `<div
+    // role="tabpanel">` wrapper around the panel's content would default
+    // to `display: block`, breaking the flex min-h-0/shrink chain
+    // HistorySections relies on for its overflow-y-auto scroll region to
+    // engage — this asserts the structural classes directly since
+    // content-presence assertions would not catch that.
     it('keeps each view tabpanel as part of the flex sizing chain (no unconstrained wrapper div)', () => {
       const results = [
         makeResult({ wpm: 60, accuracy: 90, mistakes: { a: 3, b: 2 } }),
@@ -906,11 +912,12 @@ describe('TypingTestHistory', () => {
       expect(analysisPanel!.className).toContain('overflow-y-auto')
     })
 
-    // P2-1 (codex review): sort state used to live inside HistoryResultsPanel,
-    // which unmounts whenever the Analysis view is active (conditional
-    // render) — so a chosen sort silently reset on every round trip through
-    // Analysis. The fix lifts sortColumn/sortDirection into TypingTestHistory
-    // itself, which never unmounts.
+    // sortColumn/sortDirection live in TypingTestHistory itself (which
+    // stays mounted across the Results/Analysis switch), not in
+    // HistoryResultsPanel (which unmounts whenever the Analysis view is
+    // active — see the state's own doc comment in TypingTestHistory.tsx),
+    // so a chosen sort survives a round trip through Analysis instead of
+    // silently resetting.
     it('preserves the results-table sort selection across a Results→Analysis→Results round trip', () => {
       const results = [
         makeResult({ wpm: 60, date: '2025-01-03T00:00:00Z' }),
@@ -946,11 +953,10 @@ describe('TypingTestHistory', () => {
       expect(activeHeader?.textContent).toContain('WPM')
     })
 
-    // P2-2 (codex review): APG tabs pattern — arrow keys move focus AND
-    // selection between the two view tabs, roving tabIndex keeps the
-    // tablist a single Tab stop. Scoped to the NEW view tabs only; the
-    // source select (MonkeyType/Tatoeba/Aozora/File Import) is a plain
-    // `<select>`, not a tablist, and is untouched by this pattern.
+    // APG tabs pattern — arrow keys move focus AND selection between the two view
+    // tabs, roving tabIndex keeps the tablist a single Tab stop. Scoped to the
+    // view tabs only; the source select (MonkeyType/Tatoeba/Aozora/File Import) is
+    // a plain `<select>`, not a tablist, and is untouched by this pattern.
     it('supports APG roving-tabindex arrow-key navigation between the view tabs', () => {
       renderWithI18n(<TypingTestHistory results={[makeResult()]} />)
       const resultsTab = screen.getByTestId('history-view-tab-results') as HTMLButtonElement
@@ -1130,11 +1136,11 @@ describe('TypingTestHistory', () => {
     })
   })
 
-  // Header redesign: the source tabs (MonkeyType/Tatoeba/Aozora/File Import)
-  // that used to be their own row are gone entirely — source selection is
-  // now a `<select>` at the right end of the single Results/Analysis tab
-  // row, and (Analysis only) the Accuracy Trend condition select joins it
-  // as a second select in the same right-end group.
+  // Source selection (MonkeyType/Tatoeba/Aozora/File Import) is a
+  // `<select>` at the right end of the single Results/Analysis tab row,
+  // not its own row of tab buttons; in the Analysis view, when there are
+  // conditions to pick from, the Accuracy Trend condition select joins it
+  // in the same right-end group.
   describe('single header row: Results/Analysis tabs + right-end selects', () => {
     it('never renders a source-tab button anywhere in the document', () => {
       renderWithI18n(<TypingTestHistory results={[makeResult()]} />)
@@ -1155,8 +1161,7 @@ describe('TypingTestHistory', () => {
       expect(screen.getAllByText('81').length).toBeGreaterThan(0)
       expect(screen.queryByText('77')).toBeNull()
 
-      // Switching the select's value re-classifies which rows show, exactly
-      // like the old tab-click behavior did.
+      // Switching the select's value re-classifies which rows show.
       fireEvent.change(select, { target: { value: 'tatoeba' } })
       expect(screen.getAllByText('77').length).toBeGreaterThan(0)
       expect(screen.queryByText('81')).toBeNull()
@@ -1183,10 +1188,9 @@ describe('TypingTestHistory', () => {
       const sourceSelect = screen.getByTestId('history-filter-source')
       const conditionSelect = screen.getByTestId('history-condition-filter')
 
-      // Order per the approved redesign sketch: source select first, then
-      // the condition select. DOCUMENT_POSITION_FOLLOWING (4) set on
-      // `conditionSelect` relative to `sourceSelect` means the source select
-      // comes first in document order.
+      // Order: source select first, then the condition select.
+      // DOCUMENT_POSITION_FOLLOWING (4) set on `conditionSelect` relative to
+      // `sourceSelect` means the source select comes first in document order.
       expect(sourceSelect.compareDocumentPosition(conditionSelect) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 

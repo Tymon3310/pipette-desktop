@@ -82,7 +82,10 @@ export interface KeyboardState {
   keychron: KeychronState | null
   // Bumped by `applyVilFile` on every successful restore (snapshot / layout
   // store / .vil import all converge there). App.tsx watches this counter to
-  // clear the keymap undo/redo history.
+  // clear the keymap undo/redo history and close a stray Keyboard Layout
+  // apply-confirm modal — both things that KeymapEditor's own uid/keymap-size
+  // clear effect misses because a restore keeps the same uid and never
+  // empties the keymap.
   // Monotonic for the whole app session: `reset()` (disconnect) carries
   // the current value forward instead of zeroing it via `emptyState()`.
   keymapRestoreSeq: number
@@ -142,6 +145,24 @@ export function emptyState(): KeyboardState {
 
 export function isEchoDetected(err: unknown): boolean {
   return err instanceof Error && err.message.includes(ECHO_DETECTED_MSG)
+}
+
+/** Thrown by `setKeysBulk` when it fails to complete a bulk key write —
+ *  either the write loop stops partway through, or the preflight unlock
+ *  wait for a reset keycode is cancelled before any write runs.
+ *  `appliedCount` is how many of the caller's entries the device
+ *  acknowledged (and therefore reflects in state) before the failure; a
+ *  write whose response never comes back does not count, and a cancelled
+ *  unlock wait leaves it at 0. The message mirrors the original failure,
+ *  which is kept as `cause`. */
+export class BulkKeyWriteError extends Error {
+  readonly appliedCount: number
+
+  constructor(appliedCount: number, cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause })
+    this.name = 'BulkKeyWriteError'
+    this.appliedCount = appliedCount
+  }
 }
 
 export interface BootGuardRef {

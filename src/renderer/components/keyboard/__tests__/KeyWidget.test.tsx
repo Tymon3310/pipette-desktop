@@ -18,6 +18,7 @@ import {
   KEY_REMAP_COLOR,
 } from '../constants'
 import type { KleKey } from '../../../../shared/kle/types'
+import { attrs, FILL_STYLE, BORDER_STYLE } from './flash-overlay-test-utils'
 
 let mockIsMask = false
 let mockInnerKeycode: { qmkId: string } = { qmkId: 'KC_A' }
@@ -339,6 +340,99 @@ describe('KeyWidget', () => {
     })
   })
 
+  // Pins the flash overlay markup attribute-by-attribute: element kind,
+  // geometry (identical to the key's outer shape), the two layers' order
+  // right after the outer shape, and which layer remounts on a re-apply.
+  describe('flash overlay DOM contract', () => {
+    function pick(el: Element, names: string[]): Record<string, string | null> {
+      return Object.fromEntries(names.map((n) => [n, el.getAttribute(n)]))
+    }
+
+    const RECT_GEOMETRY = ['x', 'y', 'width', 'height', 'rx', 'ry']
+
+    function renderFlashed(kleKey: KleKey, extra: { selected?: boolean; flashGeneration?: number } = {}) {
+      return render(
+        <svg>
+          <KeyWidget kleKey={kleKey} keycode="KC_A" flashed {...extra} />
+        </svg>,
+      )
+    }
+
+    function layers(container: HTMLElement) {
+      const fill = container.querySelector('[data-testid="flash-overlay"]')!
+      const border = container.querySelector('[data-testid="flash-overlay-border"]')!
+      const base = container.querySelector('g')!.firstElementChild!
+      return { fill, border, base }
+    }
+
+    it('draws both layers as rects with the outer rect geometry, directly after it', () => {
+      const { container } = renderFlashed(makeKey())
+      const { fill, border, base } = layers(container)
+      expect(base.tagName).toBe('rect')
+      expect(fill.tagName).toBe('rect')
+      expect(border.tagName).toBe('rect')
+      expect(attrs(fill)).toEqual({
+        ...pick(base, RECT_GEOMETRY),
+        'data-testid': 'flash-overlay',
+        class: 'key-flash-overlay',
+        fill: KEY_SELECTED_COLOR,
+        style: FILL_STYLE,
+      })
+      expect(attrs(border)).toEqual({
+        ...pick(base, RECT_GEOMETRY),
+        'data-testid': 'flash-overlay-border',
+        fill: 'none',
+        stroke: KEY_BORDER_COLOR,
+        'stroke-width': '1',
+        style: BORDER_STYLE,
+      })
+      expect(base.nextElementSibling).toBe(fill)
+      expect(fill.nextElementSibling).toBe(border)
+    })
+
+    it('draws both layers as the union path for a stepped/ISO key, directly after it', () => {
+      const { container } = renderFlashed(
+        makeKey({ width: 1.25, height: 2, x2: -0.25, y2: 0, width2: 1.5, height2: 1 }),
+        { selected: true },
+      )
+      const { fill, border, base } = layers(container)
+      expect(base.tagName).toBe('path')
+      expect(fill.tagName).toBe('path')
+      expect(border.tagName).toBe('path')
+      expect(base.getAttribute('d')).toBeTruthy()
+      expect(attrs(fill)).toEqual({
+        d: base.getAttribute('d'),
+        'data-testid': 'flash-overlay',
+        class: 'key-flash-overlay',
+        fill: KEY_SELECTED_COLOR,
+        style: FILL_STYLE,
+      })
+      expect(attrs(border)).toEqual({
+        d: base.getAttribute('d'),
+        'data-testid': 'flash-overlay-border',
+        fill: 'none',
+        stroke: KEY_SELECTED_COLOR,
+        'stroke-width': '2',
+        style: BORDER_STYLE,
+      })
+      expect(base.nextElementSibling).toBe(fill)
+      expect(fill.nextElementSibling).toBe(border)
+    })
+
+    it('replaces only the fill layer when flashGeneration changes', () => {
+      const { container, rerender } = renderFlashed(makeKey(), { flashGeneration: 1 })
+      const before = layers(container)
+      rerender(
+        <svg>
+          <KeyWidget kleKey={makeKey()} keycode="KC_A" flashed flashGeneration={2} />
+        </svg>,
+      )
+      const after = layers(container)
+      expect(after.fill).not.toBe(before.fill)
+      expect(after.border).toBe(before.border)
+    })
+  })
+
   describe('masked key split-click', () => {
     it('renders inner rect for masked key', () => {
       mockIsMask = true
@@ -510,11 +604,11 @@ describe('KeyWidget', () => {
   })
 })
 
-// --- issue #295/#296: composite (masked) key inner label honors the
-// active Key Label pack's remap, and a two-part inner label (shift +
-// base) renders stacked instead of crammed onto one line. ---
+// --- composite (masked) key inner label honors the active Key Label
+// pack's remap, and a two-part inner label (shift + base) renders
+// stacked instead of crammed onto one line. ---
 
-describe('KeyWidget — inner label remap resolution (issue #295)', () => {
+describe('KeyWidget — inner label remap resolution', () => {
   it('resolves the inner label via remapLabel when the pack remaps the inner basic keycode', () => {
     mockIsMask = true
     mockInnerKeycode = { qmkId: 'KC_8' }
@@ -556,7 +650,7 @@ describe('KeyWidget — inner label remap resolution (issue #295)', () => {
   })
 })
 
-describe('KeyWidget — stacked shift/base inner label (issue #296)', () => {
+describe('KeyWidget — stacked shift/base inner label', () => {
   it('renders a two-part inner label as two stacked text elements, shifted char above base', () => {
     mockIsMask = true
     mockInnerKeycode = { qmkId: 'KC_8' }
@@ -587,7 +681,7 @@ describe('KeyWidget — stacked shift/base inner label (issue #296)', () => {
   })
 })
 
-describe('KeyWidget — remap tint applies to the inner label too (consistency with #294)', () => {
+describe('KeyWidget — remap tint applies to the inner label too', () => {
   it('tints the inner label with the remap color when remapped=true', () => {
     mockIsMask = true
     mockInnerKeycode = { qmkId: 'KC_9' }

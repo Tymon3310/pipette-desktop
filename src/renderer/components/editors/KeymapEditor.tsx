@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { useTileContentOverride } from '../../hooks/useTileContentOverride'
 import { ViewMatrixPanel } from './ViewMatrixPanel'
 
-// Extracted modules
 import type { KeymapEditorProps as Props } from './keymap-editor-types'
 import { PANEL_COLLAPSED_WIDTH } from './keymap-editor-types'
 export type { KeymapEditorHandle } from './keymap-editor-types'
@@ -137,7 +136,7 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
     handleKeycodeSelect, handlePopoverKeycodeSelect, handlePopoverRawKeycodeSelect,
     handlePopoverModMaskChange, popoverUndoKeycode, handlePopoverUndo,
     popoverRedoKeycode, handlePopoverRedo,
-    handleUndo, handleRedo,
+    handleUndo, handleRedo, auxUndoHandlers,
     handleDeselect, handleDeselectClick,
     tdModalIndex, macroModalIndex, handleTdModalSave, handleTdModalClose, handleMacroModalClose,
   } = useKeymapSelectionHandlers({
@@ -197,11 +196,13 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
   const layerPanelCollapsed = layerPanelOpenProp === false
   const toggleLayerPanel = useCallback(() => { onLayerPanelOpenChange?.(!layerPanelOpenProp) }, [onLayerPanelOpenChange, layerPanelOpenProp])
 
-  // --- Key Label "apply to keymap" bulk rewrite (Plan-key-label-keymap-apply
-  // Phase 3). Reachable from the footer's layout select via the imperative
+  // --- Key Label "apply to keymap" bulk rewrite. Reachable from the
+  // simulation tab's Apply button — its confirm modal's handleApplyConfirm
+  // (useKeymapApplyPrompt.ts) reaches this via App.tsx and the imperative
   // handle below, so the write lands on this same `history` instance
-  // instead of a second undo stack. See `useKeymapRewrite` for the full
-  // destructive-one-shot / freshness-check / unmount-guard contract.
+  // instead of a second undo stack.
+  // See `useKeymapRewrite` for the full destructive-one-shot /
+  // freshness-check / unmount-guard contract.
   const { applyKeymapRewrite } = useKeymapRewrite({
     keymap, encoderLayout, onSetKey, onSetEncoder, history, triggerFlash,
   })
@@ -225,9 +226,8 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
     typingTestMode, typingTestEffectiveLayer: typingTest.effectiveLayer,
   })
 
-  // --- Simulation/Base tab (Plan-qwerty-select-no-rewrite v7). See
-  // `useKeymapPackTabs` for the full tab-visibility / read-only / Base-tab
-  // raw-data contract. ---
+  // --- Simulation/Base tab. See `useKeymapPackTabs` for the full
+  // tab-visibility / read-only / Base-tab raw-data contract. ---
   const {
     packTab, showPackTabs, packTabReadOnly,
     primaryKeycodes, primaryEncoderKeycodes, primaryRemappedKeys, primaryRemappedEncoders, primaryRemapLabel,
@@ -390,16 +390,16 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
             />
           ) : (
             <>
-              {/* Simulation/Base tabs (Plan-qwerty-select-no-rewrite v7):
-                  the vertical tab strip sits to the RIGHT of the keymap
-                  pane, attached flush to its edge (index/sticky-note style
-                  — see `KeymapPackTabs`). The wrapping `flex items-stretch`
-                  div (in `KeymapPrimaryPane`) with no gap is what keeps the
-                  strip touching the pane regardless of this row's own
-                  `gap-4` (which only spaces this pane+tabs unit from its
-                  own siblings, e.g. the overlay-panel spacer). View Matrix
-                  mode is excluded from `showPackTabs` above, so it can
-                  never overlap with either tab. */}
+              {/* Simulation/Base tabs: the vertical tab strip sits to the
+                  RIGHT of the keymap pane, attached flush to its edge
+                  (index/sticky-note style — see `KeymapPackTabs`). The
+                  wrapping `flex items-stretch` div (in `KeymapPrimaryPane`)
+                  with no gap is what keeps the strip touching the pane
+                  regardless of this row's own `gap-4` (which only spaces
+                  this pane+tabs unit from its own siblings, e.g. the
+                  overlay-panel spacer). View Matrix mode is excluded from
+                  `showPackTabs` above, so it can never overlap with either
+                  tab. */}
               <KeymapPrimaryPane
                 showPackTabs={showPackTabs} packTab={packTab}
                 keys={layout.keys} layerKeycodes={layerKeycodes} layerEncoderKeycodes={layerEncoderKeycodes}
@@ -415,6 +415,7 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
                 flash={flash} multiSelectedKeys={multiSelectedKeys} primaryRemapLabel={primaryRemapLabel}
                 handleKeyClick={handleKeyClick} handleKeyDoubleClick={handleKeyDoubleClick} handleEncoderClick={handleEncoderClick} handleEncoderDoubleClick={handleEncoderDoubleClick}
                 handleDeselect={handleDeselect} handlePackTabChange={handlePackTabChange} keymapPackName={keymapPackName}
+                auxUndoHandlers={viewMatrixMode.active ? undefined : auxUndoHandlers}
                 {...viewMatrixPaneProps}
               />
               {/* The relocated zoom row the toolbar comment above points to

@@ -19,10 +19,7 @@ interface UseTypingTestPaneWindowParams {
   onViewOnlyChange?: (enabled: boolean) => void
 }
 
-/** View-only window sizing/scaling + always-on-top + controls-open state.
- *  Split out of TypingTestPane (file-splitting.md cap) — see
- *  Task-split-typing-test-pane.md. Behavior-preserving: effects and dep
- *  arrays are copied verbatim from the pre-split Pane. */
+/** View-only window sizing/scaling + always-on-top + controls-open state. */
 export function useTypingTestPaneWindow({
   typingTest,
   viewOnly,
@@ -193,8 +190,7 @@ export function useTypingTestPaneWindow({
     } else {
       onViewOnlyChange(false)
     }
-    // `typingTest` is unread by the body — kept in the deps verbatim from the
-    // pre-split Pane, which is also why the hook still takes it as a param.
+    // `typingTest` is a param and a dep of this callback; the callback body does not read it.
   }, [viewOnly, viewOnlyWindowSize, getDefaultCompactSize, onViewOnlyChange, typingTest])
 
   return {

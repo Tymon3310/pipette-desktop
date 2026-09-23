@@ -167,6 +167,7 @@ Object.defineProperty(window, 'vialAPI', { value: vialAPI, writable: true })
 import { LanguagePacksModal } from '../LanguagePacksModal'
 import { downloadJson } from '../../../utils/download-json'
 import { HUB_ERROR_RATE_LIMITED } from '../../../../shared/types/hub'
+import { ERROR_DISMISS_MS } from '../../ui/DismissibleError'
 
 function meta(over: Partial<{
   id: string
@@ -342,7 +343,7 @@ describe('LanguagePacksModal', () => {
     await waitFor(() => expect(applyImport).toHaveBeenCalled())
   })
 
-  it('import shows error on parse failure, using the actual parseError message (P2b)', async () => {
+  it('import shows error on parse failure, using the actual parseError message', async () => {
     importFromDialog.mockResolvedValueOnce({ canceled: false, files: [{ filePath: 'bad.json', parseError: 'EACCES: permission denied' }] })
     render(
       <LanguagePacksModal open onClose={vi.fn()} />,
@@ -725,7 +726,7 @@ describe('LanguagePacksModal', () => {
     expect(banner.textContent).toContain('bad.json')
   })
 
-  it('P1 fix: importing files that interleave with existing rows (existing A,D; import B,C) lands fully sorted A,B,C,D in one reorder call', async () => {
+  it('importing files that interleave with existing rows (existing A,D; import B,C) lands fully sorted A,B,C,D in one reorder call', async () => {
     storeMetas = [
       meta({ id: 'a', name: 'Alpha', matchedBaseVersion: '0.1.0' }),
       meta({ id: 'd', name: 'Delta', matchedBaseVersion: '0.1.0' }),
@@ -748,14 +749,14 @@ describe('LanguagePacksModal', () => {
 
     fireEvent.click(screen.getByTestId('language-packs-import-button'))
     await waitFor(() => expect(reorderFn).toHaveBeenCalled())
-    // Without the fix, Charlie's position would be computed against a
-    // stale [Alpha, Delta] snapshot that never saw Beta's insert,
-    // persisting ['a', 'c', 'd'] and silently dropping Beta.
+    // If Charlie's position were computed against the stale [Alpha, Delta]
+    // snapshot that never saw Beta's insert, it would call reorder with
+    // ['a', 'c', 'd'] instead of ['a', 'b', 'c', 'd'].
     expect(reorderFn).toHaveBeenCalledTimes(1)
     expect(reorderFn).toHaveBeenCalledWith(['a', 'b', 'c', 'd'])
   })
 
-  it('hub-sync failure after import is reported against the originating filename, not the pack name (P2a)', async () => {
+  it('hub-sync failure after import is reported against the originating filename, not the pack name', async () => {
     storeMetas = [meta({ id: 'a', name: 'Alpha', matchedBaseVersion: '0.1.0' })]
     const raw = { name: 'Existing Pack', version: '0.1.0', common: {} }
     importFromDialog.mockResolvedValueOnce({
@@ -847,13 +848,9 @@ describe('LanguagePacksModal', () => {
   })
 
   // --- regression: Delete must not cascade to Hub for packs the user
-  // does not own (fix/delete-ownership-gate). A downloaded pack also
-  // carries hubPostId (for Sync/freshness linkage) but is never
-  // deletable on Hub by this user — the old code attempted the Hub
-  // delete regardless of ownership, which failed for a foreign post
-  // (or a deactivated uploader account) and then blocked the local
-  // delete too, leaving the user unable to remove a downloaded pack at
-  // all. See KeyLabelsModal / ThemePacksModal for the same pattern. ---
+  // does not own. A downloaded pack also carries hubPostId (for
+  // Sync/freshness linkage) but is never deletable on Hub by this
+  // user. See KeyLabelsModal / ThemePacksModal for the same pattern. ---
 
   it('a pack downloaded from someone else deletes locally only — no Hub call at all (THE regression)', async () => {
     storeMetas = [meta({ id: 'foreign-del', name: 'Foreign Pack', hubPostId: 'hp-foreign-del', uploaderName: 'pipette' })]
@@ -922,7 +919,7 @@ describe('LanguagePacksModal', () => {
     await waitFor(() => expect(vialAPI.hubUpdateI18nPost).toHaveBeenCalled())
   })
 
-  it('update and remove buttons are visible when hubCanWrite is true and the row is mine (isMine gate, Phase 3)', () => {
+  it('update and remove buttons are visible when hubCanWrite is true and the row is mine (isMine gate)', () => {
     storeMetas = [meta({ id: 'w1', name: 'Write Hub', hubPostId: 'hp-w1', uploaderName: 'me' })]
     render(
       <LanguagePacksModal open onClose={vi.fn()} hubCanWrite currentDisplayName="me" />,
@@ -932,7 +929,7 @@ describe('LanguagePacksModal', () => {
     expect(screen.queryByTestId('language-packs-sync-w1')).toBeNull()
   })
 
-  it('shows Sync instead of Update/Remove for a hub-linked row uploaded by someone else, even with hubCanWrite (isMine gate, Phase 3)', () => {
+  it('shows Sync instead of Update/Remove for a hub-linked row uploaded by someone else, even with hubCanWrite (isMine gate)', () => {
     storeMetas = [meta({ id: 'foreign1', name: 'Foreign Pack', hubPostId: 'hp-foreign1', uploaderName: 'someone-else' })]
     render(
       <LanguagePacksModal open onClose={vi.fn()} hubCanWrite currentDisplayName="me" />,
@@ -962,7 +959,7 @@ describe('LanguagePacksModal', () => {
     await waitFor(() => expect(applyImport).toHaveBeenCalled())
   })
 
-  it('sync refreshes uploaderName/hubUpdatedAt via a name-matched Hub list lookup (Phase 3)', async () => {
+  it('sync refreshes uploaderName/hubUpdatedAt via a name-matched Hub list lookup', async () => {
     storeMetas = [meta({ id: 'sy2', name: 'Sync Me', hubPostId: 'hp-sy2' })]
     vialAPI.hubDownloadI18nPost.mockResolvedValueOnce({
       success: true,
@@ -1191,7 +1188,7 @@ describe('LanguagePacksModal', () => {
     await waitFor(() => expect(renameFn).toHaveBeenCalledWith('r1', 'New Name'))
   })
 
-  it('P1-b: starting a rename then triggering an import cancels the edit instead of letting it commit mid-batch', async () => {
+  it('starting a rename then triggering an import cancels the edit instead of letting it commit mid-batch', async () => {
     storeMetas = [meta({ id: 'r2', name: 'Old Name', matchedBaseVersion: '0.1.0' })]
     let resolveDialog!: (value: { canceled: boolean; files: Array<{ filePath: string; raw?: unknown; parseError?: string }> }) => void
     importFromDialog.mockImplementationOnce(() => new Promise((resolve) => { resolveDialog = resolve }))
@@ -1352,7 +1349,7 @@ describe('LanguagePacksModal', () => {
     expect(screen.queryByTestId('language-packs-error')).toBeNull()
   })
 
-  // --- Phase 2: drag reorder + Name sort -----------------------------------
+  // --- drag reorder + Name sort --------------------------------------------
 
   // These two only exercise the pre-load fallback: `storeMetas` here has
   // no real `builtin-english` entry (the mocked store never runs
@@ -1484,6 +1481,57 @@ describe('LanguagePacksModal', () => {
       fireEvent.click(screen.getByTestId('language-packs-pull-button'))
 
       await waitFor(() => expect(screen.getByTestId('language-packs-error')).toHaveTextContent('network down'))
+    })
+  })
+
+  describe('error auto-dismiss', () => {
+    beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }) })
+    afterEach(() => { vi.useRealTimers() })
+
+    async function advance(ms: number): Promise<void> {
+      await act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+    }
+
+    it('removes the error banner after ERROR_DISMISS_MS', async () => {
+      importFromDialog.mockResolvedValueOnce({ canceled: false, files: [{ filePath: 'bad.json', parseError: 'EACCES' }] })
+      render(<LanguagePacksModal open onClose={vi.fn()} />)
+      fireEvent.click(screen.getByTestId('language-packs-import-button'))
+      await waitFor(() => expect(screen.getByTestId('language-packs-error')).toBeTruthy())
+      await advance(ERROR_DISMISS_MS)
+      expect(screen.queryByTestId('language-packs-error')).toBeNull()
+    })
+
+    it('removes a row error badge after ERROR_DISMISS_MS', async () => {
+      storeMetas = [meta({ id: 'uf1', name: 'Upload Fail' })]
+      vialAPI.hubUploadI18nPost.mockResolvedValueOnce({ success: false, error: 'Upload rejected' })
+      render(<LanguagePacksModal open onClose={vi.fn()} hubCanWrite />)
+      fireEvent.click(screen.getByTestId('language-packs-upload-uf1'))
+      await waitFor(() => expect(screen.getByTestId('language-packs-result-uf1')).toBeTruthy())
+      await advance(ERROR_DISMISS_MS)
+      expect(screen.queryByTestId('language-packs-result-uf1')).toBeNull()
+    })
+
+    it('batch import: the banner goes away while the success badge stays', async () => {
+      storeMetas = [meta({ id: 'a', name: 'Alpha', matchedBaseVersion: '0.1.0' })]
+      const savedMeta = meta({ id: 'e', name: 'Existing', matchedBaseVersion: '0.1.0' })
+      importFromDialog.mockResolvedValueOnce({
+        canceled: false,
+        files: [
+          { filePath: 'bad.json', parseError: 'EACCES' },
+          { filePath: 'my-upload.json', raw: { name: 'Existing', version: '0.1.0', common: {} } },
+        ],
+      })
+      applyImport.mockImplementationOnce(async () => {
+        storeMetas = [...storeMetas, savedMeta]
+        return { success: true, meta: savedMeta }
+      })
+      render(<LanguagePacksModal open onClose={vi.fn()} />)
+      fireEvent.click(screen.getByTestId('language-packs-import-button'))
+      await waitFor(() => expect(screen.getByTestId('language-packs-result-e').textContent).toBe('common.saved'))
+      expect(screen.getByTestId('language-packs-error')).toBeTruthy()
+      await advance(ERROR_DISMISS_MS)
+      expect(screen.queryByTestId('language-packs-error')).toBeNull()
+      expect(screen.getByTestId('language-packs-result-e').textContent).toBe('common.saved')
     })
   })
 })

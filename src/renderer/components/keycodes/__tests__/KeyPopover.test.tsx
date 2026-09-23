@@ -35,7 +35,7 @@ const mockKeycodes = [
   { qmkId: 'KC_B', label: 'B', tooltip: 'b', hidden: false, alias: ['KC_B'], masked: false },
   { qmkId: 'KC_ENTER', label: 'Enter', tooltip: 'Return', hidden: false, alias: ['KC_ENTER', 'KC_ENT'], masked: false },
   { qmkId: 'KC_SPACE', label: 'Space', tooltip: 'space', hidden: false, alias: ['KC_SPACE', 'KC_SPC'], masked: false },
-  // Mirrors the real KC_8/KC_9 default legends (issue #294 repro): KC_9's
+  // Mirrors the real KC_8/KC_9 default legends: KC_9's
   // *unrelated* default label already contains "(", which is exactly the
   // substring collision a Key Label pack remapping KC_8 -> "(\n8" must
   // not be shadowed by.
@@ -342,7 +342,7 @@ describe('PopoverTabKey — search', () => {
   })
 })
 
-describe('PopoverTabKey — Key Label pack remap in search (issue #294)', () => {
+describe('PopoverTabKey — Key Label pack remap in search', () => {
   const onSelect = vi.fn()
   // Mirrors the reported bug: a Japanese (QWERTY)-style pack remaps
   // KC_8's legend to "(\n8". KC_9's own *unrelated* default label is
@@ -792,9 +792,10 @@ describe('KeyPopover — LT/SH_T/LM wrapper modes', () => {
 // `key` it hands `<KeyPopover>` (via `popoverInstanceKey`) as the edit target
 // moves — layer is *not* part of that key (see the next describe block for
 // that case). These tests simulate the same `key` change directly on
-// `KeyPopover` and check the popover's own internal state — the regression
-// this closes left `wrapperMode`/`selectedLayer`/`pendingAction`/`activeTab`/
-// the search box behind on the previous target.
+// `KeyPopover` and check the popover's own internal state: advancing to a
+// new target must re-derive `wrapperMode`, drop any buffered
+// `pendingAction`, return `activeTab` to Key, and re-seed the search box
+// from the new target.
 // ---------------------------------------------------------------------------
 
 describe('KeyPopover — remount on Auto Move advance (key prop change)', () => {

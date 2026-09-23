@@ -61,9 +61,9 @@ describe('useImportBatch', () => {
     await act(async () => { await result.current.runImport() })
 
     expect(hubSync).toHaveBeenCalledWith({ id: 'a', name: 'Alpha', hubPostId: 'hp1' })
-    // Third arg is the pre-dedupe original success count (1 here) — see
-    // the P1 fix note: it drives `placeMany`'s own scroll suppression
-    // and must never be inferred from the deduped `results` array.
+    // Third arg is the pre-dedupe original success count (1 here) — it
+    // drives `placeMany`'s own scroll suppression and must never be
+    // inferred from the deduped `results` array.
     expect(placement.placeMany).toHaveBeenCalledWith(
       [{ id: 'a', name: 'Alpha' }],
       { entries: [], direction: 'asc' },
@@ -124,7 +124,7 @@ describe('useImportBatch', () => {
     expect(result.current.importSummary).toBe('common.importSummary:3:3:0')
   })
 
-  it('P1-a regression: two files that both overwrite the SAME existing pack still read as a genuine 2-file batch — summary shown, no auto-select, scroll suppressed via originalCount', async () => {
+  it('two files that both overwrite the SAME existing pack still read as a genuine 2-file batch — summary shown, no auto-select, scroll suppressed via originalCount', async () => {
     const placement = makePlacement()
     const setLastResult = vi.fn()
     const onCollapsedToOne = vi.fn()

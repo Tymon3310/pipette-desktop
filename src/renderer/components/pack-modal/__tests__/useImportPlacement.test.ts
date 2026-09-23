@@ -99,7 +99,7 @@ describe('useImportPlacement', () => {
     expect(result.current.feedback).toBe('Imported Mu')
   })
 
-  it('P2 (theme DL bug): a failed reorder surfaces onReorderError but still shows "Imported" feedback', async () => {
+  it('a failed reorder surfaces onReorderError but still shows "Imported" feedback', async () => {
     const reorder = vi.fn().mockResolvedValue({ success: false, error: 'disk full' })
     const onReorderError = vi.fn()
     const { result } = renderHook(() => useImportPlacement({
@@ -124,7 +124,7 @@ describe('useImportPlacement', () => {
     expect(result.current.feedback).toBe('Imported Zeta')
   })
 
-  it('P1 race: a second rapid placement computes its order against the first\'s already-settled insert, not a stale list', async () => {
+  it('a second rapid placement computes its order against the first\'s already-settled insert, not a stale list', async () => {
     let resolveFirstReorder!: (value: { success: boolean }) => void
     const reorder = vi.fn()
       .mockImplementationOnce(() => new Promise<{ success: boolean }>((resolve) => { resolveFirstReorder = resolve }))
@@ -170,14 +170,14 @@ describe('useImportPlacement', () => {
     })
 
     expect(reorder).toHaveBeenNthCalledWith(1, ['a', 'b'])
-    // Without the fix, this would compute from the stale ['a'] list and
-    // persist ['a', 'c'] — silently dropping 'b' from the order (reorder
-    // is a full-list replacement, not a merge).
+    // If C's turn read the stale ['a'] list instead of the re-rendered
+    // one, it would call reorder with ['a', 'c'] instead of
+    // ['a', 'b', 'c'].
     expect(reorder).toHaveBeenNthCalledWith(2, ['a', 'b', 'c'])
     expect(onReorderError).not.toHaveBeenCalled()
   })
 
-  it('P2 close race: a placement resolving after close does not show feedback, even on reopen', async () => {
+  it('a placement resolving after close does not show feedback, even on reopen', async () => {
     let resolveReorder!: (value: { success: boolean }) => void
     const reorder = vi.fn().mockImplementation(() => new Promise<{ success: boolean }>((resolve) => { resolveReorder = resolve }))
 
@@ -251,7 +251,7 @@ describe('useImportPlacement', () => {
     expect(result.current.feedback).toBeNull()
   })
 
-  it('placeMany (P1 batch race fix): existing A,D; importing B then C lands fully sorted A,B,C,D in one reorder call, with no rerender in between', async () => {
+  it('placeMany (batch race fix): existing A,D; importing B then C lands fully sorted A,B,C,D in one reorder call, with no rerender in between', async () => {
     const reorder = vi.fn().mockResolvedValue({ success: true })
     const onReorderError = vi.fn()
     const { result } = renderHook(() => useImportPlacement({
@@ -393,8 +393,8 @@ describe('useImportPlacement', () => {
 
     // Still fully ascending — frozen to the 'asc' snapshot taken at
     // batch start, not the live 'desc' direction that landed mid-flight.
-    // Without the fix, merging `toInsert` against the live direction
-    // while `beforeEntries` reflects the old one would produce a
+    // If `toInsert` were merged against the live direction while
+    // `beforeEntries` still reflected the old one, the result would be a
     // garbled, neither-direction order (e.g. ['c', 'b', 'a', 'z']).
     expect(reorder).toHaveBeenCalledTimes(1)
     expect(reorder).toHaveBeenCalledWith(['a', 'b', 'c', 'z'])
@@ -450,7 +450,7 @@ describe('useImportPlacement', () => {
     }
   })
 
-  it('P1-a fix: an explicit originalCount overrides results.length for scroll suppression — a lone deduped result from a 2-file selection does not scroll', async () => {
+  it('an explicit originalCount overrides results.length for scroll suppression — a lone deduped result from a 2-file selection does not scroll', async () => {
     const reorder = vi.fn().mockResolvedValue({ success: true })
     const { result } = renderHook(() => useImportPlacement({
       open: true,
@@ -471,7 +471,7 @@ describe('useImportPlacement', () => {
       // overwrote the same existing pack), but the caller passes the
       // true pre-dedupe count (2) explicitly — this must suppress the
       // scroll that a bare `results.length <= 1` inference would
-      // otherwise trigger (see useImportBatch.ts's P1 fix note).
+      // otherwise trigger.
       await act(async () => {
         const snapshot = result.current.snapshotEntries()
         await result.current.placeMany([{ id: 'd', name: 'Delta' }], snapshot, 2)

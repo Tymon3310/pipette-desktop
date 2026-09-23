@@ -76,9 +76,12 @@ export interface TypingTestState {
   kspcUncomputable: boolean
   currentQuote: Quote | null
   wpmHistory: number[]
-  /** Word indices that end a line (imported fileImport text only). At these
-   *  words Enter advances; elsewhere Space advances. Empty for every other
-   *  mode, so their submit behaviour is unchanged. */
+  /** Word indices that end a line (imported fileImport text and tatoeba
+   *  runs); empty for the other modes. Verbatim input: Enter advances at
+   *  these words and Space elsewhere, and while 'waiting' either key only
+   *  starts the run (useTypingTest.ts). Romaji/kana input ignores Space; a
+   *  completed word here waits for Enter only when `isLineEndEnterRequired`
+   *  (romaji-input.ts) is true, otherwise it auto-advances. */
   lineBreaks: Set<number>
   /** Leading whitespace per logical line (imported fileImport text, display only).
    *  Indexed by line order; empty for every other mode. */

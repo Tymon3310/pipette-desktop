@@ -286,7 +286,6 @@ describe('useFileIO – loadLayout', () => {
     expect(result.current.error).toBe('error.loadFailed')
   })
 
-  // Task-irr-5 (Plan-import-restore-rollback.md §B call-site table, B6):
   // applyVilFile resolving { ok: false, ... } is a distinct outcome from it
   // throwing (the parse/format-error catch above) — the message must say
   // whether the device was restored.
@@ -872,4 +871,27 @@ describe('useFileIO – partial VilFile rejection', () => {
       expect(opts.applyVilFile).not.toHaveBeenCalled()
     })
   }
+})
+
+// ---------------------------------------------------------------------------
+// clearError
+// ---------------------------------------------------------------------------
+
+describe('useFileIO – clearError', () => {
+  it('clears a set error', async () => {
+    mockSaveLayout.mockResolvedValueOnce({ success: false, error: 'disk full' })
+    const opts = createHookOptions()
+    const { result } = renderHook(() => useFileIO(opts))
+
+    await act(async () => {
+      await result.current.saveLayout()
+    })
+    expect(result.current.error).toBe('error.saveFailed')
+
+    act(() => {
+      result.current.clearError()
+    })
+
+    expect(result.current.error).toBeNull()
+  })
 })

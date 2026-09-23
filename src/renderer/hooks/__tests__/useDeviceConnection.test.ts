@@ -6,6 +6,21 @@ import { renderHook, act, waitFor } from '@testing-library/react'
 import { useDeviceConnection, POLL_INTERVAL_MS } from '../useDeviceConnection'
 import type { DeviceInfo } from '../../../shared/types/protocol'
 
+// Switchable per-test so a stale-ref bug (the hook reading `t` from the
+// render that mounted it, instead of the latest one) is actually observable.
+// Each call to useTranslation() snapshots the current tPrefix into a fresh
+// `t` closure — mirroring real react-i18next, where `t` gets a new identity
+// per render — so a `t` captured on an earlier render keeps producing that
+// render's prefix even after tPrefix is later changed.
+let tPrefix = ''
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => {
+    const prefix = tPrefix
+    return { t: (k: string) => `${prefix}${k}` }
+  },
+}))
+
 const mockDevice: DeviceInfo = {
   vendorId: 0x1234,
   productId: 0x5678,
@@ -20,6 +35,7 @@ const mockCloseDevice = vi.fn<() => Promise<void>>()
 const mockIsDeviceOpen = vi.fn<() => Promise<boolean>>()
 
 beforeEach(() => {
+  tPrefix = ''
   mockListDevices.mockResolvedValue([])
   mockOpenDevice.mockResolvedValue(true)
   mockCloseDevice.mockResolvedValue(undefined)
@@ -320,6 +336,163 @@ describe('useDeviceConnection', () => {
       )
 
       expect(result.current.devices).toEqual([mockDevice])
+    })
+  })
+
+  describe('clearError', () => {
+    it('clears the error via clearError', async () => {
+      mockOpenDevice.mockResolvedValue(false)
+      const { result } = renderHook(() => useDeviceConnection())
+
+      await waitFor(() => {
+        expect(mockListDevices).toHaveBeenCalled()
+      })
+
+      await act(async () => {
+        await result.current.connectDevice(mockDevice)
+      })
+      expect(result.current.error).toBe('error.deviceOpenFailed')
+
+      act(() => {
+        result.current.clearError()
+      })
+
+      expect(result.current.error).toBeNull()
+    })
+
+    it('clears the error at the start of the next connectDevice call', async () => {
+      mockOpenDevice.mockResolvedValueOnce(false)
+      const { result } = renderHook(() => useDeviceConnection())
+
+      await waitFor(() => {
+        expect(mockListDevices).toHaveBeenCalled()
+      })
+
+      await act(async () => {
+        await result.current.connectDevice(mockDevice)
+      })
+      expect(result.current.error).toBe('error.deviceOpenFailed')
+
+      mockOpenDevice.mockResolvedValueOnce(true)
+      await act(async () => {
+        await result.current.connectDevice(mockDevice)
+      })
+
+      expect(result.current.error).toBeNull()
+    })
+  })
+
+  describe('error persistence across list refreshes', () => {
+    it('keeps a connect failure visible across a subsequent successful refreshDevices', async () => {
+      mockOpenDevice.mockResolvedValue(false)
+      const { result } = renderHook(() => useDeviceConnection())
+
+      await waitFor(() => {
+        expect(mockListDevices).toHaveBeenCalled()
+      })
+
+      await act(async () => {
+        await result.current.connectDevice(mockDevice)
+      })
+      expect(result.current.error).toBe('error.deviceOpenFailed')
+
+      mockListDevices.mockResolvedValue([mockDevice])
+      await act(async () => {
+        await result.current.refreshDevices()
+      })
+
+      expect(result.current.error).toBe('error.deviceOpenFailed')
+    })
+
+    it('keeps a connect failure visible across a subsequent successful poll tick', async () => {
+      mockOpenDevice.mockResolvedValue(false)
+      const { result } = renderHook(() => useDeviceConnection())
+
+      await waitFor(() => {
+        expect(mockListDevices).toHaveBeenCalled()
+      })
+
+      await act(async () => {
+        await result.current.connectDevice(mockDevice)
+      })
+      expect(result.current.error).toBe('error.deviceOpenFailed')
+
+      mockListDevices.mockClear()
+      mockListDevices.mockResolvedValue([mockDevice])
+      await waitFor(
+        () => {
+          expect(mockListDevices).toHaveBeenCalled()
+        },
+        { timeout: 5000, interval: 200 },
+      )
+
+      expect(result.current.error).toBe('error.deviceOpenFailed')
+    })
+  })
+
+  describe('raw error strings never reach the UI', () => {
+    it('translates an openDevice rejection instead of surfacing the raw IPC error', async () => {
+      mockOpenDevice.mockRejectedValue(
+        new Error("Error invoking remote method 'hid:open': cannot open /dev/hidraw3"),
+      )
+      const { result } = renderHook(() => useDeviceConnection())
+
+      await waitFor(() => {
+        expect(mockListDevices).toHaveBeenCalled()
+      })
+
+      await act(async () => {
+        await result.current.connectDevice(mockDevice)
+      })
+
+      expect(result.current.error).toBe('error.deviceOpenFailed')
+      expect(result.current.error).not.toContain('hidraw')
+      expect(result.current.error).not.toContain('Error')
+    })
+
+    it('translates a listDevices rejection at mount', async () => {
+      mockListDevices.mockRejectedValue(new Error('USB enumeration failed'))
+      const { result } = renderHook(() => useDeviceConnection())
+
+      await waitFor(() => {
+        expect(result.current.error).toBe('error.deviceListFailed')
+      })
+    })
+  })
+
+  describe('translation ref freshness', () => {
+    it('uses the latest t after a re-render when a connect failure is translated', async () => {
+      const { result, rerender } = renderHook(() => useDeviceConnection())
+
+      await waitFor(() => {
+        expect(mockListDevices).toHaveBeenCalled()
+      })
+
+      tPrefix = 'v2:'
+      rerender()
+
+      mockOpenDevice.mockRejectedValue(new Error('boom'))
+      await act(async () => {
+        await result.current.connectDevice(mockDevice)
+      })
+
+      expect(result.current.error).toBe('v2:error.deviceOpenFailed')
+    })
+  })
+
+  describe('callback identity', () => {
+    it('keeps connectDevice and refreshDevices identities stable across a re-render', async () => {
+      const { result, rerender } = renderHook(() => useDeviceConnection())
+
+      await waitFor(() => {
+        expect(mockListDevices).toHaveBeenCalled()
+      })
+
+      const { connectDevice, refreshDevices } = result.current
+      rerender()
+
+      expect(result.current.connectDevice).toBe(connectDevice)
+      expect(result.current.refreshDevices).toBe(refreshDevices)
     })
   })
 })
