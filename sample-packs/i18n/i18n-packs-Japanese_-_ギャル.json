@@ -1,5 +1,5 @@
 {
-  "version": "0.1.96",
+  "version": "0.1.98",
   "name": "Japanese - ギャル",
   "common": {
     "save": "保存☆",
@@ -446,6 +446,8 @@
       "recordingIndicator": "記録なう☆",
       "resetSize": "初期サイズ☆",
       "fitSize": "フィット！",
+      "opacity": "不透明度☆",
+      "opacityAria": "ウィンドウの不透明度☆",
       "baseLayer": "Base Layer",
       "modeLabel": "データ元っしょ",
       "pattern": "パターンっしょ",
@@ -1863,6 +1865,7 @@
     "basicViewType": "Basic タブ表示☆",
     "splitKeyMode": "Shiftキー分離っしょ",
     "quickSelect": "爆速選択☆",
+    "layerHoverPreview": "レイヤー勝手にチラ見せ☆",
     "keyEditorZoom": "エディタズーム☆"
   },
   "hub": {

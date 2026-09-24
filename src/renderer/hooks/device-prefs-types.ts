@@ -25,6 +25,7 @@ export interface UseDevicePrefsReturn {
   typingTestViewOnly: boolean
   typingTestViewOnlyWindowSize: { width: number; height: number } | undefined
   typingTestViewOnlyAlwaysOnTop: boolean
+  typingTestViewOnlyOpacity: number
   typingTestMemory: TypingTestMemory | undefined
   typingTestDisplayLines: number
   typingTestFontSize: number
@@ -41,6 +42,9 @@ export interface UseDevicePrefsReturn {
   /** Shows the View Matrix wiring overlay on the keymap surface — see
    *  `PipetteSettings.viewMatrixWires`. Defaults to false. */
   viewMatrixWires: boolean
+  /** Layer hover preview in the keymap editor — see
+   *  `PipetteSettings.layerHoverPreview`. Defaults to true. */
+  layerHoverPreview: boolean
   appliedUid: string | null
   setLayout: (id: KeyboardLayoutId) => void
   setAutoAdvance: (enabled: boolean) => void
@@ -58,6 +62,7 @@ export interface UseDevicePrefsReturn {
   setTypingTestViewOnly: (enabled: boolean) => void
   setTypingTestViewOnlyWindowSize: (size: { width: number; height: number }) => void
   setTypingTestViewOnlyAlwaysOnTop: (enabled: boolean) => void
+  setTypingTestViewOnlyOpacity: (opacity: number) => void
   setTypingTestMemory: (memory: TypingTestMemory | undefined) => void
   setTypingTestDisplayLines: (lines: number) => void
   setTypingTestFontSize: (px: number) => void
@@ -72,6 +77,7 @@ export interface UseDevicePrefsReturn {
   setKeyEditorZoom: (zoom: number) => void
   setViewMatrix: (next: Record<string, ViewMatrixCell> | undefined) => void
   setViewMatrixWires: (next: boolean) => void
+  setLayerHoverPreview: (enabled: boolean) => void
   defaultLayout: KeyboardLayoutId
   defaultAutoAdvance: boolean
   defaultLayerPanelOpen: boolean

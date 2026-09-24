@@ -42,7 +42,7 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
     tapHoldSupported, mouseKeysSupported, magicSupported, graveEscapeSupported,
     autoShiftSupported, oneShotKeysSupported, comboSettingsSupported,
     supportedQsids, qmkSettingsGet, qmkSettingsSet, qmkSettingsReset, onSettingsUpdate,
-    autoAdvance = true, viewMatrix, onViewMatrixChange, viewMatrixWires,
+    autoAdvance = true, viewMatrix, onViewMatrixChange, viewMatrixWires, layerHoverPreview: layerHoverPreviewEnabled = true,
     basicViewType, splitKeyMode,
     quickSelect, keyboardLayout = 'qwerty',
     keymapPackName, onRequestKeymapApply,
@@ -416,6 +416,7 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
                 handleKeyClick={handleKeyClick} handleKeyDoubleClick={handleKeyDoubleClick} handleEncoderClick={handleEncoderClick} handleEncoderDoubleClick={handleEncoderDoubleClick}
                 handleDeselect={handleDeselect} handlePackTabChange={handlePackTabChange} keymapPackName={keymapPackName}
                 auxUndoHandlers={viewMatrixMode.active ? undefined : auxUndoHandlers}
+                layerHoverPreview={{ layers, currentLayer, keymap, encoderLayout, encoderCount, isRemapped, layerLabel, deviceKey: keyboardUid, blocked: !layerHoverPreviewEnabled || !!popoverState || pickerSelectedIndices.size > 0 }}
                 {...viewMatrixPaneProps}
               />
               {/* The relocated zoom row the toolbar comment above points to

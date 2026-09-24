@@ -101,6 +101,7 @@ function isValidPrefs(value: unknown): value is PipetteSettings {
     if (typeof ws.width !== 'number' || typeof ws.height !== 'number') return false
   }
   if ('typingTestViewOnlyAlwaysOnTop' in obj && obj.typingTestViewOnlyAlwaysOnTop != null && typeof obj.typingTestViewOnlyAlwaysOnTop !== 'boolean') return false
+  if ('typingTestViewOnlyOpacity' in obj && obj.typingTestViewOnlyOpacity != null && typeof obj.typingTestViewOnlyOpacity !== 'number') return false
   if ('typingTestMemory' in obj && obj.typingTestMemory != null && (typeof obj.typingTestMemory !== 'object' || Array.isArray(obj.typingTestMemory))) return false
   if ('typingTestDisplayLines' in obj && obj.typingTestDisplayLines != null && typeof obj.typingTestDisplayLines !== 'number') return false
   if ('typingTestFontSize' in obj && obj.typingTestFontSize != null && typeof obj.typingTestFontSize !== 'number') return false
@@ -116,6 +117,7 @@ function isValidPrefs(value: unknown): value is PipetteSettings {
   if ('analyze' in obj && !isValidAnalyzeSettings(obj.analyze)) return false
   if ('viewMatrix' in obj && !isValidViewMatrix(obj.viewMatrix)) return false
   if ('viewMatrixWires' in obj && obj.viewMatrixWires != null && typeof obj.viewMatrixWires !== 'boolean') return false
+  if ('layerHoverPreview' in obj && obj.layerHoverPreview != null && typeof obj.layerHoverPreview !== 'boolean') return false
   if ('_rev' in obj && obj._rev !== 1) return false
   return true
 }
@@ -158,6 +160,7 @@ async function readData(uid: string): Promise<PipetteSettings | null> {
       typingTestViewOnly: parsed.typingTestViewOnly,
       typingTestViewOnlyWindowSize: parsed.typingTestViewOnlyWindowSize,
       typingTestViewOnlyAlwaysOnTop: parsed.typingTestViewOnlyAlwaysOnTop,
+      typingTestViewOnlyOpacity: parsed.typingTestViewOnlyOpacity,
       typingTestMemory: parsed.typingTestMemory,
       typingTestDisplayLines: parsed.typingTestDisplayLines,
       typingTestFontSize: parsed.typingTestFontSize,
@@ -173,6 +176,7 @@ async function readData(uid: string): Promise<PipetteSettings | null> {
       analyze: parsed.analyze,
       viewMatrix: parsed.viewMatrix,
       viewMatrixWires: parsed.viewMatrixWires,
+      layerHoverPreview: parsed.layerHoverPreview,
     }
   } catch {
     return null

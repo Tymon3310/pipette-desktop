@@ -1,5 +1,5 @@
 {
-  "version": "0.1.96",
+  "version": "0.1.98",
   "name": "Japanese - 紳士",
   "common": {
     "save": "保存を承る",
@@ -446,6 +446,8 @@
       "recordingIndicator": "記録しております",
       "resetSize": "元の大きさに",
       "fitSize": "丁度よく",
+      "opacity": "不透明度",
+      "opacityAria": "ウィンドウの不透明度を整える",
       "baseLayer": "Base Layer",
       "modeLabel": "資料元",
       "pattern": "様式",
@@ -1863,6 +1865,7 @@
     "basicViewType": "Basic の見栄え",
     "splitKeyMode": "Shift を分離",
     "quickSelect": "即座の選択",
+    "layerHoverPreview": "階層の自動内覧",
     "keyEditorZoom": "エディタ表示倍率"
   },
   "hub": {

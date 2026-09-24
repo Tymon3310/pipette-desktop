@@ -14,6 +14,7 @@ import type { UseDevicePrefsReturn } from './device-prefs-types'
 import type { KeyboardLayoutId } from '../data/keyboard-layouts'
 import type { BasicViewType, SplitKeyMode } from '../../shared/types/app-config'
 import type { ViewMode, ViewMatrixCell } from '../../shared/types/pipette-settings'
+import { VIEW_ONLY_OPACITY_DEFAULT } from '../../shared/types/pipette-settings'
 
 export type { KeyboardLayoutId, AutoLockMinutes, BasicViewType, SplitKeyMode } from './device-prefs-types'
 export type { UseDevicePrefsReturn } from './device-prefs-types'
@@ -43,6 +44,7 @@ export function useDevicePrefs(): UseDevicePrefsReturn {
     typingTestViewOnly, updateTypingTestViewOnly,
     typingTestViewOnlyWindowSize, updateTypingTestViewOnlyWindowSize,
     typingTestViewOnlyAlwaysOnTop, updateTypingTestViewOnlyAlwaysOnTop,
+    typingTestViewOnlyOpacity, updateTypingTestViewOnlyOpacity, typingTestViewOnlyOpacityRef,
     typingTestMemory, updateTypingTestMemory, typingTestMemoryRef,
     typingTestDisplayLines, updateTypingTestDisplayLines, typingTestDisplayLinesRef,
     typingTestFontSize, updateTypingTestFontSize, typingTestFontSizeRef,
@@ -57,6 +59,7 @@ export function useDevicePrefs(): UseDevicePrefsReturn {
     keyEditorZoom, updateKeyEditorZoom, keyEditorZoomRef,
     viewMatrix, updateViewMatrix,
     viewMatrixWires, updateViewMatrixWires,
+    layerHoverPreview, updateLayerHoverPreview,
     appliedUid, setAppliedUid,
     uidRef, applySeqRef,
     saveCurrentPrefs,
@@ -115,6 +118,7 @@ export function useDevicePrefs(): UseDevicePrefsReturn {
     setTypingTestViewOnly,
     setTypingTestViewOnlyWindowSize,
     setTypingTestViewOnlyAlwaysOnTop,
+    setTypingTestViewOnlyOpacity,
     setTypingTestMemory,
     setTypingTestDisplayLines,
     setTypingTestFontSize,
@@ -132,6 +136,7 @@ export function useDevicePrefs(): UseDevicePrefsReturn {
     updateTypingTestViewOnly,
     updateTypingTestViewOnlyWindowSize,
     updateTypingTestViewOnlyAlwaysOnTop,
+    typingTestViewOnlyOpacityRef, updateTypingTestViewOnlyOpacity,
     typingTestMemoryRef, updateTypingTestMemory,
     typingTestDisplayLinesRef, updateTypingTestDisplayLines,
     typingTestFontSizeRef, updateTypingTestFontSize,
@@ -161,6 +166,11 @@ export function useDevicePrefs(): UseDevicePrefsReturn {
     updateViewMatrixWires(next)
     saveCurrentPrefs()
   }, [saveCurrentPrefs, updateViewMatrixWires])
+
+  const setLayerHoverPreview = useCallback((enabled: boolean) => {
+    updateLayerHoverPreview(enabled)
+    saveCurrentPrefs()
+  }, [saveCurrentPrefs, updateLayerHoverPreview])
 
   const setKeyEditorZoom = useCallback((zoom: number) => {
     const clamped = clampZoomFactor(zoom)
@@ -196,6 +206,7 @@ export function useDevicePrefs(): UseDevicePrefsReturn {
       typingTestResults: [],
       typingTestViewOnly: false,
       typingTestViewOnlyAlwaysOnTop: false,
+      typingTestViewOnlyOpacity: VIEW_ONLY_OPACITY_DEFAULT,
       typingTestDisplayLines: DEFAULT_DISPLAY_LINES,
       typingTestFontSize: DEFAULT_FONT_SIZE,
       typingTestHideKeymap: false,
@@ -207,6 +218,7 @@ export function useDevicePrefs(): UseDevicePrefsReturn {
       typingRecordEnabled: false,
       viewMode: 'editor',
       viewMatrixWires: false,
+      layerHoverPreview: true,
     }
     applyValidated(resolved)
     setAppliedUid(uid)
@@ -241,6 +253,7 @@ export function useDevicePrefs(): UseDevicePrefsReturn {
     typingTestViewOnly,
     typingTestViewOnlyWindowSize,
     typingTestViewOnlyAlwaysOnTop,
+    typingTestViewOnlyOpacity,
     typingTestMemory,
     typingTestDisplayLines,
     typingTestFontSize,
@@ -255,6 +268,7 @@ export function useDevicePrefs(): UseDevicePrefsReturn {
     keyEditorZoom,
     viewMatrix,
     viewMatrixWires,
+    layerHoverPreview,
     appliedUid,
     setLayout,
     setAutoAdvance,
@@ -272,6 +286,7 @@ export function useDevicePrefs(): UseDevicePrefsReturn {
     setTypingTestViewOnly,
     setTypingTestViewOnlyWindowSize,
     setTypingTestViewOnlyAlwaysOnTop,
+    setTypingTestViewOnlyOpacity,
     setTypingTestMemory,
     setTypingTestDisplayLines,
     setTypingTestFontSize,
@@ -285,6 +300,7 @@ export function useDevicePrefs(): UseDevicePrefsReturn {
     setViewMode,
     setViewMatrix,
     setViewMatrixWires,
+    setLayerHoverPreview,
     setKeyEditorZoom,
     defaultLayout,
     defaultAutoAdvance,

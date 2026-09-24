@@ -30,7 +30,7 @@
 // typing-analytics-service.ts's facade split uses.
 
 import { syncRuntime } from './sync-runtime-state'
-import { stopPolling } from './sync-polling'
+import { stopPolling, clearInFlightPollForTests } from './sync-polling'
 import { clearQuitFinalizersForTests } from './sync-flush'
 
 // --- Test helpers -------------------------------------------------------
@@ -41,6 +41,7 @@ export function _resetForTests(): void {
     syncRuntime.debounceTimer = null
   }
   stopPolling()
+  clearInFlightPollForTests()
   syncRuntime.pendingChanges.clear()
   syncRuntime.lastKnownRemoteState.clear()
   syncRuntime.isSyncing = false
@@ -52,8 +53,7 @@ export function _resetForTests(): void {
 
 // --- Public re-exports ---------------------------------------------------
 // Explicit named re-exports only (never `export *`) so the facade's public
-// surface is grep-able in one place and stays byte-identical to what it was
-// before the split.
+// surface is grep-able in one place.
 
 export { SyncCredentialError } from './sync-password'
 
@@ -93,7 +93,7 @@ export {
   fetchRemoteTypingDay,
 } from './sync-typing-remote'
 
-export { startPolling, stopPolling } from './sync-polling'
+export { startPolling, stopPolling, waitForPollPassForTests } from './sync-polling'
 
 export { executeAnalyticsSync } from './sync-analytics'
 

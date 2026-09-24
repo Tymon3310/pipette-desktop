@@ -1964,6 +1964,93 @@ describe('useDevicePrefs', () => {
   })
 
 
+  describe('typingTestViewOnlyOpacity', () => {
+    async function applyWith(saved: Record<string, unknown> | null) {
+      setupMocks()
+      mockPipetteSettingsGet.mockResolvedValue(saved === null ? null : {
+        _rev: 1,
+        keyboardLayout: 'qwerty',
+        autoAdvance: true,
+        layerNames: [],
+        ...saved,
+      } as never)
+      const hook = renderHookWithConfig(() => useDevicePrefs())
+      await act(async () => {})
+      await act(async () => {
+        await hook.result.current.applyDevicePrefs('0xAABB')
+      })
+      return hook
+    }
+
+    it('defaults to 1 for a new device', async () => {
+      const { result } = await applyWith(null)
+      expect(result.current.typingTestViewOnlyOpacity).toBe(1)
+    })
+
+    it('restores a saved in-range value', async () => {
+      const { result } = await applyWith({ typingTestViewOnlyOpacity: 0.7 })
+      expect(result.current.typingTestViewOnlyOpacity).toBe(0.7)
+    })
+
+    it('clamps out-of-range saved values', async () => {
+      const low = await applyWith({ typingTestViewOnlyOpacity: 0.1 })
+      expect(low.result.current.typingTestViewOnlyOpacity).toBe(0.5)
+      const high = await applyWith({ typingTestViewOnlyOpacity: 3 })
+      expect(high.result.current.typingTestViewOnlyOpacity).toBe(1)
+    })
+
+    it('falls back to 1 for a non-number without dropping the other settings', async () => {
+      const { result } = await applyWith({
+        typingTestViewOnlyOpacity: 'half',
+        typingTestViewOnlyAlwaysOnTop: true,
+        typingTestFontSize: 30,
+        layerNames: ['Base', 'Fn'],
+      })
+      expect(result.current.typingTestViewOnlyOpacity).toBe(1)
+      expect(result.current.typingTestViewOnlyAlwaysOnTop).toBe(true)
+      expect(result.current.typingTestFontSize).toBe(30)
+      expect(result.current.layerNames).toEqual(['Base', 'Fn'])
+    })
+
+    it('setTypingTestViewOnlyOpacity clamps, updates state and saves via IPC', async () => {
+      const { result } = await applyWith(null)
+      mockPipetteSettingsPatch.mockClear()
+
+      act(() => {
+        result.current.setTypingTestViewOnlyOpacity(0.2)
+      })
+
+      expect(result.current.typingTestViewOnlyOpacity).toBe(0.5)
+      expect(mockPipetteSettingsPatch).toHaveBeenCalledTimes(1)
+      expect(mockPipetteSettingsPatch).toHaveBeenCalledWith('0xAABB', expect.objectContaining({
+        typingTestViewOnlyOpacity: 0.5,
+      }))
+    })
+
+    it('setTypingTestViewOnlyOpacity skips the IPC save when the value is unchanged', async () => {
+      const { result } = await applyWith({ typingTestViewOnlyOpacity: 0.8 })
+      mockPipetteSettingsPatch.mockClear()
+
+      act(() => {
+        result.current.setTypingTestViewOnlyOpacity(0.8)
+      })
+
+      expect(mockPipetteSettingsPatch).not.toHaveBeenCalled()
+    })
+
+    it('setTypingTestViewOnlyOpacity skips the save when a value clamps to the current one', async () => {
+      const { result } = await applyWith(null)
+      mockPipetteSettingsPatch.mockClear()
+
+      act(() => {
+        result.current.setTypingTestViewOnlyOpacity(Number.NaN)
+      })
+
+      expect(result.current.typingTestViewOnlyOpacity).toBe(1)
+      expect(mockPipetteSettingsPatch).not.toHaveBeenCalled()
+    })
+  })
+
   describe('viewMatrix', () => {
     it('defaults to undefined when not in storage', async () => {
       setupMocks()
@@ -2485,5 +2572,66 @@ describe('useDevicePrefs', () => {
       expect(result.current.remapKind).toBe('actual')
       expect(result.current.activeRewriteTable).toBeUndefined()
     })
+  })
+})
+
+describe('useDevicePrefs — layerHoverPreview', () => {
+  type StoredPrefs = { _rev: 1; keyboardLayout: string; autoAdvance: boolean; layerNames: string[] }
+  const stored = (extra: Record<string, unknown> = {}): StoredPrefs =>
+    ({ _rev: 1, keyboardLayout: 'qwerty', autoAdvance: true, layerNames: [], ...extra }) as StoredPrefs
+
+  async function applied(uid: string) {
+    setupMocks()
+    const hook = renderHookWithConfig(() => useDevicePrefs())
+    await act(async () => {})
+    await act(async () => { await hook.result.current.applyDevicePrefs(uid) })
+    return hook
+  }
+
+  it('defaults to on for a new keyboard and saves it explicitly', async () => {
+    const { result } = await applied('0xAABB')
+    expect(result.current.layerHoverPreview).toBe(true)
+    expect(mockPipetteSettingsPatch).toHaveBeenCalledWith('0xAABB', expect.objectContaining({ layerHoverPreview: true }))
+  })
+
+  it('defaults to on when the stored prefs have no value', async () => {
+    mockPipetteSettingsGet.mockResolvedValue(stored())
+    const { result } = await applied('0xAABB')
+    expect(result.current.layerHoverPreview).toBe(true)
+  })
+
+  it('restores an explicit false', async () => {
+    mockPipetteSettingsGet.mockResolvedValue(stored({ layerHoverPreview: false }))
+    const { result } = await applied('0xAABB')
+    expect(result.current.layerHoverPreview).toBe(false)
+  })
+
+  it('falls back to on for a non-boolean value', async () => {
+    mockPipetteSettingsGet.mockResolvedValue(stored({ layerHoverPreview: 'no' }))
+    const { result } = await applied('0xAABB')
+    expect(result.current.layerHoverPreview).toBe(true)
+  })
+
+  it('setLayerHoverPreview saves false, and later unrelated saves keep it', async () => {
+    mockPipetteSettingsGet.mockResolvedValue(stored())
+    const { result } = await applied('0xAABB')
+    act(() => { result.current.setLayerHoverPreview(false) })
+    expect(result.current.layerHoverPreview).toBe(false)
+    expect(mockPipetteSettingsPatch).toHaveBeenLastCalledWith('0xAABB', expect.objectContaining({ layerHoverPreview: false }))
+
+    act(() => { result.current.setAutoAdvance(false) })
+    expect(mockPipetteSettingsPatch).toHaveBeenLastCalledWith('0xAABB', expect.objectContaining({
+      autoAdvance: false, layerHoverPreview: false,
+    }))
+  })
+
+  it('does not carry one keyboard\'s value over to another', async () => {
+    mockPipetteSettingsGet
+      .mockResolvedValueOnce(stored({ layerHoverPreview: false }))
+      .mockResolvedValueOnce(stored())
+    const { result } = await applied('uid-1')
+    expect(result.current.layerHoverPreview).toBe(false)
+    await act(async () => { await result.current.applyDevicePrefs('uid-2') })
+    expect(result.current.layerHoverPreview).toBe(true)
   })
 })

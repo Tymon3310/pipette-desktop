@@ -140,6 +140,10 @@ export interface KeymapEditorProps {
    *  mode is active — see `PipetteSettings.viewMatrixWires`. */
   viewMatrixWires?: boolean
   onViewMatrixWiresChange?: (next: boolean) => void
+  /** Hovering a layer key previews its target layer — see
+   *  `PipetteSettings.layerHoverPreview`. Omitted means on. */
+  layerHoverPreview?: boolean
+  onLayerHoverPreviewChange?: (enabled: boolean) => void
   basicViewType?: BasicViewType
   onBasicViewTypeChange?: (type: BasicViewType) => void
   splitKeyMode?: SplitKeyMode
@@ -222,6 +226,8 @@ export interface KeymapEditorProps {
   onTypingTestViewOnlyWindowSizeChange?: (size: { width: number; height: number }) => void
   typingTestViewOnlyAlwaysOnTop?: boolean
   onTypingTestViewOnlyAlwaysOnTopChange?: (enabled: boolean) => void
+  typingTestViewOnlyOpacity?: number
+  onTypingTestViewOnlyOpacityChange?: (opacity: number) => void
   typingTestMemory?: TypingTestMemory
   onTypingTestMemoryChange?: (memory: TypingTestMemory | undefined) => void
   typingTestDisplayLines?: number
