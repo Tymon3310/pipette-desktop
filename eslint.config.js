@@ -79,7 +79,12 @@ export default [
       'src/shared/keycodes/keycodes-v6.ts',
       'src/shared/typing-benchmarks.ts',
       'src/renderer/typing-test/romaji-tables.ts',
-      'src/preload/index.ts'
+      'src/preload/index.ts',
+      'src/preload/keychron-protocol.ts',
+      'src/renderer/App.tsx',
+      'src/renderer/components/editors/KeychronAnalog.tsx',
+      'src/renderer/components/editors/KeychronDfuFlasher.tsx',
+      'src/renderer/components/editors/KeychronRGB.tsx'
     ],
     rules: {
       'max-lines': 'off'
