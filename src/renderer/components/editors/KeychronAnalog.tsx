@@ -9,7 +9,8 @@ import type {
   OKMCSlotConfig,
 } from '../../../shared/types/keychron'
 import { KeyboardWidget } from '../keyboard/KeyboardWidget'
-import { KEY_UNIT, KEYBOARD_PADDING } from '../keyboard/constants'
+import { KEY_UNIT, KEY_SPACING, KEYBOARD_PADDING } from '../keyboard/constants'
+import { keyCorners } from '../keyboard/key-geometry'
 import type { KleKey } from '../../../shared/kle/types'
 import {
   AKM_MODE_NAMES,
@@ -24,9 +25,11 @@ import {
   OKMC_ACTION_NAMES,
   OKMC_ACTION_NONE,
   SOCD_TYPE_NAMES,
+  SOCD_TYPE_TOOLTIPS,
 } from '../../../shared/constants/keychron'
 import { codeToLabel } from '../../../shared/keycodes/keycodes'
 import { Tooltip } from '../ui/Tooltip'
+import { BTN_SECONDARY } from '../../constants/ui-tokens'
 
 interface Props {
   analog: KeychronAnalogState
@@ -104,7 +107,7 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer:
   }, [keys, keymap, defaultLayer])
 
   // Dynamic keyboard widget scaling
-  const kbContainerRef = useRef<HTMLDivElement>(null)
+  const [kbContainerEl, setKbContainerEl] = useState<HTMLDivElement | null>(null)
   const [kbScale, setKbScale] = useState(1)
 
   // Realtime travel (for calibration display)
@@ -138,24 +141,35 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer:
 
   // Measure keyboard widget container and compute scale
   useLayoutEffect(() => {
-    const container = kbContainerRef.current
-    if (!container) return
-    const observer = new ResizeObserver(() => {
-      const containerWidth = container.clientWidth - 32 // subtract padding
-      let maxX = 0
-      for (const k of keys) {
-        if (k.x + k.width > maxX) maxX = k.x + k.width
+    if (!kbContainerEl) return
+
+    const updateScale = () => {
+      const containerWidth = kbContainerEl.clientWidth - 40
+      if (containerWidth <= 0 || keys.length === 0) return
+
+      let minX = Infinity
+      let maxX = -Infinity
+      for (const key of keys) {
+        for (const [cx] of keyCorners(key, KEY_UNIT, KEY_SPACING)) {
+          if (cx < minX) minX = cx
+          if (cx > maxX) maxX = cx
+        }
       }
-      const naturalWidth = maxX * KEY_UNIT + KEYBOARD_PADDING * 2
-      if (naturalWidth > containerWidth && naturalWidth > 0) {
-        setKbScale(containerWidth / naturalWidth)
+      const keysWidth = maxX - minX
+      const naturalWidth = keysWidth + KEYBOARD_PADDING * 2
+      if (naturalWidth > containerWidth && keysWidth > 0) {
+        const targetScale = Math.min(1, (containerWidth - KEYBOARD_PADDING * 2) / keysWidth)
+        setKbScale(Math.max(0.2, targetScale))
       } else {
         setKbScale(1)
       }
-    })
-    observer.observe(container)
+    }
+
+    updateScale()
+    const observer = new ResizeObserver(updateScale)
+    observer.observe(kbContainerEl)
     return () => observer.disconnect()
-  }, [activeTab, keys])
+  }, [kbContainerEl, keys])
 
   // Debounced save
   const saveTimerRef = useRef<number | null>(null)
@@ -632,7 +646,7 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer:
       {activeTab === 'actuation' && (
         <div className="flex flex-col gap-4">
           {/* Keyboard visualization */}
-          <div ref={kbContainerRef} className="rounded-lg border border-edge bg-surface-dim p-4 flex justify-center overflow-x-hidden">
+          <div ref={setKbContainerEl} className="rounded-lg border border-edge bg-surface-dim p-4 flex justify-center overflow-x-auto">
             <div data-kb-widget>
               <KeyboardWidget
                 keys={keys}
@@ -931,7 +945,7 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer:
             })()}
 
           <div className="flex flex-col gap-2 pt-2">
-            <div ref={kbContainerRef} className="rounded-lg border border-edge bg-surface-dim p-4 flex justify-center overflow-x-hidden">
+            <div ref={setKbContainerEl} className="rounded-lg border border-edge bg-surface-dim p-4 flex justify-center overflow-x-auto">
               <div data-kb-widget>
                 <KeyboardWidget
                   keys={keys}
@@ -991,7 +1005,7 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer:
 
       {/* SOCD Tab */}
       {activeTab === 'socd' && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           <p className="text-sm text-content-secondary">
             {t(
               'keychron.analog.socdDesc',
@@ -1001,12 +1015,11 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer:
 
           {/* Show keyboard widget when in pick mode */}
           {socdPickMode && (
-            <div ref={kbContainerRef} className="w-full rounded-lg border-2 border-accent bg-surface-dim p-4 flex flex-col">
-              <p className="mb-2 text-sm font-medium text-accent self-start">
-                Click a key on the keyboard to assign it as Key {socdPickMode.whichKey} for SOCD
-                pair #{socdPickMode.pairIdx + 1}
+            <div ref={setKbContainerEl} className="w-full rounded-lg border-2 border-accent bg-surface-dim p-4 flex flex-col mb-4">
+              <p className="mb-2 self-start text-sm font-medium text-accent">
+                Click a key on the keyboard to assign it as Key {socdPickMode.whichKey} for SOCD pair #{socdPickMode.pairIdx + 1}
               </p>
-              <div className="flex justify-center overflow-x-hidden">
+              <div className="flex justify-center overflow-x-auto w-full">
                 <div data-kb-widget>
                   <KeyboardWidget
                     keys={keys}
@@ -1018,7 +1031,8 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer:
                 </div>
               </div>
               <button
-                className="mt-2 self-center rounded border border-edge px-3 py-1 text-xs text-content-secondary hover:text-content"
+                type="button"
+                className={`mt-3 self-center ${BTN_SECONDARY}`}
                 onClick={() => setSocdPickMode(null)}
               >
                 Cancel
@@ -1027,67 +1041,89 @@ export function KeychronAnalog({ analog, keys, rows, cols, keymap, defaultLayer:
           )}
 
           {socdPairsState.length === 0 ? (
-            <p className="text-sm text-content-secondary italic">
+            <div className="rounded-lg border border-dashed border-edge p-8 text-center text-sm italic text-content-secondary">
               {t('keychron.analog.noSocd', 'No SOCD slots available for this keyboard.')}
-            </p>
+            </div>
           ) : (
-            <div className="space-y-2">
-              {socdPairsState.map((pair, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 rounded-lg border border-edge bg-surface p-3 flex-wrap"
-                >
-                  <span className="text-xs font-medium text-content-secondary w-8">#{i + 1}</span>
-                  <div className="flex items-center gap-1 text-xs">
-                    <Tooltip content="Click to assign Key 1">
-                      <button
-                        className={`rounded px-2 py-0.5 border transition-colors ${
-                          socdPickMode?.pairIdx === i && socdPickMode?.whichKey === 1
-                            ? 'bg-accent text-on-accent border-accent'
-                            : 'bg-surface-dim border-edge hover:border-accent hover:text-accent'
-                        }`}
-                        onClick={() => setSocdPickMode({ pairIdx: i, whichKey: 1 })}
-                      >
-                        R{pair.key1Row}C{pair.key1Col}
-                        {keymap.has(`0,${pair.key1Row},${pair.key1Col}`) && (
-                          <span className="ml-1 opacity-70">
-                            ({codeToLabel(keymap.get(`0,${pair.key1Row},${pair.key1Col}`)!)})
-                          </span>
-                        )}
-                      </button>
-                    </Tooltip>
-                    <span className="text-content-secondary">↔</span>
-                    <Tooltip content="Click to assign Key 2">
-                      <button
-                        className={`rounded px-2 py-0.5 border transition-colors ${
-                          socdPickMode?.pairIdx === i && socdPickMode?.whichKey === 2
-                            ? 'bg-accent text-on-accent border-accent'
-                            : 'bg-surface-dim border-edge hover:border-accent hover:text-accent'
-                        }`}
-                        onClick={() => setSocdPickMode({ pairIdx: i, whichKey: 2 })}
-                      >
-                        R{pair.key2Row}C{pair.key2Col}
-                      {keymap.has(`0,${pair.key2Row},${pair.key2Col}`) && (
-                        <span className="ml-1 opacity-70">
-                          ({codeToLabel(keymap.get(`0,${pair.key2Row},${pair.key2Col}`)!)})
-                        </span>
-                      )}
-                      </button>
-                    </Tooltip>
-                  </div>
-                  <select
-                    className="ml-auto rounded border border-edge bg-surface-dim px-2 py-1 text-sm"
-                    value={pair.type}
-                    onChange={(e) => handleSocdTypeChange(i, Number(e.target.value))}
+            <div className="space-y-3">
+              {socdPairsState.map((pair, i) => {
+                const key1Kc = keymap.get(`0,${pair.key1Row},${pair.key1Col}`)
+                const key1Label = key1Kc ? codeToLabel(key1Kc) : ''
+                const key1Sub = `R${pair.key1Row}C${pair.key1Col}`
+
+                const key2Kc = keymap.get(`0,${pair.key2Row},${pair.key2Col}`)
+                const key2Label = key2Kc ? codeToLabel(key2Kc) : ''
+                const key2Sub = `R${pair.key2Row}C${pair.key2Col}`
+
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-edge bg-surface p-3.5 transition-colors hover:border-edge-focus"
                   >
-                    {Object.entries(SOCD_TYPE_NAMES).map(([k, v]) => (
-                      <option key={k} value={k}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
+                    <div className="flex items-center gap-2 min-w-[70px]">
+                      <span className="rounded-md bg-surface-dim px-2.5 py-1 text-xs font-semibold text-content-secondary">
+                        {t('keychron.snapPair', 'Pair {{n}}', { n: i + 1 })}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Tooltip content={t('keychron.socd.clickToAssign1', 'Click to assign Key 1')}>
+                        <button
+                          type="button"
+                          className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                            socdPickMode?.pairIdx === i && socdPickMode?.whichKey === 1
+                              ? 'border-accent bg-accent/10 text-accent font-semibold ring-1 ring-accent'
+                              : 'border-edge bg-surface-alt text-content-secondary hover:text-content hover:bg-surface-dim'
+                          }`}
+                          onClick={() => setSocdPickMode({ pairIdx: i, whichKey: 1 })}
+                        >
+                          <span className="text-content-muted">Key 1:</span>
+                          <span className="font-semibold text-content">
+                            {key1Label ? `(${key1Label})` : t('common.unassigned', 'None')}
+                          </span>
+                          <span className="font-mono text-[10px] text-content-muted">{key1Sub}</span>
+                        </button>
+                      </Tooltip>
+
+                      <span className="text-content-muted font-bold text-sm">↔</span>
+
+                      <Tooltip content={t('keychron.socd.clickToAssign2', 'Click to assign Key 2')}>
+                        <button
+                          type="button"
+                          className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                            socdPickMode?.pairIdx === i && socdPickMode?.whichKey === 2
+                              ? 'border-accent bg-accent/10 text-accent font-semibold ring-1 ring-accent'
+                              : 'border-edge bg-surface-alt text-content-secondary hover:text-content hover:bg-surface-dim'
+                          }`}
+                          onClick={() => setSocdPickMode({ pairIdx: i, whichKey: 2 })}
+                        >
+                          <span className="text-content-muted">Key 2:</span>
+                          <span className="font-semibold text-content">
+                            {key2Label ? `(${key2Label})` : t('common.unassigned', 'None')}
+                          </span>
+                          <span className="font-mono text-[10px] text-content-muted">{key2Sub}</span>
+                        </button>
+                      </Tooltip>
+                    </div>
+
+                    <div className="w-56 shrink-0">
+                      <Tooltip content={SOCD_TYPE_TOOLTIPS[pair.type] ?? ''}>
+                        <select
+                          className="w-full rounded-md border border-edge bg-surface-alt px-2.5 py-1.5 text-xs font-medium text-content focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                          value={pair.type}
+                          onChange={(e) => handleSocdTypeChange(i, Number(e.target.value))}
+                        >
+                          {Object.entries(SOCD_TYPE_NAMES).map(([k, v]) => (
+                            <option key={k} value={k}>
+                              {v}
+                            </option>
+                          ))}
+                        </select>
+                      </Tooltip>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

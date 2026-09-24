@@ -260,6 +260,22 @@ export const SOCD_TYPE_NAMES: Record<number, string> = {
   [SOCD_PRI_NEUTRAL]: 'Neutral',
 }
 
+export const SOCD_TYPE_TOOLTIPS: Record<number, string> = {
+  [SOCD_PRI_NONE]: 'This pair is inactive.',
+  [SOCD_PRI_DEEPER_TRAVEL]:
+    'The key pressed deeper takes priority. Both keys remain tracked continuously.',
+  [SOCD_PRI_DEEPER_TRAVEL_SINGLE]:
+    'The key pressed deeper takes priority (single trigger resolution).',
+  [SOCD_PRI_LAST_KEYSTROKE]:
+    'The most recently pressed key takes priority.',
+  [SOCD_PRI_KEY_1]:
+    'Key 1 always takes priority when both keys are pressed.',
+  [SOCD_PRI_KEY_2]:
+    'Key 2 always takes priority when both keys are pressed.',
+  [SOCD_PRI_NEUTRAL]:
+    'When both keys are pressed simultaneously, neither key outputs.',
+}
+
 // Calibration states
 export const CALIB_OFF = 0
 export const CALIB_ZERO_TRAVEL_POWER_ON = 1

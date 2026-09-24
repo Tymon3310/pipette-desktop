@@ -18,6 +18,7 @@ import {
   REPORT_RATE_8000HZ,
   REPORT_RATE_125HZ,
 } from '../../../shared/constants/keychron'
+import { BTN_SECONDARY } from '../../constants/ui-tokens'
 import { FactoryResetDialog } from './FactoryResetDialog'
 
 interface Props {
@@ -52,7 +53,6 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
     setPollRateUsb(keychron.pollRateUsb)
     setPollRate24g(keychron.pollRate24g)
     setBacklitTime(keychron.wirelessBacklitTime)
-    setIdleTime(keychron.wirelessIdleTime)
     setIdleTime(keychron.wirelessIdleTime)
     updating.current = false
   }, [keychron])
@@ -145,8 +145,6 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
     [api, backlitTime, onSettingChanged],
   )
 
-
-
   // Build supported rate options from bitmask
   function rateOptions(mask: number) {
     const opts: { value: number; label: string }[] = []
@@ -159,22 +157,22 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-5" data-testid="keychron-settings">
+    <div className="flex flex-col gap-6" data-testid="keychron-settings">
       {/* Debounce */}
       {keychron.hasDebounce && (
         <section>
-          <h4 className="mb-2 text-sm font-semibold text-content-muted">
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-content-muted">
             {t('keychron.debounce', 'Debounce')}
           </h4>
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <label className="flex-1 min-w-0 text-sm">
+              <label className="flex-1 min-w-0 text-sm text-content">
                 {t('keychron.debounceAlgorithm', 'Algorithm')}
               </label>
               <select
                 value={debounceType}
                 onChange={handleDebounceType}
-                className="w-64 rounded border border-edge bg-surface px-2 py-1 text-sm"
+                className="w-64 rounded-md border border-edge bg-surface px-2.5 py-1.5 text-sm text-content"
                 data-testid="keychron-debounce-type"
               >
                 {Object.entries(DEBOUNCE_TYPE_NAMES)
@@ -187,7 +185,7 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
               </select>
             </div>
             <div className="flex items-center gap-3">
-              <label className="flex-1 min-w-0 text-sm">
+              <label className="flex-1 min-w-0 text-sm text-content">
                 {t('keychron.debounceTime', 'Time (ms)')}
               </label>
               <input
@@ -196,7 +194,7 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
                 max={50}
                 value={debounceTime}
                 onChange={handleDebounceTime}
-                className="w-28 rounded border border-edge bg-surface px-2 py-1 text-sm"
+                className="w-28 rounded-md border border-edge bg-surface px-2.5 py-1.5 text-sm text-content"
                 data-testid="keychron-debounce-time"
               />
             </div>
@@ -207,7 +205,7 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
       {/* NKRO */}
       {keychron.hasNkro && (
         <section>
-          <h4 className="mb-2 text-sm font-semibold text-content-muted">
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-content-muted">
             {t('keychron.nkro', 'N-Key Rollover')}
           </h4>
           <div className="flex items-center gap-3">
@@ -216,13 +214,13 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
               checked={nkroEnabled}
               onChange={handleNkro}
               disabled={keychron.nkroAdaptive || !keychron.nkroSupported}
-              className="h-4 w-4 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-4 w-4 rounded border-edge text-accent focus:ring-accent accent-accent disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="keychron-nkro"
             />
-            <span className={`text-sm ${keychron.nkroAdaptive || !keychron.nkroSupported ? 'text-content-muted' : ''}`}>
+            <span className={`text-sm ${keychron.nkroAdaptive || !keychron.nkroSupported ? 'text-content-muted' : 'text-content'}`}>
               {t('keychron.enableNkro', 'Enable NKRO')}
             </span>
-            <span className={`text-xs ${keychron.nkroAdaptive || !keychron.nkroSupported ? 'text-content-muted' : 'text-content-muted'}`}>
+            <span className="text-xs text-content-muted">
               {keychron.nkroAdaptive
                 ? t('keychron.nkroAdaptive', '(Adaptive — controlled by firmware)')
                 : keychron.nkroSupported
@@ -236,20 +234,20 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
       {/* Report Rate */}
       {keychron.hasReportRate && (
         <section>
-          <h4 className="mb-2 text-sm font-semibold text-content-muted">
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-content-muted">
             {isV2
               ? t('keychron.pollingRate', 'Polling Rate')
               : t('keychron.usbReportRate', 'USB Report Rate')}
           </h4>
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <label className="flex-1 min-w-0 text-sm">
+              <label className="flex-1 min-w-0 text-sm text-content">
                 {t('keychron.usbPollingRate', 'USB Polling Rate')}
               </label>
               <select
                 value={isV2 ? pollRateUsb : reportRate}
                 onChange={handleReportRate}
-                className="w-40 rounded border border-edge bg-surface px-2 py-1 text-sm"
+                className="w-44 rounded-md border border-edge bg-surface px-2.5 py-1.5 text-sm text-content"
                 data-testid="keychron-report-rate"
               >
                 {rateOptions(isV2 ? keychron.pollRateUsbMask : keychron.reportRateMask).map(
@@ -263,13 +261,13 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
             </div>
             {isV2 && (
               <div className="flex items-center gap-3">
-                <label className="flex-1 min-w-0 text-sm">
+                <label className="flex-1 min-w-0 text-sm text-content">
                   {t('keychron.frPollingRate', '2.4 GHz Polling Rate')}
                 </label>
                 <select
                   value={pollRate24g}
                   onChange={handleFrRate}
-                  className="w-40 rounded border border-edge bg-surface px-2 py-1 text-sm"
+                  className="w-44 rounded-md border border-edge bg-surface px-2.5 py-1.5 text-sm text-content"
                   data-testid="keychron-fr-rate"
                 >
                   {rateOptions(keychron.pollRate24gMask).map((opt) => (
@@ -287,12 +285,12 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
       {/* Wireless LPM */}
       {keychron.hasWireless && (
         <section>
-          <h4 className="mb-2 text-sm font-semibold text-content-muted">
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-content-muted">
             {t('keychron.wirelessPower', 'Wireless Power Management')}
           </h4>
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <label className="flex-1 min-w-0 text-sm">
+              <label className="flex-1 min-w-0 text-sm text-content">
                 {t('keychron.backlightOff', 'Backlight off after (seconds)')}
               </label>
               <input
@@ -301,12 +299,12 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
                 max={3600}
                 value={backlitTime}
                 onChange={handleBacklitTime}
-                className="w-28 rounded border border-edge bg-surface px-2 py-1 text-sm"
+                className="w-28 rounded-md border border-edge bg-surface px-2.5 py-1.5 text-sm text-content"
                 data-testid="keychron-backlit-time"
               />
             </div>
             <div className="flex items-center gap-3">
-              <label className="flex-1 min-w-0 text-sm">
+              <label className="flex-1 min-w-0 text-sm text-content">
                 {t('keychron.sleepAfter', 'Sleep after idle (seconds)')}
               </label>
               <input
@@ -315,7 +313,7 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
                 max={7200}
                 value={idleTime}
                 onChange={handleIdleTime}
-                className="w-28 rounded border border-edge bg-surface px-2 py-1 text-sm"
+                className="w-28 rounded-md border border-edge bg-surface px-2.5 py-1.5 text-sm text-content"
                 data-testid="keychron-idle-time"
               />
             </div>
@@ -323,21 +321,19 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
         </section>
       )}
 
-
-
       {/* Factory Reset */}
-      <section className="border-t border-edge pt-3">
-        <h4 className="mb-2 text-sm font-semibold text-content-muted">
+      <section className="border-t border-edge pt-4">
+        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-content-muted">
           {t('keychron.factoryReset', 'Factory Reset')}
         </h4>
-        <p className="mb-3 text-xs text-content-muted">
+        <p className="mb-3 text-xs text-content-secondary">
           {t(
             'keychron.factoryResetInfo',
             'Factory reset restores all settings to their defaults. This cannot be triggered via USB — use the hardware key combo instead.',
           )}
         </p>
         <button
-          className="rounded-md border border-edge bg-surface px-3 py-1.5 text-sm hover:bg-surface-hover"
+          className={BTN_SECONDARY}
           onClick={() => setShowFactoryReset(true)}
           data-testid="keychron-factory-reset-btn"
         >
@@ -347,7 +343,7 @@ export function KeychronSettings({ keychron, onSettingChanged }: Props) {
       </section>
 
       {/* Firmware info */}
-      <section className="border-t border-edge pt-3">
+      <section className="border-t border-edge pt-4">
         {keychron.firmwareVersion && (
           <div className="text-xs text-content-muted">
             {t('keychron.firmware', 'Firmware')}: {keychron.firmwareVersion}

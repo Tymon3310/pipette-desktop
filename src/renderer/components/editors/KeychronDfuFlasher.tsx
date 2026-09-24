@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ModalCloseButton } from './ModalCloseButton'
-
+import { KeychronModalShell } from './KeychronModalShell'
 import { useUnlockGate } from '../../hooks/useUnlockGate'
 import type { DeviceInfo, VilFile } from '../../../shared/types/protocol'
+import { BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER } from '../../constants/ui-tokens'
 
 /** How often to poll for the device to re-appear after DFU flashing (ms) */
 const RECONNECT_POLL_MS = 2000
@@ -28,6 +30,7 @@ interface KeychronDfuFlasherProps {
 }
 
 export const KeychronDfuFlasher = ({
+  isOpen,
   onClose,
   onSaveBackup,
   onRestoreBackup,
@@ -75,31 +78,37 @@ export const KeychronDfuFlasher = ({
   const handleFileSelection = (file: File) => {
     // Basic validation
     if (!file.name.toLowerCase().endsWith('.bin')) {
-      setLogs(['Error: Please select a valid .bin firmware file.'])
+      setLogs(['Error: Selected file is not a .bin file. Please select a valid firmware file.'])
+      setSelectedFile(null)
       setFlashSuccess(false)
       return
     }
-    
+
     setSelectedFile(file)
     setFlashSuccess(null)
     setProgress(0)
-    setLogs([])
+    setLogs([`Selected firmware: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`])
   }
 
   const [isDragging, setIsDragging] = useState(false)
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
-    if (!isBusy) setIsDragging(true)
+    e.stopPropagation()
+    if (!isBusy) {
+      setIsDragging(true)
+    }
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     setIsDragging(false)
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     setIsDragging(false)
     if (isBusy) return
 
@@ -108,9 +117,6 @@ export const KeychronDfuFlasher = ({
     }
   }
 
-  /**
-   * After flashing, poll for the original device to re-appear and reconnect.
-   */
   const waitForReconnect = useCallback(async (): Promise<boolean> => {
     if (!originalDevice || !connectDevice) return false
 
@@ -133,9 +139,9 @@ export const KeychronDfuFlasher = ({
         console.log('[Flasher] Polling for reconnected devices...', devices)
         const match =
           devices.find(
-            (d) => d.vendorId === originalDevice.vendorId && d.productId === originalDevice.productId,
+            (d: DeviceInfo) => d.vendorId === originalDevice.vendorId && d.productId === originalDevice.productId,
           ) ||
-          devices.find((d) => d.vendorId === originalDevice.vendorId) ||
+          devices.find((d: DeviceInfo) => d.vendorId === originalDevice.vendorId) ||
           (devices.length === 1 ? devices[0] : undefined)
 
         if (match) {
@@ -303,7 +309,7 @@ export const KeychronDfuFlasher = ({
       }
 
       // Subscribe to progress
-      const unsubscribe = window.vialAPI.keychronDfuOnOutput((data) => {
+      const unsubscribe = window.vialAPI.keychronDfuOnOutput((data: { log?: string; progress?: number }) => {
         if (data.log) {
           setLogs((prev) => [...prev, data.log!])
         }
@@ -345,147 +351,22 @@ export const KeychronDfuFlasher = ({
 
   const isBusy = isFlashing || reconnecting
 
+  if (!isOpen) return null
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={isBusy ? undefined : handleClose}
-    >
-      <div
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-surface-alt shadow-xl text-content"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-edge px-6 py-4 shrink-0 bg-surface">
-          <h2 className="text-lg font-semibold">
-            {t('keychron.flasher.title', 'Keychron Firmware Flasher')}
-          </h2>
-          {!isBusy && (
-            <ModalCloseButton testid="keychron-dfu-flasher-close" onClick={handleClose} />
-          )}
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0 flex flex-col gap-6">
-          <p className="text-sm text-content-secondary">
-            Select a <b>.bin</b> firmware file to flash your Keychron keyboard. This process will
-            reboot your keyboard into DFU mode and use <code className="rounded bg-surface px-1 py-0.5 text-content">dfu-util</code> to deploy the firmware.
-          </p>
-
-          <div
-            className={`p-6 border-2 border-dashed rounded-lg transition-colors flex flex-col items-center justify-center gap-3 cursor-pointer
-              ${
-                isBusy
-                  ? 'border-edge bg-surface-dim opacity-50 cursor-not-allowed'
-                  : isDragging
-                    ? 'border-accent bg-accent/10'
-                    : 'border-edge bg-surface hover:border-accent/50'
-              }
-            `}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => !isBusy && fileInputRef.current?.click()}
-          >
-            <div className="flex flex-col items-center justify-center text-center gap-1">
-              <span className="font-medium text-sm text-content">
-                {selectedFile ? selectedFile.name : 'Drag and drop your .bin file here'}
-              </span>
-              {!selectedFile && (
-                <span className="text-xs text-content-secondary">
-                  or click to browse from your computer
-                </span>
-              )}
-            </div>
-            
-            <input
-              type="file"
-              accept=".bin"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={handleFileChange}
-              disabled={isBusy}
-            />
-            
-            {selectedFile && (
-              <button
-                type="button"
-                className="mt-2 rounded bg-surface-dim px-3 py-1.5 text-xs font-medium text-content hover:bg-edge transition-colors disabled:opacity-50"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  fileInputRef.current?.click()
-                }}
-                disabled={isBusy}
-              >
-                Choose different file
-              </button>
-            )}
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-content">
-            <input
-              type="checkbox"
-              checked={backupLayout}
-              onChange={(e) => setBackupLayout(e.target.checked)}
-              disabled={isBusy}
-              className="rounded accent-accent"
-            />
-            {t('keychron.flasher.backup', 'Restore current layout after flashing')}
-          </label>
-
-          {(isBusy || logs.length > 0) && (
-            <div>
-              <div className="mb-2 font-bold text-sm text-content">
-                {reconnecting ? 'Reconnecting...' : 'Flash Progress'}
-              </div>
-              <div className="w-full h-2 bg-surface-dim rounded-full overflow-hidden mb-2">
-                <div
-                  className={`h-full transition-all duration-300 ${
-                    flashSuccess === false
-                      ? 'bg-danger'
-                      : reconnecting
-                        ? 'bg-warning animate-pulse'
-                        : 'bg-accent'
-                  }`}
-                  style={{ width: reconnecting ? '100%' : `${progress}%` }}
-                />
-              </div>
-
-              <div className="bg-surface-dim p-3 rounded-lg font-mono text-sm h-48 overflow-y-auto border border-edge">
-                {logs.map((log, i) => (
-                  <div
-                    key={i}
-                    className={
-                      log.toLowerCase().includes('error') || log.toLowerCase().includes('failed')
-                        ? 'text-danger'
-                        : 'text-content-secondary'
-                    }
-                  >
-                    {log}
-                  </div>
-                ))}
-                <div ref={logEndRef} />
-              </div>
-            </div>
-          )}
-
-          {flashSuccess === true && !reconnecting && (
-            <div className="flex gap-2 p-3 bg-success/10 text-success border border-success/20 rounded-lg items-center text-sm font-medium">
-              <span>✓</span>
-              <span>Flash completed successfully. The keyboard should reconnect shortly.</span>
-            </div>
-          )}
-
-          {flashSuccess === false && (
-            <div className="flex gap-2 p-3 bg-danger/10 text-danger border border-danger/20 rounded-lg items-center text-sm font-medium">
-              <span>⚠</span>
-              <span>Flashing failed. Check the logs above for details.</span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-3 border-t border-edge px-6 py-4 shrink-0 bg-surface">
+    <KeychronModalShell
+      title={t('keychron.flasher.title', 'Keychron Firmware Flasher')}
+      testId="keychron-dfu-flasher-modal"
+      onClose={handleClose}
+      width="w-modal-xl"
+      isBusy={isBusy}
+      contentClassName="flex flex-col gap-6 text-sm"
+      footer={
+        <>
           {reconnecting && typeof window.vialAPI?.requestDevice === 'function' && (
             <button
               type="button"
-              className="rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast shadow-sm transition-all hover:bg-accent-hover"
+              className={BTN_PRIMARY}
               onClick={handleManualReconnect}
             >
               {t('app.pairDevice', 'Reconnect / Authorize Keyboard')}
@@ -493,24 +374,142 @@ export const KeychronDfuFlasher = ({
           )}
           <button
             type="button"
-            className="rounded px-4 py-2 text-sm font-medium text-content hover:bg-surface-dim border border-edge transition-colors disabled:opacity-50"
+            className={BTN_SECONDARY}
             onClick={handleClose}
             disabled={isFlashing}
           >
-            {flashSuccess ? 'Close' : 'Cancel'}
+            {flashSuccess ? t('common.close', 'Close') : t('common.cancel', 'Cancel')}
           </button>
           {!reconnecting && (
             <button
               type="button"
-              className="rounded bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger/90 transition-colors disabled:opacity-50"
+              className={BTN_DANGER}
               onClick={handleFlash}
               disabled={!selectedFile || isBusy}
             >
-              {isFlashing ? 'Flashing...' : 'Flash Firmware'}
+              {isFlashing
+                ? t('keychron.flasher.flashing', 'Flashing...')
+                : t('keychron.flasher.flashFirmware', 'Flash Firmware')}
             </button>
           )}
+        </>
+      }
+    >
+      <p className="text-sm text-content-secondary">
+        Select a <b>.bin</b> firmware file to flash your Keychron keyboard. This process will
+        reboot your keyboard into DFU mode and use <code className="rounded bg-surface px-1 py-0.5 text-content">dfu-util</code> to deploy the firmware.
+      </p>
+
+      <div
+        className={`p-6 border-2 border-dashed rounded-xl transition-colors flex flex-col items-center justify-center gap-3 cursor-pointer
+          ${
+            isBusy
+              ? 'border-edge bg-surface-dim opacity-50 cursor-not-allowed'
+              : isDragging
+                ? 'border-accent bg-accent/10'
+                : 'border-edge bg-surface hover:border-accent/50'
+          }
+        `}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={() => !isBusy && fileInputRef.current?.click()}
+      >
+        <div className="flex flex-col items-center justify-center text-center gap-1">
+          <span className="font-medium text-sm text-content">
+            {selectedFile ? selectedFile.name : 'Drag and drop your .bin file here'}
+          </span>
+          {!selectedFile && (
+            <span className="text-xs text-content-secondary">
+              or click to browse from your computer
+            </span>
+          )}
         </div>
+
+        <input
+          type="file"
+          accept=".bin"
+          ref={fileInputRef}
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+          disabled={isBusy}
+        />
+
+        {selectedFile && (
+          <button
+            type="button"
+            className="mt-2 rounded-md border border-edge bg-surface-dim px-3 py-1.5 text-xs font-medium text-content hover:bg-edge transition-colors disabled:opacity-50"
+            onClick={(e) => {
+              e.stopPropagation()
+              fileInputRef.current?.click()
+            }}
+            disabled={isBusy}
+          >
+            Choose different file
+          </button>
+        )}
       </div>
-    </div>
+
+      <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-content">
+        <input
+          type="checkbox"
+          checked={backupLayout}
+          onChange={(e) => setBackupLayout(e.target.checked)}
+          disabled={isBusy}
+          className="h-4 w-4 rounded border-edge text-accent focus:ring-accent accent-accent disabled:cursor-not-allowed disabled:opacity-50"
+        />
+        {t('keychron.flasher.backup', 'Restore current layout after flashing')}
+      </label>
+
+      {(isBusy || logs.length > 0) && (
+        <div>
+          <div className="mb-2 font-bold text-sm text-content">
+            {reconnecting ? 'Reconnecting...' : 'Flash Progress'}
+          </div>
+          <div className="w-full h-2 bg-surface-dim rounded-full overflow-hidden mb-2">
+            <div
+              className={`h-full transition-all duration-300 ${
+                flashSuccess === false
+                  ? 'bg-danger'
+                  : reconnecting
+                    ? 'bg-warning animate-pulse'
+                    : 'bg-accent'
+              }`}
+              style={{ width: reconnecting ? '100%' : `${progress}%` }}
+            />
+          </div>
+
+          <div className="bg-surface-dim p-3 rounded-xl font-mono text-sm h-48 overflow-y-auto border border-edge">
+            {logs.map((log, i) => (
+              <div
+                key={i}
+                className={
+                  log.toLowerCase().includes('error') || log.toLowerCase().includes('failed')
+                    ? 'text-danger'
+                    : 'text-content-secondary'
+                }
+              >
+                {log}
+              </div>
+            ))}
+            <div ref={logEndRef} />
+          </div>
+        </div>
+      )}
+
+      {flashSuccess === true && !reconnecting && (
+        <div className="flex gap-2 p-3 bg-success/10 text-success border border-success/20 rounded-xl items-center text-sm font-medium">
+          <span>✓</span>
+          <span>Flash completed successfully. The keyboard should reconnect shortly.</span>
+        </div>
+      )}
+
+      {flashSuccess === false && (
+        <div className="flex gap-2 p-3 bg-danger/10 text-danger border border-danger/20 rounded-xl items-center text-sm font-medium">
+          <span>⚠</span>
+          <span>Flashing failed. Check the logs above for details.</span>
+        </div>
+      )}
+    </KeychronModalShell>
   )
 }

@@ -8,6 +8,7 @@ import { KeyboardWidget } from '../keyboard/KeyboardWidget'
 import type { KleKey } from '../../../shared/kle/types'
 import { PER_KEY_RGB_TYPE_NAMES, PER_KEY_RGB_SOLID } from '../../../shared/constants/keychron'
 import { VIALRGB_EFFECTS } from '../../../shared/constants/lighting'
+import { BTN_PRIMARY, BTN_SECONDARY } from '../../constants/ui-tokens'
 
 // Keychron custom VialRGB effect IDs
 const EFFECT_PER_KEY_RGB = 48
@@ -344,9 +345,6 @@ export function KeychronRGB({
   )
 
   const emptyKeycodes = useRef(new Map<string, string>()).current
-
-  const btnClass =
-    'rounded-md border border-edge bg-surface px-3 py-1.5 text-sm hover:bg-surface-hover transition-colors'
   const disabledClass = 'pointer-events-none opacity-40'
 
   return (
@@ -356,9 +354,9 @@ export function KeychronRGB({
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">{t('keychron.effect', 'Effect:')}</label>
+              <label className="text-sm font-medium text-content">{t('keychron.effect', 'Effect:')}</label>
               <select
-                className="rounded border border-edge bg-surface px-3 py-1.5 text-sm"
+                className="rounded-md border border-edge bg-surface px-2.5 py-1.5 text-sm text-content"
                 value={vialRGBMode}
                 onChange={(e) => onSetVialRGBMode(Number(e.target.value))}
                 data-testid="keychron-rgb-mode"
@@ -371,7 +369,7 @@ export function KeychronRGB({
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-sm text-content-muted">
+              <label className="text-sm font-medium text-content">
                 {t('keychron.brightness', 'Brightness:')}
               </label>
               <input
@@ -380,27 +378,27 @@ export function KeychronRGB({
                 max={vialRGBMaxBrightness}
                 value={vialRGBVal}
                 onChange={(e) => onSetVialRGBBrightness(Number(e.target.value))}
-                className="w-32"
+                className="w-32 accent-accent"
                 data-testid="keychron-rgb-brightness"
               />
               <span className="w-8 text-xs text-content-muted tabular-nums">{vialRGBVal}</span>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-sm text-content-muted">{t('keychron.speed', 'Speed:')}</label>
+              <label className="text-sm font-medium text-content">{t('keychron.speed', 'Speed:')}</label>
               <input
                 type="range"
                 min={0}
                 max={255}
                 value={vialRGBSpeed}
                 onChange={(e) => onSetVialRGBSpeed(Number(e.target.value))}
-                className="w-32"
+                className="w-32 accent-accent"
                 data-testid="keychron-rgb-speed"
               />
               <span className="w-8 text-xs text-content-muted tabular-nums">{vialRGBSpeed}</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-content-muted">{t('keychron.color', 'Color:')}</span>
+            <span className="text-sm font-medium text-content">{t('keychron.color', 'Color:')}</span>
             <HSVColorPicker
               hue={vialRGBHue}
               saturation={vialRGBSat}
@@ -416,35 +414,38 @@ export function KeychronRGB({
       {/* ===== OS Indicators ===== */}
       {rgb.osIndicatorConfig && (
         <Section title={t('keychron.osIndicators', 'OS Indicators')}>
-          <div className="flex gap-8">
+          <div className="flex flex-wrap gap-8">
             <div className="flex flex-col gap-3">
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm text-content">
                 <input
                   type="checkbox"
                   checked={(indMask & 0x01) !== 0}
                   onChange={() => updateIndicators(indMask ^ 0x01, indHue, indSat, indVal)}
+                  className="h-4 w-4 rounded border-edge text-accent focus:ring-accent accent-accent"
                 />
                 {t('keychron.disableNumLock', 'Disable Num Lock Indicator')}
               </label>
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm text-content">
                 <input
                   type="checkbox"
                   checked={(indMask & 0x02) !== 0}
                   onChange={() => updateIndicators(indMask ^ 0x02, indHue, indSat, indVal)}
+                  className="h-4 w-4 rounded border-edge text-accent focus:ring-accent accent-accent"
                 />
                 {t('keychron.disableCapsLock', 'Disable Caps Lock Indicator')}
               </label>
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm text-content">
                 <input
                   type="checkbox"
                   checked={(indMask & 0x04) !== 0}
                   onChange={() => updateIndicators(indMask ^ 0x04, indHue, indSat, indVal)}
+                  className="h-4 w-4 rounded border-edge text-accent focus:ring-accent accent-accent"
                 />
                 {t('keychron.disableScrollLock', 'Disable Scroll Lock Indicator')}
               </label>
             </div>
             <div className="pl-4 border-l border-edge">
-              <span className="mb-2 block text-sm font-medium text-content-muted">
+              <span className="mb-2 block text-sm font-medium text-content">
                 {t('keychron.indicatorColor', 'Indicator Color')}
               </span>
               <HSVColorPicker
@@ -472,11 +473,11 @@ export function KeychronRGB({
           </div>
         )}
         <div className={`flex flex-col gap-4 ${!isPerKeyActive ? disabledClass : ''}`}>
-          <div className="flex items-center gap-4">
-            <button className={btnClass} onClick={handleSelectAll}>
+          <div className="flex items-center gap-3">
+            <button className={BTN_SECONDARY} onClick={handleSelectAll}>
               {t('editor.keymap.selectAll', 'Select All')}
             </button>
-            <button className={btnClass} onClick={handleDeselectAll}>
+            <button className={BTN_SECONDARY} onClick={handleDeselectAll}>
               {t('editor.keymap.deselectAll', 'Deselect All')}
             </button>
             <span className="text-sm text-content-muted">
@@ -484,7 +485,7 @@ export function KeychronRGB({
             </span>
           </div>
 
-          <div className="flex justify-center rounded-lg border border-edge bg-surface-alt p-4 overflow-x-auto">
+          <div className="flex justify-center rounded-xl border border-edge bg-surface-dim p-4 overflow-x-auto">
             <KeyboardWidget
               keys={keys}
               keycodes={emptyKeycodes}
@@ -495,7 +496,7 @@ export function KeychronRGB({
           </div>
 
           <div className="flex flex-col gap-6 mt-4 sm:flex-row">
-            <div className="flex-1 rounded-lg border border-edge p-4 bg-surface-alt">
+            <div className="flex-1 rounded-xl border border-edge p-4 bg-surface-alt">
               <span className="mb-3 block text-sm font-medium text-content">
                 {t('keychron.perKeyEffectType', 'Effect Type')}
               </span>
@@ -507,7 +508,7 @@ export function KeychronRGB({
               </p>
               <div className="flex flex-col gap-2">
                 <select
-                  className="rounded border border-edge bg-surface px-3 py-1.5 text-sm"
+                  className="rounded-md border border-edge bg-surface px-2.5 py-1.5 text-sm text-content"
                   value={perKeyType}
                   onChange={(e) => handleTypeChange(Number(e.target.value))}
                   disabled={!isPerKeyActive}
@@ -521,7 +522,7 @@ export function KeychronRGB({
               </div>
             </div>
 
-            <div className="flex flex-col rounded-lg border border-edge p-4 bg-surface-alt items-center">
+            <div className="flex flex-col rounded-xl border border-edge p-4 bg-surface-alt items-center">
               <div className="mb-4">
                 <HSVColorPicker
                   hue={perKeyHue}
@@ -533,7 +534,7 @@ export function KeychronRGB({
                 />
               </div>
               <button
-                className="w-full rounded bg-accent px-4 py-2 font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                className={`w-full ${BTN_PRIMARY}`}
                 onClick={handleApplyColor}
                 disabled={selectedKeys.size === 0 || !isPerKeyActive}
               >
@@ -563,12 +564,12 @@ export function KeychronRGB({
               )}
             </p>
 
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-medium">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm font-medium text-content">
                 {t('keychron.paintRegion', 'Paint Region:')}
               </span>
               <select
-                className="rounded border border-edge bg-surface px-3 py-1.5 text-sm"
+                className="rounded-md border border-edge bg-surface px-2.5 py-1.5 text-sm text-content"
                 value={mixedRegionToApply}
                 onChange={(e) => setMixedRegionToApply(Number(e.target.value))}
                 disabled={!isMixedActive}
@@ -580,7 +581,7 @@ export function KeychronRGB({
                 ))}
               </select>
               <button
-                className="rounded-md border border-edge bg-accent px-3 py-1.5 text-sm text-white hover:bg-accent-hover disabled:opacity-50"
+                className={BTN_PRIMARY}
                 onClick={handleApplyRegion}
                 disabled={selectedMixedKeys.size === 0 || !isMixedActive}
               >
@@ -588,11 +589,11 @@ export function KeychronRGB({
               </button>
             </div>
 
-            <div className="flex items-center gap-4">
-              <button className={btnClass} onClick={handleMixedSelectAll}>
+            <div className="flex items-center gap-3">
+              <button className={BTN_SECONDARY} onClick={handleMixedSelectAll}>
                 {t('editor.keymap.selectAll', 'Select All')}
               </button>
-              <button className={btnClass} onClick={handleMixedDeselectAll}>
+              <button className={BTN_SECONDARY} onClick={handleMixedDeselectAll}>
                 {t('editor.keymap.deselectAll', 'Deselect All')}
               </button>
               <span className="text-sm text-content-muted">
@@ -600,7 +601,7 @@ export function KeychronRGB({
               </span>
             </div>
 
-            <div className="flex justify-center rounded-lg border border-edge bg-surface-alt p-4 overflow-x-auto">
+            <div className="flex justify-center rounded-xl border border-edge bg-surface-dim p-4 overflow-x-auto">
               <KeyboardWidget
                 keys={keys}
                 keycodes={emptyKeycodes}
@@ -612,14 +613,16 @@ export function KeychronRGB({
 
             {/* Region Effects Tabs */}
             <div className="mt-4">
-              <div className="flex border-b border-edge">
+              <div role="tablist" className="flex border-b border-edge shrink-0">
                 {Array.from({ length: rgb.mixedRGBLayers }).map((_, i) => (
                   <button
                     key={i}
-                    className={`px-4 py-2 text-sm font-medium ${
+                    role="tab"
+                    aria-selected={mixedRegionEffectTab === i}
+                    className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
                       mixedRegionEffectTab === i
-                        ? 'border-b-2 border-accent text-accent'
-                        : 'text-content-muted hover:text-content hover:bg-surface-hover'
+                        ? 'border-b-accent text-content'
+                        : 'border-b-transparent text-content-muted hover:text-content'
                     }`}
                     onClick={() => setMixedRegionEffectTab(i)}
                   >
@@ -632,7 +635,7 @@ export function KeychronRGB({
                 {localMixedEffects.get(mixedRegionEffectTab)?.map((slot, slotIdx) => (
                   <div
                     key={slotIdx}
-                    className="rounded border border-edge bg-surface-alt p-3 flex flex-col gap-3"
+                    className="rounded-xl border border-edge bg-surface-alt p-4 flex flex-col gap-3"
                   >
                     <span className="text-sm font-semibold text-content">
                       {t('keychron.effectSlot', {
@@ -643,7 +646,7 @@ export function KeychronRGB({
                     <div className="flex flex-col gap-2">
                       <label className="text-xs text-content-muted">Effect</label>
                       <select
-                        className="rounded border border-edge bg-surface px-2 py-1 text-sm"
+                        className="rounded-md border border-edge bg-surface px-2.5 py-1.5 text-sm text-content"
                         value={slot.effect}
                         disabled={!isMixedActive}
                         onChange={(e) => {
@@ -673,7 +676,7 @@ export function KeychronRGB({
                             type="range"
                             min="0"
                             max="255"
-                            className="w-full"
+                            className="w-full accent-accent"
                             value={slot.speed}
                             disabled={!isMixedActive}
                             onChange={(e) => {
@@ -698,7 +701,7 @@ export function KeychronRGB({
                             min="100"
                             max="60000"
                             step="100"
-                            className="w-full rounded border border-edge bg-surface px-2 py-1 text-sm"
+                            className="w-full rounded-md border border-edge bg-surface px-2.5 py-1.5 text-sm text-content"
                             value={slot.time}
                             disabled={!isMixedActive}
                             onChange={(e) => {
@@ -720,7 +723,7 @@ export function KeychronRGB({
                         <summary className="cursor-pointer hover:text-content">
                           Color Picker
                         </summary>
-                        <div className="mt-2 bg-surface p-2 rounded">
+                        <div className="mt-2 bg-surface p-2 rounded-lg border border-edge">
                           <HSVColorPicker
                             hue={slot.hue}
                             saturation={slot.sat}
@@ -765,7 +768,7 @@ export function KeychronRGB({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-edge bg-surface p-4">
+    <section className="rounded-xl border border-edge bg-surface p-5">
       <h3 className="mb-4 text-sm font-semibold text-content">{title}</h3>
       {children}
     </section>
