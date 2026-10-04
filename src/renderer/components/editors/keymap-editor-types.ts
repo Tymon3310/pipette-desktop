@@ -60,6 +60,11 @@ export interface KeymapEditorHandle {
    *  are wiped instead of gaining a revertible batch entry — recovery is
    *  the user's own .vil/snapshot backup, not Undo. */
   applyKeymapRewrite: (table: KeymapRewriteTable) => Promise<KeymapApplyResult>
+  /** Called by the footer's Key Labels select handler with the picked
+   *  layout, right before it changes the layout, so the pick opens the
+   *  pack tab (see `useKeymapPackTabs`). A layout restored from saved
+   *  prefs never goes through here and leaves the tab alone. */
+  notifyUserLayoutChange: (layout: string) => void
   /** Wipes the undo/redo stack in place, without touching the keymap itself.
    *  Called by the host (App.tsx) after a snapshot/layout-store restore or
    *  `.vil` import replaces the whole keymap out from under this same
@@ -144,6 +149,13 @@ export interface KeymapEditorProps {
    *  `PipetteSettings.layerHoverPreview`. Omitted means on. */
   layerHoverPreview?: boolean
   onLayerHoverPreviewChange?: (enabled: boolean) => void
+  /** Hovering a macro, Tap Dance, Combo, Key Override or Alt Repeat Key
+   *  shows it in full — see
+   *  `PipetteSettings.entryHoverPreview`. Only drives the Settings / Import
+   *  toggle; the hover surfaces read the value from `EntryHoverPreviewContext`
+   *  (`entry-hover-context.ts`). Omitted means on. */
+  entryHoverPreview?: boolean
+  onEntryHoverPreviewChange?: (enabled: boolean) => void
   basicViewType?: BasicViewType
   onBasicViewTypeChange?: (type: BasicViewType) => void
   splitKeyMode?: SplitKeyMode
@@ -153,7 +165,7 @@ export interface KeymapEditorProps {
   keyboardLayout?: KeyboardLayoutId
   onKeyboardLayoutChange?: (layout: KeyboardLayoutId) => void
   /** Display name of the active Key Label pack — labels the simulation
-   *  tab's top button. Only read while `remapKind === 'simulated'`. */
+   *  tab's bottom button. Only read while `remapKind === 'simulated'`. */
   keymapPackName?: string
   /** Opens the Rewrite confirm modal for the pack currently active in
    *  `keyboardLayout` — wired to `useKeymapApplyPrompt().requestApply`.

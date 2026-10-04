@@ -22,6 +22,7 @@
 import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfirmResetRow } from './ConfirmResetRow'
+import { UndecryptableFilesList } from './UndecryptableFilesList'
 import type { UseSyncReturn } from '../../hooks/useSync'
 import type { SyncDataScanResult, SyncResetTargets } from '../../../shared/types/sync'
 
@@ -85,7 +86,7 @@ export function CloudDataContent({ sync, scanResult, scanning, onRescan }: Cloud
       const targets: SyncResetTargets = { keyboards: false, favorites: false, [key]: true }
       const result = await sync.resetSyncTargets(targets)
       if (!result.success) {
-        setError(result.error ?? t('statusBar.sync.error'))
+        setError(result.error ? t(result.error, result.error) : t('statusBar.sync.error'))
         return
       }
       setConfirming(null)
@@ -103,7 +104,7 @@ export function CloudDataContent({ sync, scanResult, scanning, onRescan }: Cloud
     try {
       const result = await sync.deleteFiles([fileId])
       if (!result.success) {
-        setError(result.error ?? t('statusBar.sync.error'))
+        setError(result.error ? t(result.error, result.error) : t('statusBar.sync.error'))
         return
       }
       setConfirming(null)
@@ -166,28 +167,20 @@ export function CloudDataContent({ sync, scanResult, scanning, onRescan }: Cloud
               <div className="text-sm text-content-muted" data-testid="cloud-data-undecryptable-count">
                 {t('sync.undecryptableCount', { count: undecryptable.length })}
               </div>
-              <div className="space-y-1">
-                {undecryptable.map((file) => (
-                  <ConfirmResetRow
-                    key={file.fileId}
-                    rowClassName="flex items-center justify-between gap-2 rounded border border-edge px-3 py-2"
-                    rowTestid={`undecryptable-file-${file.fileId}`}
-                    labelClassName="text-sm text-content truncate"
-                    label={file.syncUnit ?? file.fileName}
-                    triggerLabel={t('common.delete')}
-                    confirmLabel={t('common.confirmDelete')}
-                    cancelLabel={t('common.cancel')}
-                    confirming={confirming?.kind === 'file' && confirming.fileId === file.fileId}
-                    busy={busy}
-                    onTrigger={() => setConfirming({ kind: 'file', fileId: file.fileId })}
-                    onConfirm={() => void handleDeleteFile(file.fileId)}
-                    onCancel={() => setConfirming(null)}
-                    triggerTestid={`undecryptable-delete-${file.fileId}`}
-                    confirmTestid={`undecryptable-delete-confirm-${file.fileId}`}
-                    cancelTestid={`undecryptable-delete-cancel-${file.fileId}`}
-                  />
-                ))}
-              </div>
+              <UndecryptableFilesList
+                files={undecryptable.map((file) => ({ id: file.fileId, label: file.syncUnit ?? file.fileName }))}
+                confirmingId={confirming?.kind === 'file' ? confirming.fileId : null}
+                busy={busy}
+                onTrigger={(fileId) => setConfirming({ kind: 'file', fileId })}
+                onConfirm={(fileId) => void handleDeleteFile(fileId)}
+                onCancel={() => setConfirming(null)}
+                testids={{
+                  row: 'undecryptable-file-',
+                  trigger: 'undecryptable-delete-',
+                  confirm: 'undecryptable-delete-confirm-',
+                  cancel: 'undecryptable-delete-cancel-',
+                }}
+              />
             </div>
           )}
         </>

@@ -17,6 +17,7 @@ import {
 } from './constants'
 import { flashAnimationDelayMs } from './key-flash'
 import { KeyFlashOverlay } from './KeyFlashOverlay'
+import { outerPartHoverHandlers } from './outer-part-hover'
 
 interface Props {
   kleKey: KleKey
@@ -47,6 +48,15 @@ interface Props {
   remapped?: boolean
   onClick?: (key: KleKey, direction: number, maskClicked: boolean) => void
   onDoubleClick?: (key: KleKey, direction: number, rect: DOMRect, maskClicked: boolean) => void
+  /** Pointer entered this direction's half; `rect` is its viewport rect.
+   *  Omitted means no hover handling at all. */
+  onHover?: (encoderIdx: number, direction: number, rect: DOMRect) => void
+  onHoverEnd?: () => void
+  /** For a masked (LT-style) keycode, report hover only while the pointer
+   *  is over the outer part: entering the inner rect calls `onHoverEnd`,
+   *  and moving from the inner rect back to the outer part calls `onHover`
+   *  again. Same contract as `KeyWidget`'s `hoverOuterPartOnly`. */
+  hoverOuterPartOnly?: boolean
   scale?: number
 }
 
@@ -61,6 +71,9 @@ function EncoderWidgetInner({
   remapped,
   onClick,
   onDoubleClick,
+  onHover,
+  onHoverEnd,
+  hoverOuterPartOnly,
   scale = 1,
 }: Props) {
   const clipId = useId()
@@ -100,6 +113,11 @@ function EncoderWidgetInner({
     if (onDoubleClick) { e.stopPropagation(); onDoubleClick(kleKey, kleKey.encoderDir, e.currentTarget.getBoundingClientRect(), false) }
   }
 
+  const emitHover = (group: Element) => onHover?.(kleKey.encoderIdx, kleKey.encoderDir, group.getBoundingClientRect())
+  const handleMouseEnter = onHover
+    ? (e: React.MouseEvent<SVGGElement>) => emitHover(e.currentTarget)
+    : undefined
+
   // How far into the shared `key-flash` timeline this overlay is joining —
   // same negative `animation-delay` trick as `KeyWidget` (see there for
   // the full rationale).
@@ -128,6 +146,8 @@ function EncoderWidgetInner({
         data-encoder-pos={`${kleKey.encoderIdx},${kleKey.encoderDir}`}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={onHoverEnd}
         style={{ cursor: onClick ? 'pointer' : 'default' }}
       >
         <circle cx={cx} cy={cy} r={r} fill={fillColor}
@@ -161,6 +181,7 @@ function EncoderWidgetInner({
   const handleInnerClick = (e: React.MouseEvent) => {
     if (onClick) { e.stopPropagation(); onClick(kleKey, kleKey.encoderDir, true) }
   }
+  const outerOnly = hoverOuterPartOnly && onHover ? outerPartHoverHandlers(emitHover, onHoverEnd) : undefined
   const handleInnerDoubleClick = (e: React.MouseEvent<SVGRectElement>) => {
     e.stopPropagation()
     if (onDoubleClick) {
@@ -176,6 +197,8 @@ function EncoderWidgetInner({
       data-encoder-pos={`${kleKey.encoderIdx},${kleKey.encoderDir}`}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={onHoverEnd}
       style={{ cursor: onClick ? 'pointer' : 'default' }}
     >
       <defs>
@@ -197,7 +220,9 @@ function EncoderWidgetInner({
         fill={KEY_MASK_RECT_COLOR}
         stroke={innerBorderActive ? KEY_SELECTED_COLOR : KEY_BORDER_COLOR} strokeWidth={innerBorderActive ? 2 : 1}
         clipPath={`url(#${clipId})`}
-        onClick={handleInnerClick} onDoubleClick={handleInnerDoubleClick} style={{ cursor: onClick ? 'pointer' : 'default' }} />
+        onClick={handleInnerClick} onDoubleClick={handleInnerDoubleClick}
+        onMouseEnter={outerOnly?.onInnerEnter} onMouseLeave={outerOnly?.onInnerLeave}
+        style={{ cursor: onClick ? 'pointer' : 'default' }} />
       {/* Outer label (modifier) */}
       <text x={cx} y={outerLabelY} textAnchor="middle" dominantBaseline="central"
         fill={labelColor} fontSize={fontSize * 0.85} fontFamily="sans-serif" style={{ pointerEvents: 'none' }}>

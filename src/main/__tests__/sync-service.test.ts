@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { join } from 'node:path'
-import { access, mkdtemp, readFile, rm, stat, utimes, writeFile, mkdir } from 'node:fs/promises'
+import { access, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import type { DriveFile } from '../sync/google-drive'
 
@@ -46,6 +46,7 @@ const mockUploadFile = vi.fn(
     ({ id: 'file-id', modifiedTime: '2026-01-01T00:00:00.000Z' }),
 )
 const mockDeleteFile = vi.fn(async (_fileId: string): Promise<void> => {})
+const mockCreateRawFile = vi.fn(async (..._args: unknown[]): Promise<{ id: string }> => ({ id: 'format-marker' }))
 
 vi.mock('../sync/google-drive', async () => {
   // `driveFileName`/`syncUnitFromFileName` are imported via `importActual`
@@ -62,6 +63,14 @@ vi.mock('../sync/google-drive', async () => {
     deleteFile: (...args: unknown[]) => mockDeleteFile(...(args as Parameters<typeof mockDeleteFile>)),
     driveFileName: actual.driveFileName,
     syncUnitFromFileName: actual.syncUnitFromFileName,
+    isDataFileName: actual.isDataFileName,
+    isPasswordChangeLockFile: actual.isPasswordChangeLockFile,
+    PASSWORD_CHECK_UNIT: actual.PASSWORD_CHECK_UNIT,
+    PASSWORD_CHANGE_LOCK_FILE: actual.PASSWORD_CHANGE_LOCK_FILE,
+    SYNC_FORMAT_FILE_PREFIX: actual.SYNC_FORMAT_FILE_PREFIX,
+    syncFormatFileName: actual.syncFormatFileName,
+    parseSyncFormatFileName: actual.parseSyncFormatFileName,
+    createRawFile: (...args: unknown[]) => mockCreateRawFile(...args),
   }
 })
 
@@ -222,7 +231,7 @@ import {
   resetPasswordCheckCache,
   listUndecryptableFiles,
   scanRemoteData,
-  changePassword,
+  listRemoteFileNames,
   checkPasswordCheckExists,
   setPasswordAndValidate,
   setupBeforeQuitHandler,
@@ -234,6 +243,7 @@ import {
   _resetForTests,
 } from '../sync/sync-service'
 import { app } from 'electron'
+import { syncRuntime } from '../sync/sync-runtime-state'
 
 const POLL_INTERVAL_MS = 3 * 60 * 1000
 
@@ -466,6 +476,9 @@ describe('sync-service', () => {
       const syncPromise = executeSync('download')
       expect(isSyncInProgress()).toBe(true)
 
+      // The password-change guard reads its local state file (real fs I/O)
+      // before listing, so the delayed listing starts a few turns later.
+      await flushUntil(() => mockListFiles.mock.calls.length > 0, 'the listing')
       await vi.advanceTimersByTimeAsync(200)
       await syncPromise
       expect(isSyncInProgress()).toBe(false)
@@ -516,6 +529,7 @@ describe('sync-service', () => {
       const first = executeSync('download')
       const second = executeSync('download')
 
+      await flushUntil(() => mockListFiles.mock.calls.length > 0, 'the listing')
       await vi.advanceTimersByTimeAsync(200)
       const firstResult = await first
       // The busy race must surface as a real, checkable status —
@@ -718,7 +732,9 @@ describe('sync-service', () => {
     // google-drive.test.ts's round-trip coverage.
 
     it('skips when no remote changes detected', async () => {
-      mockListFiles.mockResolvedValue([makeDriveFile('2025-01-01T00:00:00.000Z')])
+      // The listed password-check is validated by the first poll only.
+      mockListFiles.mockResolvedValue([makeDriveFile('2025-01-01T00:00:00.000Z'), PASSWORD_CHECK_DRIVE_FILE])
+      mockDownloadFile.mockResolvedValue({ ciphertext: 'ok' })
 
       startPolling()
       // The listFiles counts prove each poll actually ran, so the negative
@@ -982,9 +998,12 @@ describe('sync-service', () => {
       const themePackFile = (modifiedTime: string): DriveFile =>
         ({ id: 'theme-pack-1', name: 'themes_packs_pack-a.enc', modifiedTime })
       mockListFiles
-        .mockResolvedValueOnce([themePackFile('2026-01-01T00:00:00.000Z')])
-        .mockResolvedValueOnce([themePackFile('2026-01-02T00:00:00.000Z')])
-      mockDownloadFile.mockRejectedValue(new Error('decrypt failed'))
+        .mockResolvedValueOnce([themePackFile('2026-01-01T00:00:00.000Z'), PASSWORD_CHECK_DRIVE_FILE])
+        .mockResolvedValueOnce([themePackFile('2026-01-02T00:00:00.000Z'), PASSWORD_CHECK_DRIVE_FILE])
+      mockDownloadFile.mockImplementation(async (id) => {
+        if (id === PASSWORD_CHECK_DRIVE_FILE.id) return { ciphertext: 'ok' }
+        throw new Error('decrypt failed')
+      })
 
       startPolling()
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
@@ -1568,196 +1587,37 @@ describe('sync-service', () => {
       expect(result.typingTestTexts).toBe(true)
       expect(result.keyLabels).toBe(false)
     })
+    it('is refused while the password-change lock is listed, downloading nothing', async () => {
+      mockListFiles.mockResolvedValue([
+        { id: 'lock', name: 'password-change-lock.json', modifiedTime: '2025-01-01T00:00:00.000Z' },
+        { id: 'f1', name: 'favorites_macro.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+      ])
+
+      await expect(scanRemoteData()).rejects.toThrow('sync.passwordChange.blockedByOtherDevice')
+
+      expect(mockDownloadFile).not.toHaveBeenCalled()
+    })
   })
 
-  describe('changePassword', () => {
-    const mockDecrypt = vi.mocked(mockDecryptFn)
-    const mockEncrypt = vi.mocked(mockEncryptFn)
-    const mockStorePassword = vi.mocked(mockStorePasswordFn)
+  describe('listRemoteFileNames', () => {
+    it('leaves the password-check file out of the name set', async () => {
+      mockListFiles.mockResolvedValue([
+        PASSWORD_CHECK_DRIVE_FILE,
+        { id: 'f1', name: 'favorites_macro.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+      ])
 
-    it('re-encrypts all files and uploads with new password', async () => {
-      const dataFile = {
-        id: 'f1',
-        name: 'favorites_tapDance.enc',
-        modifiedTime: '2025-01-01T00:00:00.000Z',
-      }
-      mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE, dataFile])
-      mockDownloadFile
-        .mockResolvedValueOnce(makePasswordCheckEnvelope()) // validatePasswordCheck
-        .mockResolvedValueOnce({ version: 1, syncUnit: 'favorites/tapDance', ciphertext: '{"data":"test"}' })
+      const names = await listRemoteFileNames()
 
-      await changePassword('new-password')
-
-      // Should upload the data file with the new password
-      expect(mockEncrypt).toHaveBeenCalledWith('{"data":"test"}', 'new-password', 'favorites/tapDance')
-      expect(mockUploadFile).toHaveBeenCalledWith(
-        'favorites_tapDance.enc',
-        expect.objectContaining({ syncUnit: 'favorites/tapDance' }),
-        'f1',
-      )
-      // Should upload password-check with new password
-      expect(mockUploadFile).toHaveBeenCalledWith(
-        'password-check.enc',
-        expect.objectContaining({ syncUnit: 'password-check' }),
-        'pc-1',
-      )
-      expect(mockStorePassword).toHaveBeenCalledWith('new-password')
+      expect(names).toEqual(new Set(['favorites_macro.enc']))
     })
 
-    it('aborts when a file cannot be decrypted (uploadFile not called)', async () => {
-      const dataFile = {
-        id: 'f1',
-        name: 'favorites_tapDance.enc',
-        modifiedTime: '2025-01-01T00:00:00.000Z',
-      }
-      mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE, dataFile])
-      mockDownloadFile
-        .mockResolvedValueOnce(makePasswordCheckEnvelope()) // validatePasswordCheck
-        .mockResolvedValueOnce({ version: 1, syncUnit: 'favorites/tapDance', ciphertext: 'bad' })
-      mockDecrypt
-        .mockResolvedValueOnce('ok') // validatePasswordCheck succeeds
-        .mockRejectedValueOnce(new Error('Decryption failed')) // data file fails
+    it('returns null while the password-change lock is listed', async () => {
+      mockListFiles.mockResolvedValue([
+        { id: 'lock', name: 'password-change-lock.json', modifiedTime: '2025-01-01T00:00:00.000Z' },
+        { id: 'f1', name: 'favorites_macro.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+      ])
 
-      await expect(changePassword('new-password')).rejects.toThrow('sync.changePasswordUndecryptable')
-      expect(mockUploadFile).not.toHaveBeenCalled()
-    })
-
-    it('throws when sync is in progress', async () => {
-      mockListFiles.mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve([]), 100)),
-      )
-      const syncPromise = executeSync('download')
-
-      await expect(changePassword('new-password')).rejects.toThrow(
-        'sync.changePasswordInProgress',
-      )
-
-      await vi.advanceTimersByTimeAsync(200)
-      await syncPromise
-    })
-
-    it('throws when new password is the same as current', async () => {
-      await expect(changePassword('test-password')).rejects.toThrow('sync.samePassword')
-      expect(mockUploadFile).not.toHaveBeenCalled()
-    })
-
-    it('throws SyncCredentialError(unauthenticated) when not signed in', async () => {
-      mockGetAuthStatus.mockResolvedValueOnce({ authenticated: false })
-
-      await expect(changePassword('new-password')).rejects.toThrow('sync.changePasswordError.unauthenticated')
-    })
-
-    it('succeeds with no remote data files (password-check only)', async () => {
-      mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
-      mockDownloadFile.mockResolvedValueOnce(makePasswordCheckEnvelope())
-
-      await changePassword('new-password')
-
-      // Only password-check should be uploaded (re-created in Phase 3)
-      expect(mockUploadFile).toHaveBeenCalledTimes(1)
-      expect(mockUploadFile).toHaveBeenCalledWith(
-        'password-check.enc',
-        expect.objectContaining({ syncUnit: 'password-check' }),
-        'pc-1',
-      )
-      expect(mockStorePassword).toHaveBeenCalledWith('new-password')
-    })
-
-    it('validates old password against password-check before proceeding', async () => {
-      mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
-      mockDownloadFile.mockResolvedValueOnce(makePasswordCheckEnvelope())
-      mockDecrypt.mockRejectedValueOnce(new Error('wrong password'))
-
-      await expect(changePassword('new-password')).rejects.toThrow('sync.passwordMismatch')
-      // Should not upload anything since validation failed
-      expect(mockUploadFile).not.toHaveBeenCalled()
-      expect(mockStorePassword).not.toHaveBeenCalled()
-    })
-
-    it('skips password-check file during re-encryption and recreates it', async () => {
-      const dataFile = {
-        id: 'f1',
-        name: 'favorites_tapDance.enc',
-        modifiedTime: '2025-01-01T00:00:00.000Z',
-      }
-      mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE, dataFile])
-      mockDownloadFile
-        .mockResolvedValueOnce(makePasswordCheckEnvelope()) // validatePasswordCheck
-        .mockResolvedValueOnce({ version: 1, syncUnit: 'favorites/tapDance', ciphertext: '{"data":"test"}' })
-
-      await changePassword('new-password')
-
-      // downloadFile called twice: once for validation, once for data file
-      expect(mockDownloadFile).toHaveBeenCalledTimes(2)
-      expect(mockDownloadFile).toHaveBeenCalledWith('pc-1')
-      expect(mockDownloadFile).toHaveBeenCalledWith('f1')
-    })
-
-    it('uploads with existing file ID (overwrite)', async () => {
-      const dataFile = {
-        id: 'existing-id-123',
-        name: 'favorites_tapDance.enc',
-        modifiedTime: '2025-01-01T00:00:00.000Z',
-      }
-      // No PASSWORD_CHECK_DRIVE_FILE — validatePasswordCheck will create one
-      mockListFiles.mockResolvedValue([dataFile])
-      mockDownloadFile.mockResolvedValue({
-        version: 1,
-        syncUnit: 'favorites/tapDance',
-        ciphertext: '{"data":"test"}',
-      })
-
-      await changePassword('new-password')
-
-      expect(mockUploadFile).toHaveBeenCalledWith(
-        'favorites_tapDance.enc',
-        expect.anything(),
-        'existing-id-123',
-      )
-    })
-
-    it('preserves syncUnit from envelope for re-encryption', async () => {
-      const dataFile = {
-        id: 'f1',
-        name: 'keyboards_uid1_settings.enc',
-        modifiedTime: '2025-01-01T00:00:00.000Z',
-      }
-      mockListFiles.mockResolvedValue([dataFile])
-      mockDownloadFile.mockResolvedValue({
-        version: 1,
-        syncUnit: 'keyboards/uid1/settings',
-        ciphertext: '{"settings":"data"}',
-      })
-
-      await changePassword('new-password')
-
-      expect(mockEncrypt).toHaveBeenCalledWith(
-        '{"settings":"data"}',
-        'new-password',
-        'keyboards/uid1/settings',
-      )
-    })
-
-    it('releases sync lock on error', async () => {
-      mockListFiles.mockRejectedValue(new Error('network error'))
-
-      await expect(changePassword('new-password')).rejects.toThrow('network error')
-      expect(isSyncInProgress()).toBe(false)
-    })
-
-    it('propagates download errors without classifying as undecryptable', async () => {
-      const dataFile = {
-        id: 'f1',
-        name: 'favorites_tapDance.enc',
-        modifiedTime: '2025-01-01T00:00:00.000Z',
-      }
-      mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE, dataFile])
-      mockDownloadFile
-        .mockResolvedValueOnce(makePasswordCheckEnvelope()) // validatePasswordCheck
-        .mockRejectedValueOnce(new Error('Network timeout')) // data file download fails
-
-      await expect(changePassword('new-password')).rejects.toThrow('Network timeout')
-      expect(mockUploadFile).not.toHaveBeenCalled()
+      expect(await listRemoteFileNames()).toBeNull()
     })
   })
 
@@ -2219,6 +2079,7 @@ describe('sync-service', () => {
       expect(mockUploadFile).toHaveBeenCalledWith(
         'password-check.enc',
         expect.objectContaining({ syncUnit: 'password-check' }),
+        undefined,
       )
     })
 
@@ -2262,12 +2123,16 @@ describe('sync-service', () => {
 
     it('caches validation result for flushPendingChanges', async () => {
       mockAutoSync = true
-      // First: manual sync creates and validates
+      // First: manual sync creates the password-check
       mockListFiles.mockResolvedValue([])
       await executeSync('download')
 
-      // Now trigger auto-sync — should skip password check (cached)
-      mockListFiles.mockResolvedValue([])
+      // Once listed, the first auto-sync validates it; later ones skip the
+      // check while its modifiedTime stays the same.
+      mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
+      mockDownloadFile.mockResolvedValue({ ciphertext: 'ok' })
+      const passwordCheckDownloads = (): number =>
+        mockDownloadFile.mock.calls.filter((call) => call[0] === PASSWORD_CHECK_DRIVE_FILE.id).length
       const listCallsBeforeFlush = mockListFiles.mock.calls.length
       notifyChange('favorites/tapDance')
       await vi.advanceTimersByTimeAsync(10_000)
@@ -2275,6 +2140,13 @@ describe('sync-service', () => {
 
       // The auto-sync flush ran (it lists remote files)
       expect(mockListFiles.mock.calls.length).toBeGreaterThan(listCallsBeforeFlush)
+      expect(passwordCheckDownloads()).toBe(1)
+
+      notifyChange('favorites/tapDance')
+      await vi.advanceTimersByTimeAsync(10_000)
+      await waitForSyncIdle()
+
+      expect(passwordCheckDownloads()).toBe(1)
       // No additional password-check upload (cached)
       const passwordCheckUploads = mockUploadFile.mock.calls.filter(
         (call) => call[0] === 'password-check.enc',
@@ -2389,6 +2261,7 @@ describe('sync-service', () => {
       expect(mockUploadFile).toHaveBeenCalledWith(
         'password-check.enc',
         expect.objectContaining({ syncUnit: 'password-check' }),
+        undefined,
       )
     })
 
@@ -2454,6 +2327,34 @@ describe('sync-service', () => {
       expect(preSyncFinalizer.run).toHaveBeenCalledTimes(1)
       expect(extraFinalizer.run).toHaveBeenCalledTimes(1)
       expect(order).toEqual(['pre-sync', 'extra'])
+      expect(app.quit).toHaveBeenCalled()
+    })
+
+    it('waits for a running password switch to stop before quitting', async () => {
+      let finish!: () => void
+      syncRuntime.passwordChangeRun = new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      const handler = captureBeforeQuitHandler()
+      const preventDefault = vi.fn()
+      handler({ preventDefault })
+
+      expect(preventDefault).toHaveBeenCalled()
+      // The switch reads this at its next chunk boundary and stops.
+      expect(syncRuntime.isQuitting).toBe(true)
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(app.quit).not.toHaveBeenCalled()
+
+      finish()
+      await flushUntil(() => vi.mocked(app.quit).mock.calls.length > 0, 'the quit phases to call app.quit')
+      expect(app.quit).toHaveBeenCalled()
+    })
+
+    it('still quits when the password switch rejects', async () => {
+      syncRuntime.passwordChangeRun = Promise.reject(new Error('switch failed'))
+      const handler = captureBeforeQuitHandler()
+      handler({ preventDefault: vi.fn() })
+      await flushUntil(() => vi.mocked(app.quit).mock.calls.length > 0, 'the quit phases to call app.quit')
       expect(app.quit).toHaveBeenCalled()
     })
 
@@ -3099,11 +3000,10 @@ describe('sync-service', () => {
         await readFile(join(mockUserDataPath, 'sync', dir, 'packs', `${packId}.json`), 'utf-8'),
       ) as { version: string }
       expect(written.version).toBe('2.0.0')
-      // applySyncedPackBody writes via temp-file-then-rename — the `.tmp`
-      // must never linger after a successful write.
-      await expect(
-        access(join(mockUserDataPath, 'sync', dir, 'packs', `${packId}.json.tmp`)),
-      ).rejects.toThrow()
+      // applySyncedPackBody writes via temp-file-then-rename — no `.tmp`
+      // sibling may linger after a successful write.
+      const packFiles = await readdir(join(mockUserDataPath, 'sync', dir, 'packs'))
+      expect(packFiles.filter((f) => f.endsWith('.tmp'))).toEqual([])
     })
 
     it('local i18n-pack file newer than remote drive modifiedTime: local kept, remote re-uploaded', async () => {

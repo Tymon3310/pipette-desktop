@@ -1,5 +1,5 @@
 {
-  "version": "0.1.98",
+  "version": "0.1.108",
   "name": "Japanese",
   "common": {
     "save": "保存",
@@ -124,6 +124,12 @@
       "pickerHint": "Ctrl+クリック: 複数選択 / Shift+クリック: 範囲選択 → キーをクリックでペースト",
       "pickerDoubleClickHint": "同じキーを再度ダブルクリックするか、Enterキーを押すと閉じます",
       "keyboardTab": "Keyboard",
+      "tabReorder": {
+        "hint": "ドラッグまたは ←/→ で並び替え · Enter で完了",
+        "moved": "{{name}} を {{total}} 個中 {{position}} 番目に移動しました",
+        "resetLabel": "タブの並びを既定に戻す",
+        "resetDone": "タブの並びを既定に戻しました"
+      },
       "pickerSourceCurrent": "現在",
       "pickerSourceFile": "ファイル",
       "pickerLoadFile": ".pipetteから読み込み…",
@@ -659,6 +665,11 @@
         "missedBarMovedOnLine": "未修正のまま次へ: {{count}}",
         "missedBarNoDetail": "この記録には打鍵ごとの詳細がありません"
       }
+    },
+    "hoverDetails": {
+      "none": "なし",
+      "on": "オン",
+      "off": "オフ"
     }
   },
   "error": {
@@ -874,7 +885,6 @@
     "changingPassword": "パスワードを変更中...",
     "settingPassword": "パスワードを設定中...",
     "samePassword": "現在と同じパスワードには変更できません",
-    "changePasswordUndecryptable": "復号できないファイルがあります。先に復号できないファイルをスキャンして削除してください。",
     "autoSync": "自動同期",
     "enable": "有効",
     "disable": "停止",
@@ -892,9 +902,55 @@
     "continueOffline": "オフラインで続行",
     "noSyncYet": "未同期",
     "changePasswordError": {
-      "unauthenticated": "パスワードを変更する前に Google にサインインしてください"
+      "unauthenticated": "パスワードを変更する前に Google にサインインしてください",
+      "noPasswordFile": "このPCには同期パスワードが保存されていません。変更ではなく設定してください",
+      "decryptFailed": "保存された同期パスワードを読み取れないため、パスワードを変更できません",
+      "keystoreUnavailable": "OSキーチェーンが利用できないため、ここではパスワードを変更できません",
+      "remoteCheckFailed": "Google Drive に接続できませんでした。しばらくしてからもう一度変更してください"
     },
     "changePasswordInProgress": "同期実行中のためパスワードを変更できません",
+    "passwordChange": {
+      "alreadyInProgress": "この PC でパスワード変更が進行中です。先に続けるか、旧パスワードに戻してください。",
+      "notInProgress": "進行中のパスワード変更はありません。",
+      "invalidState": "パスワード変更の進行状況を読み込めません。",
+      "keysUnavailable": "パスワード変更用に保存したパスワードを読み込めません。OS のキーチェーンが使える状態か確認してから、もう一度お試しください。",
+      "wrongStep": "パスワード変更の現在の段階では、この操作はできません。",
+      "notStarted": "パスワード変更は開始されていません。もう一度パスワードを変更してください。",
+      "locked": "別の PC で同期パスワードを変更中です。終わってからもう一度お試しください。",
+      "lost": "別の PC が同時に同期パスワードの変更を始めました。終わってからもう一度お試しください。",
+      "lockLost": "Google Drive 上のロックが削除されたため（別の PC からの可能性があります）、パスワード変更を中止しました。",
+      "interrupted": "パスワード変更が中断されました。後で続けられます。",
+      "undecryptable": "旧パスワードでも新パスワードでも復号できないファイルが Google Drive にあります。削除してから続けてください。",
+      "notConverged": "パスワード変更中に Google Drive のファイルが変更され続けました。ほかの PC の Pipette を閉じてから続けてください。",
+      "blockedByOtherDevice": "別の PC で同期パスワードを変更中のため、終わるまでこの PC の同期を止めています。",
+      "blockedLocal": "この PC の同期パスワード変更が終わっていないため、同期を止めています。先に続けるか、旧パスワードに戻すか、中止してください。",
+      "closeOtherPcs": "パスワードの変更が終わるまで、ほかの PC の Pipette は閉じておいてください。",
+      "working": "パスワード変更を処理中...",
+      "toNew": "新しい同期パスワードへの変更が終わっていません。この PC の同期は止まっています。",
+      "toOld": "旧パスワードへの戻しが終わっていません。この PC の同期は止まっています。",
+      "stepLabel": "現在の段階: {{step}}",
+      "step": {
+        "locking": "準備中",
+        "reencrypting": "Google Drive のファイルを再暗号化中",
+        "committing": "変更の確定中",
+        "cleanup": "後片付け中"
+      },
+      "resume": "続ける",
+      "revertToOld": "旧パスワードに戻す",
+      "revertToNew": "やはり新パスワードに変更する",
+      "abandonLabel": "パスワード変更を中止する",
+      "abandon": "中止",
+      "confirmAbandon": "中止しますか？",
+      "abandonWarning": "Google Drive のファイルが旧・新パスワード混在のまま残ることがあります。復号できないファイルは データ › Sync › クラウドデータ で削除してください。",
+      "deleteSkipped": "どちらかのパスワードで開けるため、ファイルは削除しませんでした。",
+      "releaseBusy": "この PC で同期が実行中です。少し待ってからもう一度お試しください。",
+      "ownLockLeft": "この PC が Google Drive に残したパスワード変更のロックのため、すべての PC の同期が止まっています。",
+      "lockStartedAt": "開始: {{time}}",
+      "releaseLockLabel": "Google Drive のパスワード変更ロック",
+      "releaseLock": "ロックを解除",
+      "confirmRelease": "解除しますか？",
+      "releaseWarning": "ほかの PC で同期やパスワード変更が動いていないことを確認してください。"
+    },
     "import": "インポート",
     "export": "エクスポート",
     "importComplete": "インポート完了",
@@ -906,6 +962,14 @@
     "undecryptableCount": "{{count}} 件の復号できないファイル",
     "checkingRemotePassword": "同期状態を確認中...",
     "existingPasswordHint": "同期パスワードが既に設定されています。他のデバイスで使用したパスワードを入力してください。",
+    "reenterPasswordWarning": "この PC の同期パスワードが Google Drive と合っていません。ほかの PC で使っているパスワードを入力してください。",
+    "reenterPassword": "パスワードを入力し直す",
+    "reenterPasswordNoRemote": "Google Drive に照合できる同期パスワードがまだありません。このフォームを閉じて、今のパスワードで同期してください。",
+    "updateRequired": "この Google Drive の同期データは新しいバージョンの Pipette で作られています。同期を続けるにはアップデートしてください。",
+    "updateBanner": {
+      "message": "Cloud Sync には新しいバージョンの Pipette が必要です。同期を続けるにはアプリをアップデートしてください。",
+      "openDownloadPage": "ダウンロードページを開く"
+    },
     "unavailable": "接続先またはネットワークに問題があります。同期機能は使用できません。",
     "retry": "再試行",
     "pullError": {
@@ -1876,6 +1940,7 @@
     "splitKeyMode": "キーピッカーでShiftキーを分離",
     "quickSelect": "キーの即時選択",
     "layerHoverPreview": "レイヤーの自動プレビュー",
+    "entryHoverPreview": "お気に入りをホバーで詳細表示",
     "keyEditorZoom": "キーエディタ ズーム"
   },
   "hub": {

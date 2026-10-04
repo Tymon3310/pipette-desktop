@@ -1,5 +1,5 @@
 {
-  "version": "0.1.98",
+  "version": "0.1.108",
   "name": "Japanese - 紳士",
   "common": {
     "save": "保存を承る",
@@ -124,6 +124,12 @@
       "pickerHint": "Ctrl+クリック: 複数選択 / Shift+クリック: 範囲選択 → 鍵をクリックで反映いたします",
       "pickerDoubleClickHint": "再び叩くか、Enterを賜れば閉じます",
       "keyboardTab": "Keyboard",
+      "tabReorder": {
+        "hint": "ドラッグ、または ←/→ にて並べ替えを賜ります · Enter にて完了",
+        "moved": "{{name}}を{{total}}件中{{position}}番目へお移しいたしました",
+        "resetLabel": "タブの並びを初期の順へお戻しいたします",
+        "resetDone": "タブの並びを初期の順へお戻しいたしました"
+      },
       "pickerSourceCurrent": "現在",
       "pickerSourceFile": "書物",
       "pickerLoadFile": ".pipetteより拝読…",
@@ -659,6 +665,11 @@
         "missedBarMovedOnLine": "未修正のまま進まれた回数: {{count}}",
         "missedBarNoDetail": "この記録には打鍵ごとの詳細情報がございません"
       }
+    },
+    "hoverDetails": {
+      "none": "ございません",
+      "on": "有効",
+      "off": "無効"
     }
   },
   "error": {
@@ -864,7 +875,6 @@
     "changingPassword": "合言葉を書き換えております...",
     "settingPassword": "合言葉を定めております...",
     "samePassword": "以前と同じ合言葉では意味がございません",
-    "changePasswordUndecryptable": "開けぬ書物がございます。先にそれらを整理してくださいませ。",
     "autoSync": "自動で揃える",
     "enable": "有効",
     "disable": "停止",
@@ -882,9 +892,55 @@
     "continueOffline": "独りで続行",
     "noSyncYet": "まだ揃っておりません",
     "changePasswordError": {
-      "unauthenticated": "合言葉を変える前に Google へ御挨拶を"
+      "unauthenticated": "合言葉を変える前に Google へ御挨拶を",
+      "noPasswordFile": "この端末には合言葉が保管されておりませぬ。変えるのではなく、まず定めてくださいませ",
+      "decryptFailed": "保管された合言葉を読み取れぬため、合言葉を変えられませぬ",
+      "keystoreUnavailable": "OSの錠前が使えぬため、ここでは合言葉を変えられませぬ",
+      "remoteCheckFailed": "あちらへ繋がらぬため、後ほど改めて合言葉をお変えくださいませ"
     },
     "changePasswordInProgress": "作業中のため合言葉は変えられませぬ",
+    "passwordChange": {
+      "alreadyInProgress": "この端末では合言葉の変更が進行中でございます。先にお続けになるか、元の合言葉にお戻しくださいませ。",
+      "notInProgress": "進行中の合言葉の変更はございません。",
+      "invalidState": "合言葉変更の進捗記録が読めませぬ。",
+      "keysUnavailable": "合言葉変更のためにお預かりした合言葉が読めませぬ。OS の鍵束がお使いになれるかご確認のうえ、改めてお試しくださいませ。",
+      "wrongStep": "合言葉変更の現段階では、その儀は承れませぬ。",
+      "notStarted": "合言葉の変更は始まっておりませんでした。改めて合言葉をお変えくださいませ。",
+      "locked": "別の端末にて同期の合言葉を変更中でございます。済みましてから改めてお試しくださいませ。",
+      "lost": "別の端末が同時に合言葉の変更を始められました。済みましてから改めてお試しくださいませ。",
+      "lockLost": "Google Drive の錠が外されましたゆえ（別の端末からやもしれませぬ）、合言葉の変更を取りやめました。",
+      "interrupted": "合言葉の変更が中断されました。後ほどお続けいただけます。",
+      "undecryptable": "旧き合言葉でも新しき合言葉でも開けぬ書物が Google Drive にございます。整理なさってからお続けくださいませ。",
+      "notConverged": "合言葉の変更中、Google Drive の書物が変わり続けました。他の端末の Pipette をお閉じになってからお続けくださいませ。",
+      "blockedByOtherDevice": "別の端末にて同期の合言葉を変更中ゆえ、済みますまでこの端末の同期を控えております。",
+      "blockedLocal": "この端末での合言葉の変更が済んでおりませぬゆえ、同期を控えております。先にお続けになるか、元の合言葉にお戻しになるか、お取りやめくださいませ。",
+      "closeOtherPcs": "合言葉の変更が済みますまで、他の端末の Pipette はお閉じくださいませ。",
+      "working": "合言葉の変更を執り行っております...",
+      "toNew": "新しき同期の合言葉への変更が済んでおりませぬ。この端末の同期は控えております。",
+      "toOld": "元の合言葉へのお戻しが済んでおりませぬ。この端末の同期は控えております。",
+      "stepLabel": "現在の段階: {{step}}",
+      "step": {
+        "locking": "支度中",
+        "reencrypting": "Google Drive の書物を包み直しております",
+        "committing": "変更を確定しております",
+        "cleanup": "後始末をしております"
+      },
+      "resume": "続ける",
+      "revertToOld": "元の合言葉に戻す",
+      "revertToNew": "やはり新しき合言葉に改める",
+      "abandonLabel": "合言葉の変更を取りやめる",
+      "abandon": "取りやめ",
+      "confirmAbandon": "取りやめてもよろしいか？",
+      "abandonWarning": "Google Drive の書物が新旧の合言葉の入り混じったまま残るやもしれませぬ。開けぬ書物は データ › Sync › クラウドの記録 にて抹消くださいませ。",
+      "deleteSkipped": "いずれかの合言葉で開けますゆえ、書物は抹消いたしませんでした。",
+      "releaseBusy": "この端末にて同期の最中でございます。しばしお待ちのうえ、改めてお試しくださいませ。",
+      "ownLockLeft": "この端末が Google Drive に残した合言葉変更の錠のため、すべての端末の同期を控えております。",
+      "lockStartedAt": "開始: {{time}}",
+      "releaseLockLabel": "Google Drive の合言葉変更の錠",
+      "releaseLock": "錠を外す",
+      "confirmRelease": "外してもよろしいか？",
+      "releaseWarning": "他の端末にて同期や合言葉の変更が行われていないことをお確かめくださいませ。"
+    },
     "import": "入れる",
     "export": "出す",
     "importComplete": "完了いたしました",
@@ -896,6 +952,14 @@
     "undecryptableCount": "{{count}} 件の開けぬ書物",
     "checkingRemotePassword": "あちらの様子を伺っております...",
     "existingPasswordHint": "合言葉が既にございます。他で使ったものを教えていただけますか？",
+    "reenterPasswordWarning": "この端末の合言葉が Google Drive のものと一致いたしません。他の端末でお使いの合言葉をお教えくださいませ。",
+    "reenterPassword": "合言葉を入力し直す",
+    "reenterPasswordNoRemote": "Google Drive には照合すべき合言葉がまだございません。こちらを閉じ、現在の合言葉で同期なさってくださいませ。",
+    "updateRequired": "この Google Drive の同期データは、より新しい版の Pipette にて作られております。同期をお続けになるには、アップデートをお願い申し上げます。",
+    "updateBanner": {
+      "message": "Cloud Sync には、より新しい版の Pipette が必要でございます。同期をお続けになるには、アプリのアップデートをお願い申し上げます。",
+      "openDownloadPage": "ダウンロードページを開く"
+    },
     "unavailable": "繋がりが芳しくありません。同期は叶わぬようです。",
     "retry": "再試行",
     "pullError": {
@@ -1866,6 +1930,7 @@
     "splitKeyMode": "Shift を分離",
     "quickSelect": "即座の選択",
     "layerHoverPreview": "階層の自動内覧",
+    "entryHoverPreview": "お気に入りの詳細内覧",
     "keyEditorZoom": "エディタ表示倍率"
   },
   "hub": {

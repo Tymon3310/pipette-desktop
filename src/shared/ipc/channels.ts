@@ -70,6 +70,14 @@ export const IpcChannels = {
   SYNC_EXECUTE: 'sync:execute',
   SYNC_SET_PASSWORD: 'sync:set-password',
   SYNC_CHANGE_PASSWORD: 'sync:change-password',
+  SYNC_REPLACE_PASSWORD: 'sync:replace-password',
+  SYNC_PASSWORD_CHANGE_STATUS: 'sync:password-change-status',
+  SYNC_PASSWORD_CHANGE_RESUME: 'sync:password-change-resume',
+  SYNC_PASSWORD_CHANGE_REVERT: 'sync:password-change-revert',
+  SYNC_PASSWORD_CHANGE_ABANDON: 'sync:password-change-abandon',
+  SYNC_PASSWORD_CHANGE_DELETE_UNDECRYPTABLE: 'sync:password-change-delete-undecryptable',
+  SYNC_PASSWORD_CHANGE_LOCK_STATUS: 'sync:password-change-lock-status',
+  SYNC_PASSWORD_CHANGE_RELEASE_LOCKS: 'sync:password-change-release-locks',
   SYNC_HAS_PASSWORD: 'sync:has-password',
   SYNC_VALIDATE_PASSWORD: 'sync:validate-password',
   SYNC_RESET_TARGETS: 'sync:reset-targets',
@@ -82,6 +90,8 @@ export const IpcChannels = {
   SYNC_DELETE_FILES: 'sync:delete-files',
   SYNC_CHECK_PASSWORD_EXISTS: 'sync:check-password-exists',
   SYNC_ANALYTICS_NOW: 'sync:analytics-now',
+  SYNC_FORMAT_STATUS: 'sync:format-status',
+  SYNC_FORMAT_STATUS_CHANGED: 'sync:format-status-changed',
 
   // Pipette Settings Store (renderer → main → renderer)
   PIPETTE_SETTINGS_GET: 'pipette-settings:get',

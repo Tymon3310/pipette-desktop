@@ -36,7 +36,7 @@ import type {
 } from './theme-store'
 import type { AppConfig } from './app-config'
 import type { DeviceScope } from './analyze-filters'
-import type { SyncAuthStatus, SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, UndecryptableFile, SyncScope, SyncDataScanResult, StoredKeyboardInfo, SyncOperationResult, ImportLocalDataResult } from './sync'
+import type { SyncAuthStatus, SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, UndecryptableFile, SyncScope, SyncDataScanResult, StoredKeyboardInfo, SyncOperationResult, ImportLocalDataResult, PasswordChangeStatus, PasswordChangeDeleteResult, PasswordChangeLockStatus, SyncFormatStatus } from './sync'
 import type { PipetteSettings, PipetteSettingsPatch, PooledTypingTestResult } from './pipette-settings'
 import type {
   TypingActivityCell,
@@ -374,6 +374,14 @@ export interface VialAPI {
   syncExecute(direction: 'download' | 'upload', scope?: SyncScope): Promise<SyncOperationResult>
   syncSetPassword(password: string): Promise<SyncOperationResult>
   syncChangePassword(newPassword: string): Promise<SyncOperationResult>
+  syncReplacePassword(password: string): Promise<SyncOperationResult>
+  syncPasswordChangeStatus(): Promise<PasswordChangeStatus>
+  syncPasswordChangeResume(): Promise<SyncOperationResult>
+  syncPasswordChangeRevert(): Promise<SyncOperationResult>
+  syncPasswordChangeAbandon(): Promise<SyncOperationResult>
+  syncPasswordChangeDeleteUndecryptable(fileIds: string[]): Promise<PasswordChangeDeleteResult>
+  syncPasswordChangeLockStatus(): Promise<PasswordChangeLockStatus | null>
+  syncPasswordChangeReleaseLocks(): Promise<SyncOperationResult>
   syncResetTargets(targets: SyncResetTargets): Promise<SyncOperationResult>
   syncHasPassword(): Promise<boolean>
   syncValidatePassword(password: string): Promise<PasswordStrength>
@@ -385,6 +393,11 @@ export interface VialAPI {
   syncDeleteFiles(fileIds: string[]): Promise<{ success: boolean; error?: string }>
   syncCheckPasswordExists(): Promise<boolean>
   syncAnalyticsNow(uid: string): Promise<boolean>
+  /** Drive's sync-format status as last checked; null when unknown or
+   *  signed out. Never rejects. */
+  syncFormatStatus(): Promise<SyncFormatStatus | null>
+  /** Every later change of `syncFormatStatus`'s value; null once forgotten (sign-out, sign-in). */
+  syncOnFormatStatusChanged(callback: (status: SyncFormatStatus | null) => void): () => void
   syncOnPendingChange(callback: (pending: boolean) => void): () => void
 
   // Language Store

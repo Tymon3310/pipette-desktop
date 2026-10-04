@@ -28,12 +28,26 @@ import {
   collectAllSyncUnits,
   bundleSyncUnit,
   resetPasswordCheckCache,
+  forgetCreatedSyncFormatMarker,
+  getCachedSyncFormatStatus,
+  refreshSyncFormatStatus,
+  clearSyncFormatStatus,
+  setSyncFormatStatusListener,
   listUndecryptableFiles,
   scanRemoteData,
   fetchRemoteBundle,
-  changePassword,
+  startPasswordChange,
+  resumePasswordChange,
+  revertPasswordChange,
+  abandonPasswordChange,
+  deletePasswordChangeUndecryptableFiles,
+  recoverPasswordChangeOnStartup,
+  getPasswordChangeStatus,
+  getPasswordChangeLockStatus,
+  releasePasswordChangeLocks,
   checkPasswordCheckExists,
   setPasswordAndValidate,
+  replacePasswordAndValidate,
   deleteRemoteTypingDay,
   fetchRemoteTypingDay,
   hasAnyRemoteTypingData,
@@ -41,6 +55,10 @@ import {
   listRemoteTypingHashesForUidFromCloud,
   listRemoteFileNames,
   SyncCredentialError,
+  SyncBlockedError,
+  assertSyncAllowed,
+  forgetChangeStateCache,
+  assertNoLocalPasswordChange,
 } from './sync-service'
 import { importLocalData } from './local-data-import'
 import { exportTypingDataForKeyboard, importTypingDataFiles, type ImportResult } from '../typing-analytics/import-export'
@@ -48,7 +66,7 @@ import { getMachineHash } from '../typing-analytics/machine-hash'
 import { ensureCacheIsFresh } from '../typing-analytics/cache-rebuild'
 import { getTypingAnalyticsDB } from '../typing-analytics/db/typing-analytics-db'
 import { deleteAllTypingForKeyboard } from '../typing-analytics/typing-analytics-service'
-import type { SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, SyncScope, StoredKeyboardInfo, SyncDataScanResult, SyncCredentialFailureReason, SyncBundle, SyncOperationResult, ImportLocalDataResult } from '../../shared/types/sync'
+import type { SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, SyncScope, StoredKeyboardInfo, SyncDataScanResult, SyncCredentialFailureReason, SyncBundle, SyncOperationResult, ImportLocalDataResult, PasswordChangeDeleteResult, SyncFormatStatus } from '../../shared/types/sync'
 import { secureHandle, secureOn } from '../ipc-guard'
 import type { FavoriteIndex } from '../../shared/types/favorite-store'
 import type { SnapshotIndex } from '../../shared/types/snapshot-store'
@@ -120,10 +138,27 @@ function validateSyncScope(raw: unknown): SyncScope | undefined {
   return undefined
 }
 
+/** Checks Drive's sync-format markers when signed in. Never throws: null
+ *  when signed out, when the auth check fails, or when Drive can't be
+ *  listed and nothing was known before. */
+async function refreshSyncFormatStatusIfSignedIn(): Promise<SyncFormatStatus | null> {
+  try {
+    if (!(await getAuthStatus()).authenticated) return null
+  } catch {
+    return null
+  }
+  return refreshSyncFormatStatus()
+}
+
 export function setupSyncIpc(): void {
   // --- Auth ---
   secureHandle(IpcChannels.SYNC_AUTH_START, () =>
-    wrapIpc('Auth failed', () => startOAuthFlow()),
+    wrapIpc('Auth failed', async () => {
+      await startOAuthFlow()
+      // The account may have changed, so its Drive is checked afresh.
+      clearSyncFormatStatus()
+      void refreshSyncFormatStatus()
+    }),
   )
 
   secureHandle(IpcChannels.SYNC_AUTH_STATUS, () => getAuthStatus())
@@ -133,6 +168,8 @@ export function setupSyncIpc(): void {
       stopPolling()
       clearHubTokenCache()
       resetPasswordCheckCache()
+      forgetCreatedSyncFormatMarker()
+      clearSyncFormatStatus()
       await signOut()
     }),
   )
@@ -146,12 +183,55 @@ export function setupSyncIpc(): void {
       }),
   )
 
+  // A password changed on another machine: stored only once it opens the
+  // password-check on Drive.
+  secureHandle(
+    IpcChannels.SYNC_REPLACE_PASSWORD,
+    (_event, password: string) =>
+      wrapIpc('Replace password failed', async () => {
+        if (typeof password !== 'string' || password === '') throw new Error('Invalid password')
+        await replacePasswordAndValidate(password)
+      }),
+  )
+
   secureHandle(
     IpcChannels.SYNC_CHANGE_PASSWORD,
     (_event, newPassword: string) =>
       wrapIpc('Change password failed', async () => {
-        await changePassword(newPassword)
+        if (typeof newPassword !== 'string' || newPassword === '') throw new Error('Invalid password')
+        await startPasswordChange(newPassword)
       }),
+  )
+
+  secureHandle(IpcChannels.SYNC_PASSWORD_CHANGE_STATUS, () => getPasswordChangeStatus())
+
+  secureHandle(IpcChannels.SYNC_PASSWORD_CHANGE_RESUME, () =>
+    wrapIpc('Resume password change failed', () => resumePasswordChange()),
+  )
+
+  secureHandle(IpcChannels.SYNC_PASSWORD_CHANGE_REVERT, () =>
+    wrapIpc('Revert password change failed', () => revertPasswordChange()),
+  )
+
+  secureHandle(IpcChannels.SYNC_PASSWORD_CHANGE_ABANDON, () =>
+    wrapIpc('Abandon password change failed', () => abandonPasswordChange()),
+  )
+
+  secureHandle(IpcChannels.SYNC_PASSWORD_CHANGE_DELETE_UNDECRYPTABLE, (_event, fileIds: unknown) =>
+    wrapIpc<PasswordChangeDeleteResult>('Delete files failed', () => {
+      if (!Array.isArray(fileIds) || fileIds.length === 0 || !fileIds.every((id) => typeof id === 'string' && id !== '')) {
+        throw new Error('Invalid file IDs')
+      }
+      return deletePasswordChangeUndecryptableFiles(fileIds)
+    }),
+  )
+
+  // Neither lock handler goes through the sync guard: releasing the lock
+  // is the only way out once a lock blocks every machine.
+  secureHandle(IpcChannels.SYNC_PASSWORD_CHANGE_LOCK_STATUS, () => getPasswordChangeLockStatus())
+
+  secureHandle(IpcChannels.SYNC_PASSWORD_CHANGE_RELEASE_LOCKS, () =>
+    wrapIpc('Release lock failed', () => releasePasswordChangeLocks()),
   )
 
   secureHandle(IpcChannels.SYNC_RESET_TARGETS, (_event, targets: SyncResetTargets) =>
@@ -173,6 +253,7 @@ export function setupSyncIpc(): void {
         throw new Error('No targets selected')
       }
       if (isSyncInProgress()) throw new Error('Cannot reset while sync is in progress')
+      await assertSyncAllowed()
       let metaChanged = false
       // Unit-name-only labels for any target whose Drive delete batch had
       // a rejection — collected rather than thrown immediately so every
@@ -329,6 +410,18 @@ export function setupSyncIpc(): void {
       if (!isSafeKey(uid)) {
         throw new Error('Invalid uid')
       }
+      // Refused while a sync password change is in progress. When Drive
+      // can't be checked (offline, signed out) the local reset still runs
+      // but the remote delete is skipped: a lock may be there unseen. Drive
+      // needing a newer app also only skips the remote delete: this
+      // machine's local data is still its own to remove.
+      const remoteDeleteAllowed = await assertSyncAllowed().then(
+        () => true,
+        (err: unknown) => {
+          if (err instanceof SyncBlockedError && err.reason !== 'updateRequired') throw err
+          return false
+        },
+      )
       // Flush + unlink this keyboard's analytics JSONL and tombstone its
       // SQLite-cache rows first, otherwise the Analyze view keeps showing the
       // keyboard from the stale cache after the directory is removed.
@@ -339,7 +432,7 @@ export function setupSyncIpc(): void {
       const userData = app.getPath('userData')
       await rm(join(userData, 'sync', 'keyboards', uid), { recursive: true, force: true })
       // Best-effort remote deletion
-      await deleteFilesByPrefix(`keyboards_${uid}_`).catch(() => {})
+      if (remoteDeleteAllowed) await deleteFilesByPrefix(`keyboards_${uid}_`).catch(() => {})
       // Tombstone meta entry so other devices see the removal
       const tombstoneResult = await tombstoneKeyboardMeta(uid)
       if (tombstoneResult === 'tombstoned') {
@@ -363,6 +456,9 @@ export function setupSyncIpc(): void {
       }
       if (!targets.keyboards && !targets.favorites && !targets.appSettings && !targets.i18nPacks && !targets.themePacks) throw new Error('No targets selected')
       if (isSyncInProgress()) throw new Error('Cannot reset while sync is in progress')
+      // App settings include local/auth, which holds a password change's
+      // state; removing it mid-change would orphan the Drive lock.
+      if (targets.appSettings) await assertNoLocalPasswordChange()
       const userData = app.getPath('userData')
       const allSelected = targets.keyboards && targets.favorites && targets.appSettings && targets.i18nPacks && targets.themePacks
       if (allSelected) {
@@ -400,6 +496,7 @@ export function setupSyncIpc(): void {
       if (targets.appSettings) {
         getAppConfigStore().clear()
         await rm(join(userData, 'local', 'auth'), { recursive: true, force: true })
+        forgetChangeStateCache()
         await rm(join(userData, 'local', 'downloads', 'languages'), { recursive: true, force: true })
         await rm(join(userData, 'local', 'logs'), { recursive: true, force: true })
       }
@@ -509,6 +606,7 @@ export function setupSyncIpc(): void {
     wrapIpc('Delete files failed', async () => {
       if (!Array.isArray(fileIds) || fileIds.length === 0) throw new Error('No files specified')
       if (isSyncInProgress()) throw new Error('Cannot delete while sync is in progress')
+      await assertSyncAllowed()
       for (const id of fileIds) {
         if (typeof id !== 'string') throw new Error('Invalid file ID')
         await deleteFile(id)
@@ -518,6 +616,15 @@ export function setupSyncIpc(): void {
 
   // --- Password check existence ---
   secureHandle(IpcChannels.SYNC_CHECK_PASSWORD_EXISTS, () => checkPasswordCheckExists())
+
+  // --- Sync-format status for the update banner ---
+  // Fetched once by the renderer; every later change is pushed.
+  secureHandle(IpcChannels.SYNC_FORMAT_STATUS, async (): Promise<SyncFormatStatus | null> =>
+    getCachedSyncFormatStatus() ?? refreshSyncFormatStatusIfSignedIn(),
+  )
+  setSyncFormatStatusListener((status) => {
+    broadcastToAllWindows(IpcChannels.SYNC_FORMAT_STATUS_CHANGED, status)
+  })
 
   // --- Pending status (renderer polls on mount) ---
   secureHandle(IpcChannels.SYNC_PENDING_STATUS, () => hasPendingChanges())
@@ -649,6 +756,13 @@ export function setupSyncIpc(): void {
 
   // --- Before-quit handler ---
   setupBeforeQuitHandler()
+
+  // --- Finish or clean up a password change interrupted by the last exit ---
+  // Never rejects: failures are logged and the state stays for next time.
+  void recoverPasswordChangeOnStartup()
+
+  // --- Startup sync-format check (never rejects) ---
+  void refreshSyncFormatStatusIfSignedIn()
 
   // --- React to autoSync config changes ---
   onAppConfigChange((key, value) => {

@@ -207,13 +207,6 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
     keymap, encoderLayout, onSetKey, onSetEncoder, history, triggerFlash,
   })
 
-  useImperativeHandle(ref, () => ({
-    toggleMatrix: handleMatrixToggle, toggleTypingTest: handleTypingTestToggle,
-    matrixMode, hasMatrixTester,
-    applyKeymapRewrite,
-    clearHistory: history.clear,
-  }), [handleMatrixToggle, handleTypingTestToggle, matrixMode, hasMatrixTester, applyKeymapRewrite, history.clear])
-
   // --- Layer keycode builders (current layer / typing test / picker) ---
   const {
     deserializedMacros, configuredKeycodes,
@@ -231,13 +224,20 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
   const {
     packTab, showPackTabs, packTabReadOnly,
     primaryKeycodes, primaryEncoderKeycodes, primaryRemappedKeys, primaryRemappedEncoders, primaryRemapLabel,
-    handlePackTabChange, resetPackTab,
+    handlePackTabChange, resetPackTab, notifyUserLayoutChange,
   } = useKeymapPackTabs({
     keyboardLayout, remapKind, keymap, encoderLayout, encoderCount, currentLayer,
     typingTestMode, viewMatrixActive: viewMatrixMode.active, handleDeselect,
     parsedMacros, macroBuffer, macroCount, vialProtocol, tapDanceEntries,
     remapLabel, layerKeycodes, layerEncoderKeycodes, remappedKeys, layerEncoderRemapped,
   })
+
+  useImperativeHandle(ref, () => ({
+    toggleMatrix: handleMatrixToggle, toggleTypingTest: handleTypingTestToggle,
+    matrixMode, hasMatrixTester,
+    applyKeymapRewrite, notifyUserLayoutChange,
+    clearHistory: history.clear,
+  }), [handleMatrixToggle, handleTypingTestToggle, matrixMode, hasMatrixTester, applyKeymapRewrite, notifyUserLayoutChange, history.clear])
 
   // Clear history and exit View Matrix mode on keyboard/context switch or
   // disconnect — kept in this component (rather than folded into
@@ -415,8 +415,8 @@ export const KeymapEditor = forwardRef<import('./keymap-editor-types').KeymapEdi
                 flash={flash} multiSelectedKeys={multiSelectedKeys} primaryRemapLabel={primaryRemapLabel}
                 handleKeyClick={handleKeyClick} handleKeyDoubleClick={handleKeyDoubleClick} handleEncoderClick={handleEncoderClick} handleEncoderDoubleClick={handleEncoderDoubleClick}
                 handleDeselect={handleDeselect} handlePackTabChange={handlePackTabChange} keymapPackName={keymapPackName}
-                auxUndoHandlers={viewMatrixMode.active ? undefined : auxUndoHandlers}
-                layerHoverPreview={{ layers, currentLayer, keymap, encoderLayout, encoderCount, isRemapped, layerLabel, deviceKey: keyboardUid, blocked: !layerHoverPreviewEnabled || !!popoverState || pickerSelectedIndices.size > 0 }}
+                auxUndoHandlers={viewMatrixMode.active ? undefined : auxUndoHandlers} hoverMacros={deserializedMacros} hoverTapDance={tapDanceEntries}
+                layerHoverPreview={{ layers, currentLayer, keymap, encoderLayout, encoderCount, isRemapped, layerLabel, deviceKey: keyboardUid, blocked: !!popoverState || pickerSelectedIndices.size > 0, enabled: layerHoverPreviewEnabled }}
                 {...viewMatrixPaneProps}
               />
               {/* The relocated zoom row the toolbar comment above points to

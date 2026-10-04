@@ -1,5 +1,5 @@
 {
-  "version": "0.1.98",
+  "version": "0.1.108",
   "name": "Japanese - 京言葉",
   "common": {
     "save": "保存しますえ",
@@ -124,6 +124,12 @@
       "pickerHint": "Ctrl+クリックで複数選択、Shift+クリックで範囲選択どすえ。ほんでキーをクリックして貼り付けておくれやす",
       "pickerDoubleClickHint": "もういっぺんダブルクリックするか、Enterを押したら閉じますえ",
       "keyboardTab": "Keyboard",
+      "tabReorder": {
+        "hint": "ドラッグか←/→で並べ替えておくれやす · Enterで終いどすえ",
+        "moved": "{{name}}を{{total}}個のうち{{position}}番目に動かしましたえ",
+        "resetLabel": "タブの並びを元に戻しますえ",
+        "resetDone": "タブの並びを元に戻しましたえ"
+      },
       "pickerSourceCurrent": "いまの",
       "pickerSourceFile": "ファイル",
       "pickerLoadFile": ".pipetteから読み込みますえ…",
@@ -659,6 +665,11 @@
         "missedBarMovedOnLine": "直さんまま次へ行かはったんは: {{count}}どす",
         "missedBarNoDetail": "この記録には打鍵ごとの詳細がおへんどす"
       }
+    },
+    "hoverDetails": {
+      "none": "あらしまへん",
+      "on": "入り",
+      "off": "切り"
     }
   },
   "error": {
@@ -864,7 +875,6 @@
     "changingPassword": "パスワードを変えてますえ…",
     "settingPassword": "パスワードを設定してますえ…",
     "samePassword": "いまと同じパスワードには変えられまへんえ",
-    "changePasswordUndecryptable": "開けへんファイルがありますえ。先にスキャンして消しておくれやす。",
     "autoSync": "自動同期",
     "enable": "有効どすえ",
     "disable": "止めますえ",
@@ -882,9 +892,55 @@
     "continueOffline": "オフラインで続けますえ",
     "noSyncYet": "まだ同期してまへんえ",
     "changePasswordError": {
-      "unauthenticated": "パスワードを変える前にGoogleにつないでおくれやす"
+      "unauthenticated": "パスワードを変える前にGoogleにつないでおくれやす",
+      "noPasswordFile": "このPCには同期パスワードがありまへん。変えるんやのうて設定しておくれやす",
+      "decryptFailed": "保存してあるパスワードが読めへんさかい、パスワードを変えられまへんえ",
+      "keystoreUnavailable": "OSのキーチェーンが使えへんさかい、ここではパスワードを変えられまへんなぁ",
+      "remoteCheckFailed": "Google Driveにつながらへんさかい、また後で変えてみておくれやす"
     },
     "changePasswordInProgress": "同期中やさかいパスワードを変えられまへんえ",
+    "passwordChange": {
+      "alreadyInProgress": "このPCでパスワードの変更がまだ途中どすえ。先に続けるか、前のパスワードに戻しておくれやす。",
+      "notInProgress": "いま進んでるパスワードの変更はおへんえ。",
+      "invalidState": "パスワード変更の進み具合が読めしまへんえ。",
+      "keysUnavailable": "パスワード変更用にしまっといたパスワードが読めしまへん。OSのキーチェーンが使えるか確かめてから、もういっぺん試しておくれやす。",
+      "wrongStep": "パスワード変更のいまの段階では、それはできしまへんえ。",
+      "notStarted": "パスワードの変更は始まってしまへんどした。もういっぺん変えておくれやす。",
+      "locked": "よそのPCで同期パスワードを変えてはる最中どすえ。済んでから、もういっぺん試しておくれやす。",
+      "lost": "よそのPCも同じ頃にパスワードを変え始めはりました。済んでから、もういっぺん試しておくれやす。",
+      "lockLost": "Google Drive のロックが消されたさかい（よそのPCからかもしれまへん）、パスワードの変更を止めましたえ。",
+      "interrupted": "パスワードの変更が途中で止まりましたえ。あとで続けられますえ。",
+      "undecryptable": "前のパスワードでも新しいパスワードでも開けへんファイルが Google Drive にありますえ。消してから続けておくれやす。",
+      "notConverged": "パスワードを変えてる間に Google Drive のファイルが変わり続けましたえ。よそのPCの Pipette を閉じてから続けておくれやす。",
+      "blockedByOtherDevice": "よそのPCで同期パスワードを変えてはる最中やさかい、済むまでこのPCの同期は止めてますえ。",
+      "blockedLocal": "このPCのパスワードの変更がまだ済んでへんさかい、同期を止めてますえ。先に続けるか、前のパスワードに戻すか、取りやめておくれやす。",
+      "closeOtherPcs": "パスワードの変更が済むまで、よそのPCの Pipette は閉じといておくれやす。",
+      "working": "パスワードの変更を進めてますえ...",
+      "toNew": "新しい同期パスワードへの変更がまだ済んでしまへん。このPCの同期は止めてますえ。",
+      "toOld": "前のパスワードへ戻すのがまだ済んでしまへん。このPCの同期は止めてますえ。",
+      "stepLabel": "いまの段階: {{step}}",
+      "step": {
+        "locking": "支度してますえ",
+        "reencrypting": "Google Drive のファイルを暗号化し直してますえ",
+        "committing": "変更を決めてますえ",
+        "cleanup": "後片付けしてますえ"
+      },
+      "resume": "続けますえ",
+      "revertToOld": "前のパスワードに戻しますえ",
+      "revertToNew": "やっぱり新しいパスワードにしますえ",
+      "abandonLabel": "パスワードの変更を取りやめますえ",
+      "abandon": "取りやめ",
+      "confirmAbandon": "取りやめてもよろしおすか？",
+      "abandonWarning": "Google Drive のファイルが前と新しいパスワードの混ざったまま残るかもしれまへん。開けへんファイルは データ › Sync › クラウドデータ で消しておくれやす。",
+      "deleteSkipped": "どちらかのパスワードで開けるさかい、ファイルは消してしまへんえ。",
+      "releaseBusy": "このPCで同期してる最中どすえ。ちょっと待ってから、もういっぺん試しておくれやす。",
+      "ownLockLeft": "このPCが Google Drive に残したパスワード変更のロックのせいで、どのPCの同期も止まってますえ。",
+      "lockStartedAt": "始めた時: {{time}}",
+      "releaseLockLabel": "Google Drive のパスワード変更ロック",
+      "releaseLock": "ロックを外しますえ",
+      "confirmRelease": "外してもよろしおすか？",
+      "releaseWarning": "よそのPCで同期やパスワードの変更が動いてへんか、確かめておくれやす。"
+    },
     "import": "インポート",
     "export": "エクスポート",
     "importComplete": "インポートしましたえ",
@@ -896,6 +952,14 @@
     "undecryptableCount": "{{count}} 件開けへんファイルがありますえ",
     "checkingRemotePassword": "同期状態を確認してますえ…",
     "existingPasswordHint": "同期パスワードがもう設定されてますえ。他のデバイスで使うてたパスワードを入れておくれやす。",
+    "reenterPasswordWarning": "この PC の同期パスワードが Google Drive と合いまへんなぁ。ほかの PC で使うてはるパスワードを入れておくれやす。",
+    "reenterPassword": "パスワードを入れ直しますえ",
+    "reenterPasswordNoRemote": "Google Drive に照らし合わせる同期パスワードがまだあらしまへん。このフォームを閉じて、いまのパスワードで同期しておくれやす。",
+    "updateRequired": "この Google Drive の同期データは新しい版の Pipette で作らはったもんどす。同期を続けはるんやったら、アップデートしておくれやす。",
+    "updateBanner": {
+      "message": "Cloud Sync には新しい版の Pipette が要りますえ。同期を続けはるんやったら、アプリをアップデートしておくれやす。",
+      "openDownloadPage": "ダウンロードページを開きますえ"
+    },
     "unavailable": "接続先かネットワークに問題がありますえ。同期できまへんなぁ。",
     "retry": "もういっぺんやりますえ",
     "pullError": {
@@ -1866,6 +1930,7 @@
     "splitKeyMode": "キーピッカーでShiftキーを分離",
     "quickSelect": "キーの即時選択",
     "layerHoverPreview": "レイヤーの自動お披露目",
+    "entryHoverPreview": "お気に入りの中身をホバーでお披露目",
     "keyEditorZoom": "エディタズーム"
   },
   "hub": {

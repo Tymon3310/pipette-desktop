@@ -1,5 +1,5 @@
 {
-  "version": "0.1.98",
+  "version": "0.1.108",
   "name": "English",
   "common": {
     "save": "Save",
@@ -124,6 +124,12 @@
       "pickerHint": "Ctrl+click: multi-select / Shift+click: range select → click a key to paste",
       "pickerDoubleClickHint": "Double-click the same key again or press Enter to close",
       "keyboardTab": "Keyboard",
+      "tabReorder": {
+        "hint": "Drag tabs or use ←/→ to reorder · Enter to finish",
+        "moved": "{{name}} moved to position {{position}} of {{total}}",
+        "resetLabel": "Restore the default tab order",
+        "resetDone": "Default tab order restored"
+      },
       "pickerSourceCurrent": "Current",
       "pickerSourceFile": "File",
       "pickerLoadFile": "Load from .pipette…",
@@ -659,6 +665,11 @@
         "missedBarMovedOnLine": "Moved on uncorrected: {{count}}",
         "missedBarNoDetail": "No per-keystroke detail available for this run"
       }
+    },
+    "hoverDetails": {
+      "none": "None",
+      "on": "On",
+      "off": "Off"
     }
   },
   "error": {
@@ -874,7 +885,6 @@
     "changingPassword": "Changing password...",
     "settingPassword": "Setting password...",
     "samePassword": "New password must be different from the current password.",
-    "changePasswordUndecryptable": "Some files cannot be decrypted. Please scan and delete undecryptable files first.",
     "autoSync": "Auto Sync",
     "enable": "Enable",
     "disable": "Disable",
@@ -892,9 +902,55 @@
     "continueOffline": "Continue offline",
     "noSyncYet": "Not synced yet",
     "changePasswordError": {
-      "unauthenticated": "Please sign in to Google before changing the password."
+      "unauthenticated": "Please sign in to Google before changing the password.",
+      "noPasswordFile": "No sync password is saved on this PC. Set one instead of changing it.",
+      "decryptFailed": "Couldn't read the saved sync password, so it can't be changed.",
+      "keystoreUnavailable": "OS keychain is not available, so the sync password can't be changed here.",
+      "remoteCheckFailed": "Couldn't reach Google Drive. Try changing the password again later."
     },
     "changePasswordInProgress": "Cannot change password while sync is in progress.",
+    "passwordChange": {
+      "alreadyInProgress": "A password change is already in progress on this PC. Continue it or go back to the old password first.",
+      "notInProgress": "No password change is in progress.",
+      "invalidState": "The saved progress of the password change can't be read.",
+      "keysUnavailable": "The passwords saved for the password change can't be read. Make sure the OS keychain is unlocked, then try again.",
+      "wrongStep": "This can't be done at the current stage of the password change.",
+      "notStarted": "The password change didn't start. Please change the password again.",
+      "locked": "Another PC is changing the sync password. Try again after it finishes.",
+      "lost": "Another PC started changing the sync password at the same time. Try again after it finishes.",
+      "lockLost": "The password change was stopped because its lock on Google Drive was removed, possibly from another PC.",
+      "interrupted": "The password change was interrupted. You can continue it later.",
+      "undecryptable": "Some files on Google Drive can't be decrypted with either the old or the new password. Delete them, then continue.",
+      "notConverged": "Files on Google Drive kept changing during the password change. Close Pipette on your other PCs, then continue.",
+      "blockedByOtherDevice": "Another PC is changing the sync password, so syncing is paused on this PC until it finishes.",
+      "blockedLocal": "A sync password change on this PC hasn't finished, so syncing is paused. Continue it, go back to the old password, or abandon it first.",
+      "closeOtherPcs": "Close Pipette on your other PCs until the password change finishes.",
+      "working": "Working on the password change...",
+      "toNew": "Changing to the new sync password hasn't finished. Syncing is paused on this PC.",
+      "toOld": "Going back to the old sync password hasn't finished. Syncing is paused on this PC.",
+      "stepLabel": "Current step: {{step}}",
+      "step": {
+        "locking": "Preparing",
+        "reencrypting": "Re-encrypting files on Google Drive",
+        "committing": "Finishing the change",
+        "cleanup": "Cleaning up"
+      },
+      "resume": "Continue",
+      "revertToOld": "Go Back to Old Password",
+      "revertToNew": "Switch to New Password Instead",
+      "abandonLabel": "Give up the password change",
+      "abandon": "Abandon",
+      "confirmAbandon": "Abandon?",
+      "abandonWarning": "Files on Google Drive may stay mixed between the old and new passwords. Delete the ones that can't be decrypted in Data › Sync › Cloud Data.",
+      "deleteSkipped": "The file was not deleted because one of the passwords can open it.",
+      "releaseBusy": "A sync is running on this PC. Try again in a moment.",
+      "ownLockLeft": "A password change lock left on Google Drive by this PC is pausing sync on every PC.",
+      "lockStartedAt": "Started: {{time}}",
+      "releaseLockLabel": "Password change lock on Google Drive",
+      "releaseLock": "Release Lock",
+      "confirmRelease": "Release?",
+      "releaseWarning": "Make sure no other PC is syncing or changing the password."
+    },
     "import": "Import",
     "export": "Export",
     "importComplete": "Import complete",
@@ -906,6 +962,14 @@
     "undecryptableCount": "{{count}} undecryptable file(s)",
     "checkingRemotePassword": "Checking sync status...",
     "existingPasswordHint": "A sync password already exists. Enter the same password used on your other device.",
+    "reenterPasswordWarning": "This PC's sync password doesn't match Google Drive. Enter the password used on your other PCs.",
+    "reenterPassword": "Re-enter Password",
+    "reenterPasswordNoRemote": "Google Drive has no sync password to compare with yet. Close this form and run Sync with the current password.",
+    "updateRequired": "Sync data on this Google Drive was made by a newer version of Pipette. Update Pipette to keep syncing.",
+    "updateBanner": {
+      "message": "Cloud Sync needs a newer version of Pipette. Update the app to keep syncing.",
+      "openDownloadPage": "Open Download Page"
+    },
     "unavailable": "Unable to connect to sync server. Sync features are currently disabled.",
     "retry": "Retry",
     "pullError": {
@@ -1876,6 +1940,7 @@
     "splitKeyMode": "Separate Shift in Key Picker",
     "quickSelect": "Instant Key Selection",
     "layerHoverPreview": "Auto Layer Preview",
+    "entryHoverPreview": "Fav Hover Details",
     "keyEditorZoom": "Key Editor Zoom"
   },
   "hub": {

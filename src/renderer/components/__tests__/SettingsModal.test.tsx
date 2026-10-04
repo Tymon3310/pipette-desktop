@@ -78,8 +78,19 @@ const KEY_LABEL_LIST_STUB = [
   { id: 'colemak', name: 'Colemak', uploaderName: 'pipette', filename: '', savedAt: '', updatedAt: '' },
   { id: 'japanese', name: 'Japanese (QWERTY)', uploaderName: 'pipette', filename: '', savedAt: '', updatedAt: '' },
 ]
+const mockPasswordChangeStatus = vi.fn()
+const mockPasswordChangeLockStatus = vi.fn()
+const mockPasswordChangeResume = vi.fn()
+const mockPasswordChangeReleaseLocks = vi.fn()
+const mockSyncFormatStatus = vi.fn().mockResolvedValue(null)
 Object.defineProperty(window, 'vialAPI', {
   value: {
+    syncFormatStatus: mockSyncFormatStatus,
+    syncOnFormatStatusChanged: () => () => {},
+    syncPasswordChangeStatus: mockPasswordChangeStatus,
+    syncPasswordChangeLockStatus: mockPasswordChangeLockStatus,
+    syncPasswordChangeResume: mockPasswordChangeResume,
+    syncPasswordChangeReleaseLocks: mockPasswordChangeReleaseLocks,
     openExternal: mockOpenExternal,
     notificationFetch: mockNotificationFetch,
     keyLabelStoreList: async () => ({ success: true, data: KEY_LABEL_LIST_STUB }),
@@ -119,6 +130,7 @@ function makeSyncMock(overrides?: Partial<UseSyncReturn>): UseSyncReturn {
     setConfig: vi.fn().mockResolvedValue(undefined),
     setPassword: vi.fn().mockResolvedValue({ success: true }),
     changePassword: vi.fn().mockResolvedValue({ success: true }),
+    replacePassword: vi.fn().mockResolvedValue({ success: true }),
     resetSyncTargets: vi.fn().mockResolvedValue({ success: true }),
     validatePassword: vi.fn().mockResolvedValue({ score: 4, feedback: [] }),
     syncNow: vi.fn().mockResolvedValue({ success: true, status: 'completed' }),
@@ -169,6 +181,14 @@ describe('SettingsModal', () => {
     for (const key of Object.keys(mockAppConfigState)) {
       if (key !== 'language') delete mockAppConfigState[key]
     }
+    mockPasswordChangeStatus.mockReset()
+    mockPasswordChangeStatus.mockResolvedValue({ kind: 'none' })
+    mockPasswordChangeLockStatus.mockReset()
+    mockPasswordChangeLockStatus.mockResolvedValue(null)
+    mockPasswordChangeResume.mockReset()
+    mockPasswordChangeResume.mockResolvedValue({ success: true })
+    mockPasswordChangeReleaseLocks.mockReset()
+    mockPasswordChangeReleaseLocks.mockResolvedValue({ success: true })
   })
 
   function renderAndSwitchToTools(props?: Partial<Parameters<typeof SettingsModal>[0]>) {
@@ -1297,6 +1317,236 @@ describe('SettingsModal', () => {
 
       fireEvent.click(screen.getByTestId('sync-retry-btn'))
       expect(retryRemoteCheck).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe('sync password change', () => {
+    it('warns to close Pipette on other PCs in the change form', () => {
+      renderAndSwitchToData({ sync: makeSyncMock({ ...FULLY_CONFIGURED }) })
+      fireEvent.click(screen.getByTestId('sync-password-change-btn'))
+      expect(screen.getByTestId('sync-change-password-close-others')).toHaveTextContent('sync.passwordChange.closeOtherPcs')
+    })
+
+    it('replaces the password row with the change panel while a change is unfinished', async () => {
+      mockPasswordChangeStatus.mockResolvedValue({ kind: 'inProgress', target: 'new', step: 'reencrypting', startedAt: 1 })
+      renderAndSwitchToData({ sync: makeSyncMock({ ...FULLY_CONFIGURED }) })
+
+      await waitFor(() => expect(screen.getByTestId('sync-password-change-panel')).toBeInTheDocument())
+      expect(screen.queryByTestId('sync-password-set')).not.toBeInTheDocument()
+      expect(mockPasswordChangeLockStatus).not.toHaveBeenCalled()
+    })
+
+    it('returns to the password row once Continue finishes the change', async () => {
+      mockPasswordChangeStatus.mockResolvedValueOnce({ kind: 'inProgress', target: 'new', step: 'committing', startedAt: 1 })
+      renderAndSwitchToData({ sync: makeSyncMock({ ...FULLY_CONFIGURED }) })
+      await waitFor(() => expect(screen.getByTestId('sync-password-change-resume')).toBeInTheDocument())
+
+      fireEvent.click(screen.getByTestId('sync-password-change-resume'))
+
+      await waitFor(() => expect(screen.getByTestId('sync-password-set')).toBeInTheDocument())
+      expect(mockPasswordChangeResume).toHaveBeenCalledTimes(1)
+    })
+
+    it('moves a failed change from the form to the panel', async () => {
+      const sync = makeSyncMock({
+        ...FULLY_CONFIGURED,
+        changePassword: vi.fn().mockImplementation(async () => {
+          mockPasswordChangeStatus.mockResolvedValue({ kind: 'inProgress', target: 'new', step: 'reencrypting', startedAt: 1 })
+          return { success: false, error: 'sync.passwordChange.interrupted' }
+        }),
+      })
+      renderAndSwitchToData({ sync })
+      fireEvent.click(screen.getByTestId('sync-password-change-btn'))
+      fireEvent.change(screen.getByTestId('sync-password-input'), { target: { value: 'NewStr0ng!Pass' } })
+      await waitFor(() => expect(screen.getByTestId('sync-password-save')).not.toBeDisabled())
+      fireEvent.click(screen.getByTestId('sync-password-save'))
+
+      await waitFor(() => expect(screen.getByTestId('sync-password-change-panel')).toBeInTheDocument())
+      expect(screen.getByTestId('sync-password-change-error')).toHaveTextContent('sync.passwordChange.interrupted')
+      expect(screen.queryByTestId('sync-password-input')).not.toBeInTheDocument()
+    })
+
+    it('keeps an action error visible after the change panel closes', async () => {
+      mockPasswordChangeStatus.mockResolvedValueOnce({ kind: 'inProgress', target: 'new', step: 'locking', startedAt: 1 })
+      mockPasswordChangeResume.mockResolvedValue({ success: false, error: 'sync.passwordChange.notStarted' })
+      renderAndSwitchToData({ sync: makeSyncMock({ ...FULLY_CONFIGURED }) })
+      await waitFor(() => expect(screen.getByTestId('sync-password-change-resume')).toBeInTheDocument())
+
+      fireEvent.click(screen.getByTestId('sync-password-change-resume'))
+
+      await waitFor(() => expect(screen.getByTestId('sync-password-set')).toBeInTheDocument())
+      expect(screen.getByTestId('sync-password-change-result-error')).toHaveTextContent('sync.passwordChange.notStarted')
+
+      fireEvent.click(screen.getByTestId('sync-password-change-btn'))
+      expect(screen.queryByTestId('sync-password-change-result-error')).not.toBeInTheDocument()
+    })
+
+    it("shows another PC's lock with a two-step release", async () => {
+      mockPasswordChangeLockStatus.mockResolvedValueOnce({ startedAt: '2026-10-02T09:00:00.000Z', ownMachine: false })
+      renderAndSwitchToData({ sync: makeSyncMock({ ...FULLY_CONFIGURED }) })
+
+      await waitFor(() => expect(screen.getByTestId('sync-password-change-lock')).toBeInTheDocument())
+      expect(screen.getByTestId('sync-password-set')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByTestId('sync-password-change-release'))
+      expect(mockPasswordChangeReleaseLocks).not.toHaveBeenCalled()
+      fireEvent.click(screen.getByTestId('sync-password-change-release-confirm'))
+
+      await waitFor(() => expect(screen.queryByTestId('sync-password-change-lock')).not.toBeInTheDocument())
+      expect(mockPasswordChangeReleaseLocks).toHaveBeenCalledTimes(1)
+    })
+
+    it('hides the lock while Drive needs a newer sync format', async () => {
+      mockSyncFormatStatus.mockResolvedValueOnce({ required: 2, supported: 1, updateRequired: true })
+      mockPasswordChangeLockStatus.mockResolvedValueOnce({ startedAt: '2026-10-02T09:00:00.000Z', ownMachine: false })
+      renderAndSwitchToData({ sync: makeSyncMock({ ...FULLY_CONFIGURED }) })
+
+      await waitFor(() => expect(mockPasswordChangeLockStatus).toHaveBeenCalled())
+      await waitFor(() => expect(mockSyncFormatStatus).toHaveBeenCalled())
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(screen.queryByTestId('sync-password-change-lock')).not.toBeInTheDocument()
+    })
+
+    it('does not look up the lock while signed out', async () => {
+      renderAndSwitchToData()
+      await waitFor(() => expect(mockPasswordChangeStatus).toHaveBeenCalled())
+      expect(mockPasswordChangeLockStatus).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('password changed on another PC', () => {
+    const MISMATCH_RESULT = { status: 'error' as const, message: 'sync.passwordMismatch', timestamp: 1 }
+
+    function mismatchSync(overrides?: Partial<UseSyncReturn>): UseSyncReturn {
+      return makeSyncMock({ ...FULLY_CONFIGURED, lastSyncResult: MISMATCH_RESULT, ...overrides })
+    }
+
+    async function openReenterForm(): Promise<void> {
+      await waitFor(() => expect(mockPasswordChangeStatus).toHaveBeenCalled())
+      fireEvent.click(screen.getByTestId('sync-password-reenter-btn'))
+    }
+
+    it('offers to enter the new password after a sync reported a mismatch', () => {
+      renderAndSwitchToData({ sync: mismatchSync() })
+
+      expect(screen.getByTestId('sync-password-set')).toBeInTheDocument()
+      expect(screen.getByTestId('sync-password-mismatch-warning')).toHaveTextContent('sync.reenterPasswordWarning')
+      expect(screen.getByTestId('sync-password-reenter-btn')).toHaveTextContent('sync.reenterPassword')
+    })
+
+    it('offers it for a mismatch progress message', () => {
+      renderAndSwitchToData({
+        sync: makeSyncMock({ ...FULLY_CONFIGURED, progress: { direction: 'upload', status: 'error', message: 'sync.passwordMismatch' } }),
+      })
+
+      expect(screen.getByTestId('sync-password-reenter-btn')).toBeInTheDocument()
+    })
+
+    it('after Change Password stopped on a mismatch, shows only the form error, then offers it once the form is cancelled', async () => {
+      const sync = makeSyncMock({
+        ...FULLY_CONFIGURED,
+        changePassword: vi.fn().mockResolvedValue({ success: false, error: 'sync.passwordMismatch' }),
+      })
+      renderAndSwitchToData({ sync })
+      expect(screen.queryByTestId('sync-password-reenter-btn')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByTestId('sync-password-change-btn'))
+      fireEvent.change(screen.getByTestId('sync-password-input'), { target: { value: 'NewStr0ng!Pass' } })
+      await waitFor(() => expect(screen.getByTestId('sync-password-save')).not.toBeDisabled())
+      fireEvent.click(screen.getByTestId('sync-password-save'))
+
+      await waitFor(() => expect(screen.getByTestId('sync-password-error')).toHaveTextContent('sync.passwordMismatch'))
+      expect(screen.queryByTestId('sync-password-mismatch')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByTestId('sync-password-reset-cancel'))
+      expect(screen.getByTestId('sync-password-set')).toBeInTheDocument()
+      expect(screen.getByTestId('sync-password-reenter-btn')).toBeInTheDocument()
+    })
+
+    it('is not shown in the Change Password form', () => {
+      renderAndSwitchToData({ sync: mismatchSync() })
+
+      fireEvent.click(screen.getByTestId('sync-password-change-btn'))
+
+      expect(screen.getByTestId('sync-password-input')).toBeInTheDocument()
+      expect(screen.queryByTestId('sync-password-mismatch')).not.toBeInTheDocument()
+    })
+
+    it('is not offered for another sync error', () => {
+      renderAndSwitchToData({ sync: mismatchSync({ lastSyncResult: { ...MISMATCH_RESULT, message: 'sync.failed' } }) })
+
+      expect(screen.queryByTestId('sync-password-mismatch')).not.toBeInTheDocument()
+    })
+
+    it('is not offered while an unfinished change panel is shown', async () => {
+      mockPasswordChangeStatus.mockResolvedValue({ kind: 'inProgress', target: 'new', step: 'reencrypting', startedAt: 1 })
+      renderAndSwitchToData({ sync: mismatchSync() })
+
+      await waitFor(() => expect(screen.getByTestId('sync-password-change-panel')).toBeInTheDocument())
+      expect(screen.queryByTestId('sync-password-reenter-btn')).not.toBeInTheDocument()
+    })
+
+    it('opens the password form with the existing-password hint and no strength meter; Cancel returns', async () => {
+      const sync = mismatchSync({ validatePassword: vi.fn().mockResolvedValue({ score: 1, feedback: ['Add a number'] }) })
+      renderAndSwitchToData({ sync })
+      await openReenterForm()
+
+      expect(screen.getByTestId('sync-existing-password-hint')).toHaveTextContent('sync.existingPasswordHint')
+      expect(screen.queryByTestId('sync-change-password-info')).not.toBeInTheDocument()
+      fireEvent.change(screen.getByTestId('sync-password-input'), { target: { value: 'weak' } })
+      await waitFor(() => expect(sync.validatePassword).toHaveBeenCalledWith('weak'))
+      expect(screen.queryByText('Add a number')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByTestId('sync-password-reset-cancel'))
+      expect(screen.getByTestId('sync-password-set')).toBeInTheDocument()
+      expect(screen.getByTestId('sync-password-reenter-btn')).toBeInTheDocument()
+    })
+
+    it('saves a weak password, hides the warning and syncs', async () => {
+      const sync = mismatchSync({ validatePassword: vi.fn().mockResolvedValue({ score: 0, feedback: [] }) })
+      const { rerender } = renderAndSwitchToData({ sync })
+      await openReenterForm()
+
+      fireEvent.change(screen.getByTestId('sync-password-input'), { target: { value: 'pw' } })
+      await waitFor(() => expect(sync.validatePassword).toHaveBeenCalledWith('pw'))
+      expect(screen.getByTestId('sync-password-save')).not.toBeDisabled()
+      fireEvent.click(screen.getByTestId('sync-password-save'))
+
+      await waitFor(() => expect(screen.getByTestId('sync-password-set')).toBeInTheDocument())
+      expect(sync.replacePassword).toHaveBeenCalledWith('pw')
+      expect(sync.changePassword).not.toHaveBeenCalled()
+      expect(sync.setPassword).not.toHaveBeenCalled()
+      expect(screen.queryByTestId('sync-password-mismatch')).not.toBeInTheDocument()
+      await waitFor(() => expect(sync.syncNow).toHaveBeenCalledWith('download', 'favorites'))
+      expect(sync.syncNow).toHaveBeenCalledWith('upload', 'favorites')
+
+      // A new mismatch brings the warning back.
+      rerender(<SettingsModal sync={{ ...sync, lastSyncResult: { ...MISMATCH_RESULT, timestamp: 2 } }} {...defaultProps} onClose={onClose} />)
+      expect(screen.getByTestId('sync-password-reenter-btn')).toBeInTheDocument()
+    })
+
+    it('stays in the form with the error when the password does not match, and can retry', async () => {
+      const replacePassword = vi.fn()
+        .mockResolvedValueOnce({ success: false, error: 'sync.passwordMismatch' })
+        .mockResolvedValueOnce({ success: true })
+      const sync = mismatchSync({ replacePassword })
+      renderAndSwitchToData({ sync })
+      await openReenterForm()
+
+      fireEvent.change(screen.getByTestId('sync-password-input'), { target: { value: 'typo' } })
+      await waitFor(() => expect(screen.getByTestId('sync-password-save')).not.toBeDisabled())
+      fireEvent.click(screen.getByTestId('sync-password-save'))
+
+      await waitFor(() => expect(screen.getByTestId('sync-password-error')).toHaveTextContent('sync.passwordMismatch'))
+      expect(screen.getByTestId('sync-password-input')).toBeInTheDocument()
+      expect(sync.syncNow).not.toHaveBeenCalled()
+
+      fireEvent.change(screen.getByTestId('sync-password-input'), { target: { value: 'right' } })
+      await waitFor(() => expect(screen.getByTestId('sync-password-save')).not.toBeDisabled())
+      fireEvent.click(screen.getByTestId('sync-password-save'))
+
+      await waitFor(() => expect(screen.getByTestId('sync-password-set')).toBeInTheDocument())
+      expect(replacePassword).toHaveBeenCalledTimes(2)
     })
   })
 })

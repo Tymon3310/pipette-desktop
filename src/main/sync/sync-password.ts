@@ -1,13 +1,22 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Sync credentials and the password-check sentinel file: verifying the
-// stored password against the remote password-check unit, and the
-// non-destructive change-password flow.
+// stored password against the remote password-check unit. Changing the
+// password lives in sync-password-change.ts.
 
 import { encrypt, decrypt, retrievePasswordResult, storePassword, clearPassword } from './sync-crypto'
 import { getAuthStatus } from './google-auth'
-import { listFiles, downloadFile, uploadFile, driveFileName, type DriveFile } from './google-drive'
-import { pLimit } from '../../shared/concurrency'
-import { SYNC_CONCURRENCY, syncRuntime } from './sync-runtime-state'
+import {
+  listFiles,
+  downloadFile,
+  uploadFile,
+  driveFileName,
+  PASSWORD_CHECK_UNIT,
+  type DriveFile,
+  type UploadedFile,
+} from './google-drive'
+import { syncRuntime } from './sync-runtime-state'
+import { assertNoLocalPasswordChange, assertSyncAllowed } from './sync-password-guard'
+import { ensureSyncFormatMarkerKnown, syncFormatGeneration } from './sync-format'
 import type { SyncCredentialFailureReason, SyncCredentialResult } from '../../shared/types/sync'
 import { syncCredentialI18nKey } from '../../shared/types/sync'
 
@@ -19,7 +28,6 @@ export class SyncCredentialError extends Error {
   }
 }
 
-export const PASSWORD_CHECK_UNIT = 'password-check'
 export const PASSWORD_CHECK_PAYLOAD = JSON.stringify({ type: 'password-check', version: 1 })
 
 export async function requireSyncCredentials(): Promise<SyncCredentialResult> {
@@ -37,42 +45,164 @@ export class PasswordMismatchError extends Error {
   }
 }
 
+/** Encrypts the password-check payload with `password` and uploads it,
+ *  over `existingFileId` when given, otherwise as a new file. */
+export async function writePasswordCheck(password: string, existingFileId?: string): Promise<UploadedFile> {
+  const envelope = await encrypt(PASSWORD_CHECK_PAYLOAD, password, PASSWORD_CHECK_UNIT)
+  return uploadFile(driveFileName(PASSWORD_CHECK_UNIT), envelope, existingFileId)
+}
+
+/** `createdMemoryMs`: how long a created password-check that no listing
+ *  shows yet still counts as present. Long enough for Drive's listing lag;
+ *  short enough that one deleted from another machine is created again.
+ *  Exported so tests can replace the clock. */
+export const passwordCheckTiming = {
+  createdMemoryMs: 5 * 60 * 1000,
+  now: (): number => Date.now(),
+}
+
+/** Every password-check file in `remoteFiles`. More than one can exist
+ *  (two machines creating it at once); see `findPasswordCheck`. */
+export function listedPasswordChecks(remoteFiles: DriveFile[]): DriveFile[] {
+  const fileName = driveFileName(PASSWORD_CHECK_UNIT)
+  return remoteFiles.filter((f) => f.name === fileName)
+}
+
+/** The password-check every machine uses when several are listed: the
+ *  newest `modifiedTime`, ties broken by the smallest file id. */
+export function findPasswordCheck(remoteFiles: DriveFile[]): DriveFile | undefined {
+  let best: DriveFile | undefined
+  for (const file of listedPasswordChecks(remoteFiles)) {
+    if (!best) {
+      best = file
+      continue
+    }
+    const diff = Date.parse(file.modifiedTime) - Date.parse(best.modifiedTime)
+    if (diff > 0 || (diff === 0 && file.id < best.id)) best = file
+  }
+  return best
+}
+
+function forgetCreatedPasswordCheck(): void {
+  syncRuntime.passwordCheckCreated = null
+}
+
+/** The password-check this process created recently enough that a listing
+ *  without it is put down to listing lag; null otherwise. */
+function recentlyCreatedPasswordCheck(): UploadedFile | null {
+  const created = syncRuntime.passwordCheckCreated
+  if (!created) return null
+  if (passwordCheckTiming.now() - created.at < passwordCheckTiming.createdMemoryMs) return created.file
+  forgetCreatedPasswordCheck()
+  return null
+}
+
+/** Opens `file` with `password` and remembers it as validated. Throws
+ *  `PasswordMismatchError` when it does not open. */
+async function openPasswordCheck(password: string, file: UploadedFile): Promise<void> {
+  const envelope = await downloadFile(file.id)
+  try {
+    await decrypt(envelope, password)
+  } catch {
+    syncRuntime.validatedPasswordCheck = null
+    throw new PasswordMismatchError()
+  }
+  syncRuntime.validatedPasswordCheck = { id: file.id, modifiedTime: file.modifiedTime }
+}
+
+/** Creates the password-check with `password`, after our sync-format
+ *  marker (`ensureSyncFormatMarkerKnown`: callers' listings may be
+ *  name-filtered); when the marker cannot be created, neither is the
+ *  password-check. When a creation is already in flight, waits for it and
+ *  opens what it created instead: that pass may have used another password. */
+async function createPasswordCheckOnce(password: string): Promise<void> {
+  const inFlight = syncRuntime.passwordCheckCreating
+  if (inFlight) {
+    await openPasswordCheck(password, await inFlight)
+    return
+  }
+  const create = async (): Promise<UploadedFile> => {
+    await ensureSyncFormatMarkerKnown()
+    return writePasswordCheck(password)
+  }
+  const run = create().then((created) => {
+    syncRuntime.passwordCheckCreated = { file: created, at: passwordCheckTiming.now() }
+    return created
+  })
+  syncRuntime.passwordCheckCreating = run
+  const settle = (): void => {
+    if (syncRuntime.passwordCheckCreating === run) syncRuntime.passwordCheckCreating = null
+  }
+  run.then(settle, settle)
+  const created = await run
+  syncRuntime.validatedPasswordCheck = { id: created.id, modifiedTime: created.modifiedTime }
+}
+
+/** Opens the chosen password-check (`findPasswordCheck`) with `password`
+ *  and remembers it as validated. When the listing has none it is
+ *  created, unless this process created one the listing does not show
+ *  yet; that one is opened by id. Throws `PasswordMismatchError` when the
+ *  password-check does not open. */
 export async function validatePasswordCheck(
   password: string,
   remoteFiles: DriveFile[],
 ): Promise<void> {
-  const fileName = driveFileName(PASSWORD_CHECK_UNIT)
-  const existing = remoteFiles.find((f) => f.name === fileName)
-
+  const existing = findPasswordCheck(remoteFiles)
   if (existing) {
-    const envelope = await downloadFile(existing.id)
-    try {
-      await decrypt(envelope, password)
-    } catch {
-      throw new PasswordMismatchError()
-    }
-  } else {
-    const envelope = await encrypt(PASSWORD_CHECK_PAYLOAD, password, PASSWORD_CHECK_UNIT)
-    await uploadFile(fileName, envelope)
+    forgetCreatedPasswordCheck()
+    await openPasswordCheck(password, existing)
+    return
   }
-  syncRuntime.passwordCheckValidated = true
+  const recent = recentlyCreatedPasswordCheck()
+  if (recent) {
+    await openPasswordCheck(password, recent)
+  } else {
+    await createPasswordCheckOnce(password)
+  }
+}
+
+/** `validatePasswordCheck` unless the chosen password-check is the one
+ *  last validated (same Drive id and `modifiedTime`). `remoteFiles` must be
+ *  a listing that would include the password-check when it exists. */
+export async function ensurePasswordCheckValidated(
+  password: string,
+  remoteFiles: DriveFile[],
+): Promise<void> {
+  const existing = findPasswordCheck(remoteFiles)
+  const validated = syncRuntime.validatedPasswordCheck
+  if (existing && validated && existing.id === validated.id && existing.modifiedTime === validated.modifiedTime) {
+    forgetCreatedPasswordCheck()
+    return
+  }
+  await validatePasswordCheck(password, remoteFiles)
+}
+
+/** A listing of just the password-check, for entry points whose own
+ *  listing is name-filtered. */
+export function listPasswordCheckFiles(): Promise<DriveFile[]> {
+  return listFiles({ nameContains: driveFileName(PASSWORD_CHECK_UNIT) })
 }
 
 export function resetPasswordCheckCache(): void {
-  syncRuntime.passwordCheckValidated = false
+  syncRuntime.validatedPasswordCheck = null
+  forgetCreatedPasswordCheck()
 }
 
 export async function checkPasswordCheckExists(): Promise<boolean> {
   const remoteFiles = await listFiles()
-  const fileName = driveFileName(PASSWORD_CHECK_UNIT)
-  return remoteFiles.some((f) => f.name === fileName)
+  return findPasswordCheck(remoteFiles) !== undefined
 }
 
+/** Refused (`SyncBlockedError`) while a password change is in progress or
+ *  Drive needs a newer app, before the password is stored. */
 export async function setPasswordAndValidate(password: string): Promise<void> {
+  await assertNoLocalPasswordChange()
+  const formatGeneration = syncFormatGeneration()
+  const remoteFiles = await listFiles()
+  await assertSyncAllowed(remoteFiles, formatGeneration)
   await storePassword(password)
   resetPasswordCheckCache()
   try {
-    const remoteFiles = await listFiles()
     await validatePasswordCheck(password, remoteFiles)
   } catch (err) {
     await clearPassword()
@@ -80,58 +210,29 @@ export async function setPasswordAndValidate(password: string): Promise<void> {
   }
 }
 
-// --- Non-destructive password change ---
-
-export async function changePassword(newPassword: string): Promise<void> {
-  if (syncRuntime.isSyncing) throw new Error('sync.changePasswordInProgress')
-  syncRuntime.isSyncing = true
+/** Replaces the stored password with `password` once it opens the chosen
+ *  password-check on Drive, for a password changed on another machine.
+ *  Nothing is stored until it opens, so a mismatch or a network error
+ *  leaves the stored password as it was (a mismatch clears the validated
+ *  cache, as in `validatePasswordCheck`). Refused (`SyncBlockedError`)
+ *  while a password change is in progress, and when Drive has no
+ *  password-check to compare against. */
+export async function replacePasswordAndValidate(password: string): Promise<void> {
+  const authStatus = await getAuthStatus()
+  if (!authStatus.authenticated) throw new SyncCredentialError('unauthenticated')
+  await assertNoLocalPasswordChange()
+  const formatGeneration = syncFormatGeneration()
+  const remoteFiles = await listFiles()
+  await assertSyncAllowed(remoteFiles, formatGeneration)
+  const check = findPasswordCheck(remoteFiles)
+  if (!check) throw new Error('sync.reenterPasswordNoRemote')
+  await openPasswordCheck(password, check)
+  forgetCreatedPasswordCheck()
   try {
-    const credentials = await requireSyncCredentials()
-    if (!credentials.ok) throw new SyncCredentialError(credentials.reason)
-    const oldPassword = credentials.password
-    if (newPassword === oldPassword) throw new Error('sync.samePassword')
-    const remoteFiles = await listFiles()
-
-    // Validate old password against password-check first
-    await validatePasswordCheck(oldPassword, remoteFiles)
-
-    const passwordCheckFileName = driveFileName(PASSWORD_CHECK_UNIT)
-    const dataFiles = remoteFiles.filter((f) => f.name !== passwordCheckFileName)
-
-    // Phase 1: Download + decrypt all files (fail-fast on any error)
-    const limit = pLimit(SYNC_CONCURRENCY)
-    const decrypted = await Promise.all(
-      dataFiles.map((file) =>
-        limit(async () => {
-          const envelope = await downloadFile(file.id)
-          try {
-            const plaintext = await decrypt(envelope, oldPassword)
-            return { file, plaintext, syncUnit: envelope.syncUnit }
-          } catch {
-            throw new Error('sync.changePasswordUndecryptable')
-          }
-        }),
-      ),
-    )
-
-    // Phase 2: Re-encrypt + upload with new password (overwrite)
-    await Promise.all(
-      decrypted.map(({ file, plaintext, syncUnit }) =>
-        limit(async () => {
-          const newEnvelope = await encrypt(plaintext, newPassword, syncUnit)
-          await uploadFile(file.name, newEnvelope, file.id)
-        }),
-      ),
-    )
-
-    // Phase 3: Recreate password-check with new password
-    const existingPc = remoteFiles.find((f) => f.name === passwordCheckFileName)
-    const pcEnvelope = await encrypt(PASSWORD_CHECK_PAYLOAD, newPassword, PASSWORD_CHECK_UNIT)
-    await uploadFile(passwordCheckFileName, pcEnvelope, existingPc?.id)
-
-    await storePassword(newPassword)
-    resetPasswordCheckCache()
-  } finally {
-    syncRuntime.isSyncing = false
+    await storePassword(password)
+  } catch (err) {
+    // The validation belongs to `password`; the stored one is unchanged.
+    syncRuntime.validatedPasswordCheck = null
+    throw err
   }
 }

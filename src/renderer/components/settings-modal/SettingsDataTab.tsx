@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BTN_PRIMARY, BTN_SECONDARY } from './settings-modal-shared'
+import { BTN_PRIMARY, BTN_SECONDARY, type PasswordMode } from './settings-modal-shared'
 import { SyncStatusSection } from './SyncStatusSection'
 import { DisconnectConfirmButton } from './DisconnectConfirmButton'
 import { PasswordSection } from './PasswordSection'
 import { HubDisplayNameField } from './HubDisplayNameField'
+import { PasswordChangeStatusPanel } from './PasswordChangeStatusPanel'
+import { PasswordChangeLockBanner } from './PasswordChangeLockBanner'
+import { usePasswordChangeStatus } from './use-password-change-status'
+import { useSyncFormatUpdateRequired } from '../../hooks/use-sync-format-status'
 import { ROW_CLASS } from '../editors/modal-controls'
 import type { UseSyncReturn } from '../../hooks/useSync'
 
@@ -30,8 +35,10 @@ export interface SettingsDataTabProps {
   passwordScore: number | null
   passwordFeedback: string[]
   passwordError: string | null
-  changingPassword: boolean
-  setChangingPassword: (v: boolean) => void
+  passwordMode: PasswordMode
+  setPasswordMode: (mode: PasswordMode) => void
+  startReenterPassword: () => void
+  passwordMismatch: boolean
   syncDisabled: boolean
   handleSignIn: () => void
   handleGoogleDisconnect: () => void
@@ -64,8 +71,10 @@ export function SettingsDataTab({
   passwordScore,
   passwordFeedback,
   passwordError,
-  changingPassword,
-  setChangingPassword,
+  passwordMode,
+  setPasswordMode,
+  startReenterPassword,
+  passwordMismatch,
   syncDisabled,
   handleSignIn,
   handleGoogleDisconnect,
@@ -77,6 +86,25 @@ export function SettingsDataTab({
   handleAutoSyncToggle,
 }: SettingsDataTabProps) {
   const { t } = useTranslation()
+  // The app-wide update banner and the sync status already explain a
+  // sync stopped for a newer format, and the lock can't be released then.
+  const syncFormatUpdateRequired = useSyncFormatUpdateRequired()
+  const passwordChange = usePasswordChangeStatus({
+    authenticated: sync.authStatus.authenticated,
+    formBusy: busy,
+    progress: sync.progress,
+    lastSyncResult: sync.lastSyncResult,
+  })
+  const changeStatus = passwordChange.status
+  const { setError: setPasswordChangeError } = passwordChange
+
+  // A change that stopped part-way replaces the password form with the
+  // status panel; the form's error moves to the panel.
+  useEffect(() => {
+    if (changeStatus.kind === 'none' || passwordMode !== 'change') return
+    setPasswordChangeError(passwordError)
+    clearPasswordForm()
+  }, [changeStatus.kind, passwordMode, passwordError, setPasswordChangeError, clearPasswordForm])
 
   return (
     <div className="pt-4">
@@ -151,19 +179,49 @@ export function SettingsDataTab({
         <h4 className="mb-2 text-sm font-medium text-content-secondary">
           {t('sync.encryptionPassword')}
         </h4>
-        <PasswordSection
-          sync={sync}
-          password={password}
-          passwordScore={passwordScore}
-          passwordFeedback={passwordFeedback}
-          passwordError={passwordError}
-          changingPassword={changingPassword}
-          busy={busy}
-          onPasswordChange={handlePasswordChange}
-          onSetPassword={handleSetPassword}
-          onStartChange={() => setChangingPassword(true)}
-          onCancelChange={clearPasswordForm}
-        />
+        {changeStatus.kind === 'none' ? (
+          <>
+            <PasswordSection
+              sync={sync}
+              password={password}
+              passwordScore={passwordScore}
+              passwordFeedback={passwordFeedback}
+              passwordError={passwordError}
+              passwordMode={passwordMode}
+              passwordMismatch={passwordMismatch}
+              busy={busy}
+              onPasswordChange={handlePasswordChange}
+              onSetPassword={handleSetPassword}
+              onStartChange={() => {
+                setPasswordChangeError(null)
+                setPasswordMode('change')
+              }}
+              onCancelChange={clearPasswordForm}
+              onStartReenter={() => {
+                setPasswordChangeError(null)
+                startReenterPassword()
+              }}
+            />
+            {/* An action that ended the change (e.g. Continue on a change
+                that never started) leaves its explanation here once the
+                panel closes; with a lock, the lock banner shows it. */}
+            {passwordChange.error && !passwordChange.lockStatus && (
+              <div className="mt-2 text-xs text-danger" data-testid="sync-password-change-result-error">
+                {passwordChange.error}
+              </div>
+            )}
+          </>
+        ) : (
+          <PasswordChangeStatusPanel
+            status={changeStatus}
+            running={passwordChange.running}
+            error={passwordChange.error}
+            onResume={passwordChange.resume}
+            onRevert={passwordChange.revert}
+            onAbandon={passwordChange.abandon}
+            onDeleteFile={passwordChange.deleteUndecryptable}
+          />
+        )}
       </section>
 
       {/* Sync Controls */}
@@ -200,6 +258,14 @@ export function SettingsDataTab({
       </div>
 
       {/* Sync Status */}
+      {changeStatus.kind === 'none' && passwordChange.lockStatus && !syncFormatUpdateRequired && (
+        <PasswordChangeLockBanner
+          lockStatus={passwordChange.lockStatus}
+          running={passwordChange.running}
+          error={passwordChange.error}
+          onRelease={passwordChange.releaseLocks}
+        />
+      )}
       <SyncStatusSection
         syncStatus={sync.syncStatus}
         progress={sync.progress}

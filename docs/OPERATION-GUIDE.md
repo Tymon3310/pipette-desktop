@@ -38,6 +38,7 @@ Screenshots were taken using the software-emulated GPK60-63R keyboard, displayed
   - [3.12 User](#312-user)
   - [3.13 Keyboard (Device Picker)](#313-keyboard-device-picker)
   - [3.14 Keycodes Overlay Panel](#314-keycodes-overlay-panel)
+  - [3.15 Reordering the Tabs](#315-reordering-the-tabs)
 - [4. Toolbar](#4-toolbar)
   - [4.1 Zoom](#41-zoom)
   - [4.2 Undo / Redo (Keymap History)](#42-undo--redo-keymap-history)
@@ -181,7 +182,7 @@ The left sidebar provides a **tree navigation** with the following structure:
   - **Favorites**: Tap Dance, Macro, Combo, Key Override, Alt Repeat Key — each type shows its saved entries with rename, delete, export, and Hub actions
   - **Application**: Import/export local data, or reset application settings. Cancelling the Import file picker changes nothing — local data is untouched and whatever result was already shown stays displayed. A failed import rolls back everything it already wrote, leaving local data unchanged, and shows the underlying error text under **Import failed** (if the rollback itself also fails, that failure is folded into the same message)
 - **Sync** (when Cloud Sync is configured): Lists keyboards that exist only in Google Drive (not yet downloaded on this device). Each entry is labeled with the keyboard's real name, resolved from the synced name index rather than from the raw UID. Click a remote-only keyboard to download it on demand — a spinner is shown while fetching, and a failure message appears inline if the download cannot complete. Once downloaded, the keyboard moves into the **Local › Keyboards** branch
-  - **Cloud Data**: Reset targets that aren't tied to one keyboard — Favorites, Language Packs, Theme Packs, Key Labels, and imported Typing Test Texts. Only the targets actually present on Google Drive are listed. Each row has its own **Reset** button with a two-step confirmation (click Reset, then confirm or cancel); resetting removes that target's data from Google Drive only — local copies on this device are untouched, and a local copy that still exists re-uploads on the next sync (the same behavior Favorites already has). This is also where **Undecryptable Files** are listed and cleaned up: files that cannot be decrypted with the current password (e.g. encrypted with a forgotten previous password) appear as their own rows with a filename and a **Delete** button (two-step confirmation, one file at a time)
+  - **Cloud Data**: Reset targets that aren't tied to one keyboard — Favorites, Language Packs, Theme Packs, Key Labels, and imported Typing Test Texts. Only the targets actually present on Google Drive are listed. Each row has its own **Reset** button with a two-step confirmation (click Reset, then confirm or cancel); resetting removes that target's data from Google Drive only — local copies on this device are untouched, and a local copy that still exists re-uploads on the next sync (the same behavior Favorites already has). This is also where **Undecryptable Files** are listed and cleaned up: files that cannot be decrypted with the current password (e.g. encrypted with a forgotten previous password) appear as their own rows with a filename and a **Delete** button (two-step confirmation, one file at a time). Scanning, resetting and deleting here are refused while this PC has an unfinished sync password change, while a password-change lock is on Google Drive, or while Google Drive needs a newer Pipette (§6.1)
 
 ![Data — Sync](screenshots/data-sidebar-sync.png)
 
@@ -771,9 +772,22 @@ Rest the pointer on a layer key (`MO`, `LT`, `TG`, `TO`, `TT`, `OSL`, `DF`, `PDF
 - On keys with an inner part (e.g. `LT1(KC_SPC)`), only the upper (outer) part starts the preview; moving onto the inner key hides it so the inner key can be selected. The key under the pointer keeps showing its own content during the preview
 - Moving the pointer off the key returns to the current layer immediately
 - Clicks, double-clicks and middle-clicks always act on the current layer — the preview is dismissed first
-- Layer keys assigned to encoders don't start a preview
+- The half of an encoder (clockwise or counter-clockwise) works the same way when that direction is assigned a layer key. For an `LT`-style keycode only the upper (outer) part of that half starts the preview, and during the preview that half keeps showing its own keycode while the other half shows the target layer's
 - There is no preview in View Matrix mode, on the Key Label simulation tab, while keys are multi-selected, while palette keycodes are selected for pasting, or while the Key Popover is open
 - Turn it on or off with **Auto Layer Preview** in the Keycodes Overlay Panel's Settings / Import tab (§3.14). Saved and synced per keyboard; on by default
+
+**Entry details on hover (Fav Hover Details)**
+
+Rest the pointer on a key whose keycode is a macro (`M0`, `M1`, …) or a Tap Dance (`TD(0)`, `TD(1)`, …) for about 0.3 seconds and a tooltip shows that entry in full, nothing cut off. This works while the keyboard is locked, so you can read an entry without unlocking it (editing a macro still requires unlocking).
+
+- **Macro**: its number, then every action on its own line with the same letters the Macro tab tiles use (`T` tap, `D` down, `U` up, `Tx` text, `W` wait) and the full keycodes or text. A long macro is split into several columns to fit on screen; long text wraps and keeps its spaces and line breaks
+- **Tap Dance**: On Tap, On Hold, On Double Tap, On Tap Hold and Tapping Term (ms); an empty action reads "None"
+- The half of an encoder (clockwise or counter-clockwise) works the same way when that direction is assigned a macro or a Tap Dance
+- The entry is found from the key's actual keycode on the current layer, so a Key Label pack that relabels the key doesn't change which entry is shown
+- Entries whose tile reads "N/C" (not configured) show no tooltip
+- Nothing is shown in the same situations as the layer preview above (View Matrix mode, the Key Label simulation tab, multi-selected keys, palette keycodes selected for pasting, the Key Popover open). It doesn't depend on Auto Layer Preview — it still works with that turned off
+- The tiles of the key picker's Tap Dance, Macro, Combo, Key Override and Alt Repeat Key tabs show the same tooltip (§3.6–§3.10)
+- Turn it on or off with **Fav Hover Details** in the Keycodes Overlay Panel's Settings / Import tab (§3.14). Saved and synced per keyboard; on by default
 
 ### 2.4 Key Popover
 
@@ -996,6 +1010,7 @@ The Tap Dance section displays a **tile grid preview** showing all entries at a 
 
 - Each tile shows the entry number and a summary of configured actions
 - Configured entries display their tap/hold actions; unconfigured tiles show the number only
+- Rest the pointer on a configured tile for about 0.3 seconds to see the whole entry in a tooltip — On Tap, On Hold, On Double Tap, On Tap Hold and Tapping Term (the same tooltip as on the keymap, see §2.3). It works while the keyboard is locked, and also in the Tap Dance tab of the key pickers inside the Tap Dance, Combo, Key Override, Alt Repeat Key and Macro editors. Turn it off with **Fav Hover Details** (§3.14)
 - Click a tile to open the Tap Dance edit modal directly to that entry
 - Configure tap, hold, double-tap, and other actions for each entry
 - **Edit JSON** button at the bottom opens a JSON editor for bulk editing all entries (see §5.6)
@@ -1018,6 +1033,7 @@ The Macro section displays a **tile grid preview** showing all entries at a glan
 
 - Each tile shows the macro number and a preview of the recorded sequence
 - Configured entries display a summary of key actions; unconfigured tiles show the number only
+- A tile has room for only a few actions and cuts long labels short. Rest the pointer on a configured tile for about 0.3 seconds to see the whole macro in a tooltip — every action, in full (the same tooltip as on the keymap, see §2.3). It works while the keyboard is locked, and also in the Macro tab of the key pickers inside the Tap Dance, Combo, Key Override, Alt Repeat Key and Macro editors. Turn it off with **Fav Hover Details** (§3.14)
 - Click a tile to open the Macro edit modal directly to that entry
 - Record sequences of key inputs as macros
 - **Edit JSON** button at the bottom opens a JSON editor for bulk editing all entries (see §5.6)
@@ -1054,8 +1070,9 @@ Combo keycodes for simultaneous key-press combinations.
 The Combo tab displays a **tile grid preview** showing all entries. A note reads: "These features apply to the entire keyboard, not just the current layer."
 
 - Each tile shows the combo number and a summary (e.g., "A + B → C")
+- Rest the pointer on a configured tile for about 0.3 seconds to see Keys 1–4 and the Output in a tooltip; empty keys read "None". Turn it off with **Fav Hover Details** (§3.14)
 - Click a tile to open the Combo edit modal directly to that entry (§5.2)
-- Combo keycodes (CMB_000–CMB_031) can be assigned to keys for triggering combos
+- The Combo keycodes shown below the tiles (Combo On, Combo Off, Combo Toggle — `CMB_ON` / `CMB_OFF` / `CMB_TOG`) can be assigned to keys to turn the Combo feature on or off. Combos themselves have no keycode: a combo fires when its keys are pressed together
 - **Settings: Configuration** button at the bottom opens a settings modal for combo-related timeout configuration (e.g., Combo time out period)
 - Saving in that timeout modal shows the same Save-result display described for the Tap-Hold Settings modal (§3.6) — a brief confirmation, or an error message, to the left of the Reset / Revert / Save buttons
 - **Edit JSON** button at the bottom opens a JSON editor for bulk editing all entries (see §5.6)
@@ -1071,6 +1088,7 @@ Key Override keycodes for replacing key outputs when specific modifiers are held
 The Key Override tab displays a **tile grid preview** showing all entries and a settings area.
 
 - Each tile shows the override number and a summary
+- Rest the pointer on a configured tile (including a disabled one) for about 0.3 seconds to see every setting in a tooltip: Enabled (On / Off), Trigger Key, Replacement Key, Layers, Trigger / Negative / Suppressed Mods and Options, with empty ones reading "None". Turn it off with **Fav Hover Details** (§3.14)
 - Click a tile to open the Key Override edit modal directly to that entry (§5.3)
 - **Edit JSON** button at the bottom opens a JSON editor for bulk editing all entries (see §5.6)
 
@@ -1085,6 +1103,7 @@ Alt Repeat Key keycodes for context-aware alternate repeat key bindings.
 The Alt Repeat Key tab displays a **tile grid preview** showing all entries and a settings area.
 
 - Each tile shows the entry number and a summary
+- Rest the pointer on a configured tile (including a disabled one) for about 0.3 seconds to see every setting in a tooltip: Enabled (On / Off), Last Key, Alt Key, Allowed Mods and Options, with empty ones reading "None". Turn it off with **Fav Hover Details** (§3.14)
 - Click a tile to open the Alt Repeat Key edit modal directly to that entry (§5.4)
 - **Edit JSON** button at the bottom opens a JSON editor for bulk editing all entries (see §5.6)
 
@@ -1167,6 +1186,7 @@ Auto Move and Auto Layer Preview share one row, and Instant Key Selection and Ke
 - **Key Tester**: Toggle Matrix Tester mode (supported keyboards only)
 - **View Matrix**: **Edit** / **Done** enters or leaves View Matrix mode to customize the Auto Move key order; the unlabelled toggle switch at the right edge of the same row (**Wires**) shows or hides the matrix wiring overlay on the keymap, independently of Edit mode (see §2.6)
 - **Separate Shift in Key Picker**: Toggle split display for combined keycodes (e.g., show Mod-Tap as two halves)
+- **Fav Hover Details**: Toggle the tooltip that shows an entry in full while the pointer rests on a macro or Tap Dance key / encoder direction, or on a Tap Dance, Macro, Combo, Key Override or Alt Repeat Key tile (see §2.3 and §3.6–§3.10). Saved and synced per keyboard; on by default
 - **Security**: Shows lock status (Locked/Unlocked) with a button that follows it — **Unlock** while locked, **Lock** while unlocked. Unlock opens the Unlock dialog (stays disabled until the lock status has been confirmed, to avoid opening it against a stale placeholder state). Lock locks immediately if Typing Record (§4.3) is off; if Typing Record is on, it instead asks for confirmation ("Turn off Record and lock?") and, once confirmed, turns Record off before locking
 - **Import**: Restore from `.vil` files or sideload custom JSON definitions. Restoring a `.vil` file writes it to the keyboard field by field; if a write fails partway through, Pipette writes back the keyboard state it was holding just before the restore started — the state shown in the editor, not a fresh read from the device (this assumes the keyboard's shape hasn't changed — it is not a guaranteed byte-exact restore) and shows one of two messages depending on whether that write-back itself succeeded: **"Writing to the keyboard failed. The previous settings were restored."**, or, if the write-back also failed, **"Writing to the keyboard failed and the previous settings could not be restored. Reconnect the keyboard and load a saved snapshot."** This and every other error shown in the bar below the editor (failed save, failed load, failed sideload) clears itself after about 10 seconds, or immediately via its own × button. The red error boxes on the device selection screen (failed device connection, failed file load) and in the Keyboard tab's File source (§3.13) behave the same way, clearing after about 10 seconds or immediately via their own × button
 - **Reset Keyboard Data**: Reset keyboard to factory defaults
@@ -1183,6 +1203,35 @@ Auto Move and Auto Layer Preview share one row, and Instant Key Selection and Ke
 **Layout Tab** (when available)
 
 Some keyboards support layout options (see §2.5). When available, a Layout tab appears as the first tab in the overlay panel, providing access to the same layout options.
+
+### 3.15 Reordering the Tabs
+
+The keycode palette's tabs (Basic, Layers, …, User, Keyboard) can be put in any order. Reordering is done in the keymap editor's palette; the order is used by every key picker, including the pickers inside the Tap Dance, Combo, Key Override, Alt Repeat Key and Macro editors.
+
+**Entering reorder mode**
+
+- Press and hold any tab for about half a second (primary mouse button). That tab becomes the selected tab
+- Or, with a tab focused by the keyboard, press **Shift+F10** or the context menu (**Menu**) key. The focused tab becomes the selected tab
+
+![Keycode palette in reorder mode](screenshots/keycode-tab-reorder.png)
+
+In reorder mode the tabs get a dashed outline, and a row below the tabs shows the hint "Drag tabs or use ←/→ to reorder · Enter to finish" with **Reset** and **Done** buttons. The tab you work with is always the selected one, with its keycodes shown below: pressing a tab selects it right away, before you drag it.
+
+**Moving tabs**
+
+- Drag a tab and drop it on another tab to take that tab's place. Dropping anywhere else, or pressing Esc during the drag, leaves the order unchanged. The tab you dropped onto does not become selected
+- With a tab focused, **←** / **→** moves it one place to the left / right and selects it. The focus stays on the moved tab
+
+Each move is saved right away.
+
+**Leaving reorder mode**
+
+- Press **Enter** or **Esc**, click **Done**, or click anywhere outside the tabs and the hint row (the click still does what it normally does). Opening a dialog also leaves the mode. When a button in the tab bar (such as **Reset**, **Done** or the panel button) has the focus, Enter presses that button instead
+- Moves already made are kept
+
+**Reset** puts the tabs back in the default order.
+
+The order is saved and synced per keyboard. Tabs a keyboard does not show (for example MIDI) keep their place in the order, and a tab added in a later version of Pipette appears at the end. Reset Keyboard Data (§3.14) also clears the order.
 
 ---
 
@@ -1754,30 +1803,185 @@ The Data tab contains the following sections: Google Account, Data Sync, and Pip
 
 - Set a password to encrypt all synced data (required). A strength indicator helps you choose a strong password
 - If a password already exists on the server (set from another device), a hint is shown asking you to enter the same password
-- **Change Password**: Click **Change Password** to re-encrypt all synced files with a new password. No data is deleted — existing files are decrypted and re-encrypted in place
+- **Change Password**: Click **Change Password** to re-encrypt every synced file on Google Drive with a new password. No data is deleted — each existing file is decrypted and re-encrypted in place. The form shows **"Close Pipette on your other PCs until the password change finishes."** — keep Pipette closed on your other PCs until the change is done. Google Drive requests are retried automatically when Drive reports a rate limit, and most requests are also retried after a server or network error. Creating a new file on Google Drive (such as the lock) is retried only on rate limits, so a server or network error at that point stops the change. If that happens while taking the lock, the change does not start: Pipette undoes the lock attempt, and you run **Change Password** again. If undoing it also fails (for example while still offline), the change stays at the **Preparing** step and the panel below shows it. **Continue** and the next start clear it once the lock can be removed (otherwise it stays for the next attempt); **Abandon** clears it even when the lock can't be removed (a lock left behind then shows in the lock banner described below). Later in the change, continue it as described below
+
+**How a password change runs**
+
+1. Pipette saves the progress of the change (a plain file without secrets) and both passwords (encrypted with the OS keychain) on this PC, then puts a password-change lock file on Google Drive. While the lock exists, sync pauses on every PC (see **While a password change is in progress** below)
+2. Every synced file is re-encrypted with the new password. Files are checked again in up to three passes, so a file another PC wrote back with the old password during the change is picked up
+3. The password check on Google Drive and the password saved on this PC are switched to the new password, the lock is removed, and the saved progress and passwords are deleted
+
+**If a password change is interrupted**
+
+A change can stop part-way — Pipette was closed, the network dropped, or Google Drive returned an error. The change stays unfinished on this PC, and in the **Sync Encryption Password** section the usual password row is replaced by a panel that shows:
+
+- The direction: **"Changing to the new sync password hasn't finished. Syncing is paused on this PC."** or, while going back, **"Going back to the old sync password hasn't finished. Syncing is paused on this PC."**
+- The step: **"Current step: …"** — **Preparing**, **Re-encrypting files on Google Drive**, **Finishing the change**, or **Cleaning up**
+- **Continue**: Runs the change again from where it stopped, in the same direction. Files already re-encrypted are skipped
+- **Go Back to Old Password**: Shown only while files are being re-encrypted (**Re-encrypting files on Google Drive**). Re-encrypts the files back to the old password instead. While going back, the same button reads **Switch to New Password Instead**. From **Finishing the change** on, this button is not offered: finish the change with **Continue**, then change the password again to return to the old one
+- **Give up the password change** → **Abandon**: Two-step confirmation (**Abandon** → **Abandon?** / **Cancel**) with the warning **"Files on Google Drive may stay mixed between the old and new passwords. Delete the ones that can't be decrypted in Data › Sync › Cloud Data."** Abandoning removes this PC's lock (when it can) and forgets the change without touching the files on Google Drive. Files that do not open with the password this PC keeps then appear under **Undecryptable Files** in the Data panel's **Sync › Cloud Data** (§1.3), where they can be deleted. Abandon also works when the saved passwords or the saved progress can't be read
+- **Files neither password opens**: When some files on Google Drive open with neither the old nor the new password, the panel shows **"Some files on Google Drive can't be decrypted with either the old or the new password. Delete them, then continue."** and lists them, each with a **Delete** button (two-step confirmation: **Delete** → **Delete?** / **Cancel**). Each file is checked again just before it is deleted; a file one of the passwords can open is kept, with **"The file was not deleted because one of the passwords can open it."** After deleting them, press **Continue**
+- **Lock lost**: If the change's lock on Google Drive was removed (for example with **Release Lock** on another PC), the panel adds **"The password change was stopped because its lock on Google Drive was removed, possibly from another PC."** **Continue** then takes a new lock and carries on — unless another PC now holds a lock, in which case it stops with **"Another PC is changing the sync password. Try again after it finishes."** and the change stays unfinished
+
+On the next start, Pipette picks up an unfinished change by itself:
+
+- Stopped while **Preparing**: the change never started — its lock is removed and the change is forgotten. Set the new password again with **Change Password**
+- Stopped while **Re-encrypting files on Google Drive**: the panel waits for you to choose **Continue**, **Go Back to Old Password** or **Abandon** (with the lock-lost note when its lock is gone)
+- Stopped at **Finishing the change** or **Cleaning up**: the change is finished automatically (at **Finishing the change**, only when the saved passwords can be read; otherwise the panel stays with the keychain message)
+
+**While a password change is in progress**
+
+Sync is paused — automatic sync, **Sync**, Cloud Data scans and resets, and **Set Password** are all refused — on a PC that has an unfinished change of its own, and on every PC while a password-change lock is on Google Drive. Other PCs pause because of the lock only: once it is removed (for example with **Release Lock**), they sync again even if a change is still unfinished on some PC. **Sync Status** shows why:
+
+- **"Another PC is changing the sync password, so syncing is paused on this PC until it finishes."** — another PC holds the lock on Google Drive
+- **"A sync password change on this PC hasn't finished, so syncing is paused. Continue it, go back to the old password, or abandon it first."** — this PC has an unfinished change
+
+When the change finishes, the other PCs still have the old password saved, so their sync fails with **"Sync password does not match. Please check your encryption password."** Fix this on each of those PCs with **Re-enter Password** (below).
+
+**Re-entering the password after a change on another PC**
+
+**Re-enter Password** is for a PC whose saved password no longer matches Google Drive because the password was changed on another PC. It is separate from **Change Password**, which is for choosing a different password.
+
+- **When it appears**: after a sync, or a **Change Password** attempt, on this PC reports **"Sync password does not match. Please check your encryption password."** — and no unfinished password change is shown. The **Password is set** row then shows the warning **"This PC's sync password doesn't match Google Drive. Enter the password used on your other PCs."** and a **Re-enter Password** button. (A mismatch from **Change Password** shows as that form's error; the warning appears in the row once the form is closed with **Cancel**.)
+- **Entering the password**: **Re-enter Password** opens the password form. Enter the password already used on your other PCs. There is no strength rule here — the password only has to match the one in use. **Cancel** closes the form
+- **Saving**: **Set Password** first checks the password against the password check on Google Drive and saves it only if it opens. On any failure — a wrong password ("Sync password does not match…" again), a network error, a paused sync during a password change — the saved password is kept as it was. If Google Drive has no password check to compare with yet, the form shows **"Google Drive has no sync password to compare with yet. Close this form and run Sync with the current password."**
+- **After success**: the form closes, the warning clears, and a sync starts automatically (favorites and the connected keyboard, the same as **Sync**). A later mismatch shows the warning again
+
+**Password change lock**
+
+If a password-change lock is on Google Drive and this PC has no change of its own, a banner appears above **Sync Status**:
+
+- The message **"Another PC is changing the sync password, so syncing is paused on this PC until it finishes."** — or, when the lock was left by this PC (for example after the change was abandoned while the lock could not be removed), **"A password change lock left on Google Drive by this PC is pausing sync on every PC."**
+- **"Started: …"** with the time the change started, when it can be read from the lock
+- **Password change lock on Google Drive** → **Release Lock**: Two-step confirmation (**Release Lock** → **Release?** / **Cancel**) with the warning **"Make sure no other PC is syncing or changing the password."** Releasing deletes every password-change lock on Google Drive. Use it only when the PC that took the lock will not come back to finish (for example it broke or Pipette was uninstalled there); a PC still in the middle of the change stops with the lock-lost note and must take a new lock with **Continue**. Release is refused while a sync is running on this PC (**"A sync is running on this PC. Try again in a moment."**) or while this PC has an unfinished change of its own, and while Google Drive needs a newer Pipette (§6.1 **When Sync Needs a Newer Pipette**)
 
 **Change Password error conditions**
 
 When a password change cannot proceed, Pipette shows a localized message instead of the raw error. The common cases are listed below; other underlying errors (network, Drive) may appear as their own messages.
 
-Credential failures (the 5 reasons come from the same typed `SyncCredentialFailureReason` set used for readiness — only 3 of them surface in **Sync Status** below):
+Credential failures:
 
 | Reason | Message | Trigger |
 |--------|---------|---------|
 | `unauthenticated` | "Please sign in to Google before changing the password." | Not signed in with Google |
-| `noPasswordFile` | "No saved password to change. Set a password first." | No local sync password has ever been set |
-| `decryptFailed` | "Couldn't read the existing password (OS keychain rejected it)." | The OS keychain entry is unreadable (keychain reset, profile move, etc.) |
-| `keystoreUnavailable` | "OS keychain is not available; password cannot be changed here." | `safeStorage.isEncryptionAvailable()` returns false (typical on headless Linux without a keyring) |
-| `remoteCheckFailed` | "Couldn't reach Google Drive to verify the current password." | Network or Drive outage — retry later |
+| `noPasswordFile` | "No sync password is saved on this PC. Set one instead of changing it." | No sync password is saved on this PC |
+| `decryptFailed` | "Couldn't read the saved sync password, so it can't be changed." | The OS keychain cannot decrypt the saved password (keychain reset, profile move, etc.) |
+| `keystoreUnavailable` | "OS keychain is not available, so the sync password can't be changed here." | OS keychain encryption is not available (typical on Linux without a keyring) |
 
 Operational errors (shown as the message directly, no reason code):
 
 | Message | Trigger |
 |---------|---------|
-| "Cannot change password while sync is in progress." | A sync is already running — wait for it to finish |
+| "Cannot change password while sync is in progress." | A sync is already running — wait for it to finish. Also shown by **Continue**, **Go Back to Old Password**, **Abandon** and **Delete** in the interrupted-change panel |
 | "New password must be different from the current password." | The new password matches the existing one |
-| "Some files cannot be decrypted. Please scan and delete undecryptable files first." | Drive has files the current password cannot decrypt — delete them first via the Data panel's **Sync › Cloud Data** (§1.3) |
-| "Sync password does not match. Please check your encryption password." | The current password fails to decrypt the remote password check — reconfirm the password you are providing |
+| "Sync password does not match. Please check your encryption password." | The saved password fails to decrypt the password check on Google Drive — for example, another PC already changed the password. Use **Re-enter Password** to enter the password used on the other PCs |
+| "Another PC is changing the sync password. Try again after it finishes." | Another PC holds the password-change lock. Also shown by **Continue** when another PC took a lock after this PC's lock was lost |
+| "Another PC started changing the sync password at the same time. Try again after it finishes." | Two PCs tried to take the lock at the same time and the other one won |
+| "The password change was interrupted. You can continue it later." | Pipette was quitting while files were being re-encrypted — continue from the panel on the next start |
+| "The password change was stopped because its lock on Google Drive was removed, possibly from another PC." | The change's lock disappeared from Google Drive while it was running (e.g. released from another PC) |
+| "Some files on Google Drive can't be decrypted with either the old or the new password. Delete them, then continue." | Files open with neither password — delete them from the panel, then **Continue** |
+| "Files on Google Drive kept changing during the password change. Close Pipette on your other PCs, then continue." | Files kept being written back with the other password through every re-check pass |
+| "The passwords saved for the password change can't be read. Make sure the OS keychain is unlocked, then try again." | The OS keychain cannot decrypt the saved passwords (common on Linux right after login). Shown in the panel too; **Abandon** still works |
+| "The saved progress of the password change can't be read." | The saved progress file is unreadable — shown in the panel, where only **Abandon** is offered |
+| "The password change didn't start. Please change the password again." | **Continue** on a change that stopped while **Preparing** — its lock is removed and the change is forgotten |
+| "This can't be done at the current stage of the password change." | **Go Back to Old Password** or **Delete** after the change has moved past re-encrypting files |
+| "Sync data on this Google Drive was made by a newer version of Pipette. Update Pipette to keep syncing." | Google Drive needs a newer Pipette than the one on this PC (see **When Sync Needs a Newer Pipette** below). Also shown by **Continue** (at **Re-encrypting files on Google Drive** or **Finishing the change**), **Go Back to Old Password**, **Delete** and **Release Lock**; **Abandon** still works |
+
+#### Password Troubleshooting
+
+Start from what you see in the **Data** tab and follow the branch to an action. The messages in the charts are shortened with "…"; the sections above give each one in full.
+
+**When sync doesn't work**
+
+```mermaid
+flowchart LR
+  start["Cloud Sync isn't working, or a password message is shown"] --> what{"What does the Data tab show?"}
+  what -->|"Set a sync password to enable sync"| first{"Do your other PCs already sync?"}
+  first -->|Yes| samepw["Enter the password they use, then Set Password"]
+  first -->|"No, this is the first PC"| newpw["Choose a new password, then Set Password"]
+  what -->|"Sync password does not match…"| known{"Do you know the password your other PCs use?"}
+  known -->|Yes| reenter["Re-enter Password, enter it, then Set Password"]
+  known -->|No| forgot["Forgot the password: see the Q&A below"]
+  what -->|"Another PC is changing the sync password…"| running{"Is a change still running on another PC?"}
+  running -->|Yes| waitother["Wait until it finishes"]
+  running -->|"No, that PC won't finish it"| release["Release Lock"]
+  what -->|"A password change lock left on Google Drive by this PC…"| release
+  what -->|"A sync password change on this PC hasn't finished…"| panel["Use the panel: see the next chart"]
+  what -->|"Cannot change password while sync is in progress."| waitsync["Wait for the sync to finish, then try again"]
+  what -->|"Sync data on this Google Drive was made by a newer version…"| update["Update Pipette"]
+  what -->|"A message about the OS keychain or the saved sync password"| keychain["Unlock the OS keychain, then try again"]
+```
+
+- **Release Lock** shows the warning **"Make sure no other PC is syncing or changing the password."** Use it only when you are sure the PC that took the lock won't finish the change (see **Password change lock** above)
+- **"Sync password does not match. Please check your encryption password."** usually means another PC changed the password. **Re-enter Password** is described under **Re-entering the password after a change on another PC** above
+- For a newer Pipette, see [When Sync Needs a Newer Pipette](#when-sync-needs-a-newer-pipette). For the keychain, see the Q&A below
+
+**When a password change on this PC stopped**
+
+```mermaid
+flowchart LR
+  start["The password change panel is shown on this PC"] --> what{"What does the panel show?"}
+  what -->|"The saved progress of the password change can't be read."| abandon["Abandon"]
+  what -->|"The passwords saved for the password change can't be read…"| keystep{"Current step?"}
+  keystep -->|"Preparing or Cleaning up"| nokeys["Continue (it needs no saved passwords)"]
+  keystep -->|"Another step"| unlock{"Can you unlock the OS keychain?"}
+  unlock -->|Yes| unlocked["Unlock it, then Continue"]
+  unlock -->|No| abandon
+  what -->|"Some files on Google Drive can't be decrypted…"| delete["Delete each listed file, then Continue"]
+  what -->|"Files on Google Drive kept changing…"| closeothers["Close Pipette on your other PCs, then Continue"]
+  what -->|"…its lock on Google Drive was removed…"| relock["Continue (it takes a new lock)"]
+  relock -->|"Another PC is changing the sync password…"| waitother["Wait for that PC to finish"]
+  what -->|"Current step: Preparing"| preparing["Continue (it cancels the change), then Change Password again"]
+  what -->|"Current step: Re-encrypting files on Google Drive"| dir{"Which way is it going?"}
+  dir -->|"Changing to the new sync password hasn't finished…"| keepnew{"End on the new password?"}
+  keepnew -->|Yes| contnew["Continue"]
+  keepnew -->|No| goback["Go Back to Old Password"]
+  dir -->|"Going back to the old sync password hasn't finished…"| keepold{"End on the old password?"}
+  keepold -->|Yes| contold["Continue"]
+  keepold -->|No| switchnew["Switch to New Password Instead"]
+  what -->|"Current step: Finishing the change or Cleaning up"| finish["Continue"]
+```
+
+- **Abandon** (under **Give up the password change**) works in every case, even when the saved passwords or the saved progress can't be read. It leaves the files on Google Drive as they are, so some may stay on the old password — see **If a password change is interrupted** above. It removes this PC's lock only when it can: if removing the lock fails, the lock stays on Google Drive and pauses sync on every PC until it is released (**Release Lock**). At **Preparing** and **Cleaning up**, **Continue** needs no saved passwords and keeps the change until the lock is removed, so prefer it there
+- **Continue** keeps going in the direction the panel shows. While changing to the new password, the other button is **Go Back to Old Password**; while going back, it is **Switch to New Password Instead**. Both are offered only at **Re-encrypting files on Google Drive**. From **Finishing the change** on, finish with **Continue**, then change the password again
+- **Continue** at **Preparing** does not resume: the change never started, so it is removed with **"The password change didn't start. Please change the password again."**
+
+**Q&A**
+
+**Q: I forgot the sync password.**
+
+A: **Change Password** asks only for the new password; it uses the password saved on the PC, not one you type.
+
+- If any PC still syncs with its saved password, run **Change Password** on that PC and choose a new password. Then use **Re-enter Password** with the new password on each of the other PCs
+- If no PC can sync, the password can't be recovered inside Pipette: **Re-enter Password** only saves a password that opens the password check on Google Drive, and **Change Password** needs a saved password that opens it. The way out is to delete Pipette's synced data on Google Drive and start again with a new password. This is done outside Pipette, deletes **all** of Pipette's synced data on Google Drive, and can't be undone. Data saved on each PC is not touched by it. Do it in this order:
+  1. Close Pipette on every PC. While Google Drive has no password check, a running Pipette that syncs creates a new one with the password it has saved. If a PC other than the one you set the new password on does that, the new password won't match it
+  2. In Google Drive on the web, open **Settings** (gear icon) › **Settings** › **Manage apps**, find Pipette, open its **Options** menu and choose **Delete hidden app data**
+  3. Open Pipette on ONE PC and set the new password there. If it shows **Password is set**, use **Change Password**. It works whether or not this PC's own sync has already created a new password check: such a check uses this PC's saved password, which is the one **Change Password** starts from. Otherwise enter the new password and click **Set Password**
+  4. Only after that, open Pipette on the other PCs. On each one, click **Sync** in the **Data** tab of **Settings**: it fails with **"Sync password does not match. Please check your encryption password."** and **Re-enter Password** appears. Use it with the new password. A PC without a saved password just enters the new password and clicks **Set Password**
+
+**Q: I changed the password on one PC. What do I do on the others?**
+
+A: Their saved password no longer matches, but the periodic background check doesn't report that, so their sync can stop without a message. On each of them, click **Sync** in the **Data** tab of **Settings**. It fails with **"Sync password does not match. Please check your encryption password."** and **Re-enter Password** appears; use it and enter the new password. See **Re-entering the password after a change on another PC** above.
+
+**Q: Can I use Pipette on my other PCs while the password is being changed?**
+
+A: Close it, as the form says: **"Close Pipette on your other PCs until the password change finishes."** On a PC that stays open, sync pauses while the lock is on Google Drive. A file it writes back with the old password is picked up by the re-check passes; when that keeps happening, the change stops with **"Files on Google Drive kept changing during the password change. Close Pipette on your other PCs, then continue."**
+
+**Q: The PC crashed, or Pipette was closed, in the middle of a change.**
+
+A: Start Pipette on that PC again. It tries to pick up the change by itself: it tries to remove a change stopped at **Preparing** (then run **Change Password** again), leaves one stopped at **Re-encrypting files on Google Drive** in the panel, and tries to finish one stopped at **Finishing the change** or **Cleaning up**. These attempts can fail — for example, a change at **Finishing the change** stays when the saved passwords can't be read, and a network error leaves the change as it was. If the panel still shows the change, follow the second chart above. See **If a password change is interrupted** above. While the change's lock is on Google Drive, sync stays paused on the other PCs.
+
+**Q: A lock is left on Google Drive and sync stays paused.**
+
+A: If the PC that started the change can still finish it, finish it there with **Continue** or **Abandon**. If it won't come back (for example it broke or Pipette was uninstalled there), use **Release Lock** on another PC. When the banner says **"A password change lock left on Google Drive by this PC is pausing sync on every PC."**, the lock is this PC's own and **Release Lock** on this PC removes it.
+
+**Q: On Linux I get errors about the OS keychain.**
+
+A: Pipette keeps the sync password — and, during a change, both passwords — encrypted with the OS keychain. On Linux that needs a keyring service (for example GNOME Keyring or KWallet) that is running and unlocked.
+
+- **"OS keychain is not available, so the sync password can't be changed here."** or **"OS keychain is not available; sync is disabled here"**: no keychain is available. Set up a keyring, then try again
+- **"Couldn't read the saved sync password"** or **"Couldn't read the saved sync password, so it can't be changed."**: the keychain could not decrypt the saved password — it is locked, or it was reset or the profile moved. Unlock it and try again
+- **"The passwords saved for the password change can't be read. Make sure the OS keychain is unlocked, then try again."**: common right after login. Unlock the keychain, then **Continue**. **Abandon** still works without the keychain
 
 #### Sync Controls
 
@@ -1798,6 +2002,17 @@ If sync cannot run because the client is not ready, a specific readiness reason 
 | `unauthenticated` | "Connect your Google account to enable sync" |
 | `noPasswordFile` | "Set a sync password to enable sync" |
 | `remoteCheckFailed` | "Couldn't reach Google Drive; sync is paused" |
+
+#### When Sync Needs a Newer Pipette
+
+Before syncing, each Pipette puts a small marker on Google Drive that names the sync format it uses. When the sync data on Google Drive was made by a newer version of Pipette than the one on this PC, this PC stops syncing instead of risking damage to that data. Update Pipette on this PC to sync again.
+
+- **What stops**: everything that reads or writes the synced data on Google Drive — automatic sync, **Sync**, **Set Password** and **Re-enter Password**, Cloud Data scans, downloads, resets and deletes, **Pull from Google Drive** in the Language Packs and Theme Packs modals, and the password change actions that write data: **Change Password**, **Go Back to Old Password**, **Delete**, **Continue** at **Re-encrypting files on Google Drive** or **Finishing the change**, and the automatic finish at startup of a change stopped at **Finishing the change**. At **Preparing** and **Cleaning up**, **Continue** and the startup handling still run, since they only remove the lock and this PC's saved files. **Abandon** still works, so an unfinished password change can always be dropped. **Release Lock** is refused: a lock is left for an updated PC to release. **Reset Keyboard Data** still resets this PC's data but skips the Google Drive delete
+- **What keeps working**: keyboard editing and every other feature that does not use Cloud Sync
+- **Sync Status** shows **"Sync data on this Google Drive was made by a newer version of Pipette. Update Pipette to keep syncing."**
+- **Banner**: a banner at the top of the screen (on the device selection screen too) shows **"Cloud Sync needs a newer version of Pipette. Update the app to keep syncing."** **Open Download Page** opens the Pipette releases page on GitHub. Close the banner with its **×** button; it stays closed until Pipette is restarted
+- While the banner applies, the password change lock banner in the Data tab is hidden
+- **When it is checked**: at startup when signed in to Google, after signing in with **Connect**, and whenever a sync stops for this reason. Signing out clears it
 
 #### Sync Unavailable Alert
 
@@ -1927,19 +2142,19 @@ Composite keycodes (LT, MT, modifier+key, …) render the inner key inside an in
 
 Switching the **Keyboard Layout** dropdown in the footer never opens a dialog by itself — it always just changes the display. For a label set marked `keymapApplicable` whose map is a clean, closed QWERTY permutation (Colemak, Dvorak, Eucalyn, …), picking it also reveals two vertical index tabs attached to the right edge of the Keymap Editor:
 
-- **The pack's own name** (top) — a read-only *simulation* of that pack's legends, with the changed keys tinted the **simulated** colour (`key-label-simulated`). Nothing here is clickable: no key selection, no popover, no multi-select, no picker paste — this tab exists purely to preview what a Rewrite would produce
-- **QWERTY (Default)** (bottom) — the real keymap, unaffected by the selected pack, fully editable exactly as before
+- **Default** (top) — the real keymap, unaffected by the selected pack, fully editable exactly as before
+- **The pack's own name** (bottom) — a read-only *simulation* of that pack's legends, with the changed keys tinted the **simulated** colour (`key-label-simulated`). Nothing here is clickable: no key selection, no popover, no multi-select, no picker paste — this tab exists purely to preview what a Rewrite would produce
 
-The simulation tab is selected by default whenever the tabs appear. Switching keyboards resets the selection back to the simulation tab; switching only layers or picking a different pack does not.
+When the keymap is shown — after connecting or after switching keyboards — the **Default** tab is selected, even if the pack was already chosen for that keyboard. Picking a pack in the **Keyboard Layout** dropdown selects the simulation tab so you see the new pack right away, and clears any key selection. Switching layers doesn't change the tab.
 
-![Simulation and Default Tabs](screenshots/key-label-simulation-tabs.png)
+![Default and Simulation Tabs](screenshots/key-label-simulation-tabs.png)
 
 **The layer-indicator row reads "Preview - Layer N" while the simulation tab is active** (e.g. "Preview - Layer 0"), so it stays visually distinct from the plain "Layer N" label the Default tab and every other keymap view use. **Apply lives at the right end of that same row** — an **Apply** button that opens the Rewrite confirmation dialog:
 
 ![Apply Key Label to Keymap](screenshots/key-label-keymap-apply-modal.png)
 
 - **Apply?** — a destructive one-shot: bulk-rewrites every layer's keycodes (and encoders, where applicable) to match the label set, then clears the undo/redo history outright. It is not recorded as an Undo step — there is nothing to revert afterward, on the same undo/redo stack or any other
-- **Cancel** — closes the dialog without changing anything; the simulation/QWERTY (Default) tabs stay exactly as they were
+- **Cancel** — closes the dialog without changing anything; the Default/simulation tabs stay exactly as they were
 
 The dialog also shows a save recommendation: back up the current keymap first, before confirming. Rewrite replaces keycodes on every layer and clears the undo/redo history in the same stroke, so a previously saved backup is the only way back to the pre-Rewrite keymap (see **Limitations** below).
 

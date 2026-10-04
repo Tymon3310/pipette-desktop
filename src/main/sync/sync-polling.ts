@@ -8,7 +8,10 @@ import { isAnalyticsSyncUnit, isRunLogSyncUnit } from './sync-bundle'
 import { runPackGcAfterPass } from './pack-gc'
 import { log } from '../logger'
 import { SYNC_CONCURRENCY, POLL_INTERVAL_MS, syncRuntime, updateRemoteState, emitProgress } from './sync-runtime-state'
-import { requireSyncCredentials, validatePasswordCheck } from './sync-password'
+import { requireSyncCredentials, ensurePasswordCheckValidated } from './sync-password'
+import { localSyncBlock, remoteSyncBlock, emitSyncBlocked } from './sync-password-guard'
+import { ensureSyncFormatMarker, syncFormatGeneration } from './sync-format'
+import type { SyncBlockReason } from '../../shared/types/sync'
 import { listLocalKeyboardUids, shouldDownloadSyncUnit } from './sync-scope'
 import { mergeWithRemote } from './sync-merge-dispatch'
 
@@ -24,15 +27,27 @@ async function pollForRemoteChanges(): Promise<void> {
   syncRuntime.isSyncing = true
 
   try {
+    const localBlock = await localSyncBlock()
+    if (localBlock) {
+      reportBlockedPoll(localBlock)
+      return
+    }
+
     const credentials = await requireSyncCredentials()
     if (!credentials.ok) return  // polling stays silent — manual sync surfaces the reason
     const password = credentials.password
 
+    const formatGeneration = syncFormatGeneration()
     const remoteFiles = await listFiles()
-
-    if (!syncRuntime.passwordCheckValidated) {
-      await validatePasswordCheck(password, remoteFiles)
+    const remoteBlock = remoteSyncBlock(remoteFiles, formatGeneration)
+    if (remoteBlock) {
+      reportBlockedPoll(remoteBlock)
+      return
     }
+    // Merges may upload, so the marker comes first, even on the first poll.
+    await ensureSyncFormatMarker(remoteFiles, formatGeneration)
+
+    await ensurePasswordCheckValidated(password, remoteFiles)
 
     // First poll: just validate password and record remote state
     // Avoids downloading all files on startup
@@ -110,6 +125,13 @@ async function pollForRemoteChanges(): Promise<void> {
   } finally {
     syncRuntime.isSyncing = false
   }
+}
+
+/** Unlike a credential problem, a sync guard block (a password change in
+ *  progress, or Drive needing a newer app) is shown: it is the only sign on
+ *  this machine that syncing has stopped. */
+function reportBlockedPoll(reason: SyncBlockReason): void {
+  emitSyncBlocked('download', reason)
 }
 
 export function startPolling(): void {

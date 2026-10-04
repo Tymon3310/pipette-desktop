@@ -11,13 +11,17 @@ import { log } from '../logger'
 import {
   SYNC_CONCURRENCY,
   DEBOUNCE_MS,
+  POLL_INTERVAL_MS,
   syncRuntime,
   emitProgress,
   errorMessage,
   updateRemoteState,
   broadcastPendingStatus,
 } from './sync-runtime-state'
-import { requireSyncCredentials, validatePasswordCheck, PasswordMismatchError } from './sync-password'
+import { requireSyncCredentials, ensurePasswordCheckValidated, PasswordMismatchError } from './sync-password'
+import { localSyncBlock, remoteSyncBlock, emitSyncBlocked } from './sync-password-guard'
+import { ensureSyncFormatMarker, syncFormatGeneration } from './sync-format'
+import type { SyncBlockReason } from '../../shared/types/sync'
 import { syncOrUpload } from './sync-merge-dispatch'
 import { stopPolling } from './sync-polling'
 
@@ -40,14 +44,13 @@ export async function flushPendingChanges(): Promise<void> {
   if (syncRuntime.pendingChanges.size === 0) return
 
   if (syncRuntime.isSyncing) {
-    syncRuntime.debounceTimer = setTimeout(() => {
-      void flushPendingChanges()
-    }, DEBOUNCE_MS)
+    scheduleFlush(DEBOUNCE_MS)
     return
   }
 
   syncRuntime.isSyncing = true
 
+  if (syncRuntime.debounceTimer) clearTimeout(syncRuntime.debounceTimer)
   syncRuntime.debounceTimer = null
 
   try {
@@ -55,6 +58,14 @@ export async function flushPendingChanges(): Promise<void> {
     if (!config.autoSync) {
       syncRuntime.pendingChanges.clear()
       broadcastPendingStatus()
+      return
+    }
+
+    // Both block checks run before the pending set is taken below, so a
+    // blocked flush keeps every pending change for a later pass.
+    const localBlock = await localSyncBlock()
+    if (localBlock) {
+      reportBlockedFlush(localBlock)
       return
     }
 
@@ -66,28 +77,39 @@ export async function flushPendingChanges(): Promise<void> {
     }
     const password = credentials.password
 
-    const changes = new Set(syncRuntime.pendingChanges)
-    syncRuntime.pendingChanges.clear()
-
     emitProgress({ direction: 'upload', status: 'syncing', message: 'Auto-sync starting...' })
 
+    const formatGeneration = syncFormatGeneration()
     const remoteFiles = await listFiles()
+    const remoteBlock = remoteSyncBlock(remoteFiles, formatGeneration)
+    if (remoteBlock) {
+      reportBlockedFlush(remoteBlock)
+      return
+    }
     updateRemoteState(remoteFiles)
 
-    if (!syncRuntime.passwordCheckValidated) {
-      try {
-        await validatePasswordCheck(password, remoteFiles)
-      } catch (err) {
-        for (const unit of changes) syncRuntime.pendingChanges.add(unit)
-        broadcastPendingStatus()
-        if (err instanceof PasswordMismatchError) {
-          emitProgress({ direction: 'upload', status: 'error', message: 'sync.passwordMismatch' })
-        } else {
-          emitProgress({ direction: 'upload', status: 'error', message: errorMessage(err, 'Password check failed') })
-        }
-        return
-      }
+    // Before the pending set is taken, so a failed create keeps every
+    // pending change for the next flush.
+    try {
+      await ensureSyncFormatMarker(remoteFiles, formatGeneration)
+    } catch (err) {
+      emitProgress({ direction: 'upload', status: 'error', message: errorMessage(err, 'Sync failed') })
+      return
     }
+
+    try {
+      await ensurePasswordCheckValidated(password, remoteFiles)
+    } catch (err) {
+      if (err instanceof PasswordMismatchError) {
+        emitProgress({ direction: 'upload', status: 'error', message: 'sync.passwordMismatch' })
+      } else {
+        emitProgress({ direction: 'upload', status: 'error', message: errorMessage(err, 'Password check failed') })
+      }
+      return
+    }
+
+    const changes = new Set(syncRuntime.pendingChanges)
+    syncRuntime.pendingChanges.clear()
 
     const limit = pLimit(SYNC_CONCURRENCY)
     await Promise.allSettled(
@@ -117,6 +139,24 @@ export async function flushPendingChanges(): Promise<void> {
   } finally {
     syncRuntime.isSyncing = false
   }
+}
+
+/** Reports a flush stopped by the sync guard (a password change, or Drive
+ *  needing a newer app) and tries again after a polling interval (not
+ *  while quitting); the pending changes stay. */
+function reportBlockedFlush(reason: SyncBlockReason): void {
+  emitSyncBlocked('upload', reason)
+  if (syncRuntime.isQuitting) return
+  scheduleFlush(POLL_INTERVAL_MS)
+}
+
+/** Replaces any pending flush timer (e.g. one a notifyChange set while
+ *  this flush was running), so at most one is ever scheduled. */
+function scheduleFlush(delayMs: number): void {
+  if (syncRuntime.debounceTimer) clearTimeout(syncRuntime.debounceTimer)
+  syncRuntime.debounceTimer = setTimeout(() => {
+    void flushPendingChanges()
+  }, delayMs)
 }
 
 // --- Before-quit handler ---
@@ -156,7 +196,8 @@ export function setupBeforeQuitHandler(): void {
     const syncPending = syncRuntime.pendingChanges.size > 0 || syncRuntime.debounceTimer !== null
     const preSync = preSyncFinalizers.filter((f) => f.hasWork())
     const extras = extraFinalizers.filter((f) => f.hasWork())
-    if (!syncPending && preSync.length === 0 && extras.length === 0) return
+    const passwordChangeRun = syncRuntime.passwordChangeRun
+    if (!syncPending && preSync.length === 0 && extras.length === 0 && !passwordChangeRun) return
 
     e.preventDefault()
     syncRuntime.isQuitting = true
@@ -167,6 +208,14 @@ export function setupBeforeQuitHandler(): void {
     }
 
     const runQuitPhases = async (): Promise<void> => {
+      // Phase 0: a running password switch sees `isQuitting` at its next
+      // chunk boundary, stops, and keeps its state for the next launch.
+      if (passwordChangeRun) {
+        await passwordChangeRun.catch((err: unknown) => {
+          log('error', `password change failed while quitting: ${String(err)}`)
+        })
+      }
+
       // Phase 1: pre-sync finalizers. They may call notifyChange() to
       // enqueue additional sync units; those land in pendingChanges before
       // the sync flush starts.

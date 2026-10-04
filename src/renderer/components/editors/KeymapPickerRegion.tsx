@@ -11,6 +11,7 @@ import { ICON_MD } from '../../constants/ui-tokens'
 import type { KeymapEditorProps } from './keymap-editor-types'
 import type { Keycode } from '../../../shared/keycodes/keycodes'
 import type { parseLayoutLabels } from '../../../shared/layout-options'
+import type { TabContentOverride } from '../keycodes/tabbed-keycodes-model'
 
 /** `KeymapEditorProps` covers every plain pass-through field below
  *  (layers/currentLayer/onLayerChange/layerNames/onSetLayerName for
@@ -41,7 +42,7 @@ export interface KeymapPickerRegionProps extends KeymapEditorProps {
   isMaskKey: boolean
   isLMMask: boolean
   tabFooterContent: Record<string, React.ReactNode>
-  tabContentOverride: Record<string, React.ReactNode> | undefined
+  tabContentOverride: TabContentOverride | undefined
   layoutButtonRef: RefObject<HTMLButtonElement | null>
   layoutPanelOpen: boolean
   setLayoutPanelOpen: (updater: (prev: boolean) => boolean) => void
@@ -79,6 +80,7 @@ export function KeymapPickerRegion(props: KeymapPickerRegionProps): JSX.Element 
     hasLayoutOptions, parsedLayoutOptions, layoutValues, handleLayoutOptionChange,
     autoAdvance, onAutoAdvanceChange, viewMatrixActive, onToggleViewMatrixMode,
     viewMatrixWires, onViewMatrixWiresChange, layerHoverPreview, onLayerHoverPreviewChange,
+    entryHoverPreview, onEntryHoverPreviewChange,
     quickSelect, onQuickSelectChange, matrixMode, hasMatrixTester, handleMatrixToggle,
     unlocked, onLock, onUnlock, onTypingRecordDisarm, unlockStatusKnown, typingRecordEnabled, isDummy, toolsExtra, dataPanel, keyEditorZoom, onKeyEditorZoomChange,
     onExportLayoutPdfAll, onExportLayoutPdfCurrent,
@@ -106,6 +108,7 @@ export function KeymapPickerRegion(props: KeymapPickerRegionProps): JSX.Element 
         highlightedKeycodes={configuredKeycodes} maskOnly={isMaskKey} lmMode={isLMMask} showHint={!isMaskKey}
         tabFooterContent={tabFooterContent} tabContentOverride={tabContentOverride}
         basicViewType={basicViewType} onBasicViewTypeChange={onBasicViewTypeChange} splitKeyMode={splitKeyMode} remapLabel={pickerRemapLabel}
+        tabReorder
         tabBarRight={
           <Tooltip content={t('editorSettings.title')}>
             <button ref={layoutButtonRef} type="button" aria-label={t('editorSettings.title')}
@@ -128,6 +131,7 @@ export function KeymapPickerRegion(props: KeymapPickerRegionProps): JSX.Element 
               viewMatrixActive={viewMatrixActive} onToggleViewMatrixMode={onToggleViewMatrixMode}
               viewMatrixWires={viewMatrixWires} onViewMatrixWiresChange={onViewMatrixWiresChange}
               layerHoverPreview={layerHoverPreview !== false} onLayerHoverPreviewChange={onLayerHoverPreviewChange}
+              entryHoverPreview={entryHoverPreview !== false} onEntryHoverPreviewChange={onEntryHoverPreviewChange}
               splitKeyMode={splitKeyMode} onSplitKeyModeChange={onSplitKeyModeChange}
               quickSelect={quickSelect} onQuickSelectChange={onQuickSelectChange}
               matrixMode={matrixMode} hasMatrixTester={hasMatrixTester} onToggleMatrix={viewMatrixActive ? undefined : handleMatrixToggle}

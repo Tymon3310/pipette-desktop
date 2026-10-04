@@ -8,11 +8,10 @@ import type { BasicViewType } from '../../../shared/types/app-config'
 import { useAppConfig } from '../../hooks/useAppConfig'
 import { KEYCODE_CATEGORIES, groupByLayoutRow, type KeycodeCategory, type KeycodeGroup } from './categories'
 import { getLayoutsForViewType } from './display-keyboard-defs'
-import { X } from 'lucide-react'
-import { ICON_MD } from '../../constants/ui-tokens'
 import { UpwardSelect } from '../UpwardSelect'
 import { KeycodeGrid } from './KeycodeGrid'
 import { BasicKeyboardView } from './BasicKeyboardView'
+import { KeycodeTabBar } from './KeycodeTabBar'
 import { isShiftedKeycode } from './SplitKey'
 import { BUBBLE_BASE, computeBubblePosition } from '../ui/Tooltip'
 import { useSharedHoverBubble } from '../../hooks/use-shared-hover-bubble'
@@ -41,6 +40,7 @@ export function TabbedKeycodes({
   onBasicViewTypeChange,
   splitKeyMode,
   remapLabel,
+  tabReorder = false,
 }: TabbedKeycodesProps) {
   const { t } = useTranslation()
   const { config } = useAppConfig()
@@ -228,11 +228,15 @@ export function TabbedKeycodes({
     return { activeTabKeycodes: keycodes, keycodeIndexMap: indexMap }
   }, [categories, effectiveTab, isVisible, revision, resolvedBasicViewType, maskOnly, lmMode, useSplit])
 
-  // Clear any open tooltip whenever the rendered tab changes, whether from a
-  // user click or an automatic fallback/restore driven by effectiveTab.
+  // Clear any open tooltip and the tile tabs' entry bubble (pending or
+  // shown) whenever the rendered tab changes, whether from a user click or an
+  // automatic fallback/restore driven by effectiveTab. `hideBubble` is stable,
+  // so an edit to the entries never closes the bubble here.
+  const hideEntryBubble = tabContentOverride?.hideBubble
   useEffect(() => {
     hideTooltip()
-  }, [effectiveTab, hideTooltip])
+    hideEntryBubble?.()
+  }, [effectiveTab, hideTooltip, hideEntryBubble])
 
   const selectTab = useCallback(
     (id: string) => {
@@ -249,10 +253,6 @@ export function TabbedKeycodes({
     },
     [showTooltip],
   )
-
-  const handleKeycodeHoverEnd = useCallback(() => {
-    hideTooltip()
-  }, [hideTooltip])
 
   const activeTabKeycodeNumbers = useMemo(
     () => activeTabKeycodes.map((kc) => deserialize(kc.qmkId)),
@@ -282,7 +282,7 @@ export function TabbedKeycodes({
         onClick={handleKeycodeClick}
         onDoubleClick={guardedDoubleClick}
         onHover={handleKeycodeHover}
-        onHoverEnd={handleKeycodeHoverEnd}
+        onHoverEnd={hideTooltip}
         highlightedKeycodes={highlightedKeycodes}
         pickerSelectedIndices={isActive ? pickerSelectedIndices : undefined}
         isVisible={isVisible}
@@ -325,7 +325,7 @@ export function TabbedKeycodes({
           onKeycodeClick={handleKeycodeClick}
           onKeycodeDoubleClick={guardedDoubleClick}
           onKeycodeHover={handleKeycodeHover}
-          onKeycodeHoverEnd={handleKeycodeHoverEnd}
+          onKeycodeHoverEnd={hideTooltip}
           highlightedKeycodes={highlightedKeycodes}
           pickerSelectedIndices={isActive ? pickerSelectedIndices : undefined}
           isVisible={isVisible}
@@ -335,7 +335,7 @@ export function TabbedKeycodes({
       )
     }
 
-    const override = tabContentOverride && Object.hasOwn(tabContentOverride, category.id) ? tabContentOverride[category.id] : null
+    const override = tabContentOverride && Object.hasOwn(tabContentOverride.tabs, category.id) ? tabContentOverride.tabs[category.id] : null
     const groups = category.getGroups?.()?.filter((g) => g.keycodes.some(isVisible))
 
     // Override only — no groups to show below
@@ -369,55 +369,15 @@ export function TabbedKeycodes({
       data-testid="tabbed-keycodes-root"
       onClick={handleBackgroundClick}
     >
-      {/* Tab bar */}
-      <div className="flex border-b border-edge-subtle px-3 pt-1">
-        <div className="flex gap-0.5 overflow-x-auto">
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              className={`whitespace-nowrap px-3 py-1.5 text-xs transition-colors border-b-2 ${
-                effectiveTab === cat.id
-                  ? 'border-b-accent text-accent font-semibold'
-                  : 'border-b-transparent text-content-secondary hover:text-content'
-              }`}
-              onClick={() => selectTab(cat.id)}
-            >
-              {t(cat.labelKey)}
-            </button>
-          ))}
-          {keyboardPickerContent && !maskOnly && (
-            <button
-              key="keyboard"
-              type="button"
-              className={`whitespace-nowrap px-3 py-1.5 text-xs transition-colors border-b-2 ${
-                effectiveTab === 'keyboard'
-                  ? 'border-b-accent text-accent font-semibold'
-                  : 'border-b-transparent text-content-secondary hover:text-content'
-              }`}
-              onClick={() => selectTab('keyboard')}
-            >
-              {t('editor.keymap.keyboardTab')}
-            </button>
-          )}
-        </div>
-        {(tabBarRight || onClose) && (
-          <div className="ml-auto flex shrink-0 items-center gap-2 border-b-2 border-b-transparent py-1.5">
-            {tabBarRight}
-            {onClose && (
-              <button
-                type="button"
-                data-testid="tabbed-keycodes-close"
-                className="rounded p-1 text-content-secondary hover:bg-surface-dim hover:text-content"
-                onClick={onClose}
-                aria-label={t('common.close')}
-              >
-                <X size={ICON_MD} aria-hidden="true" />
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      <KeycodeTabBar
+        categories={categories}
+        effectiveTab={effectiveTab}
+        selectTab={selectTab}
+        keyboardTabAvailable={keyboardTabAvailable}
+        tabBarRight={tabBarRight}
+        onClose={onClose}
+        reorderable={tabReorder}
+      />
 
       {/* Content area below tab bar — relative container for panel overlay */}
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -493,6 +453,7 @@ export function TabbedKeycodes({
           )}
         </div>
       )}
+      {tabContentOverride?.bubble}
     </div>
   )
 }

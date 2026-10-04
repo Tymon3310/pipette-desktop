@@ -8,7 +8,7 @@
 
 import { IpcChannels } from '../../shared/ipc/channels'
 import { broadcastToAllWindows } from '../utils/broadcast'
-import type { DriveFile } from './google-drive'
+import type { DriveFile, UploadedFile } from './google-drive'
 import type { SyncProgress } from '../../shared/types/sync'
 
 export const SYNC_CONCURRENCY = 10
@@ -29,8 +29,53 @@ export const syncRuntime = {
   progressCallback: null as ProgressCallback | null,
   isQuitting: false,
   isSyncing: false,
-  passwordCheckValidated: false,
+  /** Drive id and `modifiedTime` of the password-check this machine last
+   *  opened with its stored password; null when none has been validated
+   *  since the cache was reset. A listing whose chosen password-check
+   *  differs in either (e.g. another PC changed the password) is validated
+   *  again. */
+  validatedPasswordCheck: null as UploadedFile | null,
+  /** The password-check this process created and when
+   *  (`passwordCheckTiming.now()` ms), until a listing shows a
+   *  password-check or `passwordCheckTiming.createdMemoryMs` passes. Drive
+   *  listings lag behind a create, so a pass that lists too early opens
+   *  this file by id instead of creating a second one. */
+  passwordCheckCreated: null as { file: UploadedFile; at: number } | null,
+  /** The password-check creation in flight, shared so passes that see it
+   *  missing at the same time create it once. */
+  passwordCheckCreating: null as Promise<UploadedFile> | null,
+  /** When (`syncFormatTiming.now()` ms) this process created its own
+   *  sync-format marker, until a listing shows it or
+   *  `syncFormatTiming.createdMemoryMs` passes (sync-format.ts). */
+  syncFormatMarkerCreatedAt: null as number | null,
+  /** When a listing last showed our own sync-format marker. */
+  syncFormatMarkerSeenAt: null as number | null,
+  /** The marker creation in flight, shared so passes that see it missing
+   *  at the same time create it once. */
+  syncFormatMarkerCreating: null as Promise<void> | null,
+  /** Bumped by `forgetCreatedSyncFormatMarker` (sign-out). A create or
+   *  listing that started under an older generation belongs to the previous
+   *  account, so its completion records nothing. */
+  syncFormatMarkerGeneration: 0,
   lastKnownRemoteState: new Map<string, string>(), // fileName -> modifiedTime
+  /** Files the last re-encryption pass could open with neither the old nor
+   *  the new password; null when that pass found none. Kept in memory
+   *  only — a resume after a restart finds them again. */
+  passwordChangeUndecryptable: null as Array<{ id: string; name: string }> | null,
+  /** Set when a password change stopped because this machine no longer
+   *  holds its Drive lock (e.g. another PC released it); cleared once the
+   *  lock is held again or the change ends. */
+  passwordChangeLockLost: false,
+  /** Settles (never rejects) when the running password-change operation
+   *  has finished; null when none is running. The before-quit handler
+   *  waits on it. */
+  passwordChangeRun: null as Promise<void> | null,
+  /** Keyboards with an analytics sync running (sync-analytics.ts). A
+   *  per-uid mutex rather than `isSyncing`: switching keyboards while the
+   *  previous sync runs doesn't skip the new uid, and `uid-a` and `uid-b`
+   *  can proceed in parallel since their cloud file namespaces
+   *  (`keyboards/{uid}/devices/*`) are disjoint. */
+  analyticsSyncingUids: new Set<string>(),
 }
 
 export function hasPendingChanges(): boolean {

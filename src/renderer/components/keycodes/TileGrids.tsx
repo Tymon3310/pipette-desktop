@@ -5,6 +5,12 @@ import { useTranslation } from 'react-i18next'
 import type { TapDanceEntry, ComboEntry, KeyOverrideEntry, AltRepeatKeyEntry } from '../../../shared/types/protocol'
 import { codeToLabel, findKeycode, type Keycode } from '../../../shared/keycodes/keycodes'
 import type { MacroAction } from '../../../preload/macro'
+import { MACRO_PREFIX, macroActionLabel } from './macro-action-format'
+import {
+  isAltRepeatKeyConfigured, isComboConfigured, isKeyOverrideConfigured, isMacroConfigured, isTapDanceConfigured,
+  type HoverEntryKind,
+} from './hover-entry'
+import type { TileHoverHandlers } from './tile-entry-hover'
 
 const MAX_VISIBLE_MACRO_ACTIONS = 6
 const GRID_COLUMNS = 12
@@ -35,6 +41,8 @@ interface SettingsTileGridProps<T> {
   isEnabled?: (entry: T) => boolean
   onOpen: (index: number) => void
   testIdPrefix: string
+  entryKind: HoverEntryKind
+  hover?: TileHoverHandlers
 }
 
 function tileStyle(configured: boolean, enabled?: boolean): string {
@@ -43,7 +51,7 @@ function tileStyle(configured: boolean, enabled?: boolean): string {
   return TILE_ENABLED
 }
 
-function SettingsTileGrid<T>({ entries, fields, isConfigured, isEnabled, onOpen, testIdPrefix }: SettingsTileGridProps<T>) {
+function SettingsTileGrid<T>({ entries, fields, isConfigured, isEnabled, onOpen, testIdPrefix, entryKind, hover }: SettingsTileGridProps<T>) {
   const { t } = useTranslation()
   return (
     <div>
@@ -57,8 +65,11 @@ function SettingsTileGrid<T>({ entries, fields, isConfigured, isEnabled, onOpen,
               type="button"
               data-testid={`${testIdPrefix}-tile-${i}`}
               data-configured={configured || undefined}
+              data-entry-kind={entryKind}
+              data-entry-index={i}
               className={`${TILE_BASE} ${tileStyle(configured, enabled)}`}
               onClick={() => onOpen(i)}
+              {...hover}
             >
               <span className={TILE_INDEX_LABEL}>{i}</span>
               {configured ? (
@@ -109,35 +120,22 @@ const TD_FIELDS = [
   { key: 'onTapHold', prefix: 'TH' },
 ] as const
 
-const MACRO_PREFIX: Record<MacroAction['type'], string> = {
-  tap: 'T',
-  down: 'D',
-  up: 'U',
-  text: 'Tx',
-  delay: 'W',
-}
-
-function macroActionLabel(action: MacroAction): string {
-  switch (action.type) {
-    case 'text': return action.text
-    case 'delay': return `${action.delay}ms`
-    default: return action.keycodes.map(codeToLabel).join(' ')
-  }
-}
-
 interface TdTileGridProps {
   entries: TapDanceEntry[]
   onSelect: (keycode: Keycode) => void
   /** Double-click / Enter commit. When omitted, only onSelect runs on click. */
   onDoubleClick?: (keycode: Keycode) => void
+  /** The picker's shared entry hover handlers (`tile-entry-hover.tsx`);
+   *  omitted while the hover is off. */
+  hover?: TileHoverHandlers
 }
 
-export function TdTileGrid({ entries, onSelect, onDoubleClick }: TdTileGridProps) {
+export function TdTileGrid({ entries, onSelect, onDoubleClick, hover }: TdTileGridProps) {
   const { t } = useTranslation()
   return (
     <div className="grid grid-cols-12 auto-rows-fr gap-1">
       {entries.map((entry, i) => {
-        const configured = entry.onTap !== 0 || entry.onHold !== 0 || entry.onDoubleTap !== 0 || entry.onTapHold !== 0
+        const configured = isTapDanceConfigured(entry)
         const kc = findKeycode(`TD(${i})`)
         const select = kc ? () => onSelect(kc) : undefined
         const commit = kc && onDoubleClick ? () => onDoubleClick(kc) : undefined
@@ -147,9 +145,12 @@ export function TdTileGrid({ entries, onSelect, onDoubleClick }: TdTileGridProps
             type="button"
             data-testid={`td-tile-${i}`}
             data-configured={configured || undefined}
+            data-entry-kind="tapDance"
+            data-entry-index={i}
             className={`${TILE_BASE} ${configured ? TILE_ENABLED : TILE_EMPTY}`}
             onClick={select}
             onDoubleClick={commit}
+            {...hover}
           >
             <span className={TILE_INDEX_LABEL}>TD({i})</span>
             {configured ? (
@@ -178,6 +179,9 @@ interface MacroTileGridProps {
   onSelect: (keycode: Keycode) => void
   /** Double-click / Enter commit. When omitted, only onSelect runs on click. */
   onDoubleClick?: (keycode: Keycode) => void
+  /** The picker's shared entry hover handlers (`tile-entry-hover.tsx`);
+   *  omitted while the hover is off. */
+  hover?: TileHoverHandlers
 }
 
 function useMacroFitLines(gridRef: React.RefObject<HTMLDivElement | null>): number {
@@ -203,14 +207,14 @@ function useMacroFitLines(gridRef: React.RefObject<HTMLDivElement | null>): numb
   return fitLines
 }
 
-export function MacroTileGrid({ macros, onSelect, onDoubleClick }: MacroTileGridProps) {
+export function MacroTileGrid({ macros, onSelect, onDoubleClick, hover }: MacroTileGridProps) {
   const { t } = useTranslation()
   const gridRef = useRef<HTMLDivElement>(null)
   const fitLines = useMacroFitLines(gridRef)
   return (
     <div ref={gridRef} className="grid grid-cols-12 auto-rows-fr gap-1">
       {macros.map((actions, i) => {
-        const configured = actions.length > 0
+        const configured = isMacroConfigured(actions)
         const visible = actions.length <= fitLines ? actions : actions.slice(0, fitLines - 1)
         const hidden = actions.length - visible.length
         const kc = findKeycode(`M${i}`)
@@ -222,9 +226,12 @@ export function MacroTileGrid({ macros, onSelect, onDoubleClick }: MacroTileGrid
             type="button"
             data-testid={`macro-tile-${i}`}
             data-configured={configured || undefined}
+            data-entry-kind="macro"
+            data-entry-index={i}
             className={`${TILE_BASE} ${configured ? TILE_ENABLED : TILE_EMPTY}`}
             onClick={select}
             onDoubleClick={commit}
+            {...hover}
           >
             <span className={TILE_INDEX_LABEL}>M{i}</span>
             {configured ? (
@@ -251,14 +258,23 @@ export function MacroTileGrid({ macros, onSelect, onDoubleClick }: MacroTileGrid
   )
 }
 
-export function ComboTileGrid({ entries, onOpenCombo }: { entries: ComboEntry[]; onOpenCombo: (index: number) => void }) {
-  return <SettingsTileGrid entries={entries} fields={COMBO_FIELDS} isConfigured={(e) => e.key1 !== 0 || e.key2 !== 0} onOpen={onOpenCombo} testIdPrefix="combo" />
+/** Props shared by the Combo / Key Override / Alt Repeat Key grids. */
+interface SettingsGridProps<T> {
+  entries: T[]
+  onOpen: (index: number) => void
+  /** The picker's shared entry hover handlers (`tile-entry-hover.tsx`);
+   *  omitted while the hover is off. */
+  hover?: TileHoverHandlers
 }
 
-export function KeyOverrideTileGrid({ entries, onOpen }: { entries: KeyOverrideEntry[]; onOpen: (index: number) => void }) {
-  return <SettingsTileGrid entries={entries} fields={KEY_OVERRIDE_FIELDS} isConfigured={(e) => e.enabled || e.triggerKey !== 0 || e.replacementKey !== 0} isEnabled={(e) => e.enabled} onOpen={onOpen} testIdPrefix="ko" />
+export function ComboTileGrid({ entries, onOpen, hover }: SettingsGridProps<ComboEntry>) {
+  return <SettingsTileGrid entries={entries} fields={COMBO_FIELDS} isConfigured={isComboConfigured} onOpen={onOpen} testIdPrefix="combo" entryKind="combo" hover={hover} />
 }
 
-export function AltRepeatKeyTileGrid({ entries, onOpen }: { entries: AltRepeatKeyEntry[]; onOpen: (index: number) => void }) {
-  return <SettingsTileGrid entries={entries} fields={ALT_REPEAT_KEY_FIELDS} isConfigured={(e) => e.enabled || e.lastKey !== 0 || e.altKey !== 0} isEnabled={(e) => e.enabled} onOpen={onOpen} testIdPrefix="arep" />
+export function KeyOverrideTileGrid({ entries, onOpen, hover }: SettingsGridProps<KeyOverrideEntry>) {
+  return <SettingsTileGrid entries={entries} fields={KEY_OVERRIDE_FIELDS} isConfigured={isKeyOverrideConfigured} isEnabled={(e) => e.enabled} onOpen={onOpen} testIdPrefix="ko" entryKind="keyOverride" hover={hover} />
+}
+
+export function AltRepeatKeyTileGrid({ entries, onOpen, hover }: SettingsGridProps<AltRepeatKeyEntry>) {
+  return <SettingsTileGrid entries={entries} fields={ALT_REPEAT_KEY_FIELDS} isConfigured={isAltRepeatKeyConfigured} isEnabled={(e) => e.enabled} onOpen={onOpen} testIdPrefix="arep" entryKind="altRepeatKey" hover={hover} />
 }

@@ -1,5 +1,5 @@
 {
-  "version": "0.1.98",
+  "version": "0.1.108",
   "name": "Japanese - ギャル",
   "common": {
     "save": "保存☆",
@@ -124,6 +124,12 @@
       "pickerHint": "Ctrl+クリックで複数、Shift+クリックで範囲選択っしょ☆からのキーをクリックでペースト！",
       "pickerDoubleClickHint": "もう一回ダブルクリックするかEnterで閉じるよん☆",
       "keyboardTab": "Keyboard",
+      "tabReorder": {
+        "hint": "ドラッグか←/→で並び替えっしょ☆ Enterで完了！",
+        "moved": "{{name}}を{{total}}コ中{{position}}番目に移動したよん☆",
+        "resetLabel": "タブの並び、最初に戻すよ☆",
+        "resetDone": "タブの並び、最初に戻したよ☆"
+      },
       "pickerSourceCurrent": "なう",
       "pickerSourceFile": "ファイル",
       "pickerLoadFile": ".pipetteから読み込みっしょ…",
@@ -659,6 +665,11 @@
         "missedBarMovedOnLine": "直さず次いっちゃったの: {{count}}こ",
         "missedBarNoDetail": "この記録、打鍵ごとの詳細ないみたい"
       }
+    },
+    "hoverDetails": {
+      "none": "なしっしょ",
+      "on": "オン☆",
+      "off": "オフ〜"
     }
   },
   "error": {
@@ -864,7 +875,6 @@
     "changingPassword": "パスワード変更ちう…",
     "settingPassword": "パスワード設定ちう☆",
     "samePassword": "前と同じじゃん！変えてよｗ",
-    "changePasswordUndecryptable": "開けないファイルあるから先に消してきて☆",
     "autoSync": "自動同期っしょ",
     "enable": "おけ！",
     "disable": "停止☆",
@@ -882,9 +892,55 @@
     "continueOffline": "オフラインでいくっしょ！",
     "noSyncYet": "まだ同期してないじゃん",
     "changePasswordError": {
-      "unauthenticated": "Google入ってからにして☆"
+      "unauthenticated": "Google入ってからにして☆",
+      "noPasswordFile": "このPCに同期パスワードないよｗ 変更じゃなくて決めてよ☆",
+      "decryptFailed": "保存したパスワード読めないから変えらんないんですけどｗ",
+      "keystoreUnavailable": "OSのキーチェーン使えなくて、ここじゃパスワード変えらんないっぽい…",
+      "remoteCheckFailed": "Google Driveにつながんない…あとでもっかい変えてみて！"
     },
     "changePasswordInProgress": "同期してるから後にしてｗ",
+    "passwordChange": {
+      "alreadyInProgress": "このPCでパスワード変更まだ途中だよ☆ 先に続けるか、前のパスワードに戻してね！",
+      "notInProgress": "今パスワード変更してないよｗ",
+      "invalidState": "パスワード変更の進み具合が読めないんだけど…",
+      "keysUnavailable": "パスワード変更用にとっといたパスワードが読めない…OSのキーチェーン使えるか見てからもう一回やって！",
+      "wrongStep": "パスワード変更の今の段階じゃそれムリ～",
+      "notStarted": "パスワード変更始まってなかったよ☆ もう一回変えてみて！",
+      "locked": "別のPCで同期パスワード変えてる途中だよ！終わってからもう一回やって☆",
+      "lost": "別のPCも同時にパスワード変え始めちゃった！終わってからもう一回ね☆",
+      "lockLost": "Google Drive のロック消されちゃったから（別のPCかも）、パスワード変更ストップしたよ！",
+      "interrupted": "パスワード変更途中で止まっちゃった！あとで続きできるよ☆",
+      "undecryptable": "前のパスワードでも新しいパスワードでも開けないファイルが Google Drive にあるよ！消してから続けて☆",
+      "notConverged": "パスワード変えてる間に Google Drive のファイルがずっと変わってたよ！ほかのPCの Pipette 閉じてから続けて☆",
+      "blockedByOtherDevice": "別のPCで同期パスワード変えてる途中だから、終わるまでこっちの同期はお休みだよ☆",
+      "blockedLocal": "このPCのパスワード変更がまだ終わってないから、同期止めてるよ！先に続けるか、前のパスワードに戻すか、やめちゃってね☆",
+      "closeOtherPcs": "パスワード変え終わるまで、ほかのPCの Pipette は閉じといてね☆",
+      "working": "パスワード変更がんばってるとこ…",
+      "toNew": "新しいパスワードへの変更まだ終わってないよ！このPCの同期はお休み中☆",
+      "toOld": "前のパスワードに戻すのまだ終わってないよ！このPCの同期はお休み中☆",
+      "stepLabel": "今ここ: {{step}}",
+      "step": {
+        "locking": "準備中☆",
+        "reencrypting": "Google Drive のファイル暗号化し直し中☆",
+        "committing": "変更キメてるとこ☆",
+        "cleanup": "お片付け中☆"
+      },
+      "resume": "続ける☆",
+      "revertToOld": "前のパスワードに戻す",
+      "revertToNew": "やっぱ新しいパスワードにする☆",
+      "abandonLabel": "パスワード変えるのやめる",
+      "abandon": "やめる",
+      "confirmAbandon": "ほんとにやめる？",
+      "abandonWarning": "Google Drive のファイル、前のと新しいパスワードがごちゃ混ぜのまま残るかも！開けないやつは データ☆ › Sync › クラウドデータ☆ で消してね☆",
+      "deleteSkipped": "どっちかのパスワードで開けるから、消さないでおいたよ☆",
+      "releaseBusy": "このPCで同期中だよ！ちょっと待ってからもう一回やって☆",
+      "ownLockLeft": "このPCが Google Drive に置きっぱのロックのせいで、全部のPCの同期止まってるよ！",
+      "lockStartedAt": "始めた時間: {{time}}",
+      "releaseLockLabel": "Google Drive のパスワード変更ロック",
+      "releaseLock": "ロック外す☆",
+      "confirmRelease": "外しちゃっていい？",
+      "releaseWarning": "ほかのPCで同期とかパスワード変更とか動いてないか、ちゃんと見てね！"
+    },
     "import": "インポート",
     "export": "エクスポート",
     "importComplete": "インポート完了っしょ！",
@@ -896,6 +952,14 @@
     "undecryptableCount": "{{count}} 件開けないやつあるｗ",
     "checkingRemotePassword": "同期チェックなう☆",
     "existingPasswordHint": "もう設定されてるよん！使ってたパスワード入れてね♡",
+    "reenterPasswordWarning": "このPCのパスワード、Google Driveとズレてるっぽい！他のPCで使ってるパスワード入れてね♡",
+    "reenterPassword": "パスワード入れ直す☆",
+    "reenterPasswordNoRemote": "Google Driveにまだ比べるパスワード無いよ～！フォーム閉じて今のパスワードで同期してね♡",
+    "updateRequired": "このGoogle Driveの同期データ、新しいPipetteで作られてるっぽい！同期続けたいならアプデしてね☆",
+    "updateBanner": {
+      "message": "Cloud Sync、新しいPipetteじゃないとダメっぽい！同期続けたいならアプリをアプデしてね☆",
+      "openDownloadPage": "ダウンロードページ開く☆"
+    },
     "unavailable": "ネットヤバくね？同期できないじゃん",
     "retry": "もう一回！",
     "pullError": {
@@ -1866,6 +1930,7 @@
     "splitKeyMode": "Shiftキー分離っしょ",
     "quickSelect": "爆速選択☆",
     "layerHoverPreview": "レイヤー勝手にチラ見せ☆",
+    "entryHoverPreview": "お気に入り♡ホバーで中身チラ見せ☆",
     "keyEditorZoom": "エディタズーム☆"
   },
   "hub": {

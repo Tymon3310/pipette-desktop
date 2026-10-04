@@ -13,6 +13,7 @@ import { useSideloadJson } from './hooks/useSideloadJson'
 import { useTheme } from './hooks/useTheme'
 import { useDevicePrefs } from './hooks/useDevicePrefs'
 import { useSync } from './hooks/useSync'
+import { useSyncFormatStatus } from './hooks/use-sync-format-status'
 import { useStartupNotification } from './hooks/useStartupNotification'
 import { useDeviceAutoSync } from './hooks/useDeviceAutoSync'
 import { useEditorUIState } from './hooks/useEditorUIState'
@@ -45,6 +46,7 @@ import { decodeLayoutOptions } from '../shared/kle/layout-options'
 import { resolveConnectedTappingTerm, resolveTappingTerm } from '../shared/qmk-settings-tapping-term'
 import { deserializeAllMacros } from '../preload/macro'
 import { EMPTY_UID } from '../shared/constants/protocol'
+import { PickerPrefsProvider } from './components/keycodes/PickerPrefsProvider'
 
 export { type PipetteFileKeyboard, type PipetteFileEntry } from './app-types'
 
@@ -55,6 +57,7 @@ export function App() {
   const device = useDeviceConnection()
   const keyboard = useKeyboard()
   const sync = useSync()
+  const syncUpdate = useSyncFormatStatus()
   const startupNotification = useStartupNotification()
 
   const effectiveIsDummy = device.isDummy && !device.isPipetteFile
@@ -351,6 +354,7 @@ export function App() {
   const handleApplyKeymapRewrite = useCallback(async (table: KeymapRewriteTable): Promise<KeymapApplyResult> => {
     return await (keymapEditorRef.current?.applyKeymapRewrite(table) ?? Promise.resolve({ appliedCount: 0 }))
   }, [])
+  const handleUserLayoutChange = useCallback((layout: string) => { keymapEditorRef.current?.notifyUserLayoutChange(layout) }, [])
 
   // Owned here because two separate consumers share the same pending/apply
   // state: the footer's Keyboard Layout select (QuickSettingsSelects, via
@@ -376,6 +380,7 @@ export function App() {
     keymapEditable: keyboard.keymap.size > 0,
     keyboardLayout: devicePrefs.layout,
     onKeyboardLayoutChange: devicePrefs.setLayout,
+    onUserLayoutChange: handleUserLayoutChange,
     onApplyKeymapRewrite: handleApplyKeymapRewrite,
     keymapRestoreSeq: keyboard.keymapRestoreSeq,
     activeRewriteTable: devicePrefs.activeRewriteTable,
@@ -435,6 +440,7 @@ export function App() {
         appConfig={appConfig}
         hub={hub}
         startupNotification={startupNotification}
+        syncUpdate={syncUpdate}
         onLoadDummy={handleLoadKeychronDummy}
       />
     )
@@ -443,116 +449,121 @@ export function App() {
   // --- Connected view ---
 
   return (
-    <div className="relative flex h-screen flex-col bg-surface text-content">
-      <AppBanners device={device} keyboard={keyboard} lifecycle={lifecycle} />
+    // The keymap pane and every key picker — including the pickers inside
+    // the editor and app-level modals — read the entry hover toggle and the
+    // tab order from here.
+    <PickerPrefsProvider devicePrefs={devicePrefs}>
+      <div className="relative flex h-screen flex-col bg-surface text-content">
+        <AppBanners device={device} keyboard={keyboard} lifecycle={lifecycle} syncUpdate={syncUpdate} />
 
-      {(keyboard.loading || deviceSyncing || phase2SyncPending || migration.migrationChecking || migration.migrating) && (
-        <ConnectingOverlay
-          deviceName={device.connectedDevice.productName || 'Unknown'}
-          deviceId={formatDeviceId(device.connectedDevice)}
-          loadingProgress={keyboard.loading ? keyboard.loadingProgress : migration.migrating ? migration.migrationProgress ?? undefined : undefined}
-          syncProgress={deviceSyncing ? sync.progress : undefined}
-          syncOnly={!keyboard.loading && !migration.migrating && !migration.migrationChecking}
-        />
-      )}
-
-      <div className="flex min-h-0 flex-1 flex-col">
-        {analyticsPageOpen ? (
-          <AnalyzePage
-            initialUid={keyboard.uid && keyboard.uid !== EMPTY_UID ? keyboard.uid : undefined}
-            onBack={handleAnalyticsBack}
-            connectedTappingTerm={connectedTappingTerm}
-            onOpenRunTimeline={openRunTimeline}
-          />
-        ) : (
-          <AppEditorSurface
-            device={device}
-            keyboard={keyboard}
-            editorUI={editorUI}
-            devicePrefs={devicePrefs}
-            appConfig={appConfig}
-            hub={hub}
-            layoutStore={layoutStore}
-            fileHandlers={fileHandlers}
-            entryOps={entryOps}
-            fileIO={fileIO}
-            sideload={sideload}
-            lifecycle={lifecycle}
-            keychronSupported={keychronSupported}
-            isBridge={isBridge}
-            onOpenKeychron={keychronSupported ? () => { keyboard.refreshKeychron(); setShowKeychronModal(true) } : undefined}
-            onOpenKeychronRgb={(keyboard.keychron?.hasRgb && keyboard.keychron.rgb) ? () => setShowKeychronRgbModal(true) : undefined}
-            onOpenKeychronFlasher={keychronSupported && !isBridge ? () => setShowKeychronFlasherModal(true) : undefined}
-            onOpenKeychronAnalog={keyboard.keychron?.hasAnalog ? handleOpenKeychronAnalog : undefined}
-            onOpenKeychronSocd={keyboard.keychron?.hasSnapClick ? () => setShowKeychronSocdModal(true) : undefined}
-            deviceName={deviceName}
-            effectiveIsDummy={effectiveIsDummy}
-            decodedLayoutOptions={decodedLayoutOptions}
-            tappingTerm={tappingTerm}
-            viewExitTransition={viewExitTransition}
-            editorRef={keymapEditorRef}
-            requestKeymapApply={requestKeymapApply}
-            pendingKeymapApply={pendingKeymapApply}
-            handleKeymapApplyConfirm={handleKeymapApplyConfirm}
-            handleKeymapApplyCancel={handleKeymapApplyCancel}
-            keymapApplyError={keymapApplyError}
-            keymapApplyBusy={keymapApplyBusy}
-            recKeystroke={recKeystroke}
-            onTypingTestViewOnlyChange={onTypingTestViewOnlyChange}
-            handleViewAnalytics={handleViewAnalytics}
-            timelineHandoff={timelineHandoff}
-            setTypingTestRunning={setTypingTestRunning}
+        {(keyboard.loading || deviceSyncing || phase2SyncPending || migration.migrationChecking || migration.migrating) && (
+          <ConnectingOverlay
+            deviceName={device.connectedDevice.productName || 'Unknown'}
+            deviceId={formatDeviceId(device.connectedDevice)}
+            loadingProgress={keyboard.loading ? keyboard.loadingProgress : migration.migrating ? migration.migrationProgress ?? undefined : undefined}
+            syncProgress={deviceSyncing ? sync.progress : undefined}
+            syncOnly={!keyboard.loading && !migration.migrating && !migration.migrationChecking}
           />
         )}
 
-        <AppErrorBanner fileIO={fileIO} sideload={sideload} layoutStore={layoutStore} />
+        <div className="flex min-h-0 flex-1 flex-col">
+          {analyticsPageOpen ? (
+            <AnalyzePage
+              initialUid={keyboard.uid && keyboard.uid !== EMPTY_UID ? keyboard.uid : undefined}
+              onBack={handleAnalyticsBack}
+              connectedTappingTerm={connectedTappingTerm}
+              onOpenRunTimeline={openRunTimeline}
+            />
+          ) : (
+            <AppEditorSurface
+              device={device}
+              keyboard={keyboard}
+              editorUI={editorUI}
+              devicePrefs={devicePrefs}
+              appConfig={appConfig}
+              hub={hub}
+              layoutStore={layoutStore}
+              fileHandlers={fileHandlers}
+              entryOps={entryOps}
+              fileIO={fileIO}
+              sideload={sideload}
+              lifecycle={lifecycle}
+              keychronSupported={keychronSupported}
+              isBridge={isBridge}
+              onOpenKeychron={keychronSupported ? () => { keyboard.refreshKeychron(); setShowKeychronModal(true) } : undefined}
+              onOpenKeychronRgb={(keyboard.keychron?.hasRgb && keyboard.keychron.rgb) ? () => setShowKeychronRgbModal(true) : undefined}
+              onOpenKeychronFlasher={keychronSupported && !isBridge ? () => setShowKeychronFlasherModal(true) : undefined}
+              onOpenKeychronAnalog={keyboard.keychron?.hasAnalog ? handleOpenKeychronAnalog : undefined}
+              onOpenKeychronSocd={keyboard.keychron?.hasSnapClick ? () => setShowKeychronSocdModal(true) : undefined}
+              deviceName={deviceName}
+              effectiveIsDummy={effectiveIsDummy}
+              decodedLayoutOptions={decodedLayoutOptions}
+              tappingTerm={tappingTerm}
+              viewExitTransition={viewExitTransition}
+              editorRef={keymapEditorRef}
+              requestKeymapApply={requestKeymapApply}
+              pendingKeymapApply={pendingKeymapApply}
+              handleKeymapApplyConfirm={handleKeymapApplyConfirm}
+              handleKeymapApplyCancel={handleKeymapApplyCancel}
+              keymapApplyError={keymapApplyError}
+              keymapApplyBusy={keymapApplyBusy}
+              recKeystroke={recKeystroke}
+              onTypingTestViewOnlyChange={onTypingTestViewOnlyChange}
+              handleViewAnalytics={handleViewAnalytics}
+              timelineHandoff={timelineHandoff}
+              setTypingTestRunning={setTypingTestRunning}
+            />
+          )}
+
+          <AppErrorBanner fileIO={fileIO} sideload={sideload} layoutStore={layoutStore} />
+        </div>
+
+        <AppStatusBar
+          connectedDevice={device.connectedDevice}
+          keyboard={keyboard}
+          editorUI={editorUI}
+          devicePrefs={devicePrefs}
+          sync={sync}
+          hub={hub}
+          themeCtx={themeCtx}
+          lifecycle={lifecycle}
+          analyticsPageOpen={analyticsPageOpen}
+          onStatusBarViewOnlyChange={onStatusBarViewOnlyChange}
+          onStatusBarTypingTestModeChange={onStatusBarTypingTestModeChange}
+          handleViewAnalytics={handleViewAnalytics}
+          handleTypingRecordEnabledChange={handleTypingRecordEnabledChange}
+          handleKeyboardLayoutSelectChange={handleKeyboardLayoutSelectChange}
+          keymapApplyBusy={keymapApplyBusy}
+          typingTestRunning={typingTestRunning}
+        />
+
+        <AppModals
+          device={device}
+          keyboard={keyboard}
+          editorUI={editorUI}
+          devicePrefs={devicePrefs}
+          hub={hub}
+          startupNotification={startupNotification}
+          missingKeyLabel={missingKeyLabel}
+          decodedLayoutOptions={decodedLayoutOptions}
+          deserializedMacros={deserializedMacros}
+          keychronSupported={keychronSupported}
+          isBridge={isBridge}
+          showKeychronModal={showKeychronModal}
+          setShowKeychronModal={setShowKeychronModal}
+          showKeychronRgbModal={showKeychronRgbModal}
+          setShowKeychronRgbModal={setShowKeychronRgbModal}
+          showKeychronFlasherModal={showKeychronFlasherModal}
+          setShowKeychronFlasherModal={setShowKeychronFlasherModal}
+          showKeychronAnalogModal={showKeychronAnalogModal}
+          setShowKeychronAnalogModal={setShowKeychronAnalogModal}
+          showKeychronSocdModal={showKeychronSocdModal}
+          setShowKeychronSocdModal={setShowKeychronSocdModal}
+          keychronAnalogData={keychronAnalogData}
+          setKeychronAnalogData={setKeychronAnalogData}
+          handleOpenKeychronAnalog={handleOpenKeychronAnalog}
+        />
       </div>
-
-      <AppStatusBar
-        connectedDevice={device.connectedDevice}
-        keyboard={keyboard}
-        editorUI={editorUI}
-        devicePrefs={devicePrefs}
-        sync={sync}
-        hub={hub}
-        themeCtx={themeCtx}
-        lifecycle={lifecycle}
-        analyticsPageOpen={analyticsPageOpen}
-        onStatusBarViewOnlyChange={onStatusBarViewOnlyChange}
-        onStatusBarTypingTestModeChange={onStatusBarTypingTestModeChange}
-        handleViewAnalytics={handleViewAnalytics}
-        handleTypingRecordEnabledChange={handleTypingRecordEnabledChange}
-        handleKeyboardLayoutSelectChange={handleKeyboardLayoutSelectChange}
-        keymapApplyBusy={keymapApplyBusy}
-        typingTestRunning={typingTestRunning}
-      />
-
-      <AppModals
-        device={device}
-        keyboard={keyboard}
-        editorUI={editorUI}
-        devicePrefs={devicePrefs}
-        hub={hub}
-        startupNotification={startupNotification}
-        missingKeyLabel={missingKeyLabel}
-        decodedLayoutOptions={decodedLayoutOptions}
-        deserializedMacros={deserializedMacros}
-        keychronSupported={keychronSupported}
-        isBridge={isBridge}
-        showKeychronModal={showKeychronModal}
-        setShowKeychronModal={setShowKeychronModal}
-        showKeychronRgbModal={showKeychronRgbModal}
-        setShowKeychronRgbModal={setShowKeychronRgbModal}
-        showKeychronFlasherModal={showKeychronFlasherModal}
-        setShowKeychronFlasherModal={setShowKeychronFlasherModal}
-        showKeychronAnalogModal={showKeychronAnalogModal}
-        setShowKeychronAnalogModal={setShowKeychronAnalogModal}
-        showKeychronSocdModal={showKeychronSocdModal}
-        setShowKeychronSocdModal={setShowKeychronSocdModal}
-        keychronAnalogData={keychronAnalogData}
-        setKeychronAnalogData={setKeychronAnalogData}
-        handleOpenKeychronAnalog={handleOpenKeychronAnalog}
-      />
-    </div>
+    </PickerPrefsProvider>
   )
 }

@@ -5,17 +5,12 @@
 
 import { listFiles, driveFilenamePrefix, syncUnitFromFileName } from './google-drive'
 import { pLimit } from '../../shared/concurrency'
-import { SYNC_CONCURRENCY } from './sync-runtime-state'
-import { requireSyncCredentials } from './sync-password'
+import { SYNC_CONCURRENCY, syncRuntime } from './sync-runtime-state'
+import { requireSyncCredentials, ensurePasswordCheckValidated, listPasswordCheckFiles } from './sync-password'
+import { localSyncBlock, remoteSyncBlock, listGuardFiles } from './sync-password-guard'
+import { ensureSyncFormatMarker, syncFormatGeneration } from './sync-format'
 import { mergeWithRemote, syncOrUpload } from './sync-merge-dispatch'
 import { isAnalyticsSyncUnit, collectAnalyticsSyncUnitsForUid } from './sync-bundle'
-
-/** Per-uid mutex so switching between keyboards while the previous
- * sync is still running doesn't immediately skip the new uid. Uses
- * a Set instead of a single flag so `uid-a` and `uid-b` can proceed
- * in parallel — the cloud file namespace (`keyboards/{uid}/devices/*`)
- * is disjoint across uids so there is no conflict. */
-const analyticsSyncingUids = new Set<string>()
 
 /** Pull + push typing-analytics bundles for one keyboard, triggered
  * from the Analyze panel mount. Runs on its own per-uid mutex so
@@ -25,15 +20,31 @@ const analyticsSyncingUids = new Set<string>()
  *
  * Returns true on a fully-successful pass so the caller can stamp a
  * rate-limit timestamp; returns false on skip (this uid is already
- * syncing or credentials are missing) or on any per-unit failure so
- * the caller can retry on the next Analyze mount. */
+ * syncing, credentials are missing, a sync password change is in
+ * progress, Drive needs a newer sync format, the sync-format marker
+ * cannot be created, or the password-check does not open) or on any per-unit
+ * failure so the caller can retry on the next Analyze mount. */
 export async function executeAnalyticsSync(uid: string): Promise<boolean> {
-  if (analyticsSyncingUids.has(uid)) return false
-  analyticsSyncingUids.add(uid)
+  // A running password-change operation (sync-password-change.ts) holds
+  // `passwordChangeRun`; it in turn refuses to start while any uid is in
+  // `analyticsSyncingUids`. Both checks are synchronous, so the two never
+  // overlap.
+  if (syncRuntime.analyticsSyncingUids.has(uid) || syncRuntime.passwordChangeRun) return false
+  syncRuntime.analyticsSyncingUids.add(uid)
   try {
     const credentials = await requireSyncCredentials()
     if (!credentials.ok) return false
     const password = credentials.password
+
+    // The data listing below is name-filtered, so the lock, the sync-format
+    // markers and the password-check are looked up with their own narrow
+    // listings.
+    if (await localSyncBlock()) return false
+    const formatGeneration = syncFormatGeneration()
+    const guardFiles = await listGuardFiles()
+    if (remoteSyncBlock(guardFiles, formatGeneration)) return false
+    await ensureSyncFormatMarker(guardFiles, formatGeneration)
+    await ensurePasswordCheckValidated(password, await listPasswordCheckFiles())
 
     // Drive-side prefix filter: scope the listing to this keyboard's
     // analytics files. The in-memory `isAnalyticsSyncUnit` + `startsWith`
@@ -82,6 +93,6 @@ export async function executeAnalyticsSync(uid: string): Promise<boolean> {
   } catch {
     return false
   } finally {
-    analyticsSyncingUids.delete(uid)
+    syncRuntime.analyticsSyncingUids.delete(uid)
   }
 }

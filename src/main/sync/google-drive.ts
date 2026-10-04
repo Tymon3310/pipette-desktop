@@ -2,6 +2,7 @@
 // Google Drive API client for appDataFolder
 
 import { getAccessToken } from './google-auth'
+import { driveRequest } from './drive-retry'
 import { pLimit } from '../../shared/concurrency'
 import { KEYBOARD_META_SYNC_UNIT } from '../../shared/types/keyboard-meta'
 import type { SyncEnvelope } from '../../shared/types/sync'
@@ -14,6 +15,9 @@ export interface DriveFile {
   id: string
   name: string
   modifiedTime: string
+  /** RFC 3339 time Drive assigned when the file was created. Optional
+   *  because a listing that does not request the field omits it. */
+  createdTime?: string
 }
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -41,14 +45,13 @@ export interface ListFilesOptions {
  *  none of those call sites need to change once a user's file count
  *  crosses Drive's single-page cap (1000, this call's own `pageSize`). */
 export async function listFiles(options?: ListFilesOptions): Promise<DriveFile[]> {
-  const headers = await authHeaders()
   const files: DriveFile[] = []
   let pageToken: string | undefined
 
   do {
     const params = new URLSearchParams({
       spaces: 'appDataFolder',
-      fields: 'nextPageToken, files(id, name, modifiedTime)',
+      fields: 'nextPageToken, files(id, name, modifiedTime, createdTime)',
       pageSize: '1000',
     })
     const filter = options?.nameContains
@@ -58,13 +61,14 @@ export async function listFiles(options?: ListFilesOptions): Promise<DriveFile[]
     }
     if (pageToken) params.set('pageToken', pageToken)
 
-    const response = await fetch(`${DRIVE_API}/files?${params}`, { headers })
-    if (!response.ok) {
-      const body = await response.text()
-      throw new Error(`Drive list failed: ${response.status} ${body}`)
-    }
+    const { text } = await driveRequest({
+      label: 'list',
+      getHeaders: authHeaders,
+      send: (headers) => fetch(`${DRIVE_API}/files?${params}`, { headers }),
+      retryTransient: true,
+    })
 
-    const data = (await response.json()) as { files?: DriveFile[]; nextPageToken?: string }
+    const data = JSON.parse(text) as { files?: DriveFile[]; nextPageToken?: string }
     files.push(...(data.files ?? []))
     pageToken = data.nextPageToken
   } while (pageToken)
@@ -72,17 +76,22 @@ export async function listFiles(options?: ListFilesOptions): Promise<DriveFile[]
   return files
 }
 
-export async function downloadFile(fileId: string): Promise<SyncEnvelope> {
-  const headers = await authHeaders()
+/** Downloads a file's content as text, without parsing it. */
+export async function downloadRawFile(fileId: string): Promise<string> {
   const params = new URLSearchParams({ alt: 'media' })
 
-  const response = await fetch(`${DRIVE_API}/files/${fileId}?${params}`, { headers })
-  if (!response.ok) {
-    const body = await response.text()
-    throw new Error(`Drive download failed: ${response.status} ${body}`)
-  }
+  const { text } = await driveRequest({
+    label: 'download',
+    getHeaders: authHeaders,
+    send: (headers) => fetch(`${DRIVE_API}/files/${fileId}?${params}`, { headers }),
+    retryTransient: true,
+  })
 
-  return (await response.json()) as SyncEnvelope
+  return text
+}
+
+export async function downloadFile(fileId: string): Promise<SyncEnvelope> {
+  return JSON.parse(await downloadRawFile(fileId)) as SyncEnvelope
 }
 
 export interface UploadedFile {
@@ -103,28 +112,41 @@ export async function uploadFile(
   envelope: SyncEnvelope,
   existingFileId?: string,
 ): Promise<UploadedFile> {
-  const headers = await authHeaders()
   const content = JSON.stringify(envelope)
 
   if (existingFileId) {
     // Update existing file. `fields` is requested explicitly — the
     // default response for a media-upload PATCH omits `modifiedTime`.
-    const response = await fetch(
-      `${UPLOAD_API}/files/${existingFileId}?uploadType=media&fields=id,modifiedTime`,
-      {
-        method: 'PATCH',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: content,
-      },
-    )
-    if (!response.ok) {
-      const body = await response.text()
-      throw new Error(`Drive update failed: ${response.status} ${body}`)
-    }
-    return (await response.json()) as UploadedFile
+    const { text } = await driveRequest({
+      label: 'update',
+      getHeaders: authHeaders,
+      send: (headers) =>
+        fetch(`${UPLOAD_API}/files/${existingFileId}?uploadType=media&fields=id,modifiedTime`, {
+          method: 'PATCH',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: content,
+        }),
+      retryTransient: true,
+    })
+    return JSON.parse(text) as UploadedFile
   }
 
-  // Create new file with multipart upload
+  // `fields` requested explicitly — same reasoning as the update path above.
+  const text = await createAppDataFile(name, content, 'id,modifiedTime')
+  return JSON.parse(text) as UploadedFile
+}
+
+/** Creates a new appDataFolder file whose content is `content` as is (no
+ *  sync envelope) and returns the id Drive assigned. */
+export async function createRawFile(name: string, content: string): Promise<{ id: string }> {
+  const text = await createAppDataFile(name, content, 'id')
+  const { id } = JSON.parse(text) as { id: string }
+  return { id }
+}
+
+/** Multipart create in appDataFolder; resolves with the response body
+ *  restricted to `fields`. */
+async function createAppDataFile(name: string, content: string, fields: string): Promise<string> {
   const metadata = {
     name,
     parents: ['appDataFolder'],
@@ -143,34 +165,36 @@ export async function uploadFile(
     `--${boundary}--`,
   ].join('\r\n')
 
-  // `fields` requested explicitly — same reasoning as the update path above.
-  const response = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id,modifiedTime`, {
-    method: 'POST',
-    headers: {
-      ...headers,
-      'Content-Type': `multipart/related; boundary=${boundary}`,
-    },
-    body,
+  // Only rate-limit responses are retried here: after a 5xx or a network
+  // error the file may already have been created, and sending the create
+  // again would leave two files with the same name.
+  const { text } = await driveRequest({
+    label: 'upload',
+    getHeaders: authHeaders,
+    send: (headers) =>
+      fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=${fields}`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': `multipart/related; boundary=${boundary}`,
+        },
+        body,
+      }),
+    retryTransient: false,
   })
 
-  if (!response.ok) {
-    const body = await response.text()
-    throw new Error(`Drive upload failed: ${response.status} ${body}`)
-  }
-
-  return (await response.json()) as UploadedFile
+  return text
 }
 
 export async function deleteFile(fileId: string): Promise<void> {
-  const headers = await authHeaders()
-  const response = await fetch(`${DRIVE_API}/files/${fileId}`, {
-    method: 'DELETE',
-    headers,
+  // A 404 means the file is already gone, which is what the caller wants.
+  await driveRequest({
+    label: 'delete',
+    getHeaders: authHeaders,
+    send: (headers) => fetch(`${DRIVE_API}/files/${fileId}`, { method: 'DELETE', headers }),
+    retryTransient: true,
+    acceptStatus: (status) => status === 404,
   })
-  if (!response.ok && response.status !== 404) {
-    const body = await response.text()
-    throw new Error(`Drive delete failed: ${response.status} ${body}`)
-  }
 }
 
 export async function deleteAllFiles(): Promise<void> {
@@ -194,6 +218,48 @@ export function driveFileName(syncUnit: string): string {
  * filename scheme ever changes. */
 export function driveFilenamePrefix(syncUnitPrefix: string): string {
   return syncUnitPrefix.replaceAll('/', '_')
+}
+
+/** Sync unit of the encrypted password-check sentinel file. Its envelope
+ *  carries this as `syncUnit`, but it is a credential check, not data. */
+export const PASSWORD_CHECK_UNIT = 'password-check'
+
+/** Unencrypted lock a machine holds while it re-encrypts every remote file
+ *  under a new sync password (sync-password-lock.ts). */
+export const PASSWORD_CHANGE_LOCK_FILE = 'password-change-lock.json'
+
+export function isPasswordChangeLockFile(name: string): boolean {
+  return name === PASSWORD_CHANGE_LOCK_FILE
+}
+
+/** Name prefix of the unencrypted sync-format markers (sync-format.ts);
+ *  also the `nameContains` filter that lists only them. */
+export const SYNC_FORMAT_FILE_PREFIX = 'sync-format-v'
+
+const SYNC_FORMAT_FILE_PATTERN = /^sync-format-v(\d+)\.json$/
+
+export function syncFormatFileName(version: number): string {
+  return `${SYNC_FORMAT_FILE_PREFIX}${version}.json`
+}
+
+/** The `n` of a `sync-format-v{n}.json` marker name; null for any other name. */
+export function parseSyncFormatFileName(name: string): number | null {
+  const match = SYNC_FORMAT_FILE_PATTERN.exec(name)
+  if (!match) return null
+  const version = Number(match[1])
+  return Number.isSafeInteger(version) ? version : null
+}
+
+/** Whether a listed file holds encrypted user data, i.e. is none of the
+ *  password-check sentinel, the password-change lock and the sync-format
+ *  markers. Listings keep them so sync entry points can see them; data
+ *  handling filters with this. */
+export function isDataFileName(name: string): boolean {
+  return (
+    name !== driveFileName(PASSWORD_CHECK_UNIT) &&
+    !isPasswordChangeLockFile(name) &&
+    parseSyncFormatFileName(name) === null
+  )
 }
 
 /** Filenames with no uid/packId segment — a plain Map lookup resolves
@@ -248,8 +314,8 @@ export function syncUnitFromFileName(fileName: string): string | null {
   if (themePackMatch) return `themes/packs/${themePackMatch[1]}`
 
   // "password-check.enc" is intentionally never mapped to a sync unit —
-  // it's a standalone credential-validation file (see sync-password.ts's
-  // PASSWORD_CHECK_UNIT), not a data sync unit, and must stay invisible
+  // it's a standalone credential-validation file (PASSWORD_CHECK_UNIT
+  // above), not a data sync unit, and must stay invisible
   // to scanRemoteData / polling / fresh-machine discovery.
 
   return null

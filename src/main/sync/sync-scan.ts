@@ -9,11 +9,14 @@ import {
   downloadFile,
   driveFileName,
   syncUnitFromFileName,
+  isDataFileName,
   type DriveFile,
 } from './google-drive'
 import { pLimit } from '../../shared/concurrency'
 import { SYNC_CONCURRENCY } from './sync-runtime-state'
-import { requireSyncCredentials, PASSWORD_CHECK_UNIT, validatePasswordCheck } from './sync-password'
+import { requireSyncCredentials, validatePasswordCheck } from './sync-password'
+import { assertNoLocalPasswordChange, assertSyncAllowed, localSyncBlock, remoteSyncBlock } from './sync-password-guard'
+import { syncFormatGeneration } from './sync-format'
 import { KEY_LABEL_SYNC_UNIT } from '../key-label-store'
 import { TYPING_TEST_TEXT_SYNC_UNIT } from '../typing-test-text-store'
 import { I18N_INDEX_SYNC_UNIT } from '../../shared/types/i18n-store'
@@ -21,16 +24,21 @@ import { THEME_INDEX_SYNC_UNIT } from '../../shared/types/theme-store'
 import { readKeyboardMetaIndex, getActiveKeyboardMetaMap } from './keyboard-meta'
 import type { SyncBundle, UndecryptableFile, SyncDataScanResult } from '../../shared/types/sync'
 
+/** Null without credentials. Throws `SyncBlockedError` while a sync
+ *  password change is in progress, like `PasswordMismatchError` when the
+ *  password-check does not open. */
 async function fetchValidatedDataFiles(): Promise<{ password: string; dataFiles: DriveFile[] } | null> {
   const credentials = await requireSyncCredentials()
   if (!credentials.ok) return null
   const { password } = credentials
+  await assertNoLocalPasswordChange()
+  const formatGeneration = syncFormatGeneration()
   const remoteFiles = await listFiles()
 
+  await assertSyncAllowed(remoteFiles, formatGeneration)
   await validatePasswordCheck(password, remoteFiles)
 
-  const passwordCheckFileName = driveFileName(PASSWORD_CHECK_UNIT)
-  const dataFiles = remoteFiles.filter((f) => f.name !== passwordCheckFileName)
+  const dataFiles = remoteFiles.filter((f) => isDataFileName(f.name))
   return { password, dataFiles }
 }
 
@@ -171,11 +179,15 @@ export async function fetchRemoteBundle(syncUnit: string): Promise<SyncBundle | 
 
 /** Snapshot of the user's appData Drive listing as a name-only set,
  * for callers that need many existence checks (e.g. import). Returns
- * `null` when the user is unauthenticated so the caller can fall back
- * to a local-only check rather than rejecting outright. */
+ * `null` when the user is unauthenticated or a sync password change is
+ * in progress, so the caller can fall back to a local-only check rather
+ * than rejecting outright. */
 export async function listRemoteFileNames(): Promise<Set<string> | null> {
   const credentials = await requireSyncCredentials()
   if (!credentials.ok) return null
+  if (await localSyncBlock()) return null
+  const formatGeneration = syncFormatGeneration()
   const remoteFiles = await listFiles()
-  return new Set(remoteFiles.map((f) => f.name))
+  if (remoteSyncBlock(remoteFiles, formatGeneration)) return null
+  return new Set(remoteFiles.map((f) => f.name).filter(isDataFileName))
 }

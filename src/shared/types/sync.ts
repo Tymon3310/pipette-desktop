@@ -189,10 +189,39 @@ export type SyncCredentialResult =
  *  the sync never actually ran — see `SyncOperationResult.status`'s doc). */
 export type SyncExecuteStatus = 'completed' | 'skipped' | 'partial'
 
-/** Why a sync was skipped (`status === 'skipped'`): either another sync was
- *  already in flight (`'busy'`), or the credential-readiness check failed
- *  (same reasons `SyncCredentialFailureReason` already enumerates). */
-export type SyncSkipReason = 'busy' | SyncCredentialFailureReason
+/** Why every sync entry point is refusing to touch Google Drive:
+ *  - `blockedByOtherDevice`: Drive holds a sync password-change lock and
+ *    this machine has no password change of its own
+ *  - `blockedLocal`: this machine has an unfinished password change; it
+ *    has to be finished, reverted or abandoned first
+ *  - `updateRequired`: Drive holds a sync-format marker newer than this
+ *    app's `SYNC_FORMAT_VERSION`; only an app update lifts it */
+export type SyncBlockReason = 'blockedByOtherDevice' | 'blockedLocal' | 'updateRequired'
+
+/** i18n key for a `SyncBlockReason` (used by progress, IPC errors and skip reasons). */
+export function syncBlockI18nKey(reason: SyncBlockReason): string {
+  return reason === 'updateRequired' ? 'sync.updateRequired' : `sync.passwordChange.${reason}`
+}
+
+/** Drive's sync-format markers compared with this app's
+ *  `SYNC_FORMAT_VERSION` (sync-format.ts). */
+export interface SyncFormatStatus {
+  /** Largest marker version on Drive; null when Drive has none. */
+  required: number | null
+  supported: number
+  updateRequired: boolean
+}
+
+export function isSyncBlockReason(value: unknown): value is SyncBlockReason {
+  return value === 'blockedByOtherDevice' || value === 'blockedLocal' || value === 'updateRequired'
+}
+
+/** Why a sync was skipped (`status === 'skipped'`): another sync was
+ *  already in flight (`'busy'`), the credential-readiness check failed
+ *  (same reasons `SyncCredentialFailureReason` already enumerates), or a
+ *  sync password change is in progress or Drive needs a newer app
+ *  (`SyncBlockReason`). */
+export type SyncSkipReason = 'busy' | SyncCredentialFailureReason | SyncBlockReason
 
 /** Serializable IPC envelope so renderer code can branch on the reason. */
 export interface SyncOperationResult {
@@ -218,3 +247,57 @@ export interface SyncOperationResult {
 export type ImportLocalDataResult =
   | { success: true; cancelled?: true }
   | { success: false; error: string }
+
+/** A Drive file a password change could open with neither password. */
+export interface PasswordChangeFile {
+  id: string
+  name: string
+}
+
+/** Progress of a sync password change on this machine, safe to show in
+ *  the renderer (no passwords, no lock ids).
+ *  - `none`: no change in progress
+ *  - `inProgress`: `target` is where the change is heading (`'old'` while
+ *    rolling back); `lockLost` when the last run stopped because this
+ *    machine no longer held its Drive lock (resume takes a new one unless
+ *    another PC holds it); `undecryptable` lists files that stopped the
+ *    last run
+ *  - `invalid`: the local state file can't be read
+ *  - `keysUnavailable`: the state is fine but the saved passwords can't
+ *    be read (`keystoreUnavailable` can succeed on a later retry) */
+export type PasswordChangeStatus =
+  | { kind: 'none' }
+  | {
+      kind: 'inProgress'
+      target: 'new' | 'old'
+      step: 'locking' | 'reencrypting' | 'committing' | 'cleanup'
+      startedAt: number
+      lockLost?: true
+      undecryptable?: PasswordChangeFile[]
+    }
+  | { kind: 'invalid' }
+  | {
+      kind: 'keysUnavailable'
+      reason: 'keystoreUnavailable' | 'noPasswordFile' | 'decryptFailed' | 'invalidContent'
+      target: 'new' | 'old'
+      step: 'locking' | 'reencrypting' | 'committing' | 'cleanup'
+      startedAt: number
+    }
+
+/** The password-change lock on Google Drive, as shown to the user (no
+ *  lock ids).
+ *  - `startedAt`: ISO 8601 start time by the holder's clock; null when the
+ *    lock's content can't be read
+ *  - `ownMachine`: the lock was left by this machine (its machine hash
+ *    matches), e.g. after an abandoned change failed to remove it */
+export interface PasswordChangeLockStatus {
+  startedAt: string | null
+  ownMachine: boolean
+}
+
+export interface PasswordChangeDeleteResult extends SyncOperationResult {
+  /** Ids deleted from Drive. */
+  deleted?: string[]
+  /** Ids left alone: not a data file on Drive, or one of the passwords opens it. */
+  skipped?: string[]
+}
