@@ -59,6 +59,7 @@ const mockGetAuthStatus = vi.fn(async () => ({ authenticated: true }))
 vi.mock('../google-auth', () => ({
   getAuthStatus: () => mockGetAuthStatus(),
   getAccessToken: vi.fn(async () => 'token'),
+  getAccountSub: vi.fn(async () => null),
 }))
 
 vi.mock('../../typing-analytics/machine-hash', () => ({
@@ -85,6 +86,8 @@ const drive = vi.hoisted(() => ({
   beforeDownload: null as null | ((id: string) => Promise<void> | void),
   /** Called before a delete is applied; throw to fail it. */
   beforeDelete: null as null | ((id: string) => void),
+  /** Called before a rename is applied; throw to fail it. */
+  beforeRename: null as null | ((id: string) => void),
   /** Called before a full (unfiltered) listing is served. */
   beforeList: null as null | (() => Promise<void> | void),
   /** Called after a raw file (the lock) is created. */
@@ -152,9 +155,28 @@ vi.mock('../google-drive', async () => {
       drive.afterCreate?.(id)
       return { id }
     },
+    renameFile: async (id: string, name: string): Promise<DriveFile | null> => {
+      drive.beforeRename?.(id)
+      const file = memFiles().get(id)
+      if (!file) return null
+      file.name = name
+      return { id, name, modifiedTime: file.modifiedTime }
+    },
     deleteFile: async (id: string): Promise<void> => {
       drive.beforeDelete?.(id)
       memFiles().delete(id)
+    },
+    deleteFilesById: async (ids: readonly string[]) => {
+      const reasons: string[] = []
+      for (const id of ids) {
+        try {
+          drive.beforeDelete?.(id)
+          memFiles().delete(id)
+        } catch (err) {
+          reasons.push(String(err))
+        }
+      }
+      return { attempted: ids.length, failed: reasons.length, firstError: reasons[0] }
     },
   }
 })
@@ -259,6 +281,7 @@ describe('sync-password-change', () => {
     drive.afterCreate = null
     drive.beforeList = null
     drive.beforeDelete = null
+    drive.beforeRename = null
     decryptCalls.length = 0
     drive.downloads = []
     drive.uploads = []
@@ -325,6 +348,38 @@ describe('sync-password-change', () => {
       syncRuntime.isSyncing = true
       await expect(startPasswordChange(NEW)).rejects.toThrow('sync.changePasswordInProgress')
       expect(syncRuntime.isSyncing).toBe(true)
+    })
+
+    it('rejects while a remote day fetch runs, before writing anything', async () => {
+      const { dataIds } = await seedDrive()
+      syncRuntime.remoteTypingDayFetches.set('uid1', 1)
+      try {
+        await expect(startPasswordChange(NEW)).rejects.toThrow('sync.changePasswordInProgress')
+      } finally {
+        syncRuntime.remoteTypingDayFetches.clear()
+      }
+      expect(syncRuntime.isSyncing).toBe(false)
+      expect(syncRuntime.passwordChangeRun).toBeNull()
+      expect(drive.uploads).toEqual([])
+      expect(lockFiles()).toEqual([])
+      await expectNoLocalChange()
+      await expectAllOn(dataIds, OLD)
+    })
+
+    it('rejects while a sign-in or sign-out switches accounts, before writing anything', async () => {
+      const { dataIds } = await seedDrive()
+      syncRuntime.accountSwitching = true
+      try {
+        await expect(startPasswordChange(NEW)).rejects.toThrow('sync.changePasswordInProgress')
+      } finally {
+        syncRuntime.accountSwitching = false
+      }
+      expect(syncRuntime.isSyncing).toBe(false)
+      expect(syncRuntime.passwordChangeRun).toBeNull()
+      expect(drive.uploads).toEqual([])
+      expect(lockFiles()).toEqual([])
+      await expectNoLocalChange()
+      await expectAllOn(dataIds, OLD)
     })
 
     it('rejects when a change is already in progress locally', async () => {
@@ -651,6 +706,111 @@ describe('sync-password-change', () => {
     })
   })
 
+  // Sync reads only the chosen copy of a name (drive-canonical.ts), so the
+  // change renames the other copies to trash, and re-encrypts them there.
+  describe('files sharing one name', () => {
+    const STALE = '{"stale":1}'
+    const copiesOf = (name: string): string[] =>
+      [...memFiles().values()].filter((f) => f.name === name).map((f) => f.id)
+    const isTrashOf = (id: string, name: string): boolean =>
+      memFiles().get(id)?.name.startsWith(`${name}.trash.`) === true && memFiles().get(id)!.name.endsWith(`.${id}`)
+
+    /** The password-check plus two copies of DATA[0]: an older one and the
+     *  newer, chosen one (seeded later, so its modifiedTime is newer). */
+    async function seedCopies(): Promise<{ pcId: string; staleId: string; keptId: string }> {
+      const pcId = await seedEncrypted(PC_NAME, 'password-check', PC_PAYLOAD, OLD)
+      const staleId = await seedEncrypted(DATA[0].name, DATA[0].unit, STALE, OLD)
+      const keptId = await seedEncrypted(DATA[0].name, DATA[0].unit, DATA[0].plain, OLD)
+      return { pcId, staleId, keptId }
+    }
+
+    it('renames the other copies to trash and re-encrypts every file', async () => {
+      const { staleId, keptId } = await seedCopies()
+
+      await startPasswordChange(NEW)
+
+      expect(copiesOf(DATA[0].name)).toEqual([keptId])
+      expect(isTrashOf(staleId, DATA[0].name)).toBe(true)
+      expect(await openWith(keptId, NEW)).toBe(DATA[0].plain)
+      expect(await openWith(staleId, NEW)).toBe(STALE)
+      expect(await storedPassword()).toBe(NEW)
+      await expectNoLocalChange()
+    })
+
+    it('re-encrypts trash files already on Drive', async () => {
+      await seedEncrypted(PC_NAME, 'password-check', PC_PAYLOAD, OLD)
+      const trashId = await seedEncrypted(DATA[0].name, DATA[0].unit, STALE, OLD)
+      memFiles().get(trashId)!.name = `${DATA[0].name}.trash.1.2.${trashId}`
+
+      await startPasswordChange(NEW)
+
+      expect(await openWith(trashId, NEW)).toBe(STALE)
+    })
+
+    it('resumes after a pass interrupted once the copies were renamed', async () => {
+      const { pcId, staleId, keptId } = await seedCopies()
+      failFirstUploadOf(DATA[0].name)
+
+      await expect(startPasswordChange(NEW)).rejects.toThrow('Drive update failed: 503')
+      expect(copiesOf(DATA[0].name)).toEqual([keptId])
+      expect(isTrashOf(staleId, DATA[0].name)).toBe(true)
+
+      await resumePasswordChange()
+
+      expect(copiesOf(DATA[0].name)).toEqual([keptId])
+      expect(isTrashOf(staleId, DATA[0].name)).toBe(true)
+      expect(await openWith(keptId, NEW)).toBe(DATA[0].plain)
+      expect(await openWith(staleId, NEW)).toBe(STALE)
+      expect(await openWith(pcId, NEW)).toBe(PC_PAYLOAD)
+      await expectNoLocalChange()
+    })
+
+    it('stops without committing when the lock is lost during the renames', async () => {
+      await seedEncrypted(PC_NAME, 'password-check', PC_PAYLOAD, OLD)
+      const staleId = await seedEncrypted(DATA[0].name, DATA[0].unit, STALE, NEW)
+      const keptId = await seedEncrypted(DATA[0].name, DATA[0].unit, DATA[0].plain, NEW)
+      drive.beforeRename = (id) => {
+        if (id !== staleId) return
+        // A peer releases our lock while the duplicate is renamed.
+        for (const lock of lockFiles()) memFiles().delete(lock.id)
+      }
+
+      await expect(startPasswordChange(NEW)).rejects.toThrow('sync.passwordChange.lockLost')
+
+      expect(copiesOf(DATA[0].name)).toEqual([keptId])
+      expect(await storedPassword()).toBe(OLD)
+      const read = await readChangeState()
+      expect(read.kind === 'ok' && read.state.step).toBe('reencrypting')
+    })
+
+    it('stops before re-encrypting when a copy cannot be renamed, and resume renames it', async () => {
+      const { staleId, keptId } = await seedCopies()
+      let failed = false
+      drive.beforeRename = (id) => {
+        if (id === staleId && !failed) {
+          failed = true
+          throw new Error('Drive rename failed: 503')
+        }
+      }
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      await expect(startPasswordChange(NEW)).rejects.toThrow('Failed to move 1 of 1 duplicate files to trash')
+      expect(copiesOf(DATA[0].name).sort()).toEqual([keptId, staleId].sort())
+      expect(await openWith(keptId, OLD)).toBe(DATA[0].plain)
+      const read = await readChangeState()
+      expect(read.kind === 'ok' && read.state).toMatchObject({ target: 'new', step: 'reencrypting' })
+
+      await resumePasswordChange()
+
+      expect(copiesOf(DATA[0].name)).toEqual([keptId])
+      expect(isTrashOf(staleId, DATA[0].name)).toBe(true)
+      expect(await openWith(keptId, NEW)).toBe(DATA[0].plain)
+      expect(await openWith(staleId, NEW)).toBe(STALE)
+      await expectNoLocalChange()
+      warn.mockRestore()
+    })
+  })
+
   describe('resume / revert', () => {
     async function halfConverted(): Promise<{ pcId: string; dataIds: string[] }> {
       const seeded = await seedDrive()
@@ -825,6 +985,36 @@ describe('sync-password-change', () => {
       await storeChangeKeys({ oldPassword: OLD, newPassword: NEW })
       await writeChangeState({ version: 1, lockId: 'own-lock', startedAt: 1, ...state })
     }
+
+    it('reports busy while a remote day fetch runs, leaving the change as it is', async () => {
+      await seedDrive(NEW)
+      const lockFileId = addFile(PASSWORD_CHANGE_LOCK_FILE, lockText('own-lock', 'hash-own'))
+      await seedLocal({ target: 'new', step: 'cleanup', lockFileId })
+      syncRuntime.remoteTypingDayFetches.set('uid1', 1)
+      try {
+        expect(await recoverPasswordChangeOnStartup()).toBe('busy')
+      } finally {
+        syncRuntime.remoteTypingDayFetches.clear()
+      }
+      expect(syncRuntime.isSyncing).toBe(false)
+      expect(lockFiles().map((f) => f.id)).toEqual([lockFileId])
+      expect((await readChangeState()).kind).toBe('ok')
+    })
+
+    it('reports busy while a sign-in or sign-out switches accounts, leaving the change as it is', async () => {
+      await seedDrive(NEW)
+      const lockFileId = addFile(PASSWORD_CHANGE_LOCK_FILE, lockText('own-lock', 'hash-own'))
+      await seedLocal({ target: 'new', step: 'cleanup', lockFileId })
+      syncRuntime.accountSwitching = true
+      try {
+        expect(await recoverPasswordChangeOnStartup()).toBe('busy')
+      } finally {
+        syncRuntime.accountSwitching = false
+      }
+      expect(syncRuntime.isSyncing).toBe(false)
+      expect(lockFiles().map((f) => f.id)).toEqual([lockFileId])
+      expect((await readChangeState()).kind).toBe('ok')
+    })
 
     it('does nothing without a state file', async () => {
       expect(await recoverPasswordChangeOnStartup()).toBe('none')

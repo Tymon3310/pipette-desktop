@@ -4,7 +4,7 @@
 // registered finalizers before the app is allowed to exit.
 
 import { app } from 'electron'
-import { listFiles } from './google-drive'
+import { listFiles, type DriveFile } from './google-drive'
 import { pLimit } from '../../shared/concurrency'
 import { loadAppConfig } from '../app-config'
 import { log } from '../logger'
@@ -15,54 +15,77 @@ import {
   syncRuntime,
   emitProgress,
   errorMessage,
-  updateRemoteState,
   broadcastPendingStatus,
+  markPending,
+  pendingGenerationOf,
+  snapshotPendingGenerations,
+  settlePending,
+  tryClaimSyncLock,
+  clearFlushTimer,
+  persistPendingNow,
 } from './sync-runtime-state'
 import { requireSyncCredentials, ensurePasswordCheckValidated, PasswordMismatchError } from './sync-password'
 import { localSyncBlock, remoteSyncBlock, emitSyncBlocked } from './sync-password-guard'
 import { ensureSyncFormatMarker, syncFormatGeneration } from './sync-format'
-import type { SyncBlockReason } from '../../shared/types/sync'
+import type { SyncBlockReason, SyncCredentialFailureReason } from '../../shared/types/sync'
 import { syncOrUpload } from './sync-merge-dispatch'
+import { settlePackIndexUnitsFirst } from './pack-bundle-merge'
 import { stopPolling } from './sync-polling'
+import { adoptPendingForSignedInAccount } from './sync-pending-account'
 
 // --- Debounced upload ---
 
+/** How long before-quit waits for the sync work it started or found
+ *  running. A Drive request has no timeout of its own, so a stalled upload
+ *  must not keep the app from exiting. */
+export const QUIT_SYNC_DEADLINE_MS = 30_000
+
+/** Credential failures that can clear up on their own. The others wait for
+ *  a sign-in or a password, which schedule a flush themselves. */
+const RETRYABLE_CREDENTIAL_REASONS: ReadonlySet<SyncCredentialFailureReason> = new Set([
+  'keystoreUnavailable',
+  'decryptFailed',
+  'remoteCheckFailed',
+])
+
 export function notifyChange(syncUnit: string): void {
-  syncRuntime.pendingChanges.add(syncUnit)
+  markPending(syncUnit)
   broadcastPendingStatus()
-
-  if (syncRuntime.debounceTimer) {
-    clearTimeout(syncRuntime.debounceTimer)
-  }
-
-  syncRuntime.debounceTimer = setTimeout(() => {
-    void flushPendingChanges()
-  }, DEBOUNCE_MS)
+  // Each change pushes the flush out by the full debounce.
+  armFlushTimer(DEBOUNCE_MS)
 }
 
 export async function flushPendingChanges(): Promise<void> {
   if (syncRuntime.pendingChanges.size === 0) return
 
-  if (syncRuntime.isSyncing) {
-    scheduleFlush(DEBOUNCE_MS)
-    return
-  }
-
-  syncRuntime.isSyncing = true
-
-  if (syncRuntime.debounceTimer) clearTimeout(syncRuntime.debounceTimer)
-  syncRuntime.debounceTimer = null
-
-  try {
-    const config = await loadAppConfig()
-    if (!config.autoSync) {
-      syncRuntime.pendingChanges.clear()
-      broadcastPendingStatus()
+  // A held lock is waited out once (until it is free while quitting); with
+  // no pass to wait on, or still held after that, the flush is rescheduled.
+  let releaseLock = tryClaimSyncLock()
+  let waited = false
+  while (!releaseLock) {
+    const pass = syncRuntime.inFlightPass
+    if (!pass || (waited && !syncRuntime.isQuitting)) {
+      scheduleFlushIfPending(DEBOUNCE_MS)
       return
     }
+    await pass
+    waited = true
+    releaseLock = tryClaimSyncLock()
+  }
+  // The pass waited on may have uploaded everything.
+  if (syncRuntime.pendingChanges.size === 0) {
+    releaseLock()
+    return
+  }
+  clearFlushTimer()
 
-    // Both block checks run before the pending set is taken below, so a
-    // blocked flush keeps every pending change for a later pass.
+  // Every early return below keeps the pending set; only an upload that
+  // succeeds removes a unit from it.
+  try {
+    const config = await loadAppConfig()
+    // Turning auto sync on schedules a flush (sync-ipc.ts).
+    if (!config.autoSync) return
+
     const localBlock = await localSyncBlock()
     if (localBlock) {
       reportBlockedFlush(localBlock)
@@ -71,29 +94,33 @@ export async function flushPendingChanges(): Promise<void> {
 
     const credentials = await requireSyncCredentials()
     if (!credentials.ok) {
-      syncRuntime.pendingChanges.clear()
-      broadcastPendingStatus()
+      if (RETRYABLE_CREDENTIAL_REASONS.has(credentials.reason)) scheduleFlushIfPending(POLL_INTERVAL_MS)
       return
     }
     const password = credentials.password
+    // Units changed under another account are held for it, not uploaded.
+    await adoptPendingForSignedInAccount()
+    if (syncRuntime.pendingChanges.size === 0) return
 
     emitProgress({ direction: 'upload', status: 'syncing', message: 'Auto-sync starting...' })
 
     const formatGeneration = syncFormatGeneration()
-    const remoteFiles = await listFiles()
+    let remoteFiles: DriveFile[]
+    try {
+      remoteFiles = await listFiles()
+    } catch (err) {
+      reportFailedFlush(errorMessage(err, 'Sync failed'))
+      return
+    }
     const remoteBlock = remoteSyncBlock(remoteFiles, formatGeneration)
     if (remoteBlock) {
       reportBlockedFlush(remoteBlock)
       return
     }
-    updateRemoteState(remoteFiles)
-
-    // Before the pending set is taken, so a failed create keeps every
-    // pending change for the next flush.
     try {
       await ensureSyncFormatMarker(remoteFiles, formatGeneration)
     } catch (err) {
-      emitProgress({ direction: 'upload', status: 'error', message: errorMessage(err, 'Sync failed') })
+      reportFailedFlush(errorMessage(err, 'Sync failed'))
       return
     }
 
@@ -101,43 +128,48 @@ export async function flushPendingChanges(): Promise<void> {
       await ensurePasswordCheckValidated(password, remoteFiles)
     } catch (err) {
       if (err instanceof PasswordMismatchError) {
+        // Waits for the new password; storing it schedules a flush
+        // (sync-ipc.ts).
         emitProgress({ direction: 'upload', status: 'error', message: 'sync.passwordMismatch' })
       } else {
-        emitProgress({ direction: 'upload', status: 'error', message: errorMessage(err, 'Password check failed') })
+        reportFailedFlush(errorMessage(err, 'Password check failed'))
       }
       return
     }
 
-    const changes = new Set(syncRuntime.pendingChanges)
-    syncRuntime.pendingChanges.clear()
-
+    const generations = snapshotPendingGenerations()
+    let anyFailed = false
     const limit = pLimit(SYNC_CONCURRENCY)
-    await Promise.allSettled(
-      [...changes].map((syncUnit) =>
-        limit(async () => {
-          try {
-            await syncOrUpload(syncUnit, password, remoteFiles)
-          } catch {
-            // Re-add failed unit so pending stays true
-            syncRuntime.pendingChanges.add(syncUnit)
-          }
-        }),
-      ),
+    // Pack rosters before pack bodies (`settlePackIndexUnitsFirst`).
+    await settlePackIndexUnitsFirst([...generations], ([syncUnit]) => syncUnit, ([syncUnit, generation]) =>
+      limit(async () => {
+        try {
+          await syncOrUpload(syncUnit, password, remoteFiles)
+          settlePending(syncUnit, generation)
+        } catch {
+          anyFailed = true
+        }
+      }),
     )
 
     broadcastPendingStatus()
 
-    // Refresh remote state after uploads to prevent polling re-downloads
-    const updatedFiles = await listFiles()
-    updateRemoteState(updatedFiles)
-
-    if (syncRuntime.pendingChanges.size === 0) {
-      emitProgress({ direction: 'upload', status: 'success', message: 'Sync complete' })
-    } else {
+    if (anyFailed) {
       emitProgress({ direction: 'upload', status: 'error', message: 'Some sync units failed' })
+    } else {
+      emitProgress({ direction: 'upload', status: 'success', message: 'Sync complete' })
+    }
+
+    if (syncRuntime.pendingChanges.size > 0 && !syncRuntime.isQuitting) {
+      // A unit changed during this pass goes out after the usual debounce;
+      // when only failed units are left, they wait a polling interval.
+      const changedDuringPass = [...syncRuntime.pendingChanges].some(
+        (unit) => pendingGenerationOf(unit) !== (generations.get(unit) ?? 0),
+      )
+      scheduleFlush(changedDuringPass ? DEBOUNCE_MS : POLL_INTERVAL_MS)
     }
   } finally {
-    syncRuntime.isSyncing = false
+    releaseLock()
   }
 }
 
@@ -146,15 +178,40 @@ export async function flushPendingChanges(): Promise<void> {
  *  while quitting); the pending changes stay. */
 function reportBlockedFlush(reason: SyncBlockReason): void {
   emitSyncBlocked('upload', reason)
-  if (syncRuntime.isQuitting) return
-  scheduleFlush(POLL_INTERVAL_MS)
+  scheduleFlushIfPending(POLL_INTERVAL_MS)
 }
 
-/** Replaces any pending flush timer (e.g. one a notifyChange set while
- *  this flush was running), so at most one is ever scheduled. */
+/** Reports a flush that failed before uploading anything (Drive listing,
+ *  format marker, password check) and tries again after a polling interval
+ *  (not while quitting); the pending changes stay. */
+function reportFailedFlush(message: string): void {
+  emitProgress({ direction: 'upload', status: 'error', message })
+  scheduleFlushIfPending(POLL_INTERVAL_MS)
+}
+
+/** Schedules a flush when changes are pending and the app is not quitting.
+ *  Called once a reason a flush kept them is gone (auto sync turned on, a
+ *  sign-in, a password stored). */
+export function scheduleFlushIfPending(delayMs: number = DEBOUNCE_MS): void {
+  if (syncRuntime.pendingChanges.size === 0 || syncRuntime.isQuitting) return
+  scheduleFlush(delayMs)
+}
+
+/** Arms the flush timer for `delayMs` from now, keeping one that already
+ *  fires no later, so at most one timer exists and the earlier flush wins. */
 function scheduleFlush(delayMs: number): void {
-  if (syncRuntime.debounceTimer) clearTimeout(syncRuntime.debounceTimer)
+  const dueAt = Date.now() + delayMs
+  if (syncRuntime.debounceTimer && syncRuntime.debounceDueAt !== null && syncRuntime.debounceDueAt <= dueAt) return
+  armFlushTimer(delayMs)
+}
+
+/** Replaces any flush timer with one firing `delayMs` from now. */
+function armFlushTimer(delayMs: number): void {
+  clearFlushTimer()
+  syncRuntime.debounceDueAt = Date.now() + delayMs
   syncRuntime.debounceTimer = setTimeout(() => {
+    syncRuntime.debounceTimer = null
+    syncRuntime.debounceDueAt = null
     void flushPendingChanges()
   }, delayMs)
 }
@@ -193,19 +250,21 @@ export function setupBeforeQuitHandler(): void {
 
     stopPolling()
 
-    const syncPending = syncRuntime.pendingChanges.size > 0 || syncRuntime.debounceTimer !== null
+    const syncPending = syncRuntime.pendingChanges.size > 0
+      || syncRuntime.debounceTimer !== null
+      || syncRuntime.inFlightPass !== null
     const preSync = preSyncFinalizers.filter((f) => f.hasWork())
     const extras = extraFinalizers.filter((f) => f.hasWork())
     const passwordChangeRun = syncRuntime.passwordChangeRun
-    if (!syncPending && preSync.length === 0 && extras.length === 0 && !passwordChangeRun) return
+    if (!syncPending && preSync.length === 0 && extras.length === 0 && !passwordChangeRun) {
+      // The last settle may not be on disk yet.
+      persistPendingNow()
+      return
+    }
 
     e.preventDefault()
     syncRuntime.isQuitting = true
-
-    if (syncRuntime.debounceTimer) {
-      clearTimeout(syncRuntime.debounceTimer)
-      syncRuntime.debounceTimer = null
-    }
+    clearFlushTimer()
 
     const runQuitPhases = async (): Promise<void> => {
       // Phase 0: a running password switch sees `isQuitting` at its next
@@ -229,9 +288,12 @@ export function setupBeforeQuitHandler(): void {
         )
       }
 
-      // Phase 2: sync flush. Re-evaluate pendingChanges because pre-sync
-      // finalizers may have added to it.
-      if (syncPending || syncRuntime.pendingChanges.size > 0) {
+      // Phase 2: sync flush. The running pass (a flush, a manual sync or a
+      // poll) ends first; then pendingChanges is re-evaluated because that
+      // pass and the pre-sync finalizers may have changed it.
+      const runningPass = syncRuntime.inFlightPass
+      if (runningPass) await runningPass
+      if (syncRuntime.pendingChanges.size > 0) {
         await flushPendingChanges().catch((err: unknown) => {
           log('error', `before-quit sync flush failed: ${String(err)}`)
         })
@@ -251,13 +313,25 @@ export function setupBeforeQuitHandler(): void {
       }
     }
 
-    // Always call app.quit() even if a phase unexpectedly throws, so the
-    // app cannot hang on the preventDefault()'d quit.
-    runQuitPhases()
+    let deadlineTimer: ReturnType<typeof setTimeout> | null = null
+    const deadline = new Promise<void>((resolve) => {
+      deadlineTimer = setTimeout(() => {
+        log('warn', 'before-quit: sync did not finish within the deadline')
+        resolve()
+      }, QUIT_SYNC_DEADLINE_MS)
+    })
+
+    // Always call app.quit() even if a phase unexpectedly throws or never
+    // settles, so the app cannot hang on the preventDefault()'d quit.
+    Promise.race([runQuitPhases(), deadline])
       .catch((err: unknown) => {
         log('error', `before-quit phases crashed: ${String(err)}`)
       })
       .finally(() => {
+        if (deadlineTimer) clearTimeout(deadlineTimer)
+        // What is still pending (the deadline passed, or a flush kept it)
+        // is sent after the next launch.
+        persistPendingNow()
         app.quit()
       })
   })

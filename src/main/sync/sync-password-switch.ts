@@ -21,6 +21,8 @@ import {
 } from './google-drive'
 import { runConcurrently } from '../../shared/concurrency'
 import { SYNC_CONCURRENCY, syncRuntime } from './sync-runtime-state'
+import { canonicalFiles } from './drive-canonical'
+import { moveFilesToTrash } from './drive-trash'
 import { isPasswordChangeLockHeld, releasePasswordChangeLock } from './sync-password-lock'
 import { assertSyncFormatSupported } from './sync-password-guard'
 import { ensureSyncFormatMarker, syncFormatGeneration } from './sync-format'
@@ -160,8 +162,31 @@ async function convertFile(
  *  write changes it, so the file is checked again. */
 type ConfirmedOnTarget = Map<string, string>
 
-/** One pass over every data file. Transfer failures abort the pass after
- *  the started workers settle; the lock is re-checked before each chunk
+/** Renames every listed data file that is not the chosen copy of its name
+ *  (drive-canonical.ts) to a trash name (drive-trash.ts). Sync reads only
+ *  the chosen copy, and re-encrypting the others under their shared name
+ *  would move the newest `modifiedTime` — and with it the choice — to
+ *  whichever finished last. A failed rename fails the pass like a failed
+ *  upload: the change keeps its state and a resume renames the copy again
+ *  (a copy already gone counts as renamed). Returns whether anything was
+ *  renamed. */
+async function trashUnchosenCopies(listed: DriveFile[]): Promise<boolean> {
+  const chosen = new Set(canonicalFiles(listed).map((f) => f.id))
+  const extras = listed.filter((f) => !chosen.has(f.id))
+  if (extras.length === 0) return false
+  const result = await moveFilesToTrash(extras, Date.now())
+  if (result.failed > 0) {
+    throw new Error(`Failed to move ${result.failed} of ${result.attempted} duplicate files to trash: ${result.firstError}`)
+  }
+  return true
+}
+
+/** One pass over every data file: duplicate copies are renamed to trash
+ *  first, then every listed file — trash files too, so one can still be
+ *  renamed back and read after the change — is re-encrypted. Files are
+ *  written by id, so a copy renamed in this pass is converted under its
+ *  trash name. Transfer failures abort the pass after the started workers
+ *  settle; the lock is re-checked after the renames and before each batch
  *  after the first. */
 async function runPass(
   state: PasswordChangeState,
@@ -172,10 +197,12 @@ async function runPass(
 ): Promise<{ converted: number; undecryptable: DriveFile[] }> {
   let converted = 0
   const undecryptable: DriveFile[] = []
+  // The caller checked the lock right before this pass; after renames it is
+  // checked again, even when nothing is left to convert.
+  if (await trashUnchosenCopies(listed)) await ensureLockHeld(state)
   const files = listed.filter((f) => confirmed.get(f.id) !== f.modifiedTime)
   for (let start = 0; start < files.length; start += passwordChangeTuning.chunkSize) {
     if (syncRuntime.isQuitting) throw new PasswordChangeError('sync.passwordChange.interrupted')
-    // The caller checked the lock right before the first chunk.
     if (start > 0) await ensureLockHeld(state)
     const chunk = files.slice(start, start + passwordChangeTuning.chunkSize)
     const result = await runConcurrently(chunk, SYNC_CONCURRENCY, (file) => convertFile(file, keys, state.target, otherFirst), {

@@ -13,7 +13,7 @@ import type {
   DynamicEntryCounts,
   UnlockStatus,
 } from './protocol'
-import type { SnapshotMeta } from './snapshot-store'
+import type { SnapshotMeta, SnapshotUpdateOptions } from './snapshot-store'
 import type { AnalyzeFilterSnapshotMeta } from './analyze-filter-store'
 import type { RunKeystrokeLog, RunLogMeta } from './typing-run-log'
 import type { FavoriteType, SavedFavoriteMeta, FavoriteImportResult } from './favorite-store'
@@ -36,7 +36,7 @@ import type {
 } from './theme-store'
 import type { AppConfig } from './app-config'
 import type { DeviceScope } from './analyze-filters'
-import type { SyncAuthStatus, SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, UndecryptableFile, SyncScope, SyncDataScanResult, StoredKeyboardInfo, SyncOperationResult, ImportLocalDataResult, PasswordChangeStatus, PasswordChangeDeleteResult, PasswordChangeLockStatus, SyncFormatStatus } from './sync'
+import type { SyncAuthStatus, SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, UndecryptableFile, SyncScope, SyncDataScanResult, StoredKeyboardInfo, SyncOperationResult, ImportLocalDataResult, PasswordChangeStatus, PasswordChangeDeleteResult, PasswordChangeLockStatus, SyncFormatStatus, SyncTrashListResult, SyncTrashDeleteResult, StoredPasswordStatus } from './sync'
 import type { PipetteSettings, PipetteSettingsPatch, PooledTypingTestResult } from './pipette-settings'
 import type {
   TypingActivityCell,
@@ -56,7 +56,7 @@ import type {
   TypingDurationCell,
   TypingSessionRow,
   TypingBksMinuteRow,
-  TypingTombstoneResult,
+  TypingAnalyticsImportResult,
   PeakRecords,
   TypingBigramAggregateOptions,
   TypingBigramAggregateResult,
@@ -205,7 +205,7 @@ export interface VialAPI {
   snapshotStoreList(uid: string): Promise<{ success: boolean; entries?: SnapshotMeta[]; error?: string }>
   snapshotStoreSave(uid: string, json: string, deviceName: string, label: string, vilVersion?: number): Promise<{ success: boolean; entry?: SnapshotMeta; error?: string }>
   snapshotStoreLoad(uid: string, entryId: string): Promise<{ success: boolean; data?: string; error?: string }>
-  snapshotStoreUpdate(uid: string, entryId: string, json: string, vilVersion?: number): Promise<{ success: boolean; error?: string }>
+  snapshotStoreUpdate(uid: string, entryId: string, json: string, vilVersion?: number, options?: SnapshotUpdateOptions): Promise<{ success: boolean; error?: string }>
   snapshotStoreRename(uid: string, entryId: string, newLabel: string): Promise<{ success: boolean; error?: string }>
   snapshotStoreDelete(uid: string, entryId: string): Promise<{ success: boolean; error?: string }>
 
@@ -268,6 +268,8 @@ export interface VialAPI {
   /** Field-level merge persist: only the defined keys of `partial` are
    * written, so concurrent writers never clobber each other's fields. */
   pipetteSettingsPatch(uid: string, partial: PipetteSettingsPatch): Promise<{ success: boolean; error?: string }>
+  /** Creates the keyboard's local sync directory without writing a settings file. */
+  pipetteSettingsEnsureDir(uid: string): Promise<{ success: boolean; error?: string }>
   /** Every locally-stored keyboard's saved typing-test results, pooled flat
    * (each tagged with its keyboard name) for the keyboard-agnostic
    * Measurement-row comparison baseline. */
@@ -313,8 +315,8 @@ export interface VialAPI {
   ): Promise<{ name: string; keystrokes: number; activeMs: number }[]>
   typingAnalyticsListKeyboards(): Promise<TypingKeyboardSummary[]>
   typingAnalyticsListItems(uid: string, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingDailySummary[]>
-  typingAnalyticsDeleteItems(uid: string, dates: string[]): Promise<TypingTombstoneResult>
-  typingAnalyticsDeleteAll(uid: string): Promise<TypingTombstoneResult>
+  typingAnalyticsDeleteItems(uid: string, dates: string[]): Promise<{ success: boolean; error?: string }>
+  typingAnalyticsDeleteAll(uid: string): Promise<{ success: boolean; error?: string }>
   typingAnalyticsGetMatrixHeatmap(uid: string, layer: number, sinceMs: number): Promise<TypingHeatmapByCell>
   typingAnalyticsListItemsLocal(uid: string, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingDailySummary[]>
   typingAnalyticsListDeviceInfos(uid: string): Promise<TypingAnalyticsDeviceInfoBundle | null>
@@ -359,9 +361,12 @@ export interface VialAPI {
   typingAnalyticsListRemoteCloudHashes(uid: string): Promise<string[]>
   typingAnalyticsListRemoteCloudDays(uid: string, machineHash: string): Promise<string[]>
   typingAnalyticsFetchRemoteDay(uid: string, machineHash: string, utcDay: string): Promise<boolean>
-  typingAnalyticsDeleteRemoteDay(uid: string, machineHash: string, utcDay: string): Promise<boolean>
+  /** Deletes another device's typing on local calendar `dates`, or all of
+   * it, up to the moment of the call (see deleteDeviceTypingData,
+   * typing-device-delete.ts). */
+  typingAnalyticsDeleteDeviceData(uid: string, machineHash: string, dates: string[] | 'all'): Promise<{ success: boolean; error?: string }>
   typingAnalyticsExport(uid: string, dates: string[]): Promise<{ written: number; cancelled: boolean }>
-  typingAnalyticsImport(): Promise<{ result: { imported: number; rejections: { fileName: string; reason: string }[] }; cancelled: boolean }>
+  typingAnalyticsImport(): Promise<TypingAnalyticsImportResult>
 
   // App Config
   appConfigGetAll(): Promise<AppConfig>
@@ -383,7 +388,7 @@ export interface VialAPI {
   syncPasswordChangeLockStatus(): Promise<PasswordChangeLockStatus | null>
   syncPasswordChangeReleaseLocks(): Promise<SyncOperationResult>
   syncResetTargets(targets: SyncResetTargets): Promise<SyncOperationResult>
-  syncHasPassword(): Promise<boolean>
+  syncPasswordStatus(): Promise<StoredPasswordStatus>
   syncValidatePassword(password: string): Promise<PasswordStrength>
   syncOnProgress(callback: (progress: SyncProgress) => void): () => void
   syncHasPendingChanges(): Promise<boolean>
@@ -391,6 +396,9 @@ export interface VialAPI {
   syncScanRemote(): Promise<SyncDataScanResult>
   syncFetchRemoteBundle(syncUnit: string): Promise<unknown>
   syncDeleteFiles(fileIds: string[]): Promise<{ success: boolean; error?: string }>
+  syncListTrash(): Promise<SyncTrashListResult>
+  syncRestoreTrash(fileId: string): Promise<SyncOperationResult>
+  syncDeleteTrash(fileIds: string[]): Promise<SyncTrashDeleteResult>
   syncCheckPasswordExists(): Promise<boolean>
   syncAnalyticsNow(uid: string): Promise<boolean>
   /** Drive's sync-format status as last checked; null when unknown or
@@ -399,6 +407,8 @@ export interface VialAPI {
   /** Every later change of `syncFormatStatus`'s value; null once forgotten (sign-out, sign-in). */
   syncOnFormatStatusChanged(callback: (status: SyncFormatStatus | null) => void): () => void
   syncOnPendingChange(callback: (pending: boolean) => void): () => void
+  /** A sync merge rewrote this unit's local files (e.g. `favorites/macro`, `keyboards/{uid}/snapshots`). */
+  syncOnUnitApplied(callback: (syncUnit: string) => void): () => void
 
   // Language Store
   langList(provider?: string): Promise<LanguageListEntry[]>
@@ -461,6 +471,9 @@ export interface VialAPI {
   i18nPackGet(id: string): Promise<I18nPackStoreResult<I18nPackRecord>>
   i18nPackRename(id: string, newName: string): Promise<I18nPackStoreResult<I18nPackMeta>>
   i18nPackSetEnabled(id: string, enabled: boolean): Promise<I18nPackStoreResult<I18nPackMeta>>
+  /** Stores a recomputed coverage on the meta without moving any clock,
+   *  only while the meta's body clock is still `measuredBodyClock`. */
+  i18nPackRefreshCoverage(id: string, values: { matchedBaseVersion: string; coverage: { totalKeys: number; coveredKeys: number }; measuredBodyClock: string }): Promise<I18nPackStoreResult<I18nPackMeta>>
   i18nPackDelete(id: string): Promise<I18nPackStoreResult<void>>
   i18nPackSetHubPostId(id: string, hubPostId: string | null, uploaderName?: string, hubUpdatedAt?: string): Promise<I18nPackStoreResult<I18nPackMeta>>
   i18nPackHasName(name: string, excludeId?: string): Promise<I18nPackStoreResult<boolean>>

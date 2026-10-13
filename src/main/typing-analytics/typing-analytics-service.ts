@@ -9,9 +9,11 @@
 // re-exports the full public surface from the sibling modules in this
 // directory. New IPC channels belong in `typing-analytics-ipc-analyze.ts`
 // or `typing-analytics-ipc-range.ts` depending on which family they extend
-// — not here. External consumers (main/index.ts, hub/hub-analytics.ts,
-// sync/sync-ipc.ts, typing-run-log-store.ts, and this module's test mocks)
-// must keep importing this facade path, never a submodule directly.
+// — not here. The Data modal's delete handlers hold the sync lock, so they
+// are registered on the sync side (sync/sync-reset-ipc.ts). External
+// consumers (main/index.ts, hub/hub-analytics.ts, sync/sync-ipc.ts,
+// sync/sync-reset-ipc.ts, typing-run-log-store.ts, and this module's test
+// mocks) must keep importing this facade path, never a submodule directly.
 
 import { app } from 'electron'
 import { IpcChannels } from '../../shared/ipc/channels'
@@ -19,10 +21,8 @@ import { secureHandle } from '../ipc-guard'
 import type {
   TypingDailySummary,
   TypingKeyboardSummary,
-  TypingTombstoneResult,
 } from './db/typing-analytics-db'
 import { getTypingAnalyticsDB } from './db/typing-analytics-db'
-import { emptyTombstoneResult } from '../../shared/types/typing-analytics'
 import { normalizeAppScopes } from '../../shared/types/analyze-filters'
 import { ensureCacheIsFresh } from './cache-rebuild'
 import { getMachineHash } from './machine-hash'
@@ -34,9 +34,11 @@ import {
   isValidEvent,
 } from './typing-analytics-pipeline'
 import { listTypingDailySummaries, listTypingKeyboards } from './typing-analytics-queries'
-import { deleteAllTypingForKeyboard, deleteTypingDailySummaries } from './typing-analytics-retention'
 import { registerAnalyzeIpc } from './typing-analytics-ipc-analyze'
 import { registerRangeIpc } from './typing-analytics-ipc-range'
+import { applyOwnDeletedRangesForAllKeyboards } from './deleted-ranges-apply'
+import { resetHoldsKeyboard } from '../sync/sync-runtime-state'
+import { log } from '../logger'
 
 async function initialize(): Promise<void> {
   // getMachineHash transitively warms getInstallationId (and caches its
@@ -52,6 +54,11 @@ async function initialize(): Promise<void> {
     force: db.cacheNeedsRebuild,
   })
   taState.syncState = state
+  // Ranges other devices deleted from this device's data while it was off.
+  // Not awaited, so a long apply does not hold back the end of startup.
+  void applyOwnDeletedRangesForAllKeyboards(userDataDir, machineHash, resetHoldsKeyboard).catch((err: unknown) => {
+    log('warn', `typing-analytics: deleted ranges not applied at startup: ${String(err)}`)
+  })
 }
 
 /**
@@ -110,27 +117,6 @@ export function setupTypingAnalyticsIpc(): void {
     },
   )
 
-  secureHandle(
-    IpcChannels.TYPING_ANALYTICS_DELETE_ITEMS,
-    async (_event, uid: unknown, dates: unknown): Promise<TypingTombstoneResult> => {
-      const empty = emptyTombstoneResult()
-      if (typeof uid !== 'string' || uid.length === 0) return empty
-      if (!Array.isArray(dates)) return empty
-      const validDates = dates.filter((d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d))
-      if (validDates.length === 0) return empty
-      return deleteTypingDailySummaries(uid, validDates)
-    },
-  )
-
-  secureHandle(
-    IpcChannels.TYPING_ANALYTICS_DELETE_ALL,
-    async (_event, uid: unknown): Promise<TypingTombstoneResult> => {
-      const empty = emptyTombstoneResult()
-      if (typeof uid !== 'string' || uid.length === 0) return empty
-      return deleteAllTypingForKeyboard(uid)
-    },
-  )
-
   registerAnalyzeIpc()
   registerRangeIpc()
 }
@@ -151,6 +137,7 @@ export {
   flushTypingAnalyticsBeforeQuit,
   flushTypingAnalyticsNowForTests,
   isValidRowColKeycode,
+  runOnFlushChain,
 } from './typing-analytics-pipeline'
 
 export {

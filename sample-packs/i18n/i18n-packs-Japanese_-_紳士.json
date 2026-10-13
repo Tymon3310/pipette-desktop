@@ -1,5 +1,5 @@
 {
-  "version": "0.1.108",
+  "version": "0.1.120",
   "name": "Japanese - 紳士",
   "common": {
     "save": "保存を承る",
@@ -189,7 +189,8 @@
       "asciiOnly": "西欧の文字のみお受けいたします",
       "unlockClickAgain": "封印を解いた後、再び鍵を叩いて筆記帳をお開きください",
       "unlockWarning": "合言葉などの機密を呪文に含めてはなりませぬ。漏洩の恐れがございます。",
-      "invalidMacroEntry": "第 {{index}} 番の呪文に乱れがございます"
+      "invalidMacroEntry": "第 {{index}} 番の呪文に乱れがございます",
+      "textLayoutNote": "言葉は機材のファームウェアが持つ配列（多くは US）にて綴られます。OSの配列が異なる折には、一部の文字が異なって現れることがございます。"
     },
     "lighting": {
       "title": "灯火 (Lighting)",
@@ -783,7 +784,8 @@
     "instructions": "光り輝く鍵を長押しして、封印をお解きください",
     "hint": "おやめになるなら、紐を抜き差ししてくださいませ",
     "progress": "進捗: {{current}} / {{total}}",
-    "cancel": "お取りやめ"
+    "cancel": "お取りやめ",
+    "missingKeys": "これらの解錠の鍵は、この機材の配列に見当たりませぬ: {{positions}}。封印を解けぬ恐れがございます。機材のファームウェア設定をお確かめになるか、作り手にお尋ねくださいませ"
   },
   "fileIO": {
     "loadLayout": ".vil 拝読",
@@ -864,6 +866,14 @@
     "signIn": "御着席",
     "authenticating": "ご本人か確認しております...",
     "authFailed": "確認に失敗いたしました。もう一度お試しを。",
+    "signInBusy": "同期の最中はサインインいたしかねます。少々お待ちのうえ、もう一度お試しを。",
+    "signOutBusy": "同期の最中はお席を立つことはいたしかねます。少々お待ちのうえ、もう一度お試しを。",
+    "signOutPasswordChanging": "合言葉を改めている最中は、お席を立つことはいたしかねます。済みましたら、もう一度お試しを。",
+    "resetBusy": "同期の最中はリセットいたしかねます。少々お待ちのうえ、もう一度お試しを。",
+    "deleteBusy": "同期の最中は削除いたしかねます。少々お待ちのうえ、もう一度お試しを。",
+    "trashBusy": "同期の最中は屑籠に手を触れかねます。少々お待ちのうえ、もう一度お試しを。",
+    "importBusy": "同期の最中はインポートいたしかねます。少々お待ちのうえ、もう一度お試しを。",
+    "ownDeviceDeleteFromLocal": "この機材の記録は Local タブより抹消くださいませ。",
     "encryptionPassword": "内緒の合言葉",
     "passwordSet": "合言葉は設定済みでございます",
     "passwordPlaceholder": "合言葉を入力",
@@ -946,15 +956,27 @@
     "importComplete": "完了いたしました",
     "importFailed": "失敗いたしました",
     "passwordMismatch": "合言葉が違います。今一度ご確認くださいませ。",
+    "passwordAlreadySet": "合言葉はすでにお預かりしております。「合言葉を入力し直す」または「合言葉の変更」をお使いくださいませ。",
     "scanning": "見渡しております...",
     "downloading": "お取り寄せ中...",
     "noRemoteData": "あちらに記録はございません",
     "undecryptableCount": "{{count}} 件の開けぬ書物",
+    "trash": {
+      "description": "同じ記録の別の写しが選ばれたため、同期が用いなくなった写しでございます。復元なされば、その写しと現在の写しを入れ替えます（現在の写しは屑籠へ）。",
+      "empty": "屑籠は空でございます",
+      "restore": "復元",
+      "notRestorable": "この PC 自身の打鍵の記録は復元いたしかねます。この PC より改めて届けられます",
+      "updated": "更新 {{date}}",
+      "autoDelete": "現在の写しがある限り、{{date}} 以降に抹消いたします",
+      "notFound": "この書物はもはや屑籠にはございません"
+    },
     "checkingRemotePassword": "あちらの様子を伺っております...",
     "existingPasswordHint": "合言葉が既にございます。他で使ったものを教えていただけますか？",
     "reenterPasswordWarning": "この端末の合言葉が Google Drive のものと一致いたしません。他の端末でお使いの合言葉をお教えくださいませ。",
     "reenterPassword": "合言葉を入力し直す",
     "reenterPasswordNoRemote": "Google Drive には照合すべき合言葉がまだございません。こちらを閉じ、現在の合言葉で同期なさってくださいませ。",
+    "storedPasswordUnreadable": "この端末に保管した合言葉を読み取れませんでした（OSの錠前に拒まれました）。錠前が閉じている、あるいはアクセスをお断りになった場合は、お開けいただくかお許しいただいたうえで「再試行」をお押しくださいませ。それ以外の場合は、下にて合言葉を改めてお定めくださいませ。",
+    "keystoreUnavailableNotice": "OSの錠前が開かなかった場合は、お開けいただくか整えていただいたうえで（Linux ではキーリング）、Pipette を再起動なさってくださいませ。",
     "updateRequired": "この Google Drive の同期データは、より新しい版の Pipette にて作られております。同期をお続けになるには、アップデートをお願い申し上げます。",
     "updateBanner": {
       "message": "Cloud Sync には、より新しい版の Pipette が必要でございます。同期をお続けになるには、アプリのアップデートをお願い申し上げます。",
@@ -1886,20 +1908,23 @@
     "syncNoOrphans": "全てのデータが手元にございます",
     "resetAppSettings": "設定を初期化",
     "cloudData": "クラウドの記録",
+    "trash": "屑籠",
     "typing": {
       "title": "タイピング",
       "noKeyboards": "記録がございません",
       "noItems": "この機材の記録はございません",
       "summaryLine": "{{days}} 日分 / 合計 {{keystrokes}} 打",
-      "colDate": "日付",
+      "colDateZone": "日付（{{zone}}）",
       "colKeystrokes": "打鍵数",
       "colActiveMs": "活動時間",
       "selectAll": "全ての日を選択",
       "selectRow": "{{date}} を選択",
       "deleteSelected": "選択した日を抹消 ({{count}})",
       "deleteAll": "この機材の全データを抹消",
-      "confirmDeleteSelected": "選ばれた {{count}} 日分を抹消してもよろしいですか？ 雲の上からも消え去ります。必要なら先に出力しておいてくださいませ。",
-      "confirmDeleteAll": "この機材の全ての記録を抹消してもよろしいですか？ 雲の上からも消え去ります。必要なら先に出力しておいてくださいませ。",
+      "confirmDeleteSelected": "選ばれた {{count}} 日分を抹消してもよろしいですか？ 雲の上からも消え去ります。抹消した記録は、以前の出力を再び取り込まれても戻りませぬゆえ、ご承知おきくださいませ。",
+      "confirmDeleteAll": "この機材の全ての記録を抹消してもよろしいですか？ 雲の上の写しも消え去り、他の機材からも次の同期の折に消え去ります。抹消した記録は、以前の出力を再び取り込まれても戻りませぬゆえ、ご承知おきくださいませ。",
+      "confirmDeleteSelectedDevice": "この機材の {{count}} 日分の記録を、ただちにここで伏せてもよろしいですか？ 記録した機材が次に同期した折に抹消されます。この時より後に打たれた分は残りますゆえ、ご安心くださいませ。",
+      "confirmDeleteAllDevice": "この機材の全ての記録を、ただちにここで伏せてもよろしいですか？ 記録した機材が次に同期した折に抹消されます。この時より後に打たれた分は残りますゆえ、ご安心くださいませ。",
       "exportLabel": "出力…",
       "importLabel": "読み込み…",
       "importStatus": {
@@ -1914,7 +1939,8 @@
           "no-matching-target": "どこにも記録が見当たりません",
           "empty-or-invalid-content": "中身が空か、不正なようでございます",
           "rows-outside-day-window": "記録の時刻が範囲外でございます",
-          "read-error": "読み込めませんでした"
+          "read-error": "読み込めませんでした",
+          "deleted-ranges-unreadable": "この機材の抹消範囲を読み取れませんでしたゆえ、この日はそのままにしてございます"
         }
       },
       "noRemoteDevices": "他の機材の記録はございません"

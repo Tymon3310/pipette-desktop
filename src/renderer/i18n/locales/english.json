@@ -1,5 +1,5 @@
 {
-  "version": "0.1.108",
+  "version": "0.1.120",
   "name": "English",
   "common": {
     "save": "Save",
@@ -189,7 +189,8 @@
       "asciiOnly": "Only ASCII characters (A-Z, 0-9, symbols) are supported",
       "unlockClickAgain": "After unlocking, click the macro key again to open the editor.",
       "unlockWarning": "Do not store passwords or sensitive information in macros, as they may be replayed or shared.",
-      "invalidMacroEntry": "Invalid macro at index {{index}}"
+      "invalidMacroEntry": "Invalid macro at index {{index}}",
+      "textLayoutNote": "Text is typed with the firmware's keyboard layout (usually US). If your OS layout differs, some characters may come out different."
     },
     "lighting": {
       "title": "Lighting",
@@ -783,7 +784,8 @@
     "instructions": "Press and hold the highlighted keys to unlock.",
     "hint": "To cancel, unplug and replug the keyboard.",
     "progress": "Progress: {{current}} / {{total}}",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "missingKeys": "These unlock keys are not in this keyboard's layout: {{positions}}. Unlocking may not be possible. Check the keyboard's firmware settings or ask its maker."
   },
   "fileIO": {
     "loadLayout": ".vil",
@@ -874,6 +876,14 @@
     "signIn": "Connect",
     "authenticating": "Waiting for authentication...",
     "authFailed": "Authentication failed. Please try again.",
+    "signInBusy": "Cannot sign in while sync is in progress. Try again in a moment.",
+    "signOutBusy": "Cannot disconnect while sync is in progress. Try again in a moment.",
+    "signOutPasswordChanging": "Cannot disconnect while the sync password is being changed. Try again after it finishes.",
+    "resetBusy": "Cannot reset while sync is in progress. Try again in a moment.",
+    "deleteBusy": "Cannot delete while sync is in progress. Try again in a moment.",
+    "trashBusy": "Cannot change Trash while sync is in progress. Try again in a moment.",
+    "importBusy": "Cannot import while sync is in progress. Try again in a moment.",
+    "ownDeviceDeleteFromLocal": "This device's data is deleted from the Local tab.",
     "encryptionPassword": "Sync Encryption Password",
     "passwordSet": "Password is set",
     "passwordPlaceholder": "Enter encryption password",
@@ -956,15 +966,27 @@
     "importComplete": "Import complete",
     "importFailed": "Import failed",
     "passwordMismatch": "Sync password does not match. Please check your encryption password.",
+    "passwordAlreadySet": "A sync password is already saved. Use Re-enter Password or Change Password instead.",
     "scanning": "Scanning...",
     "downloading": "Downloading...",
     "noRemoteData": "No remote data found",
     "undecryptableCount": "{{count}} undecryptable file(s)",
+    "trash": {
+      "description": "Copies that sync stopped using because another copy of the same data was chosen. Restore swaps a copy back in; the current copy moves to Trash.",
+      "empty": "Trash is empty",
+      "restore": "Restore",
+      "notRestorable": "This PC's own typing data can't be restored; it is uploaded again from this PC",
+      "updated": "Updated {{date}}",
+      "autoDelete": "Deleted after {{date}} while a current copy exists",
+      "notFound": "This file is no longer in Trash"
+    },
     "checkingRemotePassword": "Checking sync status...",
     "existingPasswordHint": "A sync password already exists. Enter the same password used on your other device.",
     "reenterPasswordWarning": "This PC's sync password doesn't match Google Drive. Enter the password used on your other PCs.",
     "reenterPassword": "Re-enter Password",
     "reenterPasswordNoRemote": "Google Drive has no sync password to compare with yet. Close this form and run Sync with the current password.",
+    "storedPasswordUnreadable": "This PC's saved sync password can't be read (the OS keychain refused it). If the keychain is locked or access was denied, unlock or allow it and press Retry. Otherwise, set the sync password again below.",
+    "keystoreUnavailableNotice": "If the OS keychain couldn't be opened, unlock or set it up (a keyring on Linux) and restart Pipette.",
     "updateRequired": "Sync data on this Google Drive was made by a newer version of Pipette. Update Pipette to keep syncing.",
     "updateBanner": {
       "message": "Cloud Sync needs a newer version of Pipette. Update the app to keep syncing.",
@@ -1896,20 +1918,23 @@
     "syncNoOrphans": "All synced data is available locally",
     "resetAppSettings": "Reset application settings",
     "cloudData": "Cloud Data",
+    "trash": "Trash",
     "typing": {
       "title": "Typing",
       "noKeyboards": "No recorded typing data",
       "noItems": "No typing data for this keyboard",
       "summaryLine": "{{days}} day(s), {{keystrokes}} keystrokes total",
-      "colDate": "Date",
+      "colDateZone": "Date ({{zone}})",
       "colKeystrokes": "Keystrokes",
       "colActiveMs": "Active time",
       "selectAll": "Select all days",
       "selectRow": "Select {{date}}",
       "deleteSelected": "Delete selected ({{count}})",
       "deleteAll": "Delete all for this keyboard",
-      "confirmDeleteSelected": "Delete {{count}} day(s) of this device's records? Synced copies will drop too, days recorded by other devices remain. Once deleted, those dates can no longer be re-imported — export first if you need a backup.",
-      "confirmDeleteAll": "Delete every day this device recorded for this keyboard? Synced copies will drop too, days recorded by other devices remain. Once deleted, those dates can no longer be re-imported — export first if you need a backup.",
+      "confirmDeleteSelected": "Delete {{count}} day(s) of this device's records? Synced copies will drop too, days recorded by other devices remain. Deleted data stays deleted even if an earlier export is imported again.",
+      "confirmDeleteAll": "Delete every day this device recorded for this keyboard? The copies on Google Drive go too, and other PCs drop them at their next sync; days recorded by other devices remain. Deleted data stays deleted even if an earlier export is imported again.",
+      "confirmDeleteSelectedDevice": "Hide {{count}} day(s) of this device's records here now? They are removed on the PC that recorded them the next time it syncs; what it types after this moment stays.",
+      "confirmDeleteAllDevice": "Hide every day this device recorded for this keyboard here now? They are removed on the PC that recorded them the next time it syncs; what it types after this moment stays.",
       "exportLabel": "Export…",
       "importLabel": "Import…",
       "importStatus": {
@@ -1924,7 +1949,8 @@
           "no-matching-target": "no local or cloud copy of this day to overwrite",
           "empty-or-invalid-content": "file is empty or contains invalid lines",
           "rows-outside-day-window": "row timestamps fall outside the day the filename claims",
-          "read-error": "could not read the file"
+          "read-error": "could not read the file",
+          "deleted-ranges-unreadable": "could not read this device's deleted ranges, so the day was left as it is"
         }
       },
       "noRemoteDevices": "No other devices have typed on this keyboard"

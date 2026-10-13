@@ -4,7 +4,10 @@
 import { app } from 'electron'
 import { join } from 'node:path'
 import { readFile, readdir, access } from 'node:fs/promises'
-import { gcTombstones, type EntryMeta } from './merge'
+import type { ClockedEntry, EntryStore } from './entry-clocks'
+import { gcTombstones } from './entry-merge'
+import { readIndexDirMigrated } from './body-filename-migration'
+import { withWriteLock } from '../per-uid-write-lock'
 import { keyboardMetaFilePath, readKeyboardMetaIndex } from './keyboard-meta'
 import { FAVORITE_TYPES } from '../../shared/favorite-data'
 import type { FavoriteIndex } from '../../shared/types/favorite-store'
@@ -20,21 +23,97 @@ import { TYPING_TEST_TEXT_SYNC_UNIT } from '../typing-test-text-store'
 import { BUILTIN_ENGLISH_PACK_ID, I18N_INDEX_SYNC_UNIT, type I18nPackIndex } from '../../shared/types/i18n-store'
 import { THEME_INDEX_SYNC_UNIT, type ThemePackIndex } from '../../shared/types/theme-store'
 import {
+  DELETED_RANGES_FILENAME,
   deviceDayJsonlPath,
+  listDeletedRangesHashes,
   listDeviceDays,
 } from '../typing-analytics/jsonl/paths'
+import { bundleDeletedRanges } from '../typing-analytics/deleted-ranges-store'
 import { getTypingAnalyticsDB } from '../typing-analytics/db/typing-analytics-db'
 import { getMachineHash } from '../typing-analytics/machine-hash'
 import {
   parseTypingAnalyticsDeviceDaySyncUnit,
+  parseTypingDeletedRangesSyncUnit,
   typingAnalyticsDeviceDaySyncUnit,
+  typingDeletedRangesSyncUnit,
 } from '../typing-analytics/sync'
 import { log } from '../logger'
+import { bundleSyncedIndex as bundleSyncedI18nIndex, bundleSyncedPackBody as bundleSyncedI18nPackBody } from '../i18n-pack-store'
+import { bundleSyncedIndex as bundleSyncedThemeIndex, bundleSyncedPackBody as bundleSyncedThemePackBody } from '../theme-pack-store'
+import { isSafePathSegment } from '../utils/safe-filename'
 
 export async function readIndexFile(dir: string): Promise<FavoriteIndex | SnapshotIndex | AnalyzeFilterSnapshotIndex | RunLogIndex | KeyLabelIndex | TypingTestTextIndex | null> {
   try {
     const raw = await readFile(join(dir, 'index.json'), 'utf-8')
     return JSON.parse(raw) as FavoriteIndex | SnapshotIndex | AnalyzeFilterSnapshotIndex | RunLogIndex | KeyLabelIndex | TypingTestTextIndex
+  } catch {
+    return null
+  }
+}
+
+/** The entry store an index-based sync unit belongs to, or null for any
+ *  other unit (settings, packs, keyboard meta, analytics days). */
+export function entryStoreForSyncUnit(syncUnit: string): EntryStore | null {
+  if (syncUnit === KEY_LABEL_SYNC_UNIT) return 'keyLabels'
+  if (syncUnit === TYPING_TEST_TEXT_SYNC_UNIT) return 'typingTestTexts'
+  const parts = syncUnit.split('/')
+  if (parts.length === 2 && parts[0] === 'favorites') return 'favorites'
+  if (parts.length === 3 && parts[0] === 'keyboards') {
+    if (parts[2] === 'snapshots') return 'snapshots'
+    if (parts[2] === 'analyze_filters') return 'analyzeFilters'
+    if (parts[2] === 'runs') return 'runLogs'
+  }
+  return null
+}
+
+/** Key of the store lock that guards a sync unit's local files: the keyboard
+ * uid for per-keyboard units, `favorites/{type}` for favorites, otherwise the
+ * unit name itself (key-labels, typing-test-texts, a device's deleted ranges —
+ * deleted-ranges-store.ts locks on that name). The stores do their
+ * read-modify-write under the same key, so a local save, a merge and a
+ * bundle never interleave. `collectLockKeys` in local-data-import.ts uses
+ * the same key scheme, so the two must agree. */
+export function storeLockKey(syncUnit: string): string {
+  const parts = syncUnit.split('/')
+  if (parts[0] === 'keyboards' && parts.length === 3) return parts[1]
+  if (parts[0] === 'favorites' && parts.length === 2) return `favorites/${parts[1]}`
+  return syncUnit
+}
+
+/** The index and body files of an index-based store, for a caller holding
+ *  its lock. Entries go out as v2 entries with expired tombstones dropped.
+ *  An alive entry whose body file is missing is left out: no device may
+ *  take a body group from an entry that has no body (`mergeEntries`).
+ *  Tombstones carry no body. Null when the index is missing or
+ *  unreadable. */
+async function readIndexBodies(
+  store: EntryStore,
+  basePath: string,
+): Promise<{ index: SyncBundle['index']; files: Record<string, string> } | null> {
+  const local = await readIndexDirMigrated(store, basePath)
+  if (local.state !== 'ok') return null
+  const files: Record<string, string> = {}
+  const kept: ClockedEntry[] = []
+  for (const entry of gcTombstones(local.entries)) {
+    if (entry.deletedAt === undefined) {
+      if (typeof entry.filename !== 'string' || !isSafePathSegment(entry.filename)) continue
+      try {
+        files[entry.filename] = await readFile(join(basePath, entry.filename), 'utf-8')
+      } catch {
+        continue
+      }
+    }
+    kept.push(entry)
+  }
+  const index = { ...local.index, entries: kept } as unknown as SyncBundle['index']
+  files['index.json'] = JSON.stringify(index, null, 2)
+  return { index, files }
+}
+
+/** Raw text of a keyboard's `pipette_settings.json`, or null when missing. */
+export async function readSettingsFile(dir: string): Promise<string | null> {
+  try {
+    return await readFile(join(dir, 'pipette_settings.json'), 'utf-8')
   } catch {
     return null
   }
@@ -49,72 +128,33 @@ export async function bundleSyncUnit(syncUnit: string): Promise<SyncBundle | nul
   const parts = syncUnit.split('/')
   const userData = app.getPath('userData')
 
-  // Handle "i18n/index" — the language pack roster (LWW + tombstone).
-  // Index-only bundle (no `files`) so the renderer can register packs
-  // before / independent of their bodies arriving.
+  // Handle "i18n/index" — the language pack roster, metas as v2 entries
+  // read under the store's lock (`bundleSyncedIndex`). Index-only bundle
+  // (no `files`) so the renderer can register packs before / independent
+  // of their bodies arriving.
   if (syncUnit === I18N_INDEX_SYNC_UNIT) {
-    try {
-      const raw = await readFile(join(userData, 'sync', 'i18n', 'index.json'), 'utf-8')
-      const index = JSON.parse(raw) as I18nPackIndex
-      if (!Array.isArray(index?.metas)) return null
-      return { type: 'i18n-index', key: 'i18n-index', index, files: {} }
-    } catch {
-      return null
-    }
+    return bundleSyncedI18nIndex()
   }
 
   // Handle "i18n/packs/{packId}" — single-file bundle carrying one
-  // pack's translations. Each pack rides its own sync unit so editing
-  // one pack does not bump every other pack's LWW timestamp. The
-  // built-in English body is refused defensively even if somehow
-  // requested (collectAllSyncUnits already never enumerates it, and
-  // the store's own notifyPackChange never dirty-marks it — this is
-  // belt-and-suspenders against a stale/future call site).
+  // pack's translations plus its body clock (`bundleSyncedPackBody`,
+  // read under the store's lock). Each pack rides its own sync unit so
+  // editing one pack does not re-send every other pack's body. The
+  // built-in English body never syncs (collectAllSyncUnits never
+  // enumerates it, and the store refuses to bundle it).
   if (parts.length === 3 && parts[0] === 'i18n' && parts[1] === 'packs') {
-    const packId = parts[2]
-    if (packId === BUILTIN_ENGLISH_PACK_ID) return null
-    const filePath = join(userData, 'sync', 'i18n', 'packs', `${packId}.json`)
-    try {
-      const content = await readFile(filePath, 'utf-8')
-      return {
-        type: 'i18n-pack',
-        key: packId,
-        index: { metas: [] } as I18nPackIndex,
-        files: { [`${packId}.json`]: content },
-      }
-    } catch {
-      return null
-    }
+    return bundleSyncedI18nPackBody(parts[2])
   }
 
-  // Handle "themes/index" — the theme pack roster (LWW + tombstone).
+  // Handle "themes/index" — the theme pack roster, like "i18n/index".
   if (syncUnit === THEME_INDEX_SYNC_UNIT) {
-    try {
-      const raw = await readFile(join(userData, 'sync', 'themes', 'index.json'), 'utf-8')
-      const index = JSON.parse(raw) as ThemePackIndex
-      if (!Array.isArray(index?.metas)) return null
-      return { type: 'theme-index', key: 'theme-index', index, files: {} }
-    } catch {
-      return null
-    }
+    return bundleSyncedThemeIndex()
   }
 
   // Handle "themes/packs/{packId}" — single-file bundle carrying one
-  // theme pack's color definitions.
+  // theme pack's color definitions plus its body clock.
   if (parts.length === 3 && parts[0] === 'themes' && parts[1] === 'packs') {
-    const packId = parts[2]
-    const filePath = join(userData, 'sync', 'themes', 'packs', `${packId}.json`)
-    try {
-      const content = await readFile(filePath, 'utf-8')
-      return {
-        type: 'theme-pack',
-        key: packId,
-        index: { metas: [] } as ThemePackIndex,
-        files: { [`${packId}.json`]: content },
-      }
-    } catch {
-      return null
-    }
+    return bundleSyncedThemePackBody(parts[2])
   }
 
   // Handle "keyboards/{uid}/devices/{hash}/days/{YYYY-MM-DD}" — per-day
@@ -137,6 +177,24 @@ export async function bundleSyncUnit(syncUnit: string): Promise<SyncBundle | nul
     }
   }
 
+  // Handle "keyboards/{uid}/devices/{hash}/deleted-ranges" — the time
+  // ranges other devices deleted from that device's typing data, read under
+  // the file's lock (`bundleDeletedRanges`). The segments come from a unit
+  // name that may derive from a Drive filename, so they are checked before
+  // they become a path.
+  const rangesRef = parseTypingDeletedRangesSyncUnit(syncUnit)
+  if (rangesRef) {
+    if (!isSafePathSegment(rangesRef.uid) || !isSafePathSegment(rangesRef.machineHash)) return null
+    const content = await bundleDeletedRanges(userData, rangesRef.uid, rangesRef.machineHash)
+    if (content === null) return null
+    return {
+      type: 'typing-deleted-ranges',
+      key: `${rangesRef.uid}|${rangesRef.machineHash}`,
+      index: { uid: rangesRef.uid, entries: [] } as SnapshotIndex,
+      files: { [DELETED_RANGES_FILENAME]: content },
+    }
+  }
+
   // Handle "keyboards/{uid}/settings" — single-file bundle (no index)
   if (parts.length === 3 && parts[0] === 'keyboards' && parts[2] === 'settings') {
     const uid = parts[1]
@@ -154,30 +212,16 @@ export async function bundleSyncUnit(syncUnit: string): Promise<SyncBundle | nul
     }
   }
 
-  // Handle index-based sync units (favorites, keyboard snapshots)
+  // Handle index-based sync units (favorites, snapshots, analyze filters,
+  // run logs, key labels, typing-test texts)
+  const store = entryStoreForSyncUnit(syncUnit)
+  if (!store) return null
   const basePath = join(userData, 'sync', ...parts)
-  const index = await readIndexFile(basePath)
-  if (!index) return null
-
-  // `index.entries`'s static type is a union of each possible index's own
-  // array type (rather than a single array-of-union type), which a generic
-  // function call can't unify against. Every constituent is an EntryMeta[]
-  // at runtime, so widen through that shared alias.
-  const gcEntries = gcTombstones(index.entries as EntryMeta[])
-  index.entries = gcEntries as typeof index.entries
-
-  const files: Record<string, string> = {}
-
-  for (const entry of gcEntries) {
-    try {
-      const content = await readFile(join(basePath, entry.filename), 'utf-8')
-      files[entry.filename] = content
-    } catch {
-      // File missing — skip
-    }
-  }
-
-  files['index.json'] = JSON.stringify(index, null, 2)
+  // Under the store's lock, so an entry's clocks and its body bytes come
+  // from the same save.
+  const read = await withWriteLock(storeLockKey(syncUnit), () => readIndexBodies(store, basePath))
+  if (!read) return null
+  const { index, files } = read
 
   // keyboards/{uid}/analyze_filters mirrors the snapshots layout but is
   // its own bundle type so the export-categorisation in sync-ipc.ts
@@ -216,6 +260,15 @@ export function isAnalyticsSyncUnit(syncUnit: string): boolean {
   return parseTypingAnalyticsDeviceDaySyncUnit(syncUnit) !== null
 }
 
+/** Per-device deleted-ranges units
+ * (`keyboards/{uid}/devices/{hash}/deleted-ranges`). Not analytics units:
+ * one small file per device, so they ride every trigger, connect-time
+ * initial sync and 3-minute polling included, and the Analyze panel sync
+ * takes them too. */
+export function isTypingDeletedRangesSyncUnit(syncUnit: string): boolean {
+  return parseTypingDeletedRangesSyncUnit(syncUnit) !== null
+}
+
 /** Per-run raw keystroke log units (`keyboards/{uid}/runs`). Excluded
  * from connect-time initial sync and 3-minute polling for the same
  * reason as `isAnalyticsSyncUnit`. Unlike typing-analytics units, this
@@ -225,10 +278,17 @@ export function isRunLogSyncUnit(syncUnit: string): boolean {
   return /^keyboards\/[^/]+\/runs$/.test(syncUnit)
 }
 
-/** Own-hash typing-analytics units for one keyboard. Narrower than
- * `collectAllSyncUnits` + filter — no favorites/snapshots/settings
- * scan, no remote-unaware reconcile. Used by the Analyze panel mount
- * sync. */
+/** The deleted-ranges unit of every hash of `uid` that has a local file.
+ * Every hash, not only this device's: any device may add ranges to another
+ * device's file, and the owner learns of them through Drive. */
+async function collectDeletedRangesUnits(userData: string, uid: string): Promise<string[]> {
+  return (await listDeletedRangesHashes(userData, uid)).map((hash) => typingDeletedRangesSyncUnit(uid, hash))
+}
+
+/** Own-hash typing-analytics day units and every hash's deleted-ranges
+ * unit for one keyboard. Narrower than `collectAllSyncUnits` + filter — no
+ * favorites/snapshots/settings scan, no remote-unaware reconcile. Used by
+ * the Analyze panel mount sync. */
 export async function collectAnalyticsSyncUnitsForUid(uid: string): Promise<string[]> {
   const userData = app.getPath('userData')
   const units: string[] = []
@@ -240,6 +300,7 @@ export async function collectAnalyticsSyncUnitsForUid(uid: string): Promise<stri
   } catch (err) {
     log('warn', `typing-analytics per-uid scan failed for ${uid}: ${String(err)}`)
   }
+  units.push(...await collectDeletedRangesUnits(userData, uid))
   return units
 }
 
@@ -324,6 +385,8 @@ export async function collectAllSyncUnits(): Promise<string[]> {
         await access(join(keyboardsDir, uid, 'runs', 'index.json'))
         units.push(`keyboards/${uid}/runs`)
       } catch { /* no run logs */ }
+      // per-device deleted ranges (one file per hash, every hash)
+      units.push(...await collectDeletedRangesUnits(userData, uid))
     }
   } catch { /* dir doesn't exist */ }
 

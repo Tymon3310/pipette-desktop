@@ -1,5 +1,5 @@
 {
-  "version": "0.1.108",
+  "version": "0.1.120",
   "name": "Japanese",
   "common": {
     "save": "保存",
@@ -189,7 +189,8 @@
       "asciiOnly": "ASCII文字（英数字・記号）のみ対応しています",
       "unlockClickAgain": "アンロック後、もう一度マクロキーをクリックしてエディタを開いてください",
       "unlockWarning": "パスワードや機密情報をマクロに保存しないでください。再生・共有される可能性があります。",
-      "invalidMacroEntry": "インデックス{{index}}のマクロが無効です"
+      "invalidMacroEntry": "インデックス{{index}}のマクロが無効です",
+      "textLayoutNote": "テキストはファームウェアのキーボード配列（通常は US）で入力されます。OS の配列が異なる場合、一部の文字が違って出力されることがあります。"
     },
     "lighting": {
       "title": "Lighting",
@@ -783,7 +784,8 @@
     "instructions": "ハイライトされたキーを押し続けてロックを解除してください",
     "hint": "キャンセルするにはキーボードを抜き差ししてください",
     "progress": "進捗: {{current}} / {{total}}",
-    "cancel": "キャンセル"
+    "cancel": "キャンセル",
+    "missingKeys": "次のアンロックキーはこのキーボードのレイアウトにありません: {{positions}}。ロックを解除できない可能性があります。キーボードのファームウェア設定を確認するか、製作者に問い合わせてください"
   },
   "fileIO": {
     "loadLayout": ".vil",
@@ -874,6 +876,14 @@
     "signIn": "接続",
     "authenticating": "認証を待機中...",
     "authFailed": "認証に失敗しました。もう一度お試しください。",
+    "signInBusy": "同期の処理中はサインインできません。しばらくしてからもう一度お試しください。",
+    "signOutBusy": "同期の処理中は接続を解除できません。しばらくしてからもう一度お試しください。",
+    "signOutPasswordChanging": "同期パスワードの変更中は接続を解除できません。変更が終わってからもう一度お試しください。",
+    "resetBusy": "同期の処理中はリセットできません。しばらくしてからもう一度お試しください。",
+    "deleteBusy": "同期の処理中は削除できません。しばらくしてからもう一度お試しください。",
+    "trashBusy": "同期の処理中はゴミ箱を変更できません。しばらくしてからもう一度お試しください。",
+    "importBusy": "同期の処理中はインポートできません。しばらくしてからもう一度お試しください。",
+    "ownDeviceDeleteFromLocal": "このデバイスのデータは Local タブから削除してください。",
     "encryptionPassword": "同期暗号化パスワード",
     "passwordSet": "パスワード設定済み",
     "passwordPlaceholder": "暗号化パスワードを入力",
@@ -956,15 +966,27 @@
     "importComplete": "インポート完了",
     "importFailed": "インポートに失敗しました",
     "passwordMismatch": "同期パスワードが一致しません。暗号化パスワードを確認してください。",
+    "passwordAlreadySet": "同期パスワードはすでに保存されています。「パスワードを入力し直す」か「パスワード変更」を使ってください。",
     "scanning": "スキャン中...",
     "downloading": "ダウンロード中...",
     "noRemoteData": "リモートデータはありません",
     "undecryptableCount": "{{count}} 件の復号できないファイル",
+    "trash": {
+      "description": "同じデータの別のコピーが選ばれたため、同期が使わなくなったコピーです。復元すると、そのコピーと現在のコピーを入れ替えます（現在のコピーはゴミ箱へ移ります）。",
+      "empty": "ゴミ箱は空です",
+      "restore": "復元",
+      "notRestorable": "この PC 自身の打鍵データは復元できません（この PC から再アップロードされます）",
+      "updated": "更新 {{date}}",
+      "autoDelete": "現在のコピーがある間、{{date}} 以降に削除",
+      "notFound": "このファイルはもうゴミ箱にありません"
+    },
     "checkingRemotePassword": "同期状態を確認中...",
     "existingPasswordHint": "同期パスワードが既に設定されています。他のデバイスで使用したパスワードを入力してください。",
     "reenterPasswordWarning": "この PC の同期パスワードが Google Drive と合っていません。ほかの PC で使っているパスワードを入力してください。",
     "reenterPassword": "パスワードを入力し直す",
     "reenterPasswordNoRemote": "Google Drive に照合できる同期パスワードがまだありません。このフォームを閉じて、今のパスワードで同期してください。",
+    "storedPasswordUnreadable": "この PC に保存した同期パスワードを読み取れません（OS のキーチェーンが拒否しました）。キーチェーンがロック中か、アクセスを拒否した場合は、解錠・許可してから「再試行」を押してください。それ以外の場合は、下で同期パスワードをもう一度設定してください。",
+    "keystoreUnavailableNotice": "OS のキーチェーンを開けなかった場合は、ロックを解除するか設定して（Linux ではキーリング）、Pipette を再起動してください。",
     "updateRequired": "この Google Drive の同期データは新しいバージョンの Pipette で作られています。同期を続けるにはアップデートしてください。",
     "updateBanner": {
       "message": "Cloud Sync には新しいバージョンの Pipette が必要です。同期を続けるにはアプリをアップデートしてください。",
@@ -1896,20 +1918,23 @@
     "syncNoOrphans": "同期データは全てローカルにあります",
     "resetAppSettings": "アプリケーション設定をリセット",
     "cloudData": "クラウドデータ",
+    "trash": "ゴミ箱",
     "typing": {
       "title": "タイピング",
       "noKeyboards": "タイピングデータがありません",
       "noItems": "このキーボードのタイピングデータはありません",
       "summaryLine": "{{days}} 日分 / 合計 {{keystrokes}} 打",
-      "colDate": "日付",
+      "colDateZone": "日付（{{zone}}）",
       "colKeystrokes": "打鍵数",
       "colActiveMs": "アクティブ時間",
       "selectAll": "全ての日を選択",
       "selectRow": "{{date}} を選択",
       "deleteSelected": "選択した日を削除 ({{count}})",
       "deleteAll": "このキーボードの全データを削除",
-      "confirmDeleteSelected": "このデバイスで記録された {{count}} 日分を削除しますか？ 同期先からも消えますが、他のデバイスで記録された分は残ります。削除した日付のデータは再 import できなくなります — 必要なら先に Export してください。",
-      "confirmDeleteAll": "このデバイスで記録したこのキーボードの全ての日を削除しますか？ 同期先からも消えますが、他のデバイスで記録された分は残ります。削除した日付のデータは再 import できなくなります — 必要なら先に Export してください。",
+      "confirmDeleteSelected": "このデバイスで記録された {{count}} 日分を削除しますか？ 同期先からも消えますが、他のデバイスで記録された分は残ります。削除したデータは、以前の Export を再 import しても削除されたままです。",
+      "confirmDeleteAll": "このデバイスで記録したこのキーボードの全ての日を削除しますか？ Google Drive 上のコピーも消え、他の PC からも次の同期で消えます。他のデバイスで記録された分は残ります。削除したデータは、以前の Export を再 import しても削除されたままです。",
+      "confirmDeleteSelectedDevice": "このデバイスで記録された {{count}} 日分を、ここですぐ非表示にしますか？ 記録した PC では、次にその PC が同期した時に削除されます。この時点より後にその PC で打った分は残ります。",
+      "confirmDeleteAllDevice": "このデバイスがこのキーボードで記録した全ての日を、ここですぐ非表示にしますか？ 記録した PC では、次にその PC が同期した時に削除されます。この時点より後にその PC で打った分は残ります。",
       "exportLabel": "Export…",
       "importLabel": "Import…",
       "importStatus": {
@@ -1924,7 +1949,8 @@
           "no-matching-target": "ローカルにもクラウドにもこの日付のデータがありません",
           "empty-or-invalid-content": "ファイルが空、または不正な行が含まれます",
           "rows-outside-day-window": "行の timestamp がファイル名の日付範囲外です",
-          "read-error": "ファイルを読み込めませんでした"
+          "read-error": "ファイルを読み込めませんでした",
+          "deleted-ranges-unreadable": "このデバイスの削除範囲を読み込めなかったため、この日は変更していません"
         }
       },
       "noRemoteDevices": "このキーボードを他のデバイスで打ったデータはありません"

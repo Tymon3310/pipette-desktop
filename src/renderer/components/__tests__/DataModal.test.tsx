@@ -71,11 +71,11 @@ const mockTypingAnalyticsHasRemote = vi.fn().mockResolvedValue(false)
 const mockTypingAnalyticsListRemoteCloudHashes = vi.fn().mockResolvedValue([])
 const mockTypingAnalyticsListRemoteCloudDays = vi.fn().mockResolvedValue([])
 const mockTypingAnalyticsFetchRemoteDay = vi.fn().mockResolvedValue(true)
-const mockTypingAnalyticsDeleteRemoteDay = vi.fn().mockResolvedValue(true)
+const mockTypingAnalyticsDeleteDeviceData = vi.fn().mockResolvedValue({ success: true })
 const mockTypingAnalyticsExport = vi.fn().mockResolvedValue({ written: 0, cancelled: true })
-const mockTypingAnalyticsImport = vi.fn().mockResolvedValue({ result: { imported: 0, rejections: [] }, cancelled: true })
-const mockTypingAnalyticsDeleteItems = vi.fn().mockResolvedValue({ charMinutes: 0, matrixMinutes: 0, minuteStats: 0, sessions: 0 })
-const mockTypingAnalyticsDeleteAll = vi.fn().mockResolvedValue({ charMinutes: 0, matrixMinutes: 0, minuteStats: 0, sessions: 0 })
+const mockTypingAnalyticsImport = vi.fn().mockResolvedValue({ success: true, result: { imported: 0, rejections: [] }, cancelled: true })
+const mockTypingAnalyticsDeleteItems = vi.fn().mockResolvedValue({ success: true })
+const mockTypingAnalyticsDeleteAll = vi.fn().mockResolvedValue({ success: true })
 const mockSyncScanRemote = vi.fn().mockResolvedValue(fullScanResult())
 
 Object.defineProperty(window, 'vialAPI', {
@@ -109,7 +109,7 @@ Object.defineProperty(window, 'vialAPI', {
     typingAnalyticsListRemoteCloudHashes: mockTypingAnalyticsListRemoteCloudHashes,
     typingAnalyticsListRemoteCloudDays: mockTypingAnalyticsListRemoteCloudDays,
     typingAnalyticsFetchRemoteDay: mockTypingAnalyticsFetchRemoteDay,
-    typingAnalyticsDeleteRemoteDay: mockTypingAnalyticsDeleteRemoteDay,
+    typingAnalyticsDeleteDeviceData: mockTypingAnalyticsDeleteDeviceData,
     typingAnalyticsExport: mockTypingAnalyticsExport,
     typingAnalyticsImport: mockTypingAnalyticsImport,
     typingAnalyticsDeleteItems: mockTypingAnalyticsDeleteItems,
@@ -123,6 +123,8 @@ function makeSyncMock(overrides?: Partial<UseSyncReturn>): UseSyncReturn {
   return {
     config: { ...DEFAULT_APP_CONFIG },
     authStatus: { authenticated: false },
+    // Follows `hasPassword` unless a test sets it, as useSync derives one from the other.
+    passwordStatus: overrides?.hasPassword ? 'readable' : 'noPasswordFile',
     hasPassword: false,
     hasPendingChanges: false,
     progress: null,
@@ -135,7 +137,7 @@ function makeSyncMock(overrides?: Partial<UseSyncReturn>): UseSyncReturn {
     syncReadinessReason: null,
     retryRemoteCheck: vi.fn(),
     startAuth: vi.fn().mockResolvedValue(undefined),
-    signOut: vi.fn().mockResolvedValue(undefined),
+    signOut: vi.fn().mockResolvedValue({ success: true }),
     setConfig: vi.fn().mockResolvedValue(undefined),
     setPassword: vi.fn().mockResolvedValue({ success: true }),
     changePassword: vi.fn().mockResolvedValue({ success: true }),
@@ -144,7 +146,11 @@ function makeSyncMock(overrides?: Partial<UseSyncReturn>): UseSyncReturn {
     validatePassword: vi.fn().mockResolvedValue({ score: 4, feedback: [] }),
     syncNow: vi.fn().mockResolvedValue({ success: true, status: 'completed' }),
     refreshStatus: vi.fn().mockResolvedValue(undefined),
+    refreshPasswordStatus: vi.fn().mockResolvedValue(undefined),
     deleteFiles: vi.fn().mockResolvedValue({ success: true }),
+    listTrash: vi.fn().mockResolvedValue({ success: true, files: [] }),
+    restoreTrash: vi.fn().mockResolvedValue({ success: true }),
+    deleteTrash: vi.fn().mockResolvedValue({ success: true, deleted: [], skipped: [] }),
     ...overrides,
   }
 }
@@ -184,11 +190,11 @@ describe('DataModal', () => {
     mockTypingAnalyticsListRemoteCloudHashes.mockResolvedValue([])
     mockTypingAnalyticsListRemoteCloudDays.mockResolvedValue([])
     mockTypingAnalyticsFetchRemoteDay.mockResolvedValue(true)
-    mockTypingAnalyticsDeleteRemoteDay.mockResolvedValue(true)
+    mockTypingAnalyticsDeleteDeviceData.mockResolvedValue({ success: true })
     mockTypingAnalyticsExport.mockResolvedValue({ written: 0, cancelled: true })
-    mockTypingAnalyticsImport.mockResolvedValue({ result: { imported: 0, rejections: [] }, cancelled: true })
-    mockTypingAnalyticsDeleteItems.mockResolvedValue({ charMinutes: 0, matrixMinutes: 0, minuteStats: 0, sessions: 0 })
-    mockTypingAnalyticsDeleteAll.mockResolvedValue({ charMinutes: 0, matrixMinutes: 0, minuteStats: 0, sessions: 0 })
+    mockTypingAnalyticsImport.mockResolvedValue({ success: true, result: { imported: 0, rejections: [] }, cancelled: true })
+    mockTypingAnalyticsDeleteItems.mockResolvedValue({ success: true })
+    mockTypingAnalyticsDeleteAll.mockResolvedValue({ success: true })
     mockSyncScanRemote.mockResolvedValue(fullScanResult())
     resetDataNavCache()
   })
@@ -767,12 +773,58 @@ describe('DataModal', () => {
       })
       expect(screen.queryByTestId('local-data-import-error')).not.toBeInTheDocument()
     })
+
+    it('keeps the reset confirmation open and shows the error when resetting application settings fails', async () => {
+      mockResetLocalTargets.mockResolvedValueOnce({ success: false, error: 'EACCES: sync-pending.json' })
+      renderAndSwitchToApplication()
+
+      fireEvent.click(screen.getByTestId('app-reset-btn'))
+      fireEvent.click(screen.getByTestId('app-reset-confirm'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('app-settings-reset-error')).toHaveTextContent('EACCES: sync-pending.json')
+      })
+      expect(mockResetLocalTargets).toHaveBeenCalledWith({ keyboards: false, favorites: false, appSettings: true })
+      expect(screen.getByTestId('app-reset-confirm')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByTestId('app-reset-cancel'))
+      expect(screen.queryByTestId('app-settings-reset-error')).not.toBeInTheDocument()
+    })
+
+    it('closes the reset confirmation without an error when resetting application settings succeeds', async () => {
+      mockResetLocalTargets.mockResolvedValueOnce({ success: true })
+      renderAndSwitchToApplication()
+
+      fireEvent.click(screen.getByTestId('app-reset-btn'))
+      fireEvent.click(screen.getByTestId('app-reset-confirm'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('app-reset-btn')).toBeInTheDocument()
+      })
+      expect(screen.queryByTestId('app-settings-reset-error')).not.toBeInTheDocument()
+    })
   })
 
   describe('sync tree', () => {
     it('renders sync branch in sidebar', () => {
       render(<DataModal {...makeProps()} />)
       expect(screen.getByTestId('nav-sync')).toBeInTheDocument()
+    })
+
+    it('puts Trash last under Sync and lists it only when opened', async () => {
+      const listTrash = vi.fn().mockResolvedValue({ success: true, files: [] })
+      render(<DataModal {...makeProps({ sync: makeSyncMock({ listTrash }) })} />)
+      fireEvent.click(screen.getByTestId('nav-sync'))
+
+      const leaves = screen.getAllByTestId(/^nav-sync-(cloud-data|trash)$/)
+      expect(leaves.map((leaf) => leaf.dataset.testid)).toEqual(['nav-sync-cloud-data', 'nav-sync-trash'])
+      expect(listTrash).not.toHaveBeenCalled()
+
+      fireEvent.click(screen.getByTestId('nav-sync-trash'))
+
+      await waitFor(() => expect(screen.getByTestId('trash-empty')).toBeInTheDocument())
+      expect(listTrash).toHaveBeenCalledTimes(1)
+      expect(screen.getByTestId('data-nav-breadcrumb')).toHaveTextContent('dataModal.sync›dataModal.trash')
     })
   })
 

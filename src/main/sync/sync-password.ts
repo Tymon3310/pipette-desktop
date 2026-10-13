@@ -3,6 +3,7 @@
 // stored password against the remote password-check unit. Changing the
 // password lives in sync-password-change.ts.
 
+import { createHash } from 'node:crypto'
 import { encrypt, decrypt, retrievePasswordResult, storePassword, clearPassword } from './sync-crypto'
 import { getAuthStatus } from './google-auth'
 import {
@@ -15,6 +16,7 @@ import {
   type UploadedFile,
 } from './google-drive'
 import { syncRuntime } from './sync-runtime-state'
+import { filesNamed, pickCanonicalFile } from './drive-canonical'
 import { assertNoLocalPasswordChange, assertSyncAllowed } from './sync-password-guard'
 import { ensureSyncFormatMarkerKnown, syncFormatGeneration } from './sync-format'
 import type { SyncCredentialFailureReason, SyncCredentialResult } from '../../shared/types/sync'
@@ -63,24 +65,29 @@ export const passwordCheckTiming = {
 
 /** Every password-check file in `remoteFiles`. More than one can exist
  *  (two machines creating it at once); see `findPasswordCheck`. */
-export function listedPasswordChecks(remoteFiles: DriveFile[]): DriveFile[] {
-  const fileName = driveFileName(PASSWORD_CHECK_UNIT)
-  return remoteFiles.filter((f) => f.name === fileName)
+export function listedPasswordChecks(remoteFiles: DriveFile[]): readonly DriveFile[] {
+  return filesNamed(remoteFiles, driveFileName(PASSWORD_CHECK_UNIT))
 }
 
 /** The password-check every machine uses when several are listed: the
- *  newest `modifiedTime`, ties broken by the smallest file id. */
-export function findPasswordCheck(remoteFiles: DriveFile[]): DriveFile | undefined {
-  let best: DriveFile | undefined
-  for (const file of listedPasswordChecks(remoteFiles)) {
-    if (!best) {
-      best = file
-      continue
-    }
-    const diff = Date.parse(file.modifiedTime) - Date.parse(best.modifiedTime)
-    if (diff > 0 || (diff === 0 && file.id < best.id)) best = file
+ *  copy `pickCanonicalFile` (drive-canonical.ts) chooses — the newest
+ *  `modifiedTime`, ties broken by the smallest file id. */
+export function findPasswordCheck(remoteFiles: readonly DriveFile[]): DriveFile | undefined {
+  return pickCanonicalFile(remoteFiles, driveFileName(PASSWORD_CHECK_UNIT))
+}
+
+/** SHA-256 hex digest of `password`, kept with the validated
+ *  password-check so a pass holding another password validates again. */
+function passwordFingerprint(password: string): string {
+  return createHash('sha256').update(password, 'utf8').digest('hex')
+}
+
+function rememberValidated(file: UploadedFile, password: string): void {
+  syncRuntime.validatedPasswordCheck = {
+    id: file.id,
+    modifiedTime: file.modifiedTime,
+    passwordFingerprint: passwordFingerprint(password),
   }
-  return best
 }
 
 function forgetCreatedPasswordCheck(): void {
@@ -107,7 +114,7 @@ async function openPasswordCheck(password: string, file: UploadedFile): Promise<
     syncRuntime.validatedPasswordCheck = null
     throw new PasswordMismatchError()
   }
-  syncRuntime.validatedPasswordCheck = { id: file.id, modifiedTime: file.modifiedTime }
+  rememberValidated(file, password)
 }
 
 /** Creates the password-check with `password`, after our sync-format
@@ -135,7 +142,7 @@ async function createPasswordCheckOnce(password: string): Promise<void> {
   }
   run.then(settle, settle)
   const created = await run
-  syncRuntime.validatedPasswordCheck = { id: created.id, modifiedTime: created.modifiedTime }
+  rememberValidated(created, password)
 }
 
 /** Opens the chosen password-check (`findPasswordCheck`) with `password`
@@ -162,15 +169,25 @@ export async function validatePasswordCheck(
 }
 
 /** `validatePasswordCheck` unless the chosen password-check is the one
- *  last validated (same Drive id and `modifiedTime`). `remoteFiles` must be
- *  a listing that would include the password-check when it exists. */
+ *  last validated (same Drive id and `modifiedTime`) and `password` is the
+ *  one it opened with. A pass that read the stored password before a
+ *  re-enter replaced it therefore validates again, and fails with
+ *  `PasswordMismatchError` instead of writing with the old password.
+ *  `remoteFiles` must be a listing that would include the password-check
+ *  when it exists. */
 export async function ensurePasswordCheckValidated(
   password: string,
   remoteFiles: DriveFile[],
 ): Promise<void> {
   const existing = findPasswordCheck(remoteFiles)
   const validated = syncRuntime.validatedPasswordCheck
-  if (existing && validated && existing.id === validated.id && existing.modifiedTime === validated.modifiedTime) {
+  if (
+    existing &&
+    validated &&
+    existing.id === validated.id &&
+    existing.modifiedTime === validated.modifiedTime &&
+    validated.passwordFingerprint === passwordFingerprint(password)
+  ) {
     forgetCreatedPasswordCheck()
     return
   }
@@ -193,10 +210,27 @@ export async function checkPasswordCheckExists(): Promise<boolean> {
   return findPasswordCheck(remoteFiles) !== undefined
 }
 
+/** Throws `SyncCredentialError('keystoreUnavailable')` when the OS keychain
+ *  cannot store a password, so a save is refused before it touches Drive. */
+function assertKeystoreAvailable(stored: SyncCredentialResult): void {
+  if (!stored.ok && stored.reason === 'keystoreUnavailable') throw new SyncCredentialError('keystoreUnavailable')
+}
+
 /** Refused (`SyncBlockedError`) while a password change is in progress or
- *  Drive needs a newer app, before the password is stored. */
+ *  Drive needs a newer app, before the password is stored. Refused
+ *  (`sync.passwordAlreadySet`) when a readable password is already stored,
+ *  and (`keystoreUnavailable`) when the OS keychain is unavailable, both
+ *  before any Drive call. */
 export async function setPasswordAndValidate(password: string): Promise<void> {
   await assertNoLocalPasswordChange()
+  const stored = await retrievePasswordResult()
+  assertKeystoreAvailable(stored)
+  // A failed validation below clears the stored password, so overwriting a
+  // readable one here could erase the correct password; re-enter and change
+  // are the paths that replace it. A stored file the OS keychain can no
+  // longer decrypt is not refused: setting a new password is how it is
+  // replaced.
+  if (stored.ok) throw new Error('sync.passwordAlreadySet')
   const formatGeneration = syncFormatGeneration()
   const remoteFiles = await listFiles()
   await assertSyncAllowed(remoteFiles, formatGeneration)
@@ -216,11 +250,13 @@ export async function setPasswordAndValidate(password: string): Promise<void> {
  *  leaves the stored password as it was (a mismatch clears the validated
  *  cache, as in `validatePasswordCheck`). Refused (`SyncBlockedError`)
  *  while a password change is in progress, and when Drive has no
- *  password-check to compare against. */
+ *  password-check to compare against. Refused (`keystoreUnavailable`)
+ *  before any Drive call when the OS keychain is unavailable. */
 export async function replacePasswordAndValidate(password: string): Promise<void> {
   const authStatus = await getAuthStatus()
   if (!authStatus.authenticated) throw new SyncCredentialError('unauthenticated')
   await assertNoLocalPasswordChange()
+  assertKeystoreAvailable(await retrievePasswordResult())
   const formatGeneration = syncFormatGeneration()
   const remoteFiles = await listFiles()
   await assertSyncAllowed(remoteFiles, formatGeneration)

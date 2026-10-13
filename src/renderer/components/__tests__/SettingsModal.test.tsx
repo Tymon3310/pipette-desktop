@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { SettingsModal } from '../SettingsModal'
-import type { UseSyncReturn } from '../../hooks/useSync'
+import { SyncAuthStartError, type UseSyncReturn } from '../../hooks/useSync'
 import { HUB_ERROR_DISPLAY_NAME_CONFLICT } from '../../../shared/types/hub'
 import type { NotificationFetchResult } from '../../../shared/types/notification'
 import { DEFAULT_APP_CONFIG } from '../../../shared/types/sync'
@@ -49,6 +49,7 @@ vi.mock('../../hooks/useKeyLabels', () => ({
     loading: false,
     error: null,
     refresh: async () => {},
+    holdChangeRefresh: () => {},
     importFromFile: async () => ({ success: true }),
     exportEntry: async () => ({ success: true }),
     reorder: async () => ({ success: true }),
@@ -114,6 +115,8 @@ function makeSyncMock(overrides?: Partial<UseSyncReturn>): UseSyncReturn {
   return {
     config: { ...DEFAULT_APP_CONFIG },
     authStatus: { authenticated: false },
+    // Follows `hasPassword` unless a test sets it, as useSync derives one from the other.
+    passwordStatus: overrides?.hasPassword ? 'readable' : 'noPasswordFile',
     hasPassword: false,
     hasPendingChanges: false,
     progress: null,
@@ -126,7 +129,7 @@ function makeSyncMock(overrides?: Partial<UseSyncReturn>): UseSyncReturn {
     syncReadinessReason: null,
     retryRemoteCheck: vi.fn(),
     startAuth: vi.fn().mockResolvedValue(undefined),
-    signOut: vi.fn().mockResolvedValue(undefined),
+    signOut: vi.fn().mockResolvedValue({ success: true }),
     setConfig: vi.fn().mockResolvedValue(undefined),
     setPassword: vi.fn().mockResolvedValue({ success: true }),
     changePassword: vi.fn().mockResolvedValue({ success: true }),
@@ -135,7 +138,11 @@ function makeSyncMock(overrides?: Partial<UseSyncReturn>): UseSyncReturn {
     validatePassword: vi.fn().mockResolvedValue({ score: 4, feedback: [] }),
     syncNow: vi.fn().mockResolvedValue({ success: true, status: 'completed' }),
     refreshStatus: vi.fn().mockResolvedValue(undefined),
+    refreshPasswordStatus: vi.fn().mockResolvedValue(undefined),
     deleteFiles: vi.fn().mockResolvedValue({ success: true }),
+    listTrash: vi.fn().mockResolvedValue({ success: true, files: [] }),
+    restoreTrash: vi.fn().mockResolvedValue({ success: true }),
+    deleteTrash: vi.fn().mockResolvedValue({ success: true, deleted: [], skipped: [] }),
     ...overrides,
   }
 }
@@ -236,7 +243,7 @@ describe('SettingsModal', () => {
     expect(sync.signOut).not.toHaveBeenCalled()
   })
 
-  it('calls signOut and disables hub when confirmation is accepted', () => {
+  it('calls signOut and disables hub when confirmation is accepted', async () => {
     const sync = makeSyncMock({ authStatus: { authenticated: true } })
     const onHubEnabledChange = vi.fn()
     renderAndSwitchToData({ sync, hubEnabled: true, onHubEnabledChange })
@@ -244,7 +251,36 @@ describe('SettingsModal', () => {
     fireEvent.click(screen.getByTestId('sync-sign-out'))
     fireEvent.click(screen.getByTestId('sync-sign-out-confirm'))
     expect(sync.signOut).toHaveBeenCalledOnce()
-    expect(onHubEnabledChange).toHaveBeenCalledWith(false)
+    await waitFor(() => expect(onHubEnabledChange).toHaveBeenCalledWith(false))
+    expect(screen.queryByTestId('sync-sign-out-error')).not.toBeInTheDocument()
+  })
+
+  it('keeps hub and shows the error when signOut is refused', async () => {
+    const sync = makeSyncMock({ authStatus: { authenticated: true } })
+    ;(sync.signOut as Mock).mockResolvedValueOnce({ success: false, error: 'sync.signOutPasswordChanging' })
+    const onHubEnabledChange = vi.fn()
+    renderAndSwitchToData({ sync, hubEnabled: true, onHubEnabledChange })
+
+    fireEvent.click(screen.getByTestId('sync-sign-out'))
+    fireEvent.click(screen.getByTestId('sync-sign-out-confirm'))
+
+    expect(await screen.findByTestId('sync-sign-out-error')).toHaveTextContent('sync.signOutPasswordChanging')
+    expect(onHubEnabledChange).not.toHaveBeenCalled()
+    expect(screen.getByTestId('sync-sign-out')).toBeInTheDocument()
+  })
+
+  it.each([
+    [{ success: false, error: 'Cannot switch accounts while sync is in progress. Try again in a moment.', reason: 'syncBusy' }, 'sync.signOutBusy'],
+    [{ success: false }, 'sync.authFailed'],
+  ])('shows an i18n message for a refused signOut (%j)', async (refusal, expected) => {
+    const sync = makeSyncMock({ authStatus: { authenticated: true } })
+    ;(sync.signOut as Mock).mockResolvedValueOnce(refusal)
+    renderAndSwitchToData({ sync, hubEnabled: true })
+
+    fireEvent.click(screen.getByTestId('sync-sign-out'))
+    fireEvent.click(screen.getByTestId('sync-sign-out-confirm'))
+
+    expect(await screen.findByTestId('sync-sign-out-error')).toHaveTextContent(expected)
   })
 
   it('shows hub warning when hub is enabled and confirming disconnect', () => {
@@ -285,6 +321,44 @@ describe('SettingsModal', () => {
 
     expect(screen.getByTestId('sync-password-input')).toBeInTheDocument()
     expect(screen.queryByTestId('sync-password-set')).not.toBeInTheDocument()
+  })
+
+  it('shows the Set form under an unreadable-password warning with Retry when the stored password cannot be decrypted', () => {
+    const sync = makeSyncMock({ authStatus: { authenticated: true }, passwordStatus: 'decryptFailed', hasRemotePassword: true })
+    renderAndSwitchToData({ sync })
+
+    expect(screen.getByTestId('sync-stored-password-unreadable-warning')).toHaveTextContent('sync.storedPasswordUnreadable')
+    expect(screen.getByTestId('sync-existing-password-hint')).toBeInTheDocument()
+    expect(screen.getByTestId('sync-password-input')).toBeInTheDocument()
+    expect(screen.getByTestId('sync-password-save')).toBeInTheDocument()
+    expect(screen.queryByTestId('sync-password-set')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('sync-password-status-retry-btn'))
+    expect(sync.refreshPasswordStatus).toHaveBeenCalledTimes(1)
+    expect(sync.refreshStatus).not.toHaveBeenCalled()
+  })
+
+  it('hides Set, Change, Re-enter and Retry and shows the keychain notice when the OS keychain is unavailable', () => {
+    const sync = makeSyncMock({ authStatus: { authenticated: true }, passwordStatus: 'keystoreUnavailable', hasRemotePassword: true })
+    renderAndSwitchToData({ sync })
+
+    expect(screen.getByTestId('sync-keystore-unavailable')).toHaveTextContent('sync.keystoreUnavailableNotice')
+    expect(screen.queryByTestId('sync-password-input')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('sync-password-save')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('sync-password-change-btn')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('sync-password-reenter-btn')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('sync-password-status-retry-btn')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    { name: 'readable', overrides: { hasPassword: true } },
+    { name: 'noPasswordFile', overrides: {} },
+  ])('shows no password status notice or Retry when the status is $name', ({ overrides }) => {
+    renderAndSwitchToData({ sync: makeSyncMock({ authStatus: { authenticated: true }, ...overrides }) })
+
+    expect(screen.queryByTestId('sync-stored-password-unreadable')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('sync-keystore-unavailable')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('sync-password-status-retry-btn')).not.toBeInTheDocument()
   })
 
   it('disables sync buttons when not fully configured', () => {
@@ -454,6 +528,20 @@ describe('SettingsModal', () => {
       expect(screen.getByTestId('sync-auth-error')).toHaveTextContent('OAuth error')
     })
     expect(screen.getByTestId('sync-sign-in')).not.toBeDisabled()
+  })
+
+  it('shows the translated busy message when sign-in is refused while sync runs', async () => {
+    renderAndSwitchToData({
+      sync: makeSyncMock({
+        startAuth: vi.fn().mockRejectedValue(new SyncAuthStartError('Cannot switch accounts while sync is in progress.', 'syncBusy')),
+      }),
+    })
+
+    fireEvent.click(screen.getByTestId('sync-sign-in'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sync-auth-error')).toHaveTextContent('sync.signInBusy')
+    })
   })
 
   it('hides password controls and shows busy banner while setting password', async () => {

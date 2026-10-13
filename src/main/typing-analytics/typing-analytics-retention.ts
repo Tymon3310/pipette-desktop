@@ -1,53 +1,44 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Deletion / retention paths for the Data modal: per-date and
-// delete-all-for-keyboard, each unlinking the owning device's JSONL master
-// files and tombstoning the matching cache rows so the affected days
-// disappear from Analyze immediately.
+// Deletion / retention paths for the Data modal: per-date (delete marks
+// appended to this device's JSONL master files) and delete-all-for-keyboard
+// (this device's files unlinked), each also tombstoning the matching cache
+// rows so the affected days disappear from Analyze immediately.
 
 import { app } from 'electron'
+import { randomUUID } from 'node:crypto'
 import { unlink } from 'node:fs/promises'
+import { localDayRangeMs } from '../../shared/local-day-range'
 import { emptyTombstoneResult } from '../../shared/types/typing-analytics'
 import { log } from '../logger'
 import {
   getTypingAnalyticsDB,
   type TypingTombstoneResult,
 } from './db/typing-analytics-db'
-import { typingAnalyticsDeviceDaySyncUnit } from './sync'
 import { getMachineHash } from './machine-hash'
+import { deletedRangeForAll, unionDeletedRanges } from './deleted-ranges'
+import { updateDeletedRanges } from './deleted-ranges-store'
+import { recordOwnDeletedRangeApplied } from './deleted-ranges-apply'
 import { deviceDayJsonlPath, listDeviceDays } from './jsonl/paths'
-import { utcDayFromMs, type UtcDay } from './jsonl/utc-day'
-import { taState } from './typing-analytics-state'
-import { closeSessionsForUid, flushNow } from './typing-analytics-pipeline'
+import type { UtcDay } from './jsonl/utc-day'
+import {
+  closeSessionsForUid,
+  discardBufferedTyping,
+  notifyDeletedRangesChanged,
+  notifyOwnDaysChanged,
+} from './typing-analytics-pipeline'
+import { deleteOwnTypingInRanges, type TimeRange } from './typing-analytics-day-delete'
 
-/** Convert a 'YYYY-MM-DD' local-calendar date into a [startMs, endMs)
- * window that matches the strftime('%Y-%m-%d', ..., 'localtime') buckets
- * used by listDailySummariesForUid. */
-function localDayRangeMs(date: string): { startMs: number; endMs: number } | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
-  if (!m) return null
-  const y = Number(m[1])
-  const mo = Number(m[2])
-  const d = Number(m[3])
-  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null
-  const startMs = new Date(y, mo - 1, d).getTime()
-  const endMs = new Date(y, mo - 1, d + 1).getTime()
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null
-  return { startMs, endMs }
-}
-
-/** Delete the local per-day JSONL files covering the requested
- * calendar dates and tombstone the matching cache rows for an
- * immediate list refresh. The owning device's `uploaded` bookkeeping
- * still holds the day, so the next sync pass drops the cloud copy via
- * reconcile rule 2. `is_deleted` on cache rows is retained so the
- * upcoming list query can hide the affected minutes before the next
- * rebuild runs. */
+/** Delete this device's typing of the requested local calendar dates.
+ * The rows inside each date are marked deleted in the UTC day files they
+ * live in (see deleteOwnTypingInRanges, typing-analytics-day-delete.ts);
+ * rows of other devices are left alone. `cutoffMs` is when the user asked
+ * for the delete (see discardBufferedTyping, typing-analytics-pipeline.ts). */
 export async function deleteTypingDailySummaries(
   uid: string,
   dates: string[],
+  cutoffMs = Date.now(),
 ): Promise<TypingTombstoneResult> {
-  await flushNow({ final: true })
-  const ranges: Array<{ startMs: number; endMs: number }> = []
+  const ranges: TimeRange[] = []
   for (const date of dates) {
     const range = localDayRangeMs(date)
     if (range) ranges.push(range)
@@ -55,68 +46,101 @@ export async function deleteTypingDailySummaries(
   if (ranges.length === 0) {
     return emptyTombstoneResult()
   }
-  const machineHash = await getMachineHash()
-  const userDataDir = app.getPath('userData')
-  // Map each local-calendar range to the UTC days it overlaps. A local
-  // date typically covers one UTC day, but near midnight UTC in
-  // non-zero offsets it spans two, so we unlink both.
-  const utcDays = new Set<UtcDay>()
-  for (const range of ranges) {
-    utcDays.add(utcDayFromMs(range.startMs))
-    utcDays.add(utcDayFromMs(range.endMs - 1))
-  }
-  for (const day of utcDays) {
-    try {
-      await unlinkOwnDayFile(userDataDir, uid, machineHash, day)
-    } catch (err) {
-      log('warn', `typing-analytics per-day unlink failed for ${uid}/${machineHash}/${day}: ${String(err)}`)
-    }
-  }
-  const db = getTypingAnalyticsDB()
-  const updatedAt = Date.now()
-  const result = emptyTombstoneResult()
-  for (const range of ranges) {
-    const r = db.tombstoneRowsForUidInRange(uid, range.startMs, range.endMs, updatedAt)
-    result.charMinutes += r.charMinutes
-    result.matrixMinutes += r.matrixMinutes
-    result.minuteStats += r.minuteStats
-    result.bigramMinutes += r.bigramMinutes
-    result.trigramMinutes += r.trigramMinutes
-    result.sessions += r.sessions
-  }
-  await notifySyncIfTouched(uid, result, [...utcDays])
-  return result
+  return deleteOwnTypingInRanges(uid, ranges, cutoffMs)
 }
 
 /** Delete every per-day JSONL file owned by this device for the given
- * keyboard uid and tombstone all of that uid's cache rows. Other
- * devices' files are untouched — they clear themselves on their own
- * Delete All action. */
-export async function deleteAllTypingForKeyboard(uid: string): Promise<TypingTombstoneResult> {
-  // Finalize this keyboard's active session first so flushNow persists it and
-  // the cache tombstone below covers it; otherwise closeAll() on quit would
-  // re-persist the open session and resurrect the deleted keyboard in Analyze.
+ * keyboard uid and tombstone that uid's cache rows: only this device's
+ * rows for `scope: 'own'` (the Local tab's Delete All), every device's for
+ * `scope: 'all'` (Reset Keyboard Data, which also removes the other
+ * devices' downloaded files). Other devices' files are untouched by this
+ * function. For `'own'` the delete also reaches the devices that already
+ * replayed this device's files: see addOwnDeleteAllRange.
+ * `cutoffMs` is when the user asked for the delete;
+ * what was typed in later minutes stays buffered and is written
+ * afterwards (see discardBufferedTyping, typing-analytics-pipeline.ts).
+ * Rows of those later minutes already on disk are still removed with the
+ * day file: only a final flush (TYPING_ANALYTICS_FLUSH) while the caller
+ * waited for the sync lock writes them, since a later minute cannot close
+ * within that wait. */
+export async function deleteAllTypingForKeyboard(
+  uid: string,
+  cutoffMs: number,
+  scope: 'own' | 'all',
+): Promise<TypingTombstoneResult> {
+  // Finalize this keyboard's active session so the discard below drops it
+  // (when it started by the cutoff); otherwise closeAll() on quit would
+  // persist the open session and resurrect the deleted keyboard in Analyze.
   closeSessionsForUid(uid)
-  await flushNow({ final: true })
+  // Buffered data is dropped instead of flushed: a kept entry of today would
+  // be reopened by the next keystroke in its minute, and its next finalize
+  // would write the pre-delete counts back.
+  await discardBufferedTyping(uid, cutoffMs)
   const machineHash = await getMachineHash()
   const userDataDir = app.getPath('userData')
+  // A ranges file that cannot be updated fails the delete here, before any
+  // day file is removed.
+  const rangeId = scope === 'own' ? await addOwnDeleteAllRange(uid, machineHash, userDataDir, cutoffMs) : null
   // Snapshot the days *before* unlinking so the post-tombstone notify
   // can still iterate over them — once the unlink loop has removed every
   // per-day file, a fresh listDeviceDays would only see the now-empty
   // directory and return [].
   const days = await listDeviceDays(userDataDir, uid, machineHash)
+  let everyFileRemoved = true
   for (const day of days) {
     try {
       await unlinkOwnDayFile(userDataDir, uid, machineHash, day)
     } catch (err) {
+      everyFileRemoved = false
       log('warn', `typing-analytics per-day unlink failed for ${uid}/${machineHash}/${day}: ${String(err)}`)
     }
   }
   const db = getTypingAnalyticsDB()
   const updatedAt = Date.now()
-  const result = db.tombstoneAllRowsForUid(uid, updatedAt)
-  await notifySyncIfTouched(uid, result, days)
+  const result = scope === 'own'
+    ? db.tombstoneAllRowsForUidHash(uid, machineHash, updatedAt)
+    : db.tombstoneAllRowsForUid(uid, updatedAt)
+  const touched =
+    result.charMinutes + result.matrixMinutes + result.minuteStats +
+    result.bigramMinutes + result.trigramMinutes + result.sessions
+  // `days` was listed before the unlink, so the removed days are announced.
+  if (touched > 0) notifyOwnDaysChanged(uid, machineHash, days)
+  if (rangeId !== null) {
+    notifyDeletedRangesChanged(uid, machineHash)
+    if (everyFileRemoved) await recordOwnDeleteAllApplied(uid, rangeId)
+  }
   return result
+}
+
+/** Adds "everything up to `cutoffMs`" to this device's own-hash
+ * deleted-ranges file and returns the entry's id. Other devices merge the
+ * file to hide the rows they hold from this device's files, in the cache
+ * and in every rebuild. Done even when nothing is left here: the other
+ * devices still hold the rows. Takes the ranges file's lock; called
+ * outside the flush chain and holding nothing a lock holder waits for. */
+async function addOwnDeleteAllRange(
+  uid: string,
+  machineHash: string,
+  userDataDir: string,
+  cutoffMs: number,
+): Promise<string> {
+  const entry = deletedRangeForAll(cutoffMs, randomUUID())
+  await updateDeletedRanges(userDataDir, uid, machineHash, (local) => unionDeletedRanges(local, [entry]))
+  return entry.id
+}
+
+/** Records the Delete All range as applied once every day file is gone, so
+ * this device never applies it to itself: applying it would also remove
+ * what was typed after the click in the same minute. When a file could not
+ * be removed (or this is never reached), the id stays unrecorded and the
+ * next apply pass marks the rows of the files left, the same-minute typing
+ * included. A failed record is logged and leaves the same state. */
+async function recordOwnDeleteAllApplied(uid: string, rangeId: string): Promise<void> {
+  try {
+    await recordOwnDeletedRangeApplied(uid, rangeId)
+  } catch (err) {
+    log('warn', `typing-analytics: Delete All range of ${uid} not recorded as applied: ${String(err)}`)
+  }
 }
 
 async function unlinkOwnDayFile(
@@ -129,30 +153,5 @@ async function unlinkOwnDayFile(
     await unlink(deviceDayJsonlPath(userDataDir, uid, machineHash, utcDay))
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
-  }
-}
-
-/** Emit one per-day sync-unit per affected day so the upload pipeline
- * picks up the new rows for each `(uid, machineHash, day)` independently.
- * Caller is responsible for materialising the affected `days` *before*
- * any unlink so a delete-and-notify flow doesn't lose the day list. */
-async function notifySyncIfTouched(
-  uid: string,
-  result: TypingTombstoneResult,
-  days: readonly UtcDay[],
-): Promise<void> {
-  const touched =
-    result.charMinutes + result.matrixMinutes + result.minuteStats +
-    result.bigramMinutes + result.trigramMinutes + result.sessions
-  if (touched === 0 || days.length === 0) return
-  const notifier = taState.syncNotifier
-  if (!notifier) return
-  try {
-    const machineHash = await getMachineHash()
-    for (const day of days) {
-      notifier(typingAnalyticsDeviceDaySyncUnit(uid, machineHash, day))
-    }
-  } catch (err) {
-    log('warn', `typing-analytics sync notify failed for ${uid}: ${String(err)}`)
   }
 }

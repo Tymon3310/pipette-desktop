@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAppConfig } from './useAppConfig'
 import type { AppConfig } from '../../shared/types/app-config'
 import { isSyncTerminalStatus } from '../../shared/types/sync'
@@ -16,6 +16,9 @@ import type {
   SyncScope,
   SyncOperationResult,
   SyncCredentialFailureReason,
+  SyncTrashListResult,
+  SyncTrashDeleteResult,
+  StoredPasswordStatus,
 } from '../../shared/types/sync'
 
 /** Maps a SyncProgress status or LastSyncResult status to the UI SyncStatusType. */
@@ -27,12 +30,25 @@ const SYNC_STATUS_MAP: Record<SyncStatus, SyncStatusType> & Record<SyncTerminalS
   partial: 'partial',
 }
 
+/** Thrown by `startAuth` when signing in fails; `reason` is set when the
+ *  main process said why, so the caller can show its own message. */
+export class SyncAuthStartError extends Error {
+  readonly reason: SyncOperationResult['reason']
+  constructor(message: string, reason?: SyncOperationResult['reason']) {
+    super(message)
+    this.reason = reason
+  }
+}
+
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 2000
 
 export interface UseSyncReturn {
   config: AppConfig
   authStatus: SyncAuthStatus
+  /** Whether the stored sync password can be read on this machine. */
+  passwordStatus: StoredPasswordStatus
+  /** `passwordStatus === 'readable'`. */
   hasPassword: boolean
   hasPendingChanges: boolean
   progress: SyncProgress | null
@@ -46,7 +62,8 @@ export interface UseSyncReturn {
   syncReadinessReason: SyncCredentialFailureReason | null
   retryRemoteCheck: () => void
   startAuth: () => Promise<void>
-  signOut: () => Promise<void>
+  /** The IPC result; a refused sign-out leaves the account signed in. */
+  signOut: () => Promise<SyncOperationResult>
   setConfig: (patch: Partial<AppConfig>) => void
   setPassword: (password: string) => Promise<SyncOperationResult>
   changePassword: (newPassword: string) => Promise<SyncOperationResult>
@@ -62,13 +79,20 @@ export interface UseSyncReturn {
    *  call succeeded. */
   syncNow: (direction: 'download' | 'upload', scope?: SyncScope) => Promise<SyncOperationResult>
   refreshStatus: () => Promise<void>
+  /** Reads the stored password's status again (`passwordStatus`) only. */
+  refreshPasswordStatus: () => Promise<void>
   deleteFiles: (fileIds: string[]) => Promise<{ success: boolean; error?: string }>
+  listTrash: () => Promise<SyncTrashListResult>
+  restoreTrash: (fileId: string) => Promise<SyncOperationResult>
+  deleteTrash: (fileIds: string[]) => Promise<SyncTrashDeleteResult>
 }
 
 export function useSync(): UseSyncReturn {
   const { config, set } = useAppConfig()
   const [authStatus, setAuthStatus] = useState<SyncAuthStatus>({ authenticated: false })
-  const [hasPassword, setHasPassword] = useState(false)
+  const [passwordStatus, setPasswordStatus] = useState<StoredPasswordStatus>('noPasswordFile')
+  const passwordStatusRef = useRef(passwordStatus)
+  const hasPassword = passwordStatus === 'readable'
   const [hasPendingChangesState, setHasPendingChanges] = useState(false)
   const [progress, setProgress] = useState<SyncProgress | null>(null)
   const [lastSyncResult, setLastSyncResult] = useState<LastSyncResult | null>(null)
@@ -81,11 +105,11 @@ export function useSync(): UseSyncReturn {
     try {
       const [auth, pwd, pending] = await Promise.all([
         window.vialAPI.syncAuthStatus(),
-        window.vialAPI.syncHasPassword(),
+        window.vialAPI.syncPasswordStatus(),
         window.vialAPI.syncHasPendingChanges(),
       ])
       setAuthStatus(auth)
-      setHasPassword(pwd)
+      setPasswordStatus(pwd)
       setHasPendingChanges(pending)
     } catch {
       // Ignore errors during initial load
@@ -93,6 +117,18 @@ export function useSync(): UseSyncReturn {
       setLoading(false)
     }
   }, [])
+
+  const refreshPasswordStatus = useCallback(async () => {
+    try {
+      setPasswordStatus(await window.vialAPI.syncPasswordStatus())
+    } catch {
+      // Keep the last known status.
+    }
+  }, [])
+
+  useEffect(() => {
+    passwordStatusRef.current = passwordStatus
+  }, [passwordStatus])
 
   useEffect(() => {
     void refreshStatus()
@@ -113,6 +149,13 @@ export function useSync(): UseSyncReturn {
       if (p.status === 'syncing') {
         setSyncUnavailable(false)
       }
+      // The main process reads the stored password on every pass, so a
+      // successful one means it can be read again (e.g. the OS keychain
+      // was unlocked). Only asked while the status says otherwise: a poll
+      // reports success once per merged unit.
+      if (p.status === 'success' && passwordStatusRef.current !== 'readable') {
+        void refreshPasswordStatus()
+      }
       if (isSyncTerminalStatus(p.status)) {
         // Only update lastSyncResult on final events (no syncUnit = end of entire sync)
         if (!p.syncUnit) {
@@ -130,7 +173,7 @@ export function useSync(): UseSyncReturn {
       if (timeoutId) clearTimeout(timeoutId)
       cleanup()
     }
-  }, [])
+  }, [refreshPasswordStatus])
 
   const checkRemotePassword = useCallback(async () => {
     setCheckingRemotePassword(true)
@@ -176,14 +219,15 @@ export function useSync(): UseSyncReturn {
     if (result.success) {
       await refreshStatus()
     } else {
-      throw new Error(result.error ?? 'Auth failed')
+      throw new SyncAuthStartError(result.error ?? 'Auth failed', result.reason)
     }
   }, [refreshStatus])
 
   const signOut = useCallback(async () => {
-    await window.vialAPI.syncAuthSignOut()
-    setLastSyncResult(null)
+    const result = await window.vialAPI.syncAuthSignOut()
+    if (result.success) setLastSyncResult(null)
     await refreshStatus()
+    return result
   }, [refreshStatus])
 
   const setConfig = useCallback((patch: Partial<AppConfig>) => {
@@ -196,11 +240,15 @@ export function useSync(): UseSyncReturn {
     async (apiFn: (pw: string) => Promise<{ success: boolean; error?: string }>, password: string) => {
       const result = await apiFn(password)
       if (result.success) {
-        setHasPassword(true)
+        setPasswordStatus('readable')
+      } else {
+        // A refused save may have cleared the stored password, or found
+        // the OS keychain unavailable.
+        await refreshPasswordStatus()
       }
       return result
     },
-    [],
+    [refreshPasswordStatus],
   )
 
   const setPassword = useCallback(
@@ -238,6 +286,12 @@ export function useSync(): UseSyncReturn {
     [],
   )
 
+  const listTrash = useCallback(() => window.vialAPI.syncListTrash(), [])
+
+  const restoreTrash = useCallback((fileId: string) => window.vialAPI.syncRestoreTrash(fileId), [])
+
+  const deleteTrash = useCallback((fileIds: string[]) => window.vialAPI.syncDeleteTrash(fileIds), [])
+
   const syncStatus = useMemo((): SyncStatusType => {
     if (progress?.status && progress.status !== 'idle') {
       return SYNC_STATUS_MAP[progress.status]
@@ -248,18 +302,19 @@ export function useSync(): UseSyncReturn {
     return 'none'
   }, [progress, authStatus.authenticated, hasPassword, config.autoSync, hasPendingChangesState, lastSyncResult])
 
-  // Detailed keystore failures (decryptFailed / keystoreUnavailable) come back
-  // through password set/change IPC results, not from this aggregate.
+  // The stored password's status is the reason whenever it is not readable
+  // (no file, the OS keychain refuses it, or the keychain is unavailable).
   const syncReadinessReason = useMemo<SyncCredentialFailureReason | null>(() => {
     if (!authStatus.authenticated) return 'unauthenticated'
-    if (!hasPassword) return 'noPasswordFile'
+    if (passwordStatus !== 'readable') return passwordStatus
     if (syncUnavailable) return 'remoteCheckFailed'
     return null
-  }, [authStatus.authenticated, hasPassword, syncUnavailable])
+  }, [authStatus.authenticated, passwordStatus, syncUnavailable])
 
   return {
     config,
     authStatus,
+    passwordStatus,
     hasPassword,
     hasPendingChanges: hasPendingChangesState,
     progress,
@@ -281,6 +336,10 @@ export function useSync(): UseSyncReturn {
     validatePassword,
     syncNow,
     refreshStatus,
+    refreshPasswordStatus,
     deleteFiles,
+    listTrash,
+    restoreTrash,
+    deleteTrash,
   }
 }

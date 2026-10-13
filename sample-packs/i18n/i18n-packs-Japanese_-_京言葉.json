@@ -1,5 +1,5 @@
 {
-  "version": "0.1.108",
+  "version": "0.1.120",
   "name": "Japanese - 京言葉",
   "common": {
     "save": "保存しますえ",
@@ -189,7 +189,8 @@
       "asciiOnly": "英数字・記号だけどすえ",
       "unlockClickAgain": "アンロックしはったら、もういっぺんクリックして開いておくれやす",
       "unlockWarning": "パスワードや大事なもんはマクロに入れんといておくれやす。漏れるかもしれまへんえ。",
-      "invalidMacroEntry": "インデックス{{index}}のマクロがちゃいますえ"
+      "invalidMacroEntry": "インデックス{{index}}のマクロがちゃいますえ",
+      "textLayoutNote": "テキストはファームウェアの配列（たいていはUS）で打たれますえ。OSの配列がちゃうと、別の文字が出ることがありますよって、気ぃつけておくれやす。"
     },
     "lighting": {
       "title": "Lighting",
@@ -783,7 +784,8 @@
     "instructions": "光ってるキーを押し続けてロックを解除しておくれやす",
     "hint": "やめはるならキーボードを抜き差ししておくれやす",
     "progress": "進捗: {{current}} / {{total}}",
-    "cancel": "やめときますえ"
+    "cancel": "やめときますえ",
+    "missingKeys": "このアンロックキーは、このキーボードの配列にあらしまへん: {{positions}}。ロックを解除できひんかもしれまへん。ファームウェアの設定を確かめはるか、作り手さんに聞いておくれやす"
   },
   "fileIO": {
     "loadLayout": ".vil",
@@ -864,6 +866,14 @@
     "signIn": "つなぎますえ",
     "authenticating": "認証を待ってますえ...",
     "authFailed": "認証があきまへんでしたえ。もういっぺんやっておくれやす。",
+    "signInBusy": "同期の最中はサインインできしまへんえ。ちょっと間ぁおいてから、もういっぺんやっておくれやす。",
+    "signOutBusy": "同期の最中は切れしまへんえ。ちょっと間ぁおいてから、もういっぺんやっておくれやす。",
+    "signOutPasswordChanging": "同期パスワードを変えてはる最中は切れしまへんえ。済んでから、もういっぺんやっておくれやす。",
+    "resetBusy": "同期の最中はリセットできしまへんえ。ちょっと間ぁおいてから、もういっぺんやっておくれやす。",
+    "deleteBusy": "同期の最中は消せしまへんえ。ちょっと間ぁおいてから、もういっぺんやっておくれやす。",
+    "trashBusy": "同期の最中はゴミ箱をいじれしまへんえ。ちょっと間ぁおいてから、もういっぺんやっておくれやす。",
+    "importBusy": "同期の最中は取り込めしまへんえ。ちょっと間ぁおいてから、もういっぺんやっておくれやす。",
+    "ownDeviceDeleteFromLocal": "このデバイスのデータは Local タブから消しておくれやす。",
     "encryptionPassword": "同期暗号化パスワード",
     "passwordSet": "パスワード設定済みどすえ",
     "passwordPlaceholder": "暗号化パスワードを入れておくれやす",
@@ -946,15 +956,27 @@
     "importComplete": "インポートしましたえ",
     "importFailed": "インポートがあきまへんでしたえ",
     "passwordMismatch": "同期パスワードが合いまへんなぁ。暗号化パスワードを確認しておくれやす。",
+    "passwordAlreadySet": "同期パスワードはもう保存されてますえ。「パスワードを入れ直しますえ」か「パスワード変更しますえ」を使うておくれやす。",
     "scanning": "スキャンしてますえ…",
     "downloading": "ダウンロードしてますえ…",
     "noRemoteData": "リモートにデータがおへんなぁ",
     "undecryptableCount": "{{count}} 件開けへんファイルがありますえ",
+    "trash": {
+      "description": "おんなじデータの別のコピーが選ばれはったさかい、同期が使わんようになったコピーどす。戻さはったら今のコピーと入れ替えますえ（今のんはゴミ箱へ移りますえ）。",
+      "empty": "ゴミ箱は空どすえ",
+      "restore": "戻すえ",
+      "notRestorable": "この PC の打鍵データは戻せしまへんえ。この PC からまた上げますさかい",
+      "updated": "更新 {{date}}",
+      "autoDelete": "今のコピーがあるうちは、{{date}} を過ぎたら消えますえ",
+      "notFound": "このファイルはもうゴミ箱にはおへんえ"
+    },
     "checkingRemotePassword": "同期状態を確認してますえ…",
     "existingPasswordHint": "同期パスワードがもう設定されてますえ。他のデバイスで使うてたパスワードを入れておくれやす。",
     "reenterPasswordWarning": "この PC の同期パスワードが Google Drive と合いまへんなぁ。ほかの PC で使うてはるパスワードを入れておくれやす。",
     "reenterPassword": "パスワードを入れ直しますえ",
     "reenterPasswordNoRemote": "Google Drive に照らし合わせる同期パスワードがまだあらしまへん。このフォームを閉じて、いまのパスワードで同期しておくれやす。",
+    "storedPasswordUnreadable": "この PC に保存してある同期パスワードが読めまへんえ（OS のキーチェーンに断られましたんや）。キーチェーンに鍵がかかってたり、拒否しはったんやったら、開けるか許してから「もういっぺんやりますえ」を押しておくれやす。そうやなかったら、下で同期パスワードを設定し直しておくれやす。",
+    "keystoreUnavailableNotice": "OS のキーチェーンが開けへんかったんやったら、鍵を開けるか設定して（Linux やったらキーリング）、Pipette を立ち上げ直しておくれやす。",
     "updateRequired": "この Google Drive の同期データは新しい版の Pipette で作らはったもんどす。同期を続けはるんやったら、アップデートしておくれやす。",
     "updateBanner": {
       "message": "Cloud Sync には新しい版の Pipette が要りますえ。同期を続けはるんやったら、アプリをアップデートしておくれやす。",
@@ -1886,20 +1908,23 @@
     "syncNoOrphans": "同期データは全部ここにありますえ",
     "resetAppSettings": "アプリケーション設定をリセットしますえ",
     "cloudData": "クラウドデータ",
+    "trash": "ゴミ箱",
     "typing": {
       "title": "タイピング",
       "noKeyboards": "タイピングデータがおへんなぁ",
       "noItems": "このキーボードのデータがおへんなぁ",
       "summaryLine": "{{days}} 日分 / 合計 {{keystrokes}} 打",
-      "colDate": "日付",
+      "colDateZone": "日付（{{zone}}）",
       "colKeystrokes": "打鍵数",
       "colActiveMs": "アクティブ時間",
       "selectAll": "全部の日を選びますえ",
       "selectRow": "{{date}} を選びますえ",
       "deleteSelected": "選んだ日を消しますえ ({{count}})",
       "deleteAll": "このキーボードの全データを消しますえ",
-      "confirmDeleteSelected": "このデバイスで記録された {{count}} 日分を消しますえ。同期先からも消えますけど、他のデバイスで記録された分は残りますえ。消した日のデータは再インポートできまへんさかい、先にExportしておくれやす。",
-      "confirmDeleteAll": "このデバイスで記録したこのキーボードの全部の日を消しますえ。同期先からも消えますけど、他のデバイスで記録された分は残りますえ。消した日のデータは再インポートできまへんさかい、先にExportしておくれやす。",
+      "confirmDeleteSelected": "このデバイスで記録された {{count}} 日分を消しますえ。同期先からも消えますけど、他のデバイスで記録された分は残りますえ。消したデータは、前のExportを再インポートしても消えたままどすえ。",
+      "confirmDeleteAll": "このデバイスで記録したこのキーボードの全部の日を消しますえ。Google Drive の写しも消えて、他の PC からも次の同期で消えますえ。他のデバイスで記録された分は残りますえ。消したデータは、前のExportを再インポートしても消えたままどすえ。",
+      "confirmDeleteSelectedDevice": "このデバイスで記録された {{count}} 日分を、ここですぐ見えへんようにしますえ。記録した PC では、次にその PC が同期した時に消えますえ。今より後にその PC で打った分は残りますえ。",
+      "confirmDeleteAllDevice": "このデバイスがこのキーボードで記録した全部の日を、ここですぐ見えへんようにしますえ。記録した PC では、次にその PC が同期した時に消えますえ。今より後にその PC で打った分は残りますえ。",
       "exportLabel": "Export…",
       "importLabel": "Import…",
       "importStatus": {
@@ -1914,7 +1939,8 @@
           "no-matching-target": "ローカルにもクラウドにもこの日のデータがおへんなぁ",
           "empty-or-invalid-content": "ファイルが空か、中身がちゃいますえ",
           "rows-outside-day-window": "行のtimestampがファイル名の日付範囲外どすえ",
-          "read-error": "ファイルを読み込めまへんでしたえ"
+          "read-error": "ファイルを読み込めまへんでしたえ",
+          "deleted-ranges-unreadable": "このデバイスの削除範囲を読み込めまへんでしたさかい、この日はそのままにしておきましたえ"
         }
       },
       "noRemoteDevices": "このキーボードを他のデバイスで打ったデータがおへんなぁ"

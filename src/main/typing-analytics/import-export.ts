@@ -21,7 +21,12 @@
 //   6. every parsed row's timestamps fall inside the day window the
 //      filename claims.
 // Anything else is rejected with a structured reason so the UI can
-// surface why nothing happened.
+// surface why nothing happened. An accepted file replaces the local one,
+// except that the local file's delete marks (`is_deleted` rows) are kept
+// after the imported rows: the LWW merge then keeps deleted data deleted
+// unless the import holds a newer copy of that row. The caller can also
+// mark the replaced file's rows again (`prepareReplace`), which is how the
+// deleted ranges of this device's own data are kept deleted.
 
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
@@ -32,6 +37,7 @@ import {
 import { parseRow, type JsonlRow } from './jsonl/jsonl-row'
 import { utcDayBoundaryMs, utcDayFromMs, type UtcDay } from './jsonl/utc-day'
 import { pLimit } from '../../shared/concurrency'
+import { writeFileAtomic } from '../utils/write-file-atomic'
 
 /** Filename shape that pairs with the cloud sync-unit encoding. The
  * encrypted cloud files end in `.enc`; the export files use `.jsonl`
@@ -104,6 +110,7 @@ export type ImportRejectReason =
   | 'empty-or-invalid-content'
   | 'rows-outside-day-window'
   | 'read-error'
+  | 'deleted-ranges-unreadable'
 
 export interface ImportRejection {
   fileName: string
@@ -127,6 +134,15 @@ export interface ImportOptions {
    * `live-day-locked` check. Defaults to `Date.now`. Tests pass a fixed
    * value so the live-day boundary is deterministic. */
   now?: () => number
+  /** Runs each target file's read-and-replace so it cannot interleave
+   * with other writers of that file (this device's flush chain appends to
+   * its own files). Defaults to running the task directly. */
+  runExclusive?: (task: () => Promise<void>) => Promise<void>
+  /** Runs inside the same `runExclusive` task, before a target file is
+   * replaced, and returns a step to run right after the replace. When it
+   * throws, the file is left as it is and rejected as
+   * `deleted-ranges-unreadable`. */
+  prepareReplace?: (ref: ExportFileRef) => Promise<() => Promise<void>>
 }
 
 /** Validate + overwrite a batch of files. Each path is processed
@@ -187,11 +203,48 @@ export async function importTypingDataFiles(
       result.rejections.push({ fileName: ref.fileName, reason: 'rows-outside-day-window' })
       continue
     }
-    await mkdir(dirname(targetPath), { recursive: true })
-    await writeFile(targetPath, body, 'utf-8')
-    result.imported += 1
+    let replaced = false
+    const replace = async (): Promise<void> => {
+      let afterReplace: (() => Promise<void>) | undefined
+      try {
+        afterReplace = await options.prepareReplace?.(ref)
+      } catch {
+        return
+      }
+      await mkdir(dirname(targetPath), { recursive: true })
+      await writeFileAtomic(targetPath, withLocalDeleteMarks(body, await readDeleteMarkLines(targetPath)))
+      replaced = true
+      await afterReplace?.()
+    }
+    await (options.runExclusive ? options.runExclusive(replace) : replace())
+    if (replaced) result.imported += 1
+    else result.rejections.push({ fileName: ref.fileName, reason: 'deleted-ranges-unreadable' })
   }
   return result
+}
+
+/** The lines of the file at `path` that are delete marks, verbatim. None
+ * when the file does not exist. */
+async function readDeleteMarkLines(path: string): Promise<string[]> {
+  let content: string
+  try {
+    content = await readFile(path, 'utf-8')
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw err
+  }
+  return content.split('\n').filter((line) => line && parseRow(line)?.is_deleted === true)
+}
+
+/** `body` followed by the kept mark lines it does not already hold (an
+ * export taken after a delete already carries them), compared trimmed so
+ * repeated imports do not pile up copies. Always ends with a newline:
+ * the reader drops a last line without one as crash-truncated. */
+function withLocalDeleteMarks(body: string, markLines: readonly string[]): string {
+  const bodyLines = new Set(body.split('\n').map((line) => line.trim()))
+  const missing = markLines.filter((line) => !bodyLines.has(line.trim()))
+  const head = body.endsWith('\n') ? body : `${body}\n`
+  return missing.length === 0 ? head : `${head}${missing.join('\n')}\n`
 }
 
 /** Parse every non-empty line. Returns `null` when the body is empty

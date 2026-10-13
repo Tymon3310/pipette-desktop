@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { buildSnapshotFilename, capSnapshotDeviceName } from '../../shared/snapshot-filename'
 
 let mockUserDataPath = ''
 
@@ -25,7 +26,13 @@ vi.mock('../sync/google-drive', () => ({
   driveFileName: (syncUnit: string) => syncUnit.replaceAll('/', '_') + '.enc',
 }))
 
+vi.mock('../utils/broadcast', () => ({
+  broadcastToAllWindows: vi.fn(),
+}))
+
 import {
+  backfillKeyboardMeta,
+  keyboardMetaFilePath,
   extractDeviceNameFromFilename,
   extractKeyboardUidsFromDriveFiles,
   mergeKeyboardMetaIndex,
@@ -38,8 +45,19 @@ import {
   getActiveKeyboardMetaMap,
 } from '../sync/keyboard-meta'
 import type { KeyboardMetaIndex } from '../../shared/types/keyboard-meta'
+import { broadcastToAllWindows } from '../utils/broadcast'
+import { IpcChannels } from '../../shared/ipc/channels'
+import type { DriveFile } from '../sync/google-drive'
+
+function metaAppliedCount(): number {
+  return vi.mocked(broadcastToAllWindows).mock.calls.filter(
+    ([channel, payload]) => channel === IpcChannels.SYNC_UNIT_APPLIED
+      && (payload as { syncUnit: string }).syncUnit === 'meta/keyboard-names',
+  ).length
+}
 
 beforeEach(async () => {
+  vi.mocked(broadcastToAllWindows).mockClear()
   mockUserDataPath = await mkdtemp(join(tmpdir(), 'keyboard-meta-test-'))
 })
 
@@ -53,6 +71,18 @@ describe('extractDeviceNameFromFilename', () => {
   it('returns the device name prefix from a snapshot filename', () => {
     expect(extractDeviceNameFromFilename('GPK60-63R_2026-04-16T10-00-00.000Z.pipette')).toBe('GPK60-63R')
     expect(extractDeviceNameFromFilename('Jeneko Box 42R_2026-03-15T14-35-29.037Z.pipette')).toBe('Jeneko Box 42R')
+  })
+
+  it('reads the device name from a filename that ends in the entry id', () => {
+    expect(
+      extractDeviceNameFromFilename('Jeneko Box 42R_2026-03-15T14-35-29.037Z_0b9f6f1e-3c1a-4e0e-9d7a-2f1d5f6b8a90.pipette'),
+    ).toBe('Jeneko Box 42R')
+  })
+
+  it('reads the cut device name from a filename built with a capped name', () => {
+    const long = 'Very Long Keyboard '.repeat(20)
+    const filename = buildSnapshotFilename(long, '2026-03-15T14-35-29.037Z', '0b9f6f1e-3c1a-4e0e-9d7a-2f1d5f6b8a90')
+    expect(extractDeviceNameFromFilename(filename)).toBe(capSnapshotDeviceName(long))
   })
 
   it('returns null when the filename does not match the expected pattern', () => {
@@ -189,6 +219,64 @@ describe('applyRemoteKeyboardMetaIndex', () => {
     expect(remoteNeedsUpdate).toBe(true)
     const stored = await readKeyboardMetaIndex()
     expect(stored.entries.map((e) => e.uid).sort()).toEqual(['0xA', '0xB'])
+    expect(metaAppliedCount()).toBe(1)
+  })
+
+  async function writeRawMeta(index: KeyboardMetaIndex): Promise<string> {
+    // Compact JSON, unlike the store's pretty-printed writes, so an
+    // untouched file is distinguishable from a rewritten one.
+    const raw = JSON.stringify(index)
+    await mkdir(join(mockUserDataPath, 'sync', 'meta'), { recursive: true })
+    await writeFile(keyboardMetaFilePath(), raw, 'utf-8')
+    return raw
+  }
+
+  it('skips the write and the notification when the merge changes nothing', async () => {
+    const index: KeyboardMetaIndex = {
+      type: 'keyboard-meta',
+      version: 1,
+      entries: [{ uid: '0xA', deviceName: 'A', updatedAt: '2026-04-16T00:00:00.000Z' }],
+    }
+    const raw = await writeRawMeta(index)
+
+    await applyRemoteKeyboardMetaIndex(index)
+
+    expect(await readFile(keyboardMetaFilePath(), 'utf-8')).toBe(raw)
+    expect(metaAppliedCount()).toBe(0)
+  })
+
+  it('writes and notifies when only tombstone GC changes the index', async () => {
+    const live = { uid: '0xA', deviceName: 'A', updatedAt: '2026-04-16T00:00:00.000Z' }
+    const expired = { uid: '0xB', deviceName: '', updatedAt: '2020-01-01T00:00:00.000Z', deletedAt: '2020-01-01T00:00:00.000Z' }
+    await writeRawMeta({ type: 'keyboard-meta', version: 1, entries: [live, expired] })
+
+    const { remoteNeedsUpdate } = await applyRemoteKeyboardMetaIndex({ type: 'keyboard-meta', version: 1, entries: [live] })
+
+    expect(remoteNeedsUpdate).toBe(true)
+    expect((await readKeyboardMetaIndex()).entries.map((e) => e.uid)).toEqual(['0xA'])
+    expect(metaAppliedCount()).toBe(1)
+  })
+})
+
+describe('backfillKeyboardMeta', () => {
+  it('notifies after writing backfilled names', async () => {
+    const snapDir = join(mockUserDataPath, 'sync', 'keyboards', '0xC', 'snapshots')
+    await mkdir(snapDir, { recursive: true })
+    await writeFile(join(snapDir, 'index.json'), JSON.stringify({
+      uid: '0xC',
+      entries: [{ id: 's', label: '', filename: 'Board C_2026-04-16T10-00-00.000Z.pipette', savedAt: '2026-04-16T10:00:00.000Z' }],
+    }), 'utf-8')
+    const files = [{ id: 'f', name: 'keyboards_0xC_snapshots.enc', modifiedTime: '' }] as DriveFile[]
+
+    const { resolved } = await backfillKeyboardMeta('pw', files)
+
+    expect(resolved).toBe(1)
+    expect(metaAppliedCount()).toBe(1)
+  })
+
+  it('does not notify when nothing needed a name', async () => {
+    await backfillKeyboardMeta('pw', [])
+    expect(metaAppliedCount()).toBe(0)
   })
 })
 

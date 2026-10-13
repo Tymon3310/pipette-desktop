@@ -5,31 +5,35 @@
 
 import { listFiles, driveFilenamePrefix, syncUnitFromFileName } from './google-drive'
 import { pLimit } from '../../shared/concurrency'
-import { SYNC_CONCURRENCY, syncRuntime } from './sync-runtime-state'
+import { SYNC_CONCURRENCY, lockFreeWriterBlocked, syncRuntime } from './sync-runtime-state'
 import { requireSyncCredentials, ensurePasswordCheckValidated, listPasswordCheckFiles } from './sync-password'
 import { localSyncBlock, remoteSyncBlock, listGuardFiles } from './sync-password-guard'
 import { ensureSyncFormatMarker, syncFormatGeneration } from './sync-format'
 import { mergeWithRemote, syncOrUpload } from './sync-merge-dispatch'
-import { isAnalyticsSyncUnit, collectAnalyticsSyncUnitsForUid } from './sync-bundle'
+import { canonicalFiles } from './drive-canonical'
+import { isAnalyticsSyncUnit, isTypingDeletedRangesSyncUnit, collectAnalyticsSyncUnitsForUid } from './sync-bundle'
+import { queueOwnDeletedRangesApply } from './typing-deleted-ranges-merge'
 
 /** Pull + push typing-analytics bundles for one keyboard, triggered
  * from the Analyze panel mount. Runs on its own per-uid mutex so
- * polling / manual sync stay untouched — the cloud file namespace is
- * disjoint (only `keyboards/{uid}/devices/*` is written) so there is
- * no conflict with the global `isSyncing` path.
+ * polling / manual sync stay untouched — only `keyboards/{uid}/devices/*`
+ * is written, which the global `isSyncing` path leaves alone except for the
+ * deleted-ranges units; those both paths sync, and `mergeWithRemote` /
+ * `syncOrUpload` (sync-merge-dispatch.ts) run one sync of such a unit at a
+ * time.
  *
  * Returns true on a fully-successful pass so the caller can stamp a
  * rate-limit timestamp; returns false on skip (this uid is already
- * syncing, credentials are missing, a sync password change is in
- * progress, Drive needs a newer sync format, the sync-format marker
+ * syncing, a reset of it is running, credentials are missing, a sync password
+ * change is in progress, Drive needs a newer sync format, the sync-format marker
  * cannot be created, or the password-check does not open) or on any per-unit
  * failure so the caller can retry on the next Analyze mount. */
 export async function executeAnalyticsSync(uid: string): Promise<boolean> {
-  // A running password-change operation (sync-password-change.ts) holds
-  // `passwordChangeRun`; it in turn refuses to start while any uid is in
-  // `analyticsSyncingUids`. Both checks are synchronous, so the two never
-  // overlap.
-  if (syncRuntime.analyticsSyncingUids.has(uid) || syncRuntime.passwordChangeRun) return false
+  // A password change, a reset of this keyboard and a token switch each
+  // wait or refuse while this uid is in `analyticsSyncingUids`
+  // (`lockFreeWriterRunning`). The check and the add below are synchronous,
+  // so they never overlap.
+  if (syncRuntime.analyticsSyncingUids.has(uid) || lockFreeWriterBlocked(uid)) return false
   syncRuntime.analyticsSyncingUids.add(uid)
   try {
     const credentials = await requireSyncCredentials()
@@ -47,9 +51,9 @@ export async function executeAnalyticsSync(uid: string): Promise<boolean> {
     await ensurePasswordCheckValidated(password, await listPasswordCheckFiles())
 
     // Drive-side prefix filter: scope the listing to this keyboard's
-    // analytics files. The in-memory `isAnalyticsSyncUnit` + `startsWith`
-    // checks below remain as a safety net in case Drive ever returns a
-    // looser substring match.
+    // analytics day and deleted-ranges files. The in-memory unit-kind and
+    // `startsWith` checks below remain as a safety net in case Drive ever
+    // returns a looser substring match.
     const prefix = `keyboards/${uid}/devices/`
     const remoteFiles = await listFiles({ nameContains: driveFilenamePrefix(prefix) })
     let anyFailure = false
@@ -58,11 +62,12 @@ export async function executeAnalyticsSync(uid: string): Promise<boolean> {
     // divergence internally, so the push pass can skip them.
     const mergedUnits = new Set<string>()
 
+    // One copy per name, so a unit with duplicate files is merged once.
     await Promise.allSettled(
-      remoteFiles.map((file) =>
+      canonicalFiles(remoteFiles).map((file) =>
         limit(async () => {
           const unit = syncUnitFromFileName(file.name)
-          if (!unit || !isAnalyticsSyncUnit(unit)) return
+          if (!unit || !(isAnalyticsSyncUnit(unit) || isTypingDeletedRangesSyncUnit(unit))) return
           if (!unit.startsWith(prefix)) return
           try {
             await mergeWithRemote(file, unit, password, remoteFiles)
@@ -89,6 +94,7 @@ export async function executeAnalyticsSync(uid: string): Promise<boolean> {
         ),
     )
 
+    queueOwnDeletedRangesApply()
     return !anyFailure
   } catch {
     return false

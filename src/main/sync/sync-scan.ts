@@ -14,6 +14,8 @@ import {
 } from './google-drive'
 import { pLimit } from '../../shared/concurrency'
 import { SYNC_CONCURRENCY } from './sync-runtime-state'
+import { pickCanonicalFile } from './drive-canonical'
+import { parseTrashFile } from './drive-trash'
 import { requireSyncCredentials, validatePasswordCheck } from './sync-password'
 import { assertNoLocalPasswordChange, assertSyncAllowed, localSyncBlock, remoteSyncBlock } from './sync-password-guard'
 import { syncFormatGeneration } from './sync-format'
@@ -42,11 +44,13 @@ async function fetchValidatedDataFiles(): Promise<{ password: string; dataFiles:
   return { password, dataFiles }
 }
 
+/** Trash files (drive-trash.ts) are not checked: sync never reads them,
+ *  and the poll deletes them once they are old enough (sync-trash.ts). */
 async function findUndecryptableFiles(password: string, dataFiles: DriveFile[]): Promise<UndecryptableFile[]> {
   const undecryptable: UndecryptableFile[] = []
   const limit = pLimit(SYNC_CONCURRENCY)
   await Promise.allSettled(
-    dataFiles.map((file) =>
+    dataFiles.filter((file) => parseTrashFile(file) === null).map((file) =>
       limit(async () => {
         try {
           const envelope = await downloadFile(file.id)
@@ -165,8 +169,7 @@ export async function fetchRemoteBundle(syncUnit: string): Promise<SyncBundle | 
   const result = await fetchValidatedDataFiles()
   if (!result) return null
   const { password, dataFiles } = result
-  const targetName = driveFileName(syncUnit)
-  const file = dataFiles.find((f) => f.name === targetName)
+  const file = pickCanonicalFile(dataFiles, driveFileName(syncUnit))
   if (!file) return null
   try {
     const envelope = await downloadFile(file.id)

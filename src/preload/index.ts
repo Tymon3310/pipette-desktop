@@ -11,7 +11,7 @@ import * as keychronProtocol from './keychron-protocol'
 import { IpcChannels } from '../shared/ipc/channels'
 import type { DeviceInfo, KeyboardDefinition, ProbeResult } from '../shared/types/protocol'
 import type { TrayStatus } from '../shared/types/vial-api'
-import type { SnapshotMeta } from '../shared/types/snapshot-store'
+import type { SnapshotMeta, SnapshotUpdateOptions } from '../shared/types/snapshot-store'
 import type { AnalyzeFilterSnapshotMeta } from '../shared/types/analyze-filter-store'
 import type { RunKeystrokeLog, RunLogMeta } from '../shared/types/typing-run-log'
 import type { SavedFavoriteMeta, FavoriteImportResult } from '../shared/types/favorite-store'
@@ -55,7 +55,7 @@ import type {
 import type { HubPrivateLink } from '../shared/types/hub-private'
 import type { AppConfig } from '../shared/types/app-config'
 import type { DeviceScope } from '../shared/types/analyze-filters'
-import type { SyncAuthStatus, SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, UndecryptableFile, SyncDataScanResult, SyncScope, StoredKeyboardInfo, SyncOperationResult, ImportLocalDataResult, PasswordChangeStatus, PasswordChangeDeleteResult, PasswordChangeLockStatus, SyncFormatStatus } from '../shared/types/sync'
+import type { SyncAuthStatus, SyncProgress, PasswordStrength, SyncResetTargets, LocalResetTargets, UndecryptableFile, SyncDataScanResult, SyncScope, StoredKeyboardInfo, SyncOperationResult, ImportLocalDataResult, PasswordChangeStatus, PasswordChangeDeleteResult, PasswordChangeLockStatus, SyncFormatStatus, SyncTrashListResult, SyncTrashDeleteResult, StoredPasswordStatus } from '../shared/types/sync'
 import type { PipetteSettings, PipetteSettingsPatch, PooledTypingTestResult } from '../shared/types/pipette-settings'
 import type {
   LayoutComparisonOptions,
@@ -77,7 +77,7 @@ import type {
   TypingDurationCell,
   TypingSessionRow,
   TypingBksMinuteRow,
-  TypingTombstoneResult,
+  TypingAnalyticsImportResult,
   PeakRecords,
   TypingBigramAggregateOptions,
   TypingBigramAggregateResult,
@@ -367,8 +367,8 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_SAVE, uid, json, deviceName, label, vilVersion),
   snapshotStoreLoad: (uid: string, entryId: string): Promise<{ success: boolean; data?: string; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_LOAD, uid, entryId),
-  snapshotStoreUpdate: (uid: string, entryId: string, json: string, vilVersion?: number): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_UPDATE, uid, entryId, json, vilVersion),
+  snapshotStoreUpdate: (uid: string, entryId: string, json: string, vilVersion?: number, options?: SnapshotUpdateOptions): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_UPDATE, uid, entryId, json, vilVersion, options),
   snapshotStoreRename: (uid: string, entryId: string, newLabel: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SNAPSHOT_STORE_RENAME, uid, entryId, newLabel),
   snapshotStoreDelete: (uid: string, entryId: string): Promise<{ success: boolean; error?: string }> =>
@@ -479,6 +479,8 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.I18N_PACK_STORE_RENAME, id, newName),
   i18nPackSetEnabled: (id: string, enabled: boolean): Promise<I18nPackStoreResult<I18nPackMeta>> =>
     ipcRenderer.invoke(IpcChannels.I18N_PACK_STORE_SET_ENABLED, id, enabled),
+  i18nPackRefreshCoverage: (id: string, values: { matchedBaseVersion: string; coverage: { totalKeys: number; coveredKeys: number }; measuredBodyClock: string }): Promise<I18nPackStoreResult<I18nPackMeta>> =>
+    ipcRenderer.invoke(IpcChannels.I18N_PACK_STORE_REFRESH_COVERAGE, id, values),
   i18nPackDelete: (id: string): Promise<I18nPackStoreResult<void>> =>
     ipcRenderer.invoke(IpcChannels.I18N_PACK_STORE_DELETE, id),
   i18nPackSetHubPostId: (id: string, hubPostId: string | null, uploaderName?: string, hubUpdatedAt?: string): Promise<I18nPackStoreResult<I18nPackMeta>> =>
@@ -559,6 +561,8 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.PIPETTE_SETTINGS_GET, uid),
   pipetteSettingsPatch: (uid: string, partial: PipetteSettingsPatch): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.PIPETTE_SETTINGS_PATCH, uid, partial),
+  pipetteSettingsEnsureDir: (uid: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.PIPETTE_SETTINGS_ENSURE_DIR, uid),
   pipetteSettingsListAllTypingResults: (): Promise<PooledTypingTestResult[]> =>
     ipcRenderer.invoke(IpcChannels.PIPETTE_SETTINGS_LIST_ALL_TYPING_RESULTS),
 
@@ -607,9 +611,9 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_KEYBOARDS),
   typingAnalyticsListItems: (uid: string, appScopes: string[] = [], typingTestScopes: string[] = [], runIdScopes: string[] = []): Promise<TypingDailySummary[]> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_ITEMS, uid, appScopes, typingTestScopes, runIdScopes),
-  typingAnalyticsDeleteItems: (uid: string, dates: string[]): Promise<TypingTombstoneResult> =>
+  typingAnalyticsDeleteItems: (uid: string, dates: string[]): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_DELETE_ITEMS, uid, dates),
-  typingAnalyticsDeleteAll: (uid: string): Promise<TypingTombstoneResult> =>
+  typingAnalyticsDeleteAll: (uid: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_DELETE_ALL, uid),
   typingAnalyticsGetMatrixHeatmap: (
     uid: string,
@@ -769,11 +773,11 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_LIST_REMOTE_CLOUD_DAYS, uid, machineHash),
   typingAnalyticsFetchRemoteDay: (uid: string, machineHash: string, utcDay: string): Promise<boolean> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_FETCH_REMOTE_DAY, uid, machineHash, utcDay),
-  typingAnalyticsDeleteRemoteDay: (uid: string, machineHash: string, utcDay: string): Promise<boolean> =>
-    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_DELETE_REMOTE_DAY, uid, machineHash, utcDay),
+  typingAnalyticsDeleteDeviceData: (uid: string, machineHash: string, dates: string[] | 'all'): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_DELETE_DEVICE_DATA, uid, machineHash, dates),
   typingAnalyticsExport: (uid: string, dates: string[]): Promise<{ written: number; cancelled: boolean }> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_EXPORT, uid, dates),
-  typingAnalyticsImport: (): Promise<{ result: { imported: number; rejections: { fileName: string; reason: string }[] }; cancelled: boolean }> =>
+  typingAnalyticsImport: (): Promise<TypingAnalyticsImportResult> =>
     ipcRenderer.invoke(IpcChannels.TYPING_ANALYTICS_IMPORT),
 
   // --- Language Store (IPC to main) ---
@@ -831,8 +835,8 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.SYNC_PASSWORD_CHANGE_RELEASE_LOCKS),
   syncResetTargets: (targets: SyncResetTargets): Promise<SyncOperationResult> =>
     ipcRenderer.invoke(IpcChannels.SYNC_RESET_TARGETS, targets),
-  syncHasPassword: (): Promise<boolean> =>
-    ipcRenderer.invoke(IpcChannels.SYNC_HAS_PASSWORD),
+  syncPasswordStatus: (): Promise<StoredPasswordStatus> =>
+    ipcRenderer.invoke(IpcChannels.SYNC_PASSWORD_STATUS),
   syncValidatePassword: (password: string): Promise<PasswordStrength> =>
     ipcRenderer.invoke(IpcChannels.SYNC_VALIDATE_PASSWORD, password),
   syncOnProgress: (callback: (progress: SyncProgress) => void): (() => void) => {
@@ -852,6 +856,12 @@ const vialAPI = {
     ipcRenderer.invoke(IpcChannels.SYNC_FETCH_REMOTE_BUNDLE, syncUnit),
   syncDeleteFiles: (fileIds: string[]): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IpcChannels.SYNC_DELETE_FILES, fileIds),
+  syncListTrash: (): Promise<SyncTrashListResult> =>
+    ipcRenderer.invoke(IpcChannels.SYNC_LIST_TRASH),
+  syncRestoreTrash: (fileId: string): Promise<SyncOperationResult> =>
+    ipcRenderer.invoke(IpcChannels.SYNC_RESTORE_TRASH, fileId),
+  syncDeleteTrash: (fileIds: string[]): Promise<SyncTrashDeleteResult> =>
+    ipcRenderer.invoke(IpcChannels.SYNC_DELETE_TRASH, fileIds),
   syncCheckPasswordExists: (): Promise<boolean> =>
     ipcRenderer.invoke(IpcChannels.SYNC_CHECK_PASSWORD_EXISTS),
   syncAnalyticsNow: (uid: string): Promise<boolean> =>
@@ -864,6 +874,13 @@ const vialAPI = {
     }
     ipcRenderer.on(IpcChannels.SYNC_FORMAT_STATUS_CHANGED, handler)
     return () => ipcRenderer.removeListener(IpcChannels.SYNC_FORMAT_STATUS_CHANGED, handler)
+  },
+  syncOnUnitApplied: (callback: (syncUnit: string) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { syncUnit: string }): void => {
+      callback(payload.syncUnit)
+    }
+    ipcRenderer.on(IpcChannels.SYNC_UNIT_APPLIED, handler)
+    return () => ipcRenderer.removeListener(IpcChannels.SYNC_UNIT_APPLIED, handler)
   },
   syncOnPendingChange: (callback: (pending: boolean) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, pending: boolean): void => {

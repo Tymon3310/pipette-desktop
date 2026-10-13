@@ -24,10 +24,18 @@ export interface SyncEnvelope {
 }
 
 export interface SyncBundle {
-  type: 'favorite' | 'layout' | 'analyze-filter' | 'run-log' | 'settings' | 'keyboard-meta' | 'typing-analytics-device' | 'key-label' | 'typing-test-text' | 'i18n-index' | 'i18n-pack' | 'theme-index' | 'theme-pack'
-  key: string // FavoriteType, UID, 'keyboard-names' for meta, `${uid}|${machineHash}` for device, 'key-labels', 'typing-test-texts', 'i18n-index', or packId for i18n-pack
+  type: 'favorite' | 'layout' | 'analyze-filter' | 'run-log' | 'settings' | 'keyboard-meta' | 'typing-analytics-device' | 'typing-deleted-ranges' | 'key-label' | 'typing-test-text' | 'i18n-index' | 'i18n-pack' | 'theme-index' | 'theme-pack'
+  key: string // FavoriteType, UID, 'keyboard-names' for meta, `${uid}|${machineHash}|${utcDay}` for a device day, `${uid}|${machineHash}` for deleted ranges, 'key-labels', 'typing-test-texts', 'i18n-index', or packId for i18n-pack
   index: FavoriteIndex | SnapshotIndex | AnalyzeFilterSnapshotIndex | RunLogIndex | KeyboardMetaIndex | KeyLabelIndex | TypingTestTextIndex | I18nPackIndex | ThemePackIndex
   files: Record<string, string> // filename -> content (empty for meta / i18n-index)
+  /** i18n / theme pack body bundles only: the clock and body fields of the
+   *  local meta the body was read with. Absent in bundles of v1 apps. */
+  body?: PackBodyClock
+}
+
+export interface PackBodyClock {
+  clock: string
+  fields: Record<string, unknown>
 }
 
 export type SyncDirection = 'upload' | 'download'
@@ -122,6 +130,34 @@ export interface UndecryptableFile {
   syncUnit: string | null
 }
 
+/** A Drive trash file: a copy of `originalName` that sync stopped reading.
+ *  Times are epoch ms. `updatedAt` is the copy's last modification before
+ *  it was moved to trash; from `expiresAt` on, it is deleted while a
+ *  current copy of the name exists. */
+export interface SyncTrashFile {
+  fileId: string
+  originalName: string
+  syncUnit: string | null
+  updatedAt: number
+  expiresAt: number
+  /** False for this machine's own typing days, which are never renamed back
+   *  (the next sync uploads the local day again, and a deleted day must
+   *  stay deleted); such a file can only be deleted. */
+  restorable: boolean
+}
+
+export interface SyncTrashListResult extends Pick<SyncOperationResult, 'success' | 'error' | 'reason'> {
+  /** Set when `success`. */
+  files?: SyncTrashFile[]
+}
+
+export interface SyncTrashDeleteResult extends Pick<SyncOperationResult, 'success' | 'error' | 'reason'> {
+  /** Set when `success`: the ids deleted, and the ids skipped because
+   *  they were no longer trash files. */
+  deleted?: string[]
+  skipped?: string[]
+}
+
 export interface SyncDataScanResult {
   keyboards: string[]
   /** uid -> deviceName from synced meta (when available) */
@@ -169,6 +205,18 @@ export type SyncCredentialFailureReason =
   | 'decryptFailed'           // file exists but the OS keychain refuses it
   | 'keystoreUnavailable'     // safeStorage.isEncryptionAvailable() === false
   | 'remoteCheckFailed'       // can't reach the remote password-check (network / drive)
+
+/** What the stored sync password file is, without the password: `readable`
+ *  when it decrypts, otherwise the local reason `retrievePasswordResult`
+ *  (sync-crypto.ts) gives. */
+export type StoredPasswordStatus =
+  | 'readable'
+  | Extract<SyncCredentialFailureReason, 'noPasswordFile' | 'decryptFailed' | 'keystoreUnavailable'>
+
+/** Why a sign-in or sign-out was refused (`syncBusy`: sync work kept
+ *  running past the wait, so the tokens were not switched). Kept apart from
+ *  `SyncCredentialFailureReason`, which describes the stored credentials. */
+export type SyncAuthFailureReason = 'syncBusy'
 
 export type SyncCredentialI18nNamespace = 'readiness' | 'changePasswordError'
 
@@ -227,7 +275,7 @@ export type SyncSkipReason = 'busy' | SyncCredentialFailureReason | SyncBlockRea
 export interface SyncOperationResult {
   success: boolean
   error?: string
-  reason?: SyncCredentialFailureReason
+  reason?: SyncCredentialFailureReason | SyncAuthFailureReason
   /** Populated only by SYNC_EXECUTE. `success` stays `true` whenever the IPC
    *  call itself didn't throw — including when the sync silently did
    *  nothing (busy race, missing credentials) — so callers that need to know

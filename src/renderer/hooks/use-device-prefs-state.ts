@@ -2,17 +2,18 @@
 
 import { useState, useCallback, useRef } from 'react'
 import type { KeyboardLayoutId } from '../data/keyboard-layouts'
-import type { TypingTestResult, ViewMode, TypingTestMemory, TypingTestComparisonBaselines, ViewMatrixCell } from '../../shared/types/pipette-settings'
+import type { PipetteSettingsPatch, TypingTestResult, ViewMode, TypingTestMemory, TypingTestComparisonBaselines, ViewMatrixCell } from '../../shared/types/pipette-settings'
 import { VIEW_ONLY_OPACITY_DEFAULT } from '../../shared/types/pipette-settings'
 import type { TypingTestConfig } from '../typing-test/types'
 import { DEFAULT_DISPLAY_LINES, DEFAULT_FONT_SIZE } from '../typing-test/types'
 import type { BasicViewType, SplitKeyMode } from '../../shared/types/app-config'
 import type { ValidatedPrefs } from './device-prefs-validate'
+import { isSameValue } from '../utils/same-value'
 
 /**
  * Pairs a state value with a ref that always holds the latest value.
- * The ref is needed so that saveCurrentPrefs can read current values
- * inside a stable (never-recreated) callback.
+ * The ref lets setters that compare against or derive from the current
+ * value read it inside a stable callback.
  */
 function useStateRef<T>(initial: T): [T, (v: T) => void, React.RefObject<T>] {
   const [value, setValue] = useState<T>(initial)
@@ -22,6 +23,23 @@ function useStateRef<T>(initial: T): [T, (v: T) => void, React.RefObject<T>] {
     setValue(v)
   }, [])
   return [value, update, ref]
+}
+
+/** Save bookkeeping shared by `savePrefs` and the sync reload. */
+export interface PatchTracker {
+  /** Bumped by every save, so a reader can tell a save started meanwhile. */
+  generation: number
+  /** Saves whose IPC call has not settled yet. */
+  inFlight: number
+  /** Called each time `inFlight` drops back to 0. A single slot with one
+   *  owner: `useDevicePrefsReload` (`use-device-prefs-reload.ts`) sets it
+   *  on mount and clears it on unmount. Nothing else may assign it. */
+  onSettled: (() => void) | null
+}
+
+export interface ApplyValidatedOptions {
+  skip?: ReadonlySet<keyof ValidatedPrefs>
+  onlyChanged?: boolean
 }
 
 export interface DevicePrefsInitialDefaults {
@@ -71,117 +89,111 @@ export function useDevicePrefsState(defaults: DevicePrefsInitialDefaults) {
 
   const uidRef = useRef('')
   const applySeqRef = useRef(0)
+  const patchTrackerRef = useRef<PatchTracker>({ generation: 0, inFlight: 0, onSettled: null })
 
-  const saveCurrentPrefs = useCallback(() => {
+  /** Persists only the fields a setter changed. A field-level PATCH leaves
+   *  every other field in the file untouched, so a value written by a sync
+   *  merge is never overwritten with this renderer's stale copy. Clearable
+   *  fields send `null`: the main-side merge skips `undefined`.
+   *  Every call is counted in `patchTrackerRef`, which the sync reload
+   *  (`use-device-prefs-reload.ts`) reads to drop a read that raced a save. */
+  const savePrefs = useCallback((partial: PipetteSettingsPatch) => {
     const uid = uidRef.current
     if (!uid) return
-    window.vialAPI.pipetteSettingsPatch(uid, {
-      _rev: 1,
-      keyboardLayout: layoutRef.current,
-      autoAdvance: autoAdvanceRef.current,
-      layerPanelOpen: layerPanelOpenRef.current,
-      basicViewType: basicViewTypeRef.current,
-      splitKeyMode: splitKeyModeRef.current,
-      quickSelect: quickSelectRef.current,
-      keymapScale: keymapScaleRef.current,
-      keyEditorZoom: keyEditorZoomRef.current,
-      layerNames: layerNamesRef.current,
-      typingTestResults: typingTestResultsRef.current,
-      typingTestConfig: typingTestConfigRef.current as Record<string, unknown> | undefined,
-      typingTestMonkeytypeConfig: typingTestMonkeytypeConfigRef.current as Record<string, unknown> | undefined,
-      typingTestLanguage: typingTestLanguageRef.current,
-      typingTestViewOnly: typingTestViewOnlyRef.current,
-      typingTestViewOnlyWindowSize: typingTestViewOnlyWindowSizeRef.current,
-      typingTestViewOnlyAlwaysOnTop: typingTestViewOnlyAlwaysOnTopRef.current,
-      typingTestViewOnlyOpacity: typingTestViewOnlyOpacityRef.current,
-      // `null` clears the persisted memory; the field-level PATCH skips
-      // `undefined`, so a bare `undefined` would leave a stale paused run
-      // on disk after finish / restart.
-      typingTestMemory: typingTestMemoryRef.current ?? null,
-      typingTestDisplayLines: typingTestDisplayLinesRef.current,
-      typingTestFontSize: typingTestFontSizeRef.current,
-      typingTestHideKeymap: typingTestHideKeymapRef.current,
-      typingTestHideStatsRow: typingTestHideStatsRowRef.current,
-      typingTestHideControls: typingTestHideControlsRef.current,
-      typingTestSaveUnnamed: typingTestSaveUnnamedRef.current,
-      typingTestComparisonBaselines: typingTestComparisonBaselinesRef.current,
-      typingTestSettingsPanelOpen: typingTestSettingsPanelOpenRef.current,
-      typingRecordEnabled: typingRecordEnabledRef.current,
-      viewMode: viewModeRef.current,
-      // `null` clears the persisted overrides when the ref holds `undefined`
-      // (reset), mirroring `typingTestMemory` above — a bare `undefined`
-      // would leave a stale map on disk instead of clearing it.
-      viewMatrix: viewMatrixRef.current ?? null,
-      // Always sent explicitly (never `undefined`) so turning the toggle
-      // OFF actually persists `false` instead of being skipped by the
-      // field-level PATCH's "undefined leaves the field untouched" rule.
-      viewMatrixWires: viewMatrixWiresRef.current,
-      // Sent explicitly for the same reason as `viewMatrixWires`.
-      layerHoverPreview: layerHoverPreviewRef.current,
-      entryHoverPreview: entryHoverPreviewRef.current,
-      // `null` clears a reset order, same as `viewMatrix`.
-      keycodeTabOrder: keycodeTabOrderRef.current ?? null,
-    }).catch(() => {
-      // IPC failure — best-effort save
-    })
+    const tracker = patchTrackerRef.current
+    tracker.generation++
+    tracker.inFlight++
+    let request: Promise<unknown>
+    try {
+      request = window.vialAPI.pipetteSettingsPatch(uid, { _rev: 1, ...partial })
+    } catch (err) {
+      // A synchronous throw still has to settle the count below.
+      request = Promise.reject(err)
+    }
+    request
+      .catch(() => {
+        // IPC failure — best-effort save
+      })
+      .finally(() => {
+        tracker.inFlight--
+        if (tracker.inFlight === 0) tracker.onSettled?.()
+      })
   }, [])
 
   /** Applies a resolved (defaulted/migrated) prefs snapshot to every state
    *  slot in one synchronous pass — no await between updates, so a caller
    *  can follow it immediately with `setAppliedUid` and rely on state being
-   *  fully settled by then (view-mode routing gates on `appliedUid`). */
-  const applyValidated = useCallback((resolved: ValidatedPrefs) => {
-    updateLayout(resolved.keyboardLayout)
-    updateAutoAdvance(resolved.autoAdvance)
-    updateLayerPanelOpen(resolved.layerPanelOpen)
-    updateBasicViewType(resolved.basicViewType)
-    updateSplitKeyMode(resolved.splitKeyMode)
-    updateQuickSelect(resolved.quickSelect)
-    updateKeymapScale(resolved.keymapScale)
-    updateLayerNames(resolved.layerNames)
-    updateTypingTestResults(resolved.typingTestResults)
-    updateTypingTestConfig(resolved.typingTestConfig)
-    updateTypingTestMonkeytypeConfig(resolved.typingTestMonkeytypeConfig)
-    updateTypingTestLanguage(resolved.typingTestLanguage)
-    updateTypingTestViewOnly(resolved.typingTestViewOnly)
-    updateTypingTestViewOnlyWindowSize(resolved.typingTestViewOnlyWindowSize)
-    updateTypingTestViewOnlyAlwaysOnTop(resolved.typingTestViewOnlyAlwaysOnTop)
-    updateTypingTestViewOnlyOpacity(resolved.typingTestViewOnlyOpacity)
-    updateTypingTestMemory(resolved.typingTestMemory)
-    updateTypingTestDisplayLines(resolved.typingTestDisplayLines)
-    updateTypingTestFontSize(resolved.typingTestFontSize)
-    updateTypingTestHideKeymap(resolved.typingTestHideKeymap)
-    updateTypingTestHideStatsRow(resolved.typingTestHideStatsRow)
-    updateTypingTestHideControls(resolved.typingTestHideControls)
-    updateTypingTestSaveUnnamed(resolved.typingTestSaveUnnamed)
-    updateTypingTestComparisonBaselines(resolved.typingTestComparisonBaselines)
-    updateTypingTestSettingsPanelOpen(resolved.typingTestSettingsPanelOpen)
-    updateTypingRecordEnabled(resolved.typingRecordEnabled)
-    updateViewMode(resolved.viewMode)
-    updateKeyEditorZoom(resolved.keyEditorZoom)
-    updateViewMatrix(resolved.viewMatrix)
-    updateViewMatrixWires(resolved.viewMatrixWires)
-    updateLayerHoverPreview(resolved.layerHoverPreview)
-    updateEntryHoverPreview(resolved.entryHoverPreview)
-    updateKeycodeTabOrder(resolved.keycodeTabOrder)
+   *  fully settled by then (view-mode routing gates on `appliedUid`).
+   *  `options.skip` leaves the named slots as they are; `options.onlyChanged`
+   *  leaves a slot alone when its value is equal to the current one, so an
+   *  unchanged array or object keeps its identity. Returns the skipped
+   *  slots whose current value differs from `resolved`. */
+  const applyValidated = useCallback((resolved: ValidatedPrefs, options?: ApplyValidatedOptions): (keyof ValidatedPrefs)[] => {
+    const differingSkipped: (keyof ValidatedPrefs)[] = []
+    const put = <K extends keyof ValidatedPrefs>(
+      key: K,
+      ref: React.RefObject<ValidatedPrefs[K]>,
+      update: (value: ValidatedPrefs[K]) => void,
+    ): void => {
+      if (options?.skip?.has(key)) {
+        if (!isSameValue(ref.current, resolved[key])) differingSkipped.push(key)
+        return
+      }
+      if (options?.onlyChanged && isSameValue(ref.current, resolved[key])) return
+      update(resolved[key])
+    }
+    put('keyboardLayout', layoutRef, updateLayout)
+    put('autoAdvance', autoAdvanceRef, updateAutoAdvance)
+    put('layerPanelOpen', layerPanelOpenRef, updateLayerPanelOpen)
+    put('basicViewType', basicViewTypeRef, updateBasicViewType)
+    put('splitKeyMode', splitKeyModeRef, updateSplitKeyMode)
+    put('quickSelect', quickSelectRef, updateQuickSelect)
+    put('keymapScale', keymapScaleRef, updateKeymapScale)
+    put('layerNames', layerNamesRef, updateLayerNames)
+    put('typingTestResults', typingTestResultsRef, updateTypingTestResults)
+    put('typingTestConfig', typingTestConfigRef, updateTypingTestConfig)
+    put('typingTestMonkeytypeConfig', typingTestMonkeytypeConfigRef, updateTypingTestMonkeytypeConfig)
+    put('typingTestLanguage', typingTestLanguageRef, updateTypingTestLanguage)
+    put('typingTestViewOnly', typingTestViewOnlyRef, updateTypingTestViewOnly)
+    put('typingTestViewOnlyWindowSize', typingTestViewOnlyWindowSizeRef, updateTypingTestViewOnlyWindowSize)
+    put('typingTestViewOnlyAlwaysOnTop', typingTestViewOnlyAlwaysOnTopRef, updateTypingTestViewOnlyAlwaysOnTop)
+    put('typingTestViewOnlyOpacity', typingTestViewOnlyOpacityRef, updateTypingTestViewOnlyOpacity)
+    put('typingTestMemory', typingTestMemoryRef, updateTypingTestMemory)
+    put('typingTestDisplayLines', typingTestDisplayLinesRef, updateTypingTestDisplayLines)
+    put('typingTestFontSize', typingTestFontSizeRef, updateTypingTestFontSize)
+    put('typingTestHideKeymap', typingTestHideKeymapRef, updateTypingTestHideKeymap)
+    put('typingTestHideStatsRow', typingTestHideStatsRowRef, updateTypingTestHideStatsRow)
+    put('typingTestHideControls', typingTestHideControlsRef, updateTypingTestHideControls)
+    put('typingTestSaveUnnamed', typingTestSaveUnnamedRef, updateTypingTestSaveUnnamed)
+    put('typingTestComparisonBaselines', typingTestComparisonBaselinesRef, updateTypingTestComparisonBaselines)
+    put('typingTestSettingsPanelOpen', typingTestSettingsPanelOpenRef, updateTypingTestSettingsPanelOpen)
+    put('typingRecordEnabled', typingRecordEnabledRef, updateTypingRecordEnabled)
+    put('viewMode', viewModeRef, updateViewMode)
+    put('keyEditorZoom', keyEditorZoomRef, updateKeyEditorZoom)
+    put('viewMatrix', viewMatrixRef, updateViewMatrix)
+    put('viewMatrixWires', viewMatrixWiresRef, updateViewMatrixWires)
+    put('layerHoverPreview', layerHoverPreviewRef, updateLayerHoverPreview)
+    put('entryHoverPreview', entryHoverPreviewRef, updateEntryHoverPreview)
+    put('keycodeTabOrder', keycodeTabOrderRef, updateKeycodeTabOrder)
+    return differingSkipped
   }, [])
 
   return {
-    layout, updateLayout, layoutRef,
-    autoAdvance, updateAutoAdvance, autoAdvanceRef,
-    layerPanelOpen, updateLayerPanelOpen, layerPanelOpenRef,
-    basicViewType, updateBasicViewType, basicViewTypeRef,
-    splitKeyMode, updateSplitKeyMode, splitKeyModeRef,
-    quickSelect, updateQuickSelect, quickSelectRef,
-    keymapScale, updateKeymapScale, keymapScaleRef,
-    layerNames, updateLayerNames, layerNamesRef,
+    layout, updateLayout,
+    autoAdvance, updateAutoAdvance,
+    layerPanelOpen, updateLayerPanelOpen,
+    basicViewType, updateBasicViewType,
+    splitKeyMode, updateSplitKeyMode,
+    quickSelect, updateQuickSelect,
+    keymapScale, updateKeymapScale,
+    layerNames, updateLayerNames,
     typingTestResults, updateTypingTestResults, typingTestResultsRef,
     typingTestConfig, updateTypingTestConfig, typingTestConfigRef,
-    typingTestMonkeytypeConfig, updateTypingTestMonkeytypeConfig, typingTestMonkeytypeConfigRef,
-    typingTestLanguage, updateTypingTestLanguage, typingTestLanguageRef,
-    typingTestViewOnly, updateTypingTestViewOnly, typingTestViewOnlyRef,
-    typingTestViewOnlyWindowSize, updateTypingTestViewOnlyWindowSize, typingTestViewOnlyWindowSizeRef,
-    typingTestViewOnlyAlwaysOnTop, updateTypingTestViewOnlyAlwaysOnTop, typingTestViewOnlyAlwaysOnTopRef,
+    typingTestMonkeytypeConfig, updateTypingTestMonkeytypeConfig,
+    typingTestLanguage, updateTypingTestLanguage,
+    typingTestViewOnly, updateTypingTestViewOnly,
+    typingTestViewOnlyWindowSize, updateTypingTestViewOnlyWindowSize,
+    typingTestViewOnlyAlwaysOnTop, updateTypingTestViewOnlyAlwaysOnTop,
     typingTestViewOnlyOpacity, updateTypingTestViewOnlyOpacity, typingTestViewOnlyOpacityRef,
     typingTestMemory, updateTypingTestMemory, typingTestMemoryRef,
     typingTestDisplayLines, updateTypingTestDisplayLines, typingTestDisplayLinesRef,
@@ -195,14 +207,14 @@ export function useDevicePrefsState(defaults: DevicePrefsInitialDefaults) {
     typingRecordEnabled, updateTypingRecordEnabled, typingRecordEnabledRef,
     viewMode, updateViewMode, viewModeRef,
     keyEditorZoom, updateKeyEditorZoom, keyEditorZoomRef,
-    viewMatrix, updateViewMatrix, viewMatrixRef,
-    viewMatrixWires, updateViewMatrixWires, viewMatrixWiresRef,
-    layerHoverPreview, updateLayerHoverPreview, layerHoverPreviewRef,
-    entryHoverPreview, updateEntryHoverPreview, entryHoverPreviewRef,
-    keycodeTabOrder, updateKeycodeTabOrder, keycodeTabOrderRef,
+    viewMatrix, updateViewMatrix,
+    viewMatrixWires, updateViewMatrixWires,
+    layerHoverPreview, updateLayerHoverPreview,
+    entryHoverPreview, updateEntryHoverPreview,
+    keycodeTabOrder, updateKeycodeTabOrder,
     appliedUid, setAppliedUid,
-    uidRef, applySeqRef,
-    saveCurrentPrefs,
+    uidRef, applySeqRef, patchTrackerRef,
+    savePrefs,
     applyValidated,
   }
 }

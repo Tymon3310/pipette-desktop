@@ -2,9 +2,9 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { join } from 'node:path'
-import { access, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile, mkdir } from 'node:fs/promises'
+import { access, appendFile, mkdtemp, readdir, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import type { DriveFile } from '../sync/google-drive'
+import { driveFileName, type DriveFile } from '../sync/google-drive'
 
 // --- Mock electron ---
 let mockUserDataPath = ''
@@ -46,6 +46,7 @@ const mockUploadFile = vi.fn(
     ({ id: 'file-id', modifiedTime: '2026-01-01T00:00:00.000Z' }),
 )
 const mockDeleteFile = vi.fn(async (_fileId: string): Promise<void> => {})
+const mockRenameFile = vi.fn(async (_fileId: string, _name: string): Promise<DriveFile | null> => null)
 const mockCreateRawFile = vi.fn(async (..._args: unknown[]): Promise<{ id: string }> => ({ id: 'format-marker' }))
 
 vi.mock('../sync/google-drive', async () => {
@@ -61,8 +62,16 @@ vi.mock('../sync/google-drive', async () => {
     downloadFile: (...args: unknown[]) => mockDownloadFile(...(args as Parameters<typeof mockDownloadFile>)),
     uploadFile: (...args: unknown[]) => mockUploadFile(...(args as Parameters<typeof mockUploadFile>)),
     deleteFile: (...args: unknown[]) => mockDeleteFile(...(args as Parameters<typeof mockDeleteFile>)),
+    renameFile: (...args: unknown[]) => mockRenameFile(...(args as Parameters<typeof mockRenameFile>)),
+    // Same contract as the real one, deleting through mockDeleteFile.
+    deleteFilesById: async (ids: readonly string[]) => {
+      const results = await Promise.allSettled(ids.map((id) => mockDeleteFile(id)))
+      const reasons = results.flatMap((r) => (r.status === 'rejected' ? [String(r.reason)] : []))
+      return { attempted: ids.length, failed: reasons.length, firstError: reasons[0] }
+    },
     driveFileName: actual.driveFileName,
     syncUnitFromFileName: actual.syncUnitFromFileName,
+    driveFilenamePrefix: actual.driveFilenamePrefix,
     isDataFileName: actual.isDataFileName,
     isPasswordChangeLockFile: actual.isPasswordChangeLockFile,
     PASSWORD_CHECK_UNIT: actual.PASSWORD_CHECK_UNIT,
@@ -81,13 +90,13 @@ vi.mock('../sync/google-auth', () => ({
   getAccessToken: vi.fn(async () => 'mock-token'),
   startOAuthFlow: vi.fn(async () => {}),
   signOut: vi.fn(async () => {}),
+  getAccountSub: vi.fn(async () => null),
 }))
 
 vi.mock('../sync/sync-crypto', () => ({
   retrievePasswordResult: vi.fn(async () => ({ ok: true, password: 'test-password' })),
   storePassword: vi.fn(async () => {}),
   clearPassword: vi.fn(async () => {}),
-  hasStoredPassword: vi.fn(async () => true),
   checkPasswordStrength: vi.fn(() => ({ score: 4, feedback: [] })),
   encrypt: vi.fn(async (plaintext: string, _password: string, syncUnit: string) => ({
     version: 1,
@@ -102,12 +111,13 @@ vi.mock('../sync/sync-crypto', () => ({
 
 let mockAutoSync = false
 vi.mock('../app-config', () => ({
-  loadAppConfig: vi.fn(async () => ({ autoSync: mockAutoSync })),
+  loadAppConfig: vi.fn(() => ({ autoSync: mockAutoSync })),
   saveAppConfig: vi.fn(async () => {}),
   getAppConfigStore: vi.fn(() => ({ get: () => false })),
 }))
 
-vi.mock('../typing-analytics/sync', () => ({
+vi.mock('../typing-analytics/sync', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../typing-analytics/sync')>(),
   typingAnalyticsDeviceDaySyncUnit: (uid: string, machineHash: string, day: string) =>
     `keyboards/${uid}/devices/${machineHash}/days/${day}`,
   parseTypingAnalyticsDeviceDaySyncUnit: (syncUnit: string) => {
@@ -150,15 +160,16 @@ vi.mock('../typing-analytics/jsonl/jsonl-reader', () => ({
 }))
 
 const mockListLocalKeyboardUids = vi.fn(() => [] as string[])
-const mockTombstoneRowsForUidHashInRange = vi.fn(
-  (_uid: string, _machineHash: string, _startMs: number, _endMs: number, _updatedAt: number) => ({
+const mockTombstoneRowsForUidHashInRanges = vi.fn(
+  (_uid: string, _machineHash: string, _entries: readonly unknown[], _updatedAt: number) => ({
     charMinutes: 0, matrixMinutes: 0, minuteStats: 0, sessions: 0,
   }),
 )
 vi.mock('../typing-analytics/db/typing-analytics-db', () => ({
   getTypingAnalyticsDB: vi.fn(() => ({
     listLocalKeyboardUids: mockListLocalKeyboardUids,
-    tombstoneRowsForUidHashInRange: mockTombstoneRowsForUidHashInRange,
+    tombstoneRowsForUidHashInRanges: mockTombstoneRowsForUidHashInRanges,
+    getConnection: () => ({ transaction: <T>(fn: () => T) => fn }),
   })),
 }))
 
@@ -194,6 +205,14 @@ vi.mock('../typing-analytics/sync-state', () => ({
   },
 }))
 
+// The apply itself runs on the typing-analytics flush chain and has its own
+// tests (deleted-ranges-apply.test.ts); here only its scheduling matters.
+const mockApplyOwnDeletedRangesForAllKeyboards = vi.fn(async (..._args: unknown[]): Promise<void> => {})
+vi.mock('../typing-analytics/deleted-ranges-apply', () => ({
+  applyOwnDeletedRanges: vi.fn(async () => {}),
+  applyOwnDeletedRangesForAllKeyboards: (...args: unknown[]) => mockApplyOwnDeletedRangesForAllKeyboards(...args),
+}))
+
 vi.stubGlobal('fetch', vi.fn())
 
 const mockLog = vi.fn()
@@ -214,6 +233,26 @@ vi.mock('../sync/pack-gc', () => ({
   runPackGcAfterPass: (...args: unknown[]) => mockRunPackGcAfterPass(...args),
 }))
 
+// Pass-through wrappers so a test can stall a merge right after its read of
+// the local index / settings file (inside the merge's read-modify-write).
+vi.mock('../sync/sync-bundle', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../sync/sync-bundle')>()
+  return {
+    ...actual,
+    readSettingsFile: vi.fn(actual.readSettingsFile),
+  }
+})
+
+vi.mock('../sync/body-filename-migration', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../sync/body-filename-migration')>()
+  return { ...actual, readIndexDirMigrated: vi.fn(actual.readIndexDirMigrated) }
+})
+
+vi.mock('../utils/write-file-atomic', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../utils/write-file-atomic')>()
+  return { ...actual, writeFileAtomic: vi.fn(actual.writeFileAtomic) }
+})
+
 import { decrypt as mockDecryptFn, encrypt as mockEncryptFn, storePassword as mockStorePasswordFn, clearPassword as mockClearPasswordFn, retrievePasswordResult as mockRetrievePasswordResultFn } from '../sync/sync-crypto'
 import type { SyncProgress } from '../../shared/types/sync'
 import {
@@ -225,6 +264,8 @@ import {
   setProgressCallback,
   startPolling,
   stopPolling,
+  startPollingIfAutoSync,
+  startPollingAtLaunch,
   hasPendingChanges,
   cancelPendingChanges,
   isSyncInProgress,
@@ -234,16 +275,39 @@ import {
   listRemoteFileNames,
   checkPasswordCheckExists,
   setPasswordAndValidate,
+  replacePasswordAndValidate,
   setupBeforeQuitHandler,
   registerPreSyncQuitFinalizer,
   registerBeforeQuitFinalizer,
-  deleteRemoteTypingDay,
   fetchRemoteTypingDay,
+  executeAnalyticsSync,
   waitForPollPassForTests,
+  withResetLock,
   _resetForTests,
+  type ResetKeyboards,
 } from '../sync/sync-service'
+import { syncOrUpload, mergeWithRemote } from '../sync/sync-merge-dispatch'
+import { readSettingsFile } from '../sync/sync-bundle'
+import { readIndexDirMigrated } from '../sync/body-filename-migration'
+import { writeFileAtomic } from '../utils/write-file-atomic'
+import { withWriteLock } from '../per-uid-write-lock'
+import { saveRecord as saveKeyLabel } from '../key-label-store'
 import { app } from 'electron'
-import { syncRuntime } from '../sync/sync-runtime-state'
+import {
+  syncRuntime,
+  claimSyncLock,
+  DEBOUNCE_MS,
+  lockFreeWriterBlocked,
+  lockFreeWriterRunning,
+  resetHoldsKeyboard,
+} from '../sync/sync-runtime-state'
+import { startPasswordChange } from '../sync/sync-password-change'
+import { readChangeState } from '../sync/sync-password-change-state'
+import { RESET_LOCK_WAIT_MS, withResetLockWhenFree } from '../sync/sync-reset-lock'
+import { flushPendingChanges, scheduleFlushIfPending, QUIT_SYNC_DEADLINE_MS } from '../sync/sync-flush'
+import { PENDING_WRITE_DELAY_MS, restorePendingFromDisk } from '../sync/sync-pending-store'
+import { getAccountSub } from '../sync/google-auth'
+import { signOutKeepingPendingLocked, switchAccountKeepingPending } from '../sync/sync-pending-account'
 
 const POLL_INTERVAL_MS = 3 * 60 * 1000
 
@@ -256,9 +320,14 @@ const FAKE_TIMER_OPTS: Parameters<typeof vi.useFakeTimers>[0] = {
 // either, so yielding with it lets real fs I/O callbacks run between checks.
 const realNow = performance.now.bind(performance)
 const realSetImmediate = setImmediate
-// Kept below vitest's default 5 s test timeout so flushUntil's own
-// "timed out waiting for …" error fires before vitest aborts the test.
-const WAIT_TIMEOUT_MS = 3_000
+const realSetTimeout = setTimeout
+// Generous because a pass under a full parallel `pnpm test` run can need
+// seconds of real fs I/O. Kept well below TEST_TIMEOUT_MS / HOOK_TIMEOUT_MS
+// so flushUntil's own "timed out waiting for …" error fires before vitest
+// aborts the test or the afterEach that waits for the sync lock.
+const WAIT_TIMEOUT_MS = 8_000
+const TEST_TIMEOUT_MS = 30_000
+const HOOK_TIMEOUT_MS = 15_000
 
 /**
  * Yields to the real event loop until `predicate` is true, then lets a
@@ -270,6 +339,10 @@ const WAIT_TIMEOUT_MS = 3_000
  * fake timers, so how many turns a pass needs depends on the machine.
  * The bound is wall-clock time instead, and running out of it throws so a
  * slow pass fails here rather than as a misleading assertion later.
+ *
+ * If an earlier step already called the mock, `mockClear()` it first or wait
+ * on a flag set inside the gated implementation; otherwise the earlier calls
+ * already satisfy the predicate.
  */
 async function flushUntil(
   predicate: () => boolean,
@@ -298,7 +371,7 @@ async function waitForSyncIdle(): Promise<void> {
 
 function makeRemoteEnvelope(
   updatedAt: string,
-  entries?: Array<{ id: string; label: string; filename: string; savedAt: string; updatedAt?: string }>,
+  entries?: Array<{ id: string; label: string; filename: string; savedAt: string; updatedAt?: string; clocks?: Record<string, string> }>,
 ): Record<string, unknown> {
   const entryList = entries ?? []
   const files: Record<string, string> = {}
@@ -367,21 +440,27 @@ function makePasswordCheckEnvelope(): Record<string, unknown> {
   }
 }
 
+function routeDownloads(byId: Record<string, () => unknown>): void {
+  mockDownloadFile.mockImplementation(async (id: string) =>
+    (byId[id]?.() ?? makePasswordCheckEnvelope()) as Record<string, unknown>)
+}
+
 async function setupLocalFavorite(
   savedAt: string,
   dataFile?: { name: string; content: string },
-  opts?: { id?: string; updatedAt?: string; favoriteType?: string },
+  opts?: { id?: string; updatedAt?: string; favoriteType?: string; clocks?: Record<string, string> },
 ): Promise<void> {
   const type = opts?.favoriteType ?? 'tapDance'
   const favDir = join(mockUserDataPath, 'sync', 'favorites', type)
   await mkdir(favDir, { recursive: true })
-  const entry: Record<string, string> = {
+  const entry: Record<string, unknown> = {
     id: opts?.id ?? '1',
     label: 'entry',
     filename: dataFile?.name ?? 'data.json',
     savedAt,
   }
   if (opts?.updatedAt) entry.updatedAt = opts.updatedAt
+  if (opts?.clocks) entry.clocks = opts.clocks
   await writeFile(
     join(favDir, 'index.json'),
     JSON.stringify({ type, entries: [entry] }),
@@ -392,7 +471,18 @@ async function setupLocalFavorite(
   }
 }
 
-describe('sync-service', () => {
+function captureBeforeQuitHandler(): (e: { preventDefault: () => void }) => void {
+  setupBeforeQuitHandler()
+  const mockOn = vi.mocked(app.on)
+  // `app.on` is overloaded per Electron event name, so TS narrows the mock's
+  // inferred call-tuple type to whichever overload it picked first. Cast to
+  // string for the comparison since at runtime this is always a plain event name.
+  const match = mockOn.mock.calls.find(([event]) => (event as string) === 'before-quit')
+  if (!match) throw new Error('before-quit handler not registered')
+  return match[1] as (e: { preventDefault: () => void }) => void
+}
+
+describe('sync-service', { timeout: TEST_TIMEOUT_MS }, () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     vi.useFakeTimers(FAKE_TIMER_OPTS)
@@ -400,7 +490,7 @@ describe('sync-service', () => {
     mockAutoSync = false
     mockSyncState = null
     mockListLocalKeyboardUids.mockReturnValue([])
-    mockTombstoneRowsForUidHashInRange.mockReturnValue({ charMinutes: 0, matrixMinutes: 0, minuteStats: 0, sessions: 0 })
+    mockTombstoneRowsForUidHashInRanges.mockReturnValue({ charMinutes: 0, matrixMinutes: 0, minuteStats: 0, sessions: 0 })
     _resetForTests()
   })
 
@@ -418,7 +508,7 @@ describe('sync-service', () => {
       vi.useRealTimers()
       await rm(mockUserDataPath, { recursive: true, force: true })
     }
-  })
+  }, HOOK_TIMEOUT_MS)
 
   describe('notifyChange', () => {
     it('accumulates changes and debounces', () => {
@@ -442,7 +532,7 @@ describe('sync-service', () => {
       notifyChange('keyboards/uid1/snapshots')
       notifyChange('favorites/tapDance')
 
-      cancelPendingChanges('keyboards/uid1/')
+      cancelPendingChanges(['keyboards/uid1/'])
       expect(hasPendingChanges()).toBe(true) // favorites/tapDance remains
     })
 
@@ -450,7 +540,7 @@ describe('sync-service', () => {
       notifyChange('keyboards/uid1/settings')
       notifyChange('keyboards/uid2/settings')
 
-      cancelPendingChanges('keyboards/uid1/')
+      cancelPendingChanges(['keyboards/uid1/'])
       expect(hasPendingChanges()).toBe(true) // uid2 remains
     })
 
@@ -458,7 +548,7 @@ describe('sync-service', () => {
       notifyChange('keyboards/uid1/settings')
       notifyChange('keyboards/uid10/settings')
 
-      cancelPendingChanges('keyboards/uid1/')
+      cancelPendingChanges(['keyboards/uid1/'])
       expect(hasPendingChanges()).toBe(true) // uid10 remains
     })
   })
@@ -592,13 +682,17 @@ describe('sync-service', () => {
 
     it('does not upload when remote and local have same entries', async () => {
       mockAutoSync = true
+      // Already-converged v2 entries: v1 entries on Drive are rewritten once
+      // with their clocks and id-carrying filenames.
+      const T = '2025-01-01T00:00:00.000Z'
+      const clocks = { created: T, body: T, name: T, hub: T }
       const sharedEntry = {
-        id: '1', label: 'entry', filename: 'data.json', savedAt: '2025-01-01T00:00:00.000Z',
+        id: '1', label: 'entry', filename: 'data_1.json', savedAt: T, updatedAt: T, clocks,
       }
       mockListFiles.mockResolvedValue([makeDriveFile('2025-01-01T00:00:00.000Z'), PASSWORD_CHECK_DRIVE_FILE])
       mockDownloadFile.mockResolvedValue(makeRemoteEnvelope('2025-01-01T00:00:00.000Z', [sharedEntry]))
 
-      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{"data":1}' })
+      await setupLocalFavorite(T, { name: 'data_1.json', content: '{"data":1}' }, { updatedAt: T, clocks })
 
       notifyChange('favorites/tapDance')
       await vi.advanceTimersByTimeAsync(10_000)
@@ -610,52 +704,994 @@ describe('sync-service', () => {
   })
 
   describe('flush sync lock', () => {
-    it('re-schedules flush when sync is in progress', async () => {
+    it('waits for the running sync to end, then flushes without another timer', async () => {
       mockAutoSync = true
-
-      mockListFiles.mockImplementation(
+      mockListFiles.mockImplementationOnce(
         () => new Promise((resolve) => setTimeout(() => resolve([]), 30_000)),
       )
+      mockListFiles.mockResolvedValue([])
 
       const syncPromise = executeSync('download')
+      await flushUntil(() => mockListFiles.mock.calls.length > 0, 'the listing')
 
       notifyChange('favorites/tapDance')
+      // The debounced flush fires while the manual sync holds the lock.
       await vi.advanceTimersByTimeAsync(10_000)
-
       expect(mockListFiles).toHaveBeenCalledTimes(1)
 
-      // The re-scheduled flush can fire inside the next advance, once the
-      // manual sync has released the lock; it must not pick up the slow
-      // listFiles, whose 30 s timer the trailing 10 s advance could never reach.
-      mockListFiles.mockResolvedValue([])
-      await vi.advanceTimersByTimeAsync(30_000)
+      await vi.advanceTimersByTimeAsync(20_000)
       await syncPromise
 
-      // Fires the retry if it is still pending; the lock is free by now,
-      // so the flush starts instead of re-scheduling again.
-      await vi.advanceTimersByTimeAsync(10_000)
+      // The waiting flush starts as soon as the lock is free.
+      await flushUntil(() => mockListFiles.mock.calls.length >= 2, 'the waiting flush to list')
       await waitForSyncIdle()
+      expect(mockListFiles).toHaveBeenCalledTimes(2)
+      expect(hasPendingChanges()).toBe(false)
+    })
+  })
 
-      expect(mockListFiles.mock.calls.length).toBeGreaterThanOrEqual(2)
+  describe('flush lifecycle', () => {
+    const FAV_FILE = 'favorites_tapDance.enc'
+    const OK_UPLOAD = { id: 'file-id', modifiedTime: '2026-01-01T00:00:00.000Z' }
+    const gateReleases: Array<() => void> = []
+
+    const favUploads = (): number => mockUploadFile.mock.calls.filter((call) => call[0] === FAV_FILE).length
+    const quitCalled = (): boolean => vi.mocked(app.quit).mock.calls.length > 0
+
+    /** A promise that settles on `release`; afterEach releases it too. */
+    function makeGate(): { promise: Promise<void>; release: () => void } {
+      let release!: () => void
+      const promise = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      gateReleases.push(release)
+      return { promise, release }
+    }
+
+    /** Holds every upload of `fileName` until `release` is called. */
+    function gateUploadsOf(fileName: string): { release: () => void } {
+      const gate = makeGate()
+      mockUploadFile.mockImplementation(async (name: string) => {
+        if (name === fileName) await gate.promise
+        return OK_UPLOAD
+      })
+      return { release: gate.release }
+    }
+
+    async function turns(count = 5): Promise<void> {
+      for (let i = 0; i < count; i++) {
+        await new Promise<void>((resolve) => realSetImmediate(resolve))
+      }
+    }
+
+    beforeEach(async () => {
+      mockAutoSync = true
+      mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
+      mockDownloadFile.mockResolvedValue(makePasswordCheckEnvelope())
+      mockUploadFile.mockResolvedValue(OK_UPLOAD)
+      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{"data":1}' })
+    })
+
+    afterEach(() => {
+      for (const release of gateReleases.splice(0)) release()
+      mockUploadFile.mockImplementation(async () => OK_UPLOAD)
+      mockListFiles.mockImplementation(async () => [])
+      mockDownloadFile.mockImplementation(async () => ({}))
+    })
+
+    describe('pending units changed during a pass', () => {
+      it('keeps a unit changed during its upload pending, and uploads it again after the debounce', async () => {
+        const gate = gateUploadsOf(FAV_FILE)
+        notifyChange('favorites/tapDance')
+        const flush = flushPendingChanges()
+        await flushUntil(() => favUploads() === 1, 'the upload to start')
+
+        notifyChange('favorites/tapDance')
+        notifyChange('favorites/macro')
+        gate.release()
+        await flush
+
+        expect(syncRuntime.pendingChanges.has('favorites/tapDance')).toBe(true)
+        expect(syncRuntime.pendingChanges.has('favorites/macro')).toBe(true)
+        expect(vi.getTimerCount()).toBe(1)
+
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+        await flushUntil(() => !hasPendingChanges(), 'the retry flush')
+        await waitForSyncIdle()
+        expect(favUploads()).toBe(2)
+      })
+
+      it('removes a unit uploaded without a later change', async () => {
+        notifyChange('favorites/tapDance')
+        await flushPendingChanges()
+
+        expect(favUploads()).toBe(1)
+        expect(hasPendingChanges()).toBe(false)
+        expect(vi.getTimerCount()).toBe(0)
+      })
+
+      it('scoped upload keeps a unit changed during its upload pending', async () => {
+        const gate = gateUploadsOf(FAV_FILE)
+        notifyChange('favorites/tapDance')
+        const sync = executeSync('upload', 'favorites')
+        await flushUntil(() => favUploads() === 1, 'the upload to start')
+
+        notifyChange('favorites/tapDance')
+        gate.release()
+        await sync
+
+        expect(syncRuntime.pendingChanges.has('favorites/tapDance')).toBe(true)
+      })
+
+      it('manual upload keeps a failed unit pending with one retry timer, and settles the uploaded ones', async () => {
+        await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'macro.json', content: '{"data":2}' }, { favoriteType: 'macro' })
+        mockUploadFile.mockImplementation(async (name: string) => {
+          if (name === FAV_FILE) throw new Error('offline')
+          return OK_UPLOAD
+        })
+        notifyChange('favorites/macro')
+
+        const result = await executeSync('upload')
+
+        expect(result.status).toBe('partial')
+        expect(mockUploadFile.mock.calls.some((call) => call[0] === 'favorites_macro.enc')).toBe(true)
+        expect([...syncRuntime.pendingChanges]).toEqual(['favorites/tapDance'])
+        expect(vi.getTimerCount()).toBe(1)
+
+        mockUploadFile.mockImplementation(async () => OK_UPLOAD)
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+        await flushUntil(() => !hasPendingChanges(), 'the retry flush')
+        await waitForSyncIdle()
+        expect(favUploads()).toBe(2)
+      })
+
+      it('scoped upload removes a pending unit it uploaded', async () => {
+        notifyChange('favorites/tapDance')
+        await executeSync('upload', 'favorites')
+
+        expect(favUploads()).toBe(1)
+        expect(hasPendingChanges()).toBe(false)
+      })
+    })
+
+    describe('flush while another pass holds the lock', () => {
+      it('a second flush waits for the first and does not upload twice', async () => {
+        const gate = gateUploadsOf(FAV_FILE)
+        notifyChange('favorites/tapDance')
+        const first = flushPendingChanges()
+        await flushUntil(() => favUploads() === 1, 'the upload to start')
+
+        notifyChange('favorites/tapDance')
+        const second = flushPendingChanges()
+        await turns()
+        expect(favUploads()).toBe(1)
+
+        gate.release()
+        await first
+        await second
+
+        expect(favUploads()).toBe(2)
+        expect(hasPendingChanges()).toBe(false)
+        expect(vi.getTimerCount()).toBe(0)
+      })
+
+      it('two flushes waiting on the same pass do not both take the lock', async () => {
+        await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'macro.json', content: '{"data":2}' }, { favoriteType: 'macro' })
+        const holderGate = makeGate()
+        const waiterGate = makeGate()
+        let tapDanceUploads = 0
+        mockUploadFile.mockImplementation(async (name: string) => {
+          if (name === FAV_FILE && ++tapDanceUploads === 1) await holderGate.promise
+          if (name === 'favorites_macro.enc') await waiterGate.promise
+          return OK_UPLOAD
+        })
+        notifyChange('favorites/tapDance')
+        const holder = flushPendingChanges()
+        await flushUntil(() => favUploads() === 1, 'the holder upload to start')
+        const listsBeforeWaiters = mockListFiles.mock.calls.length
+
+        notifyChange('favorites/tapDance')
+        notifyChange('favorites/macro')
+        const first = flushPendingChanges()
+        const second = flushPendingChanges()
+        holderGate.release()
+        await holder
+        await flushUntil(
+          () => mockUploadFile.mock.calls.some((call) => call[0] === 'favorites_macro.enc'),
+          'the waiter upload to start',
+        )
+        await second
+
+        // Only one waiter took the lock; the other did not list while it runs.
+        expect(isSyncInProgress()).toBe(true)
+        expect(mockListFiles.mock.calls.length).toBe(listsBeforeWaiters + 1)
+
+        waiterGate.release()
+        await first
+        await waitForSyncIdle()
+        expect(favUploads()).toBe(2)
+        expect(mockUploadFile.mock.calls.filter((call) => call[0] === 'favorites_macro.enc')).toHaveLength(1)
+        expect(hasPendingChanges()).toBe(false)
+      })
+    })
+
+    describe('before-quit', () => {
+      it('waits for a running flush upload before quitting', async () => {
+        const gate = gateUploadsOf(FAV_FILE)
+        notifyChange('favorites/tapDance')
+        const flush = flushPendingChanges()
+        await flushUntil(() => favUploads() === 1, 'the upload to start')
+
+        const preventDefault = vi.fn()
+        captureBeforeQuitHandler()({ preventDefault })
+        expect(preventDefault).toHaveBeenCalled()
+        await turns()
+        expect(app.quit).not.toHaveBeenCalled()
+
+        gate.release()
+        await flush
+        await flushUntil(quitCalled, 'the quit phases to call app.quit')
+        expect(hasPendingChanges()).toBe(false)
+        // The deadline timer is cleared once the phases finish.
+        expect(vi.getTimerCount()).toBe(0)
+      })
+
+      it('waits for a running poll, then flushes the pending unit before quitting', async () => {
+        const listGate = makeGate()
+        mockListFiles.mockImplementationOnce(async () => {
+          await listGate.promise
+          return [PASSWORD_CHECK_DRIVE_FILE]
+        })
+        startPolling()
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+        await flushUntil(() => mockListFiles.mock.calls.length === 1, 'the poll to list')
+
+        notifyChange('favorites/tapDance')
+        captureBeforeQuitHandler()({ preventDefault: vi.fn() })
+        await turns()
+        expect(app.quit).not.toHaveBeenCalled()
+
+        listGate.release()
+        await flushUntil(quitCalled, 'the quit phases to call app.quit')
+        expect(favUploads()).toBe(1)
+        const uploadOrder = mockUploadFile.mock.invocationCallOrder.at(-1) ?? Infinity
+        expect(uploadOrder).toBeLessThan(vi.mocked(app.quit).mock.invocationCallOrder[0])
+      })
+
+      it('quits after the deadline when the upload never settles', async () => {
+        const gate = gateUploadsOf(FAV_FILE)
+        notifyChange('favorites/tapDance')
+        const flush = flushPendingChanges()
+        await flushUntil(() => favUploads() === 1, 'the upload to start')
+
+        captureBeforeQuitHandler()({ preventDefault: vi.fn() })
+        await turns()
+        expect(app.quit).not.toHaveBeenCalled()
+
+        await vi.advanceTimersByTimeAsync(QUIT_SYNC_DEADLINE_MS)
+        await flushUntil(quitCalled, 'the deadline to call app.quit')
+        expect(mockLog).toHaveBeenCalledWith('warn', 'before-quit: sync did not finish within the deadline')
+
+        gate.release()
+        await flush
+        await waitForSyncIdle()
+      })
+    })
+
+    describe('retry after failed units', () => {
+      it('arms exactly one timer and retries after the polling interval', async () => {
+        mockUploadFile.mockImplementation(async (name: string) => {
+          if (name === FAV_FILE) throw new Error('offline')
+          return OK_UPLOAD
+        })
+        notifyChange('favorites/tapDance')
+        await flushPendingChanges()
+        expect(hasPendingChanges()).toBe(true)
+        expect(vi.getTimerCount()).toBe(1)
+
+        await flushPendingChanges()
+        expect(vi.getTimerCount()).toBe(1)
+        expect(favUploads()).toBe(2)
+
+        mockUploadFile.mockImplementation(async () => OK_UPLOAD)
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+        expect(favUploads()).toBe(2)
+
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS - DEBOUNCE_MS)
+        await flushUntil(() => !hasPendingChanges(), 'the retry flush')
+        await waitForSyncIdle()
+        expect(favUploads()).toBe(3)
+      })
+    })
+
+    describe('flush timer', () => {
+      it('a partial manual upload keeps an armed debounce timer that fires sooner', async () => {
+        await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'macro.json', content: '{"data":2}' }, { favoriteType: 'macro' })
+        mockUploadFile.mockImplementation(async (name: string) => {
+          if (name === FAV_FILE) throw new Error('offline')
+          return OK_UPLOAD
+        })
+        notifyChange('favorites/macro')
+
+        expect((await executeSync('upload')).status).toBe('partial')
+        expect(vi.getTimerCount()).toBe(1)
+
+        mockUploadFile.mockImplementation(async () => OK_UPLOAD)
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+        await flushUntil(() => !hasPendingChanges(), 'the debounced flush')
+        await waitForSyncIdle()
+        expect(favUploads()).toBe(2)
+      })
+
+      it('a sooner schedule shortens an armed polling-interval retry', async () => {
+        mockUploadFile.mockImplementation(async (name: string) => {
+          if (name === FAV_FILE) throw new Error('offline')
+          return OK_UPLOAD
+        })
+        notifyChange('favorites/tapDance')
+        await flushPendingChanges()
+        expect(vi.getTimerCount()).toBe(1)
+
+        mockUploadFile.mockImplementation(async () => OK_UPLOAD)
+        scheduleFlushIfPending(DEBOUNCE_MS)
+        expect(vi.getTimerCount()).toBe(1)
+
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+        await flushUntil(() => !hasPendingChanges(), 'the shortened retry')
+        await waitForSyncIdle()
+        expect(favUploads()).toBe(2)
+      })
+    })
+
+    describe('auto sync off', () => {
+      it('keeps pending without a timer, and flushes once scheduled after auto sync turns on', async () => {
+        mockAutoSync = false
+        notifyChange('favorites/tapDance')
+        await flushPendingChanges()
+        expect(hasPendingChanges()).toBe(true)
+        expect(vi.getTimerCount()).toBe(0)
+
+        mockAutoSync = true
+        scheduleFlushIfPending()
+        expect(vi.getTimerCount()).toBe(1)
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+        await flushUntil(() => !hasPendingChanges(), 'the scheduled flush')
+        await waitForSyncIdle()
+        expect(favUploads()).toBe(1)
+      })
+
+      it('scheduleFlushIfPending arms no timer when nothing is pending', () => {
+        scheduleFlushIfPending()
+        expect(vi.getTimerCount()).toBe(0)
+      })
+    })
+
+    describe('credentials not ready', () => {
+      const mockRetrievePasswordResult = vi.mocked(mockRetrievePasswordResultFn)
+
+      it.each(['keystoreUnavailable', 'decryptFailed'] as const)(
+        '%s keeps pending and retries after the polling interval',
+        async (reason) => {
+          mockRetrievePasswordResult.mockResolvedValueOnce({ ok: false, reason })
+          notifyChange('favorites/tapDance')
+          await flushPendingChanges()
+          expect(hasPendingChanges()).toBe(true)
+          expect(favUploads()).toBe(0)
+          expect(vi.getTimerCount()).toBe(1)
+
+          await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+          await flushUntil(() => !hasPendingChanges(), 'the retry flush')
+          await waitForSyncIdle()
+          expect(favUploads()).toBe(1)
+        },
+      )
+
+      it('noPasswordFile keeps pending without a timer', async () => {
+        mockRetrievePasswordResult.mockResolvedValueOnce({ ok: false, reason: 'noPasswordFile' })
+        notifyChange('favorites/tapDance')
+        await flushPendingChanges()
+        expect(hasPendingChanges()).toBe(true)
+        expect(vi.getTimerCount()).toBe(0)
+      })
+
+      it('signed out keeps pending without a timer', async () => {
+        mockGetAuthStatus.mockResolvedValueOnce({ authenticated: false })
+        notifyChange('favorites/tapDance')
+        await flushPendingChanges()
+        expect(hasPendingChanges()).toBe(true)
+        expect(vi.getTimerCount()).toBe(0)
+      })
+
+      it('does not arm a retry while quitting', async () => {
+        mockRetrievePasswordResult.mockResolvedValueOnce({ ok: false, reason: 'keystoreUnavailable' })
+        notifyChange('favorites/tapDance')
+        syncRuntime.isQuitting = true
+        await flushPendingChanges()
+        expect(hasPendingChanges()).toBe(true)
+        expect(vi.getTimerCount()).toBe(0)
+      })
+    })
+
+    describe('pre-step failures', () => {
+      const failures: Array<[string, () => void]> = [
+        ['the listing throws', () => { mockListFiles.mockRejectedValueOnce(new Error('offline')) }],
+        ['the format marker cannot be created', () => { mockCreateRawFile.mockRejectedValueOnce(new Error('offline')) }],
+        ['the password check cannot be read', () => { mockDownloadFile.mockRejectedValueOnce(new Error('offline')) }],
+      ]
+
+      it.each(failures)('%s: keeps pending and retries after the polling interval', async (_name, fail) => {
+        fail()
+        notifyChange('favorites/tapDance')
+        await expect(flushPendingChanges()).resolves.toBeUndefined()
+        expect(hasPendingChanges()).toBe(true)
+        expect(favUploads()).toBe(0)
+        expect(vi.getTimerCount()).toBe(1)
+
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+        await flushUntil(() => !hasPendingChanges(), 'the retry flush')
+        await waitForSyncIdle()
+        expect(favUploads()).toBe(1)
+      })
+
+      it('a password mismatch keeps pending without a timer', async () => {
+        vi.mocked(mockDecryptFn).mockRejectedValueOnce(new Error('Decryption failed'))
+        const progressEvents: SyncProgress[] = []
+        setProgressCallback((p) => progressEvents.push({ ...p }))
+        notifyChange('favorites/tapDance')
+
+        await flushPendingChanges()
+
+        expect(progressEvents.some((p) => p.status === 'error' && p.message === 'sync.passwordMismatch')).toBe(true)
+        expect(hasPendingChanges()).toBe(true)
+        expect(favUploads()).toBe(0)
+        expect(vi.getTimerCount()).toBe(0)
+      })
+
+      it.each(failures)('%s while quitting: keeps pending without a timer', async (_name, fail) => {
+        fail()
+        notifyChange('favorites/tapDance')
+        syncRuntime.isQuitting = true
+        await expect(flushPendingChanges()).resolves.toBeUndefined()
+        expect(hasPendingChanges()).toBe(true)
+        expect(vi.getTimerCount()).toBe(0)
+      })
+    })
+
+    describe('pending changes kept on disk', () => {
+      const pendingFile = (): string => join(mockUserDataPath, 'local', 'sync-pending.json')
+      const unitsOnDisk = async (): Promise<string[]> =>
+        (JSON.parse(await readFile(pendingFile(), 'utf-8')) as { units: string[] }).units
+
+      beforeEach(() => {
+        restorePendingFromDisk()
+      })
+
+      it('uploads a change left by the last run and writes it out of the file once sent', async () => {
+        notifyChange('favorites/tapDance')
+        await vi.advanceTimersByTimeAsync(PENDING_WRITE_DELAY_MS)
+        expect(await unitsOnDisk()).toEqual(['favorites/tapDance'])
+
+        // A restart: memory is gone, the file stays.
+        _resetForTests()
+        restorePendingFromDisk()
+        expect(hasPendingChanges()).toBe(true)
+
+        await flushPendingChanges()
+        expect(favUploads()).toBe(1)
+        expect(hasPendingChanges()).toBe(false)
+        await vi.advanceTimersByTimeAsync(PENDING_WRITE_DELAY_MS)
+        expect(await unitsOnDisk()).toEqual([])
+      })
+
+      it('holds units changed under another account instead of uploading them', async () => {
+        syncRuntime.pendingOwner = 'account-a'
+        notifyChange('favorites/tapDance')
+        vi.mocked(getAccountSub).mockResolvedValueOnce('account-b')
+
+        await flushPendingChanges()
+
+        expect(favUploads()).toBe(0)
+        expect(hasPendingChanges()).toBe(false)
+        expect([...(syncRuntime.heldPending.get('account-a') ?? [])]).toEqual(['favorites/tapDance'])
+        expect(JSON.parse(await readFile(pendingFile(), 'utf-8'))).toEqual({
+          version: 1,
+          owner: 'account-b',
+          units: [],
+          held: { 'account-a': ['favorites/tapDance'] },
+        })
+      })
+
+      it('uploads the units held for the signed-in account with its next change', async () => {
+        syncRuntime.pendingOwner = 'account-b'
+        syncRuntime.heldPending.set('account-a', new Set(['favorites/tapDance']))
+        notifyChange('favorites/macro')
+        vi.mocked(getAccountSub).mockResolvedValueOnce('account-a')
+
+        await flushPendingChanges()
+
+        expect(favUploads()).toBe(1)
+        expect(syncRuntime.heldPending.get('account-b')).toEqual(new Set(['favorites/macro']))
+        expect(syncRuntime.pendingChanges.has('favorites/tapDance')).toBe(false)
+      })
+
+      it('before-quit with nothing left to do writes the last settle at once', async () => {
+        notifyChange('favorites/tapDance')
+        await vi.advanceTimersByTimeAsync(PENDING_WRITE_DELAY_MS)
+        await flushPendingChanges()
+        expect(await unitsOnDisk()).toEqual(['favorites/tapDance'])
+
+        const preventDefault = vi.fn()
+        captureBeforeQuitHandler()({ preventDefault })
+
+        expect(preventDefault).not.toHaveBeenCalled()
+        expect(await unitsOnDisk()).toEqual([])
+      })
+
+      it('writes what is still pending before quitting after the deadline', async () => {
+        const gate = gateUploadsOf(FAV_FILE)
+        notifyChange('favorites/tapDance')
+        const flush = flushPendingChanges()
+        await flushUntil(() => favUploads() === 1, 'the upload to start')
+        // The scheduled write has run; only the quit can bring the file back.
+        await vi.advanceTimersByTimeAsync(PENDING_WRITE_DELAY_MS)
+        await rm(pendingFile(), { force: true })
+
+        captureBeforeQuitHandler()({ preventDefault: vi.fn() })
+        await vi.advanceTimersByTimeAsync(QUIT_SYNC_DEADLINE_MS)
+        await flushUntil(quitCalled, 'the deadline to call app.quit')
+
+        expect(await unitsOnDisk()).toEqual(['favorites/tapDance'])
+
+        gate.release()
+        await flush
+        await waitForSyncIdle()
+      })
+
+      it('keeps a change kept by a flush with auto sync off for the next launch', async () => {
+        mockAutoSync = false
+        notifyChange('favorites/tapDance')
+        await flushPendingChanges()
+
+        captureBeforeQuitHandler()({ preventDefault: vi.fn() })
+        await flushUntil(quitCalled, 'the quit phases to call app.quit')
+
+        expect(await unitsOnDisk()).toEqual(['favorites/tapDance'])
+      })
+    })
+
+    describe('sync lock ownership', () => {
+      it('a stale release does not clear a newer pass', () => {
+        const releaseOld = claimSyncLock()
+        syncRuntime.isSyncing = false
+        syncRuntime.inFlightPass = null
+        const releaseNew = claimSyncLock()
+        const newPass = syncRuntime.inFlightPass
+
+        releaseOld()
+        expect(syncRuntime.inFlightPass).toBe(newPass)
+        expect(syncRuntime.isSyncing).toBe(true)
+
+        releaseNew()
+        expect(syncRuntime.inFlightPass).toBeNull()
+        expect(syncRuntime.isSyncing).toBe(false)
+      })
+
+      it('_resetForTests clears the in-flight pass and the pending generations', () => {
+        notifyChange('favorites/tapDance')
+        syncRuntime.inFlightPass = Promise.resolve()
+
+        _resetForTests()
+
+        expect(syncRuntime.inFlightPass).toBeNull()
+        expect(syncRuntime.pendingGeneration.size).toBe(0)
+      })
+    })
+  })
+
+  describe('reset holding the sync lock', () => {
+    const gateReleases: Array<() => void> = []
+
+    /** Starts a reset whose body waits for `release`; afterEach releases it too. */
+    function holdReset(keyboards: ResetKeyboards = null): { done: Promise<void>; release: () => void } {
+      let release!: () => void
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      gateReleases.push(release)
+      return { done: withResetLock(keyboards, () => gate, 'busy'), release }
+    }
+
+    async function turns(count = 5): Promise<void> {
+      for (let i = 0; i < count; i++) {
+        await new Promise<void>((resolve) => realSetImmediate(resolve))
+      }
+    }
+
+    beforeEach(() => {
+      mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
+      mockDownloadFile.mockResolvedValue(makePasswordCheckEnvelope())
+    })
+
+    afterEach(() => {
+      for (const release of gateReleases.splice(0)) release()
+      mockListFiles.mockImplementation(async () => [])
+      mockDownloadFile.mockImplementation(async () => ({}))
+    })
+
+    it('holds the lock as a waitable holder and records its keyboards until the reset ends', async () => {
+      const reset = holdReset(['uid-a'])
+      expect(isSyncInProgress()).toBe(true)
+      expect(syncRuntime.inFlightPassWaitable).toBe(true)
+      expect(syncRuntime.resetKeyboards).toEqual(new Set(['uid-a']))
+
+      reset.release()
+      await reset.done
+
+      expect(isSyncInProgress()).toBe(false)
+      expect(syncRuntime.inFlightPass).toBeNull()
+      expect(syncRuntime.inFlightPassWaitable).toBe(false)
+      expect(syncRuntime.resetKeyboards).toBeNull()
+    })
+
+    it('records no keyboards for a reset without keyboard data', () => {
+      holdReset(null)
+      expect(syncRuntime.resetKeyboards).toBeNull()
+      expect(isSyncInProgress()).toBe(true)
+    })
+
+    it('releases the lock when the reset throws', async () => {
+      await expect(withResetLock('all', async () => {
+        throw new Error('rm failed')
+      })).rejects.toThrow('rm failed')
+
+      expect(isSyncInProgress()).toBe(false)
+      expect(syncRuntime.resetKeyboards).toBeNull()
+    })
+
+    it('refuses with the default message while another pass holds the lock', async () => {
+      const release = claimSyncLock()
+      const body = vi.fn(async () => {})
+
+      await expect(withResetLock(null, body)).rejects.toThrow('sync.resetBusy')
+
+      expect(body).not.toHaveBeenCalled()
+      release()
+    })
+
+    it('refuses a reset of a keyboard with an analytics sync running', async () => {
+      syncRuntime.analyticsSyncingUids.add('uid-a')
+      const body = vi.fn(async () => {})
+
+      await expect(withResetLock(['uid-a'], body)).rejects.toThrow()
+      await expect(withResetLock('all', body)).rejects.toThrow()
+      expect(body).not.toHaveBeenCalled()
+      expect(isSyncInProgress()).toBe(false)
+
+      await withResetLock(['uid-b'], body)
+      await withResetLock(null, body)
+      expect(body).toHaveBeenCalledTimes(2)
+    })
+
+    it('refuses a reset of a keyboard with a remote day fetch running', async () => {
+      const listGate = new Promise<DriveFile[]>((resolve) => {
+        gateReleases.push(() => resolve([PASSWORD_CHECK_DRIVE_FILE]))
+      })
+      mockListFiles.mockImplementationOnce(() => listGate)
+      const fetch = fetchRemoteTypingDay('uid-a', 'remote-hash', '2026-04-18')
+      await flushUntil(() => mockListFiles.mock.calls.length === 1, 'the fetch to list')
+      expect(syncRuntime.remoteTypingDayFetches.get('uid-a')).toBe(1)
+      const body = vi.fn(async () => {})
+
+      await expect(withResetLock(['uid-a'], body)).rejects.toThrow()
+      await expect(withResetLock('all', body)).rejects.toThrow()
+      await withResetLock(['uid-b'], body)
+      await withResetLock(null, body)
+      expect(body).toHaveBeenCalledTimes(2)
+
+      for (const release of gateReleases.splice(0)) release()
+      expect(await fetch).toBe(false)
+      expect(syncRuntime.remoteTypingDayFetches.size).toBe(0)
+    })
+
+    it('a remote day fetch that throws is no longer counted', async () => {
+      mockListFiles.mockRejectedValueOnce(new Error('network error'))
+
+      await expect(fetchRemoteTypingDay('uid-a', 'remote-hash', '2026-04-18')).rejects.toThrow('network error')
+
+      expect(syncRuntime.remoteTypingDayFetches.size).toBe(0)
+    })
+
+    it('an analytics sync and a remote day fetch of a keyboard being reset do not start', async () => {
+      holdReset(['uid-a'])
+
+      expect(await executeAnalyticsSync('uid-a')).toBe(false)
+      expect(await fetchRemoteTypingDay('uid-a', 'remote-hash', '2026-04-18')).toBe(false)
+
+      expect(mockListFiles).not.toHaveBeenCalled()
+      expect(syncRuntime.analyticsSyncingUids.size).toBe(0)
+      expect(syncRuntime.remoteTypingDayFetches.size).toBe(0)
+    })
+
+    it('an analytics sync and a remote day fetch of another keyboard still run', async () => {
+      holdReset(['uid-a'])
+
+      await executeAnalyticsSync('uid-b')
+      expect(mockListFiles).toHaveBeenCalled()
+      mockListFiles.mockClear()
+      await fetchRemoteTypingDay('uid-b', 'remote-hash', '2026-04-18')
+      expect(mockListFiles).toHaveBeenCalledTimes(1)
+    })
+
+    it('a reset of every keyboard stops an analytics sync of any keyboard', async () => {
+      holdReset('all')
+
+      expect(await executeAnalyticsSync('uid-b')).toBe(false)
+      expect(mockListFiles).not.toHaveBeenCalled()
+    })
+
+    it('a poll pass skips during a reset', async () => {
+      holdReset()
+
+      startPolling()
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+      await waitForPollPassForTests()
+
+      expect(mockListFiles).not.toHaveBeenCalled()
+      stopPolling()
+    })
+
+    it('a flush waits for the reset, then runs', async () => {
+      mockAutoSync = true
+      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{"data":1}' })
+      const reset = holdReset()
+      notifyChange('favorites/tapDance')
+
+      const flush = flushPendingChanges()
+      await turns()
+      expect(mockListFiles).not.toHaveBeenCalled()
+
+      reset.release()
+      await reset.done
+      await flush
+
+      expect(mockListFiles).toHaveBeenCalled()
+      expect(hasPendingChanges()).toBe(false)
+    })
+
+    it('executeSync waits for the reset instead of returning busy', async () => {
+      const reset = holdReset()
+
+      const sync = executeSync('download')
+      await turns()
+      expect(mockListFiles).not.toHaveBeenCalled()
+
+      reset.release()
+      await reset.done
+
+      expect(await sync).toEqual({ status: 'completed' })
+      expect(mockListFiles).toHaveBeenCalled()
+    })
+
+    it('before-quit waits for a running reset', async () => {
+      const reset = holdReset()
+
+      captureBeforeQuitHandler()({ preventDefault: vi.fn() })
+      await turns()
+      expect(app.quit).not.toHaveBeenCalled()
+
+      reset.release()
+      await reset.done
+      await flushUntil(() => vi.mocked(app.quit).mock.calls.length > 0, 'the quit phases to call app.quit')
+    })
+  })
+
+  describe('withResetLockWhenFree (typing-data deletes and import)', () => {
+    async function turns(count = 5): Promise<void> {
+      for (let i = 0; i < count; i++) {
+        await new Promise<void>((resolve) => realSetImmediate(resolve))
+      }
+    }
+
+    beforeEach(() => {
+      mockDownloadFile.mockResolvedValue(makePasswordCheckEnvelope())
+    })
+
+    afterEach(() => {
+      mockListFiles.mockImplementation(async () => [])
+      mockDownloadFile.mockImplementation(async () => ({}))
+    })
+
+    it('waits for a poll holding the lock, then runs holding it', async () => {
+      let releaseListing!: () => void
+      mockListFiles.mockImplementationOnce(() => new Promise<DriveFile[]>((resolve) => {
+        releaseListing = () => resolve([PASSWORD_CHECK_DRIVE_FILE])
+      }))
+      mockAutoSync = true
+      startPolling()
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+      await flushUntil(() => mockListFiles.mock.calls.length === 1, 'the poll to list')
+      expect(isSyncInProgress()).toBe(true)
+      const body = vi.fn(async () => {
+        expect(isSyncInProgress()).toBe(true)
+        expect(syncRuntime.resetKeyboards).toEqual(new Set(['uid-a']))
+      })
+
+      const done = withResetLockWhenFree(['uid-a'], body, 'busy')
+      await turns()
+      expect(body).not.toHaveBeenCalled()
+
+      releaseListing()
+      await waitForPollPassForTests()
+      await done
+      stopPolling()
+
+      expect(body).toHaveBeenCalledTimes(1)
+      expect(isSyncInProgress()).toBe(false)
+      expect(syncRuntime.resetKeyboards).toBeNull()
+    })
+
+    it('throws its busy message when the lock is still held after the wait', async () => {
+      const release = claimSyncLock()
+      const body = vi.fn(async () => {})
+
+      const done = withResetLockWhenFree(['uid-a'], body, 'sync.deleteBusy')
+      const refused = expect(done).rejects.toThrow('sync.deleteBusy')
+      await vi.advanceTimersByTimeAsync(RESET_LOCK_WAIT_MS)
+      await refused
+
+      expect(body).not.toHaveBeenCalled()
+      expect(syncRuntime.resetKeyboards).toBeNull()
+      release()
+    })
+
+    it('waits for a remote day fetch of its keyboard, keeping new analytics work of that keyboard from starting', async () => {
+      syncRuntime.remoteTypingDayFetches.set('uid-a', 1)
+      const body = vi.fn(async () => {})
+
+      const done = withResetLockWhenFree(['uid-a'], body, 'busy')
+      await turns()
+      expect(body).not.toHaveBeenCalled()
+      expect(await executeAnalyticsSync('uid-a')).toBe(false)
+      expect(await fetchRemoteTypingDay('uid-a', 'remote-hash', '2026-04-18')).toBe(false)
+      expect(mockListFiles).not.toHaveBeenCalled()
+
+      syncRuntime.remoteTypingDayFetches.delete('uid-a')
+      await vi.advanceTimersByTimeAsync(100)
+      await done
+
+      expect(body).toHaveBeenCalledTimes(1)
+      expect(isSyncInProgress()).toBe(false)
+    })
+
+    it('throws its busy message and releases the lock when an analytics sync of its keyboard outlasts the wait', async () => {
+      syncRuntime.analyticsSyncingUids.add('uid-a')
+      const body = vi.fn(async () => {})
+
+      const done = withResetLockWhenFree(['uid-a'], body, 'busy')
+      const refused = expect(done).rejects.toThrow('busy')
+      await vi.advanceTimersByTimeAsync(RESET_LOCK_WAIT_MS)
+      await refused
+
+      expect(body).not.toHaveBeenCalled()
+      expect(isSyncInProgress()).toBe(false)
+      expect(syncRuntime.resetKeyboards).toBeNull()
+    })
+
+    it('does not wait for an analytics sync of another keyboard', async () => {
+      syncRuntime.analyticsSyncingUids.add('uid-b')
+      const body = vi.fn(async () => 'done')
+
+      expect(await withResetLockWhenFree(['uid-a'], body, 'busy')).toBe('done')
+    })
+
+    it('releases the lock when the body throws', async () => {
+      await expect(withResetLockWhenFree(['uid-a'], async () => {
+        throw new Error('unlink failed')
+      }, 'busy')).rejects.toThrow('unlink failed')
+
+      expect(isSyncInProgress()).toBe(false)
+      expect(syncRuntime.resetKeyboards).toBeNull()
     })
   })
 
   describe('polling', () => {
-    it('only records state on first poll without downloading data files', async () => {
+    describe('duplicate copies', () => {
+      const DAY_MS = 24 * 60 * 60 * 1000
+      const NAME = 'favorites_tapDance.enc'
+      let remote: DriveFile[]
+
+      beforeEach(() => {
+        remote = [
+          PASSWORD_CHECK_DRIVE_FILE,
+          { id: 'keep', name: NAME, modifiedTime: '2026-01-02T00:00:00.000Z' },
+          { id: 'extra', name: NAME, modifiedTime: '2026-01-01T00:00:00.000Z' },
+        ]
+        mockListFiles.mockImplementation(async () => remote.map((f) => ({ ...f })))
+        mockRenameFile.mockImplementation(async (id: string, name: string) => {
+          const file = remote.find((f) => f.id === id)
+          if (!file) return null
+          file.name = name
+          return { ...file }
+        })
+        mockDeleteFile.mockImplementation(async (id: string) => {
+          remote = remote.filter((f) => f.id !== id)
+        })
+        routeDownloads({ keep: () => makeRemoteEnvelope('2026-01-02T00:00:00.000Z') })
+      })
+
+      afterEach(() => {
+        mockListFiles.mockImplementation(async () => [])
+        mockRenameFile.mockImplementation(async () => null)
+        mockDeleteFile.mockImplementation(async () => {})
+      })
+
+      async function pollOnce(): Promise<void> {
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+        await waitForPollPassForTests()
+      }
+
+      it('moves the extra copy to trash after merging the chosen one, and deletes it 30 days later', async () => {
+        startPolling()
+        await pollOnce()
+
+        const renamedAt = Date.now()
+        expect(mockDownloadFile.mock.calls.map(([id]) => id)).not.toContain('extra')
+        expect(mockRenameFile).toHaveBeenCalledWith('extra', `${NAME}.trash.${renamedAt}.${Date.parse('2026-01-01T00:00:00.000Z')}.extra`)
+        expect(mockDeleteFile).not.toHaveBeenCalled()
+
+        // Still within the 30 days: kept.
+        await pollOnce()
+        expect(mockDeleteFile).not.toHaveBeenCalled()
+
+        vi.setSystemTime(renamedAt + 30 * DAY_MS)
+        await pollOnce()
+
+        expect(mockDeleteFile).toHaveBeenCalledWith('extra')
+        expect(remote.map((f) => f.id)).toEqual(['pc-1', 'keep'])
+        expect(mockRenameFile).toHaveBeenCalledTimes(1)
+      })
+
+      it('renames the trash back when no copy of the name is left', async () => {
+        remote = [
+          PASSWORD_CHECK_DRIVE_FILE,
+          { id: 'extra', name: `${NAME}.trash.1.2.extra`, modifiedTime: '2026-01-01T00:00:00.000Z' },
+        ]
+
+        startPolling()
+        await pollOnce()
+
+        expect(mockRenameFile).toHaveBeenCalledWith('extra', NAME)
+        expect(mockDeleteFile).not.toHaveBeenCalled()
+        routeDownloads({ extra: () => makeRemoteEnvelope('2026-01-01T00:00:00.000Z') })
+        await pollOnce()
+        expect(mockDownloadFile.mock.calls.map(([id]) => id)).toContain('extra')
+      })
+    })
+
+    it('downloads locally relevant units on the first poll and skips lazy and analytics units', async () => {
+      await mkdir(join(mockUserDataPath, 'sync', 'keyboards', '0x1234'), { recursive: true })
       mockListFiles.mockResolvedValue([
         PASSWORD_CHECK_DRIVE_FILE,
         makeDriveFile('2026-01-01T00:00:00.000Z'),
+        makeSettingsDriveFile('0x1234', '2026-01-01T00:00:00.000Z'),
+        makeSettingsDriveFile('0xRemoteOnly', '2026-01-01T00:00:00.000Z'),
+        { id: 'day-1', name: driveFileName('keyboards/0x1234/devices/hash/days/2026-01-01'), modifiedTime: '2026-01-01T00:00:00.000Z' },
       ])
-      mockDownloadFile.mockResolvedValue(makePasswordCheckEnvelope())
+      routeDownloads({
+        'file-1': () => makeRemoteEnvelope('2026-01-01T00:00:00.000Z'),
+        'settings-0x1234': () => makeSettingsEnvelope('0x1234', '2026-01-01T00:00:00.000Z'),
+      })
 
       startPolling()
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await waitForPollPassForTests()
       expect(mockListFiles).toHaveBeenCalledTimes(1)
 
-      // Password-check downloaded for validation, but data file NOT downloaded
-      expect(mockDownloadFile).toHaveBeenCalledTimes(1)
-      expect(mockDownloadFile).toHaveBeenCalledWith('pc-1')
+      const downloaded = mockDownloadFile.mock.calls.map((call) => call[0])
+      expect(downloaded).toContain('file-1')
+      expect(downloaded).toContain('settings-0x1234')
+      expect(downloaded).not.toContain('settings-0xRemoteOnly')
+      expect(downloaded).not.toContain('day-1')
 
       stopPolling()
     })
@@ -667,12 +1703,12 @@ describe('sync-service', () => {
       mockDownloadFile.mockResolvedValue(makeRemoteEnvelope('2026-01-02T00:00:00.000Z'))
 
       startPolling()
-      // First poll: records state, no data download
+      // First poll: merges the listed file once
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await waitForPollPassForTests()
       expect(mockListFiles).toHaveBeenCalledTimes(1)
 
-      // Second poll: detects modifiedTime change, downloads
+      // Second poll: detects modifiedTime change, downloads again
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await waitForPollPassForTests()
 
@@ -687,6 +1723,11 @@ describe('sync-service', () => {
     // their filenames, polling picks up changes for them exactly like
     // any other scope-'all' unit.
     it('detects a changed themes/packs file on a subsequent poll and downloads it', async () => {
+      const T = '2026-01-01T00:00:00.000Z'
+      await mkdir(join(mockUserDataPath, 'sync', 'themes'), { recursive: true })
+      await writeFile(join(mockUserDataPath, 'sync', 'themes', 'index.json'), JSON.stringify({
+        metas: [{ id: 'pack-a', filename: 'packs/pack-a.json', name: 'Pack A', version: '1.0.0', savedAt: T, updatedAt: T, clocks: { created: T, body: '1970-01-01T00:00:00.000Z', name: T, hub: T } }],
+      }), 'utf-8')
       const themePackFile = (modifiedTime: string): DriveFile =>
         ({ id: 'theme-pack-1', name: 'themes_packs_pack-a.enc', modifiedTime })
       mockListFiles
@@ -732,9 +1773,9 @@ describe('sync-service', () => {
     // google-drive.test.ts's round-trip coverage.
 
     it('skips when no remote changes detected', async () => {
-      // The listed password-check is validated by the first poll only.
+      // The first poll merges the listed file and validates the password-check.
       mockListFiles.mockResolvedValue([makeDriveFile('2025-01-01T00:00:00.000Z'), PASSWORD_CHECK_DRIVE_FILE])
-      mockDownloadFile.mockResolvedValue({ ciphertext: 'ok' })
+      routeDownloads({ 'file-1': () => makeRemoteEnvelope('2025-01-01T00:00:00.000Z') })
 
       startPolling()
       // The listFiles counts prove each poll actually ran, so the negative
@@ -793,6 +1834,181 @@ describe('sync-service', () => {
     })
   })
 
+  describe('polling with a delayed first pass', () => {
+    const FIRST_PASS_DELAY_MS = 15_000
+
+    it('runs one pass after the delay and then keeps the interval', async () => {
+      mockListFiles.mockResolvedValue([])
+
+      startPolling({ firstPassDelayMs: FIRST_PASS_DELAY_MS })
+      await vi.advanceTimersByTimeAsync(FIRST_PASS_DELAY_MS - 1)
+      expect(mockListFiles).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1)
+      await waitForPollPassForTests()
+      expect(mockListFiles).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS - FIRST_PASS_DELAY_MS)
+      await waitForPollPassForTests()
+      expect(mockListFiles).toHaveBeenCalledTimes(2)
+    })
+
+    it('stopPolling during the delay cancels the first pass', async () => {
+      mockListFiles.mockResolvedValue([])
+
+      startPolling({ firstPassDelayMs: FIRST_PASS_DELAY_MS })
+      stopPolling()
+      expect(vi.getTimerCount()).toBe(0)
+
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+      expect(mockListFiles).not.toHaveBeenCalled()
+    })
+
+    it('_resetForTests during the delay cancels the first pass', async () => {
+      mockListFiles.mockResolvedValue([])
+
+      startPolling({ firstPassDelayMs: FIRST_PASS_DELAY_MS })
+      _resetForTests()
+      expect(vi.getTimerCount()).toBe(0)
+
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+      expect(mockListFiles).not.toHaveBeenCalled()
+    })
+
+    it('a second start arms no second first pass or interval', async () => {
+      mockListFiles.mockResolvedValue([])
+
+      startPolling({ firstPassDelayMs: FIRST_PASS_DELAY_MS })
+      startPolling({ firstPassDelayMs: FIRST_PASS_DELAY_MS })
+      startPolling()
+      expect(vi.getTimerCount()).toBe(2)
+
+      await vi.advanceTimersByTimeAsync(FIRST_PASS_DELAY_MS)
+      await waitForPollPassForTests()
+      expect(mockListFiles).toHaveBeenCalledTimes(1)
+    })
+
+    it('a start without a delay arms no first pass even when one is asked for later', async () => {
+      mockListFiles.mockResolvedValue([])
+
+      startPolling()
+      startPolling({ firstPassDelayMs: FIRST_PASS_DELAY_MS })
+      expect(vi.getTimerCount()).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(FIRST_PASS_DELAY_MS)
+      expect(mockListFiles).not.toHaveBeenCalled()
+    })
+
+    it('waits for a running download and then runs its pass', async () => {
+      let releaseList: (files: DriveFile[]) => void = () => {}
+      const listGate = new Promise<DriveFile[]>((resolve) => { releaseList = resolve })
+      mockListFiles.mockImplementationOnce(() => listGate)
+      mockListFiles.mockResolvedValue([])
+
+      const download = executeSync('download')
+      try {
+        await flushUntil(() => mockListFiles.mock.calls.length === 1, 'the download to reach listFiles')
+
+        startPolling({ firstPassDelayMs: FIRST_PASS_DELAY_MS })
+        await vi.advanceTimersByTimeAsync(FIRST_PASS_DELAY_MS)
+        expect(mockListFiles).toHaveBeenCalledTimes(1)
+      } finally {
+        releaseList([])
+      }
+      await download
+
+      await flushUntil(() => mockListFiles.mock.calls.length === 2, 'the first poll pass to list Drive')
+      await waitForSyncIdle()
+    })
+
+    it('a download started during the first pass waits for it instead of skipping', async () => {
+      let releaseList: (files: DriveFile[]) => void = () => {}
+      const listGate = new Promise<DriveFile[]>((resolve) => { releaseList = resolve })
+      mockListFiles.mockImplementationOnce(() => listGate)
+      mockListFiles.mockResolvedValue([])
+
+      startPolling({ firstPassDelayMs: FIRST_PASS_DELAY_MS })
+      await vi.advanceTimersByTimeAsync(FIRST_PASS_DELAY_MS)
+      const pass = waitForPollPassForTests()
+      let download: Promise<Awaited<ReturnType<typeof executeSync>>>
+      try {
+        await flushUntil(() => mockListFiles.mock.calls.length === 1, 'the first pass to reach listFiles')
+        download = executeSync('download')
+      } finally {
+        releaseList([])
+      }
+      await pass
+
+      const result = await download
+      expect(result.skipReason).toBeUndefined()
+      expect(mockListFiles).toHaveBeenCalledTimes(2)
+    })
+
+    it('returns silently when credentials are not ready', async () => {
+      mockGetAuthStatus.mockResolvedValueOnce({ authenticated: false })
+      const progress: SyncProgress[] = []
+      setProgressCallback((p) => progress.push(p))
+
+      startPolling({ firstPassDelayMs: FIRST_PASS_DELAY_MS })
+      await vi.advanceTimersByTimeAsync(FIRST_PASS_DELAY_MS)
+      await waitForPollPassForTests()
+
+      expect(mockGetAuthStatus).toHaveBeenCalledTimes(1)
+      expect(mockListFiles).not.toHaveBeenCalled()
+      expect(progress).toEqual([])
+    })
+
+    it('startPollingAtLaunch arms the interval and a delayed first pass when auto sync is on', async () => {
+      mockAutoSync = true
+      mockListFiles.mockResolvedValue([])
+
+      startPollingAtLaunch()
+      expect(vi.getTimerCount()).toBe(2)
+
+      await vi.advanceTimersByTimeAsync(FIRST_PASS_DELAY_MS)
+      await waitForPollPassForTests()
+      expect(mockListFiles).toHaveBeenCalledTimes(1)
+    })
+
+    it('startPollingAtLaunch does nothing when auto sync is off', () => {
+      startPollingAtLaunch()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('startPollingIfAutoSync arms only the interval when auto sync is on', async () => {
+      mockAutoSync = true
+      mockListFiles.mockResolvedValue([])
+
+      startPollingIfAutoSync()
+      expect(vi.getTimerCount()).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(FIRST_PASS_DELAY_MS)
+      expect(mockListFiles).not.toHaveBeenCalled()
+    })
+
+    it('startPollingIfAutoSync does nothing when auto sync is off', () => {
+      startPollingIfAutoSync()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('stopPolling while the first pass waits for the lock cancels it', async () => {
+      mockListFiles.mockResolvedValue([])
+      const release = claimSyncLock()
+      try {
+        startPolling({ firstPassDelayMs: FIRST_PASS_DELAY_MS })
+        await vi.advanceTimersByTimeAsync(FIRST_PASS_DELAY_MS)
+        stopPolling()
+      } finally {
+        release()
+      }
+
+      await flushUntil(() => true)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mockListFiles).not.toHaveBeenCalled()
+      expect(isSyncInProgress()).toBe(false)
+    })
+  })
+
   describe('waitForPollPassForTests', () => {
     // Resolves 'pending' unless `promise` has already settled after a few
     // real event-loop turns.
@@ -820,19 +2036,24 @@ describe('sync-service', () => {
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await waitForPollPassForTests()
       expect(mockListFiles).toHaveBeenCalledTimes(1)
+      expect(mockRunPackGcAfterPass).toHaveBeenCalledTimes(1)
+      mockRunPackGcAfterPass.mockClear()
 
       // The gate exists before the pass reaches GC, so releasing it in
       // `finally` unblocks the pass whenever an assertion fails.
       let releaseGc: () => void = () => {}
       const gcGate = new Promise<void>((resolve) => { releaseGc = resolve })
-      mockRunPackGcAfterPass.mockImplementationOnce(() => gcGate)
+      let gcEntered = false
+      mockRunPackGcAfterPass.mockImplementationOnce(() => {
+        gcEntered = true
+        return gcGate
+      })
 
-      // Second poll: nothing changed, so the pass goes straight to the GC
-      // step and waits there.
+      // Second poll: the pass reaches the GC step and waits at the gate.
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       const tracked = waitForPollPassForTests()
       try {
-        await flushUntil(() => mockRunPackGcAfterPass.mock.calls.length === 1, 'the GC step to start')
+        await flushUntil(() => gcEntered, 'the GC step to start')
 
         // Third tick while the second pass is still running: no new pass,
         // and the tracked promise is not replaced.
@@ -956,7 +2177,8 @@ describe('sync-service', () => {
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await waitForPollPassForTests()
       expect(mockListFiles).toHaveBeenCalledTimes(1)
-      expect(mockRunPackGcAfterPass).not.toHaveBeenCalled() // first poll: seed-only, no merge
+      expect(mockRunPackGcAfterPass).toHaveBeenCalledTimes(1) // first poll: merges the pack
+      mockRunPackGcAfterPass.mockClear()
 
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await waitForPollPassForTests()
@@ -1009,6 +2231,10 @@ describe('sync-service', () => {
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await waitForPollPassForTests()
       expect(mockListFiles).toHaveBeenCalledTimes(1)
+      // First poll already failed the pack; the next poll retries it.
+      expect(mockRunPackGcAfterPass).toHaveBeenCalledTimes(1)
+      expect(mockRunPackGcAfterPass.mock.calls[0][1]).toEqual(['themes/packs/pack-a'])
+      mockRunPackGcAfterPass.mockClear()
 
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await waitForPollPassForTests()
@@ -1046,11 +2272,13 @@ describe('sync-service', () => {
     })
 
     it('does not upload when merge shows no local-only changes', async () => {
-      // Both local and remote have the same entry
+      // Both local and remote have the same (converged v2) entry
+      const T = '2025-01-01T00:00:00.000Z'
+      const clocks = { created: T, body: T, name: T, hub: T }
       const sharedEntry = {
-        id: 'shared', label: 'same', filename: 'shared.json', savedAt: '2025-01-01T00:00:00.000Z',
+        id: 'shared', label: 'entry', filename: 'shared_shared.json', savedAt: T, updatedAt: T, clocks,
       }
-      await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'shared.json', content: '{}' }, { id: 'shared' })
+      await setupLocalFavorite(T, { name: 'shared_shared.json', content: '{}' }, { id: 'shared', updatedAt: T, clocks })
 
       mockListFiles.mockResolvedValue([makeDriveFile('2025-01-01T00:00:00.000Z'), PASSWORD_CHECK_DRIVE_FILE])
       mockDownloadFile.mockResolvedValue(makeRemoteEnvelope('2025-01-01T00:00:00.000Z', [sharedEntry]))
@@ -1184,7 +2412,7 @@ describe('sync-service', () => {
       expect(hasPendingChanges()).toBe(true)
     })
 
-    it('calls listFiles only twice during upload sync (no N+1)', async () => {
+    it('calls listFiles once during upload sync (no N+1)', async () => {
       // Set up multiple local favorites to simulate N sync units
       await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{}' })
       await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'macro.json', content: '{}' }, { id: '2', favoriteType: 'macro' })
@@ -1195,11 +2423,9 @@ describe('sync-service', () => {
 
       await executeSync('upload')
 
-      // listFiles should be called exactly twice:
-      // 1. Initial fetch in executeSync (password check + passed to executeUploadSync)
-      // 2. Final refresh after the loop
-      // NOT N+1 times (once per sync unit)
-      expect(mockListFiles).toHaveBeenCalledTimes(2)
+      // One fetch in executeSync (password check + passed to executeUploadSync),
+      // not once per sync unit.
+      expect(mockListFiles).toHaveBeenCalledTimes(1)
       // Verify uploads actually happened (2 sync units, password-check downloaded not uploaded)
       expect(mockUploadFile).toHaveBeenCalledTimes(2)
     })
@@ -1362,6 +2588,20 @@ describe('sync-service', () => {
         fileName: 'favorites_macro.enc',
         syncUnit: 'favorites/macro',
       })
+    })
+
+    it('does not check trash files', async () => {
+      mockListFiles.mockResolvedValue([
+        { id: 'f1', name: 'favorites_macro.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+        { id: 't1', name: 'favorites_macro.enc.trash.1.2.t1', modifiedTime: '2025-01-01T00:00:00.000Z' },
+      ])
+      mockDecrypt.mockRejectedValue(new Error('Decryption failed'))
+
+      const result = await listUndecryptableFiles()
+
+      expect(result.map((f) => f.fileId)).toEqual(['f1'])
+      expect(mockDownloadFile.mock.calls.map(([id]) => id)).not.toContain('t1')
+      mockDecrypt.mockImplementation(async (envelope: { ciphertext: string }) => envelope.ciphertext)
     })
 
     it('returns empty array when not authenticated', async () => {
@@ -1751,6 +2991,16 @@ describe('sync-service', () => {
     })
 
     describe('executeSync with scope', () => {
+      // One poll pass; the listing count proves it ran.
+      async function pollOnce(): Promise<void> {
+        startPolling()
+        const before = mockListFiles.mock.calls.length
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+        await waitForPollPassForTests()
+        expect(mockListFiles).toHaveBeenCalledTimes(before + 1)
+        stopPolling()
+      }
+
       // Fresh-machine discovery.
       it.each([
         {
@@ -1879,6 +3129,24 @@ describe('sync-service', () => {
         expect(downloadedIds).toContain('f2')
       })
 
+      it('downloads the settings file for a keyboard whose local directory exists without any settings file', async () => {
+        const kbDir = join(mockUserDataPath, 'sync', 'keyboards', '0x1234')
+        await mkdir(kbDir, { recursive: true })
+
+        mockListFiles.mockResolvedValue([
+          makeSettingsDriveFile('0x1234', '2025-01-01T00:00:00.000Z'),
+          PASSWORD_CHECK_DRIVE_FILE,
+        ])
+        routeDownloads({
+          'settings-0x1234': () => makeSettingsEnvelope('0x1234', '2025-01-01T00:00:00.000Z'),
+        })
+
+        await executeSync('download')
+
+        expect(mockDownloadFile).toHaveBeenCalledWith('settings-0x1234')
+        await expect(access(join(kbDir, 'pipette_settings.json'))).resolves.toBeUndefined()
+      })
+
       it('does not materialize remote-only keyboards locally when scope is omitted (lazy download)', async () => {
         mockListFiles.mockResolvedValue([
           { id: 'f1', name: 'favorites_tapDance.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
@@ -1896,13 +3164,12 @@ describe('sync-service', () => {
         ).rejects.toBeDefined()
       })
 
-      it('updates remote state for all files even with scoped download', async () => {
-        // Local copy of 0x1234 exists, so polling should still pick up changes for it
+      it('scoped download records only the units it merged, so polling still picks up the rest', async () => {
         await mkdir(join(mockUserDataPath, 'sync', 'keyboards', '0x1234'), { recursive: true })
 
         const allFiles = [
           { id: 'f1', name: 'favorites_tapDance.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
-          { id: 'f2', name: 'keyboards_0x1234_settings.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+          { id: 'f2', name: 'keyboards_0x1234_snapshots.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
           PASSWORD_CHECK_DRIVE_FILE,
         ]
         mockListFiles.mockResolvedValue(allFiles)
@@ -1912,34 +3179,120 @@ describe('sync-service', () => {
 
         await executeSync('download', 'favorites')
 
-        // First poll with the UNCHANGED file list: the scoped sync must
-        // have recorded f2's remote state, so nothing should download.
-        // Without this step, a missing f2 state entry (the bug this test
-        // guards against) would be indistinguishable from a detected
-        // change on the next poll — both trigger a download.
+        // Same listing on the next poll: f2 was out of scope, so it was never
+        // merged and must be downloaded now; f1 was merged and must not be.
         mockDownloadFile.mockClear()
-        startPolling()
-        const listCallsAfterSync = mockListFiles.mock.calls.length
-        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
-        await waitForPollPassForTests()
-        expect(mockListFiles).toHaveBeenCalledTimes(listCallsAfterSync + 1)
-        expect(mockDownloadFile).not.toHaveBeenCalledWith('f2')
-
-        // Second poll after the keyboard file's modifiedTime changes:
-        // now the download must happen for the locally-tracked keyboard.
-        const updatedFiles = [
-          { id: 'f1', name: 'favorites_tapDance.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
-          { id: 'f2', name: 'keyboards_0x1234_settings.enc', modifiedTime: '2025-01-02T00:00:00.000Z' },
-          PASSWORD_CHECK_DRIVE_FILE,
-        ]
-        mockListFiles.mockResolvedValue(updatedFiles)
-        mockDownloadFile.mockResolvedValue(makeSettingsEnvelope('0x1234', '2025-01-02T00:00:00.000Z'))
-
-        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
-        await waitForPollPassForTests()
-
-        expect(mockListFiles).toHaveBeenCalledTimes(listCallsAfterSync + 2)
+        mockDownloadFile.mockResolvedValue(makePasswordCheckEnvelope())
+        await pollOnce()
         expect(mockDownloadFile).toHaveBeenCalledWith('f2')
+        expect(mockDownloadFile).not.toHaveBeenCalledWith('f1')
+      })
+
+      it('a failed unit in a scoped download is retried by the next poll', async () => {
+        mockListFiles.mockResolvedValue([
+          { id: 'f1', name: 'favorites_tapDance.enc', modifiedTime: '2025-01-01T00:00:00.000Z' },
+          PASSWORD_CHECK_DRIVE_FILE,
+        ])
+        mockDownloadFile
+          .mockResolvedValueOnce(makePasswordCheckEnvelope())
+          .mockRejectedValueOnce(new Error('download failed'))
+
+        const result = await executeSync('download', 'favorites')
+        expect(result.status).toBe('partial')
+
+        mockDownloadFile.mockClear()
+        mockDownloadFile.mockResolvedValue(makeRemoteEnvelope('2025-01-01T00:00:00.000Z'))
+        await pollOnce()
+        expect(mockDownloadFile).toHaveBeenCalledWith('f1')
+      })
+
+      it('flush records only the units it uploaded, so polling still picks up other files', async () => {
+        mockAutoSync = true
+        await mkdir(join(mockUserDataPath, 'sync', 'keyboards', '0x1234'), { recursive: true })
+        await setupLocalFavorite('2025-01-01T00:00:00.000Z', { name: 'data.json', content: '{"data":1}' })
+
+        mockListFiles.mockResolvedValue([
+          makeDriveFile('2025-01-01T00:00:00.000Z'),
+          makeSettingsDriveFile('0x1234', '2025-01-01T00:00:00.000Z'),
+          PASSWORD_CHECK_DRIVE_FILE,
+        ])
+        routeDownloads({
+          'file-1': () => makeRemoteEnvelope('2025-01-01T00:00:00.000Z'),
+          'settings-0x1234': () => makeSettingsEnvelope('0x1234', '2025-01-01T00:00:00.000Z'),
+        })
+
+        // The upload result is the revision the flush records for file-1.
+        mockUploadFile.mockResolvedValue({ id: 'file-1', modifiedTime: '2025-01-01T00:00:00.000Z' })
+
+        notifyChange('favorites/tapDance')
+        await vi.advanceTimersByTimeAsync(10_000)
+        await waitForSyncIdle()
+
+        mockDownloadFile.mockClear()
+        await pollOnce()
+        expect(mockDownloadFile).toHaveBeenCalledWith('settings-0x1234')
+        expect(mockDownloadFile).not.toHaveBeenCalledWith('file-1')
+      })
+
+      describe('revision recorded by an upload', () => {
+        const UPLOADED_AT = '2026-02-01T00:00:00.000Z'
+
+        // Only the listing taken before the upload shows the old revision;
+        // every listing after it (including any the upload pass itself might
+        // take) shows `revisionAfterUpload`.
+        async function uploadFavoriteOverOlderRemote(revisionAfterUpload: string): Promise<void> {
+          await setupLocalFavorite('2026-01-01T00:00:00.000Z', { name: 'new.json', content: '{"data":1}' })
+          mockListFiles
+            .mockResolvedValueOnce([makeDriveFile('2020-01-01T00:00:00.000Z'), PASSWORD_CHECK_DRIVE_FILE])
+            .mockResolvedValue([makeDriveFile(revisionAfterUpload), PASSWORD_CHECK_DRIVE_FILE])
+          routeDownloads({ 'file-1': () => makeRemoteEnvelope('2020-01-01T00:00:00.000Z') })
+          mockUploadFile.mockResolvedValueOnce({ id: 'file-1', modifiedTime: UPLOADED_AT })
+
+          await executeSync('upload')
+          expect(mockUploadFile).toHaveBeenCalled()
+          mockDownloadFile.mockClear()
+        }
+
+        it('an upload is not re-downloaded by the next poll', async () => {
+          await uploadFavoriteOverOlderRemote(UPLOADED_AT)
+
+          await pollOnce()
+          expect(mockDownloadFile).not.toHaveBeenCalledWith('file-1')
+        })
+
+        it('a revision newer than the upload result is downloaded by the next poll', async () => {
+          // Another machine wrote right after this upload, before any later
+          // listing: only the upload result's own revision may count as known.
+          await uploadFavoriteOverOlderRemote('2026-03-01T00:00:00.000Z')
+
+          await pollOnce()
+          expect(mockDownloadFile).toHaveBeenCalledWith('file-1')
+        })
+      })
+
+      it('a scoped executeSync waits for an in-flight poll instead of skipping as busy', async () => {
+        await mkdir(join(mockUserDataPath, 'sync', 'keyboards', '0x1234'), { recursive: true })
+
+        let releasePollListing: (files: DriveFile[]) => void = () => {}
+        const pollListing = new Promise<DriveFile[]>((resolve) => { releasePollListing = resolve })
+        const syncListing = [PASSWORD_CHECK_DRIVE_FILE, makeSettingsDriveFile('0x1234', '2025-01-01T00:00:00.000Z')]
+        mockListFiles.mockResolvedValue(syncListing)
+        mockListFiles.mockImplementationOnce(() => pollListing)
+        routeDownloads({ 'settings-0x1234': () => makeSettingsEnvelope('0x1234', '2025-01-01T00:00:00.000Z') })
+
+        startPolling()
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+        await flushUntil(() => mockListFiles.mock.calls.length === 1, 'the poll to list files')
+        expect(isSyncInProgress()).toBe(true)
+
+        const resultPromise = executeSync('download', { keyboard: '0x1234' })
+        // The poll's own listing has no keyboard unit, so only the waiting
+        // executeSync can download it.
+        releasePollListing([PASSWORD_CHECK_DRIVE_FILE])
+        const result = await resultPromise
+
+        expect(result).toEqual({ status: 'completed' })
+        expect(mockDownloadFile).toHaveBeenCalledWith('settings-0x1234')
 
         stopPolling()
       })
@@ -2235,6 +3588,51 @@ describe('sync-service', () => {
     const mockDecrypt = vi.mocked(mockDecryptFn)
     const mockEncrypt = vi.mocked(mockEncryptFn)
     const mockStorePassword = vi.mocked(mockStorePasswordFn)
+    const mockRetrievePasswordResult = vi.mocked(mockRetrievePasswordResultFn)
+
+    beforeEach(() => {
+      mockRetrievePasswordResult.mockResolvedValue({ ok: false, reason: 'noPasswordFile' })
+    })
+
+    afterEach(() => {
+      mockRetrievePasswordResult.mockResolvedValue({ ok: true, password: 'test-password' })
+    })
+
+    it('refuses when a readable password is already stored, before touching Drive', async () => {
+      const mockClearPassword = vi.mocked(mockClearPasswordFn)
+      mockRetrievePasswordResult.mockResolvedValue({ ok: true, password: 'saved-password' })
+
+      await expect(setPasswordAndValidate('my-password')).rejects.toThrow('sync.passwordAlreadySet')
+
+      expect(mockListFiles).not.toHaveBeenCalled()
+      expect(mockStorePassword).not.toHaveBeenCalled()
+      expect(mockClearPassword).not.toHaveBeenCalled()
+    })
+
+    it('refuses with keystoreUnavailable before touching Drive or the stored password', async () => {
+      const mockClearPassword = vi.mocked(mockClearPasswordFn)
+      mockRetrievePasswordResult.mockResolvedValue({ ok: false, reason: 'keystoreUnavailable' })
+
+      await expect(setPasswordAndValidate('my-password')).rejects.toMatchObject({
+        reason: 'keystoreUnavailable',
+        message: 'sync.changePasswordError.keystoreUnavailable',
+      })
+
+      expect(mockListFiles).not.toHaveBeenCalled()
+      expect(mockStorePassword).not.toHaveBeenCalled()
+      expect(mockClearPassword).not.toHaveBeenCalled()
+    })
+
+    it('overwrites a stored password file that cannot be decrypted', async () => {
+      mockRetrievePasswordResult.mockResolvedValue({ ok: false, reason: 'decryptFailed' })
+      mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
+      mockDownloadFile.mockResolvedValue(makePasswordCheckEnvelope())
+
+      await setPasswordAndValidate('my-password')
+
+      expect(mockStorePassword).toHaveBeenCalledWith('my-password')
+      expect(mockDownloadFile).toHaveBeenCalledWith('pc-1')
+    })
 
     it('stores password and validates against remote password-check', async () => {
       mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
@@ -2284,18 +3682,148 @@ describe('sync-service', () => {
     })
   })
 
-  describe('setupBeforeQuitHandler phased ordering', () => {
-    function captureBeforeQuitHandler(): (e: { preventDefault: () => void }) => void {
-      setupBeforeQuitHandler()
-      const mockOn = vi.mocked(app.on)
-      // `app.on` is overloaded per Electron event name, so TS narrows the mock's
-      // inferred call-tuple type to whichever overload it picked first. Cast to
-      // string for the comparison since at runtime this is always a plain event name.
-      const match = mockOn.mock.calls.find(([event]) => (event as string) === 'before-quit')
-      if (!match) throw new Error('before-quit handler not registered')
-      return match[1] as (e: { preventDefault: () => void }) => void
+  describe('replacePasswordAndValidate', () => {
+    const mockStorePassword = vi.mocked(mockStorePasswordFn)
+    const mockClearPassword = vi.mocked(mockClearPasswordFn)
+    const mockRetrievePasswordResult = vi.mocked(mockRetrievePasswordResultFn)
+
+    afterEach(() => {
+      mockRetrievePasswordResult.mockResolvedValue({ ok: true, password: 'test-password' })
+    })
+
+    it('refuses with keystoreUnavailable before touching Drive or the stored password', async () => {
+      mockRetrievePasswordResult.mockResolvedValue({ ok: false, reason: 'keystoreUnavailable' })
+
+      await expect(replacePasswordAndValidate('my-password')).rejects.toMatchObject({
+        reason: 'keystoreUnavailable',
+        message: 'sync.changePasswordError.keystoreUnavailable',
+      })
+
+      expect(mockListFiles).not.toHaveBeenCalled()
+      expect(mockStorePassword).not.toHaveBeenCalled()
+      expect(mockClearPassword).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('lock-free writer predicates', () => {
+    it('lockFreeWriterRunning matches the listed keyboards, any keyboard for all, none for null', () => {
+      expect(lockFreeWriterRunning('all')).toBe(false)
+      syncRuntime.analyticsSyncingUids.add('uid-a')
+      syncRuntime.remoteTypingDayFetches.set('uid-b', 1)
+
+      expect(lockFreeWriterRunning('all')).toBe(true)
+      expect(lockFreeWriterRunning(['uid-a'])).toBe(true)
+      expect(lockFreeWriterRunning(['uid-c', 'uid-b'])).toBe(true)
+      expect(lockFreeWriterRunning(['uid-c'])).toBe(false)
+      expect(lockFreeWriterRunning([])).toBe(false)
+      expect(lockFreeWriterRunning(null)).toBe(false)
+    })
+
+    it('resetHoldsKeyboard matches every keyboard or the listed ones', () => {
+      expect(resetHoldsKeyboard('uid-a')).toBe(false)
+      syncRuntime.resetKeyboards = new Set(['uid-a'])
+      expect(resetHoldsKeyboard('uid-a')).toBe(true)
+      expect(resetHoldsKeyboard('uid-b')).toBe(false)
+      syncRuntime.resetKeyboards = 'all'
+      expect(resetHoldsKeyboard('uid-b')).toBe(true)
+    })
+
+    it('lockFreeWriterBlocked is set by a password change, a reset of the keyboard or a token switch', () => {
+      expect(lockFreeWriterBlocked('uid-a')).toBe(false)
+
+      syncRuntime.passwordChangeRun = Promise.resolve()
+      expect(lockFreeWriterBlocked('uid-a')).toBe(true)
+      syncRuntime.passwordChangeRun = null
+
+      syncRuntime.resetKeyboards = new Set(['uid-b'])
+      expect(lockFreeWriterBlocked('uid-a')).toBe(false)
+      expect(lockFreeWriterBlocked('uid-b')).toBe(true)
+      syncRuntime.resetKeyboards = null
+
+      syncRuntime.accountSwitching = true
+      expect(lockFreeWriterBlocked('uid-a')).toBe(true)
+    })
+  })
+
+  describe('lock-free writers and a password change', () => {
+    const gateReleases: Array<() => void> = []
+
+    afterEach(() => {
+      for (const release of gateReleases.splice(0)) release()
+      mockListFiles.mockImplementation(async () => [])
+    })
+
+    /** Makes the next listing wait until the returned function settles it
+     *  with `settle`. */
+    function gateNextListing(): (settle: () => Promise<DriveFile[]>) => void {
+      let open!: (settle: () => Promise<DriveFile[]>) => void
+      const gate = new Promise<() => Promise<DriveFile[]>>((resolve) => {
+        open = resolve
+      })
+      gateReleases.push(() => open(async () => []))
+      mockListFiles.mockImplementationOnce(async () => (await gate)())
+      return open
     }
 
+    it('a remote day fetch does not start while a password change runs', async () => {
+      syncRuntime.passwordChangeRun = Promise.resolve()
+
+      expect(await fetchRemoteTypingDay('uid-a', 'remote-hash', '2026-04-18')).toBe(false)
+
+      expect(mockListFiles).not.toHaveBeenCalled()
+      expect(syncRuntime.remoteTypingDayFetches.size).toBe(0)
+    })
+
+    it('a password change is refused while a remote day fetch is waiting on Drive', async () => {
+      const open = gateNextListing()
+      const fetch = fetchRemoteTypingDay('uid-a', 'remote-hash', '2026-04-18')
+      await flushUntil(() => mockListFiles.mock.calls.length === 1, 'the fetch to list')
+
+      await expect(startPasswordChange('new-password')).rejects.toThrow('sync.changePasswordInProgress')
+      expect(isSyncInProgress()).toBe(false)
+      expect(syncRuntime.passwordChangeRun).toBeNull()
+
+      open(async () => [])
+      expect(await fetch).toBe(false)
+      expect(syncRuntime.remoteTypingDayFetches.size).toBe(0)
+      expect(mockListFiles).toHaveBeenCalledTimes(1)
+      expect(await readChangeState()).toEqual({ kind: 'none' })
+    })
+
+    it('a remote day fetch started while a password change is waiting on Drive does not start', async () => {
+      const open = gateNextListing()
+      const change = startPasswordChange('new-password')
+      const refused = expect(change).rejects.toThrow('network error')
+      await flushUntil(() => mockListFiles.mock.calls.length === 1, 'the password change to list')
+      expect(syncRuntime.passwordChangeRun).not.toBeNull()
+
+      expect(await fetchRemoteTypingDay('uid-a', 'remote-hash', '2026-04-18')).toBe(false)
+      expect(syncRuntime.remoteTypingDayFetches.size).toBe(0)
+      expect(mockListFiles).toHaveBeenCalledTimes(1)
+
+      open(async () => {
+        throw new Error('network error')
+      })
+      await refused
+      expect(syncRuntime.passwordChangeRun).toBeNull()
+      expect(isSyncInProgress()).toBe(false)
+      expect(await readChangeState()).toEqual({ kind: 'none' })
+    })
+  })
+
+  describe('while a sign-in or sign-out switches tokens', () => {
+    it('an analytics sync and a remote day fetch do not start', async () => {
+      syncRuntime.accountSwitching = true
+
+      expect(await executeAnalyticsSync('uid1')).toBe(false)
+      expect(await fetchRemoteTypingDay('uid1', 'hash1', '2026-10-01')).toBe(false)
+      expect(syncRuntime.analyticsSyncingUids.size).toBe(0)
+      expect(syncRuntime.remoteTypingDayFetches.size).toBe(0)
+      expect(mockListFiles).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('setupBeforeQuitHandler phased ordering', () => {
     it('runs pre-sync finalizers before the sync flush, then extra finalizers', async () => {
       const order: string[] = []
       const preSyncFinalizer = {
@@ -2412,6 +3940,25 @@ describe('sync-service', () => {
       } catch { return false }
     }
 
+    function seedOwnDayOnDrive(day: string, uploaded: string[] = [day]): void {
+      mockSyncState = {
+        _rev: 3,
+        my_device_id: OWN_HASH,
+        uploaded: { [pointerKey(OWN_HASH)]: uploaded },
+        reconciled_at: { [pointerKey(OWN_HASH)]: 5_000 },
+        last_synced_at: 5_000,
+      }
+      mockListFiles.mockResolvedValue([cloudDriveFile(OWN_HASH, day), PASSWORD_CHECK_DRIVE_FILE])
+    }
+
+    function expectOwnDayUploaded(day: string): void {
+      expect(mockUploadFile).toHaveBeenCalledWith(
+        cloudFileName(OWN_HASH, day),
+        expect.anything(),
+        `drive-${OWN_HASH}-${day}`,
+      )
+    }
+
     // --- Reconcile rule 2: uploaded has, local missing → cloud delete ---
     it('reconcile rule 2: drops cloud file when uploaded lists a day but local file is gone', async () => {
       mockSyncState = {
@@ -2435,8 +3982,8 @@ describe('sync-service', () => {
       expect(mockSyncState?.uploaded[pointerKey(OWN_HASH)]).toEqual(['2026-04-18'])
     })
 
-    // --- Reconcile rule 3: uploaded has, cloud missing → local unlink ---
-    it('reconcile rule 3: unlinks local file when uploaded has the day but cloud does not', async () => {
+    // --- Reconcile rule 3: uploaded has, cloud missing → upload again ---
+    it('reconcile rule 3: keeps the local file and uploads it again when uploaded has the day but cloud does not', async () => {
       mockSyncState = {
         _rev: 3,
         my_device_id: OWN_HASH,
@@ -2446,7 +3993,8 @@ describe('sync-service', () => {
       }
       await writeDayFile('2026-04-17')
       await writeDayFile('2026-04-18')
-      // Cloud lost day 17 (Sync-deleted from another device).
+      mockListLocalKeyboardUids.mockReturnValue([UID])
+      // Cloud lost day 17 (removed by something other than this device).
       mockListFiles.mockResolvedValue([
         cloudDriveFile(OWN_HASH, '2026-04-18'),
         PASSWORD_CHECK_DRIVE_FILE,
@@ -2454,9 +4002,10 @@ describe('sync-service', () => {
 
       await executeSync('upload')
 
-      expect(await fileExists(ownDayPath('2026-04-17'))).toBe(false)
+      expect(await fileExists(ownDayPath('2026-04-17'))).toBe(true)
       expect(await fileExists(ownDayPath('2026-04-18'))).toBe(true)
-      expect(mockSyncState?.uploaded[pointerKey(OWN_HASH)]).toEqual(['2026-04-18'])
+      expect(mockUploadFile).toHaveBeenCalledWith(cloudFileName(OWN_HASH, '2026-04-17'), expect.anything(), undefined)
+      expect(mockSyncState?.uploaded[pointerKey(OWN_HASH)]).toEqual(['2026-04-17', '2026-04-18'])
     })
 
     // --- Reconcile orphan cleanup: first run ---
@@ -2479,6 +4028,76 @@ describe('sync-service', () => {
 
       expect(mockDeleteFile).toHaveBeenCalledWith('drive-test-machine-hash-2026-04-16')
       expect(typeof mockSyncState?.reconciled_at[pointerKey(OWN_HASH)]).toBe('number')
+    })
+
+    // --- Reconcile and trash files of a day ---
+    function trashDriveFile(hash: string, day: string, id = `trash-${hash}-${day}`): { id: string; name: string; modifiedTime: string } {
+      return { id, name: `${cloudFileName(hash, day)}.trash.1000.2000.${id}`, modifiedTime: '2026-04-19T00:00:00.000Z' }
+    }
+
+    it('reconcile rule 2 deletes the trash files of a day removed locally, also when no live copy is left', async () => {
+      mockSyncState = {
+        _rev: 3,
+        my_device_id: OWN_HASH,
+        uploaded: { [pointerKey(OWN_HASH)]: ['2026-04-17', '2026-04-18'] },
+        reconciled_at: { [pointerKey(OWN_HASH)]: 1_000 },
+        last_synced_at: 1_000,
+      }
+      mockListFiles.mockResolvedValue([
+        cloudDriveFile(OWN_HASH, '2026-04-17'),
+        trashDriveFile(OWN_HASH, '2026-04-17'),
+        trashDriveFile(OWN_HASH, '2026-04-18'),
+        PASSWORD_CHECK_DRIVE_FILE,
+      ])
+
+      await executeSync('upload')
+
+      expect(mockDeleteFile.mock.calls.map((call) => call[0]).sort()).toEqual([
+        `drive-${OWN_HASH}-2026-04-17`,
+        `trash-${OWN_HASH}-2026-04-17`,
+        `trash-${OWN_HASH}-2026-04-18`,
+      ])
+      expect(mockSyncState?.uploaded[pointerKey(OWN_HASH)]).toEqual([])
+    })
+
+    it('reconcile rule 3 uploads a day again when only trash files of it are left', async () => {
+      mockSyncState = {
+        _rev: 3,
+        my_device_id: OWN_HASH,
+        uploaded: { [pointerKey(OWN_HASH)]: ['2026-04-17'] },
+        reconciled_at: { [pointerKey(OWN_HASH)]: 1_000 },
+        last_synced_at: 1_000,
+      }
+      await writeDayFile('2026-04-17')
+      mockListLocalKeyboardUids.mockReturnValue([UID])
+      mockListFiles.mockResolvedValue([trashDriveFile(OWN_HASH, '2026-04-17'), PASSWORD_CHECK_DRIVE_FILE])
+
+      await executeSync('upload')
+
+      expect(mockDeleteFile).not.toHaveBeenCalled()
+      expect(mockUploadFile).toHaveBeenCalledWith(cloudFileName(OWN_HASH, '2026-04-17'), expect.anything(), undefined)
+    })
+
+    it('reconcile orphan finds a keyboard and day that only have trash files, and deletes them', async () => {
+      const OTHER_UID = '0xBEEF'
+      mockSyncState = {
+        _rev: 3,
+        my_device_id: OWN_HASH,
+        uploaded: {},
+        reconciled_at: {},
+        last_synced_at: 0,
+      }
+      const trash = {
+        id: 'trash-beef',
+        name: `keyboards_${OTHER_UID}_devices_${OWN_HASH}_days_2026-04-16.enc.trash.1000.2000.trash-beef`,
+        modifiedTime: '2026-04-19T00:00:00.000Z',
+      }
+      mockListFiles.mockResolvedValue([trash, PASSWORD_CHECK_DRIVE_FILE])
+
+      await executeSync('upload')
+
+      expect(mockDeleteFile).toHaveBeenCalledWith('trash-beef')
+      expect(typeof mockSyncState?.reconciled_at[`${OTHER_UID}|${OWN_HASH}`]).toBe('number')
     })
 
     // --- Reconcile skip: reconciled_at set ---
@@ -2521,37 +4140,6 @@ describe('sync-service', () => {
         undefined,
       )
       expect(mockSyncState?.uploaded[pointerKey(OWN_HASH)]).toEqual(['2026-04-18'])
-    })
-
-    // --- deleteRemoteTypingDay E2E ---
-    it('deleteRemoteTypingDay: removes cloud + local + cache tombstone in one call', async () => {
-      const day = '2026-04-18'
-      const localPath = ownDayPath(day, REMOTE_HASH)
-      await writeDayFile(day, REMOTE_HASH, '{"id":"remote"}\n')
-      mockListFiles.mockResolvedValue([
-        cloudDriveFile(REMOTE_HASH, day),
-        PASSWORD_CHECK_DRIVE_FILE,
-      ])
-
-      const ok = await deleteRemoteTypingDay(UID, REMOTE_HASH, day)
-
-      expect(ok).toBe(true)
-      expect(mockDeleteFile).toHaveBeenCalledWith(`drive-${REMOTE_HASH}-${day}`)
-      expect(await fileExists(localPath)).toBe(false)
-      const tombstoneCall = mockTombstoneRowsForUidHashInRange.mock.calls.at(-1)
-      expect(tombstoneCall?.[0]).toBe(UID)
-      expect(tombstoneCall?.[1]).toBe(REMOTE_HASH)
-    })
-
-    it('deleteRemoteTypingDay: tombstones cache even when the cloud file is already gone', async () => {
-      const day = '2026-04-18'
-      mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
-
-      const ok = await deleteRemoteTypingDay(UID, REMOTE_HASH, day)
-
-      expect(ok).toBe(false)
-      expect(mockDeleteFile).not.toHaveBeenCalled()
-      expect(mockTombstoneRowsForUidHashInRange).toHaveBeenCalled()
     })
 
     // --- mergeDeviceDayBundle full replay idempotency (via download flow) ---
@@ -2630,14 +4218,450 @@ describe('sync-service', () => {
         cloudDriveFile(OWN_HASH, '2026-04-18'),
         PASSWORD_CHECK_DRIVE_FILE,
       ])
+      mockUploadFile.mockClear()
       await executeSync('upload')
+      expect(mockUploadFile).toHaveBeenCalledTimes(1)
+      expectOwnDayUploaded('2026-04-18')
+      expect(mockDownloadFile).not.toHaveBeenCalledWith(`drive-${OWN_HASH}-2026-04-18`)
       expect(mockSyncState?.uploaded[pointerKey(OWN_HASH)]).toEqual(['2026-04-18'])
+    })
+
+    it('own day on Drive: a debounced flush re-uploads it in place', async () => {
+      const day = '2026-04-18'
+      const unit = `keyboards/${UID}/devices/${OWN_HASH}/days/${day}`
+      mockAutoSync = true
+      seedOwnDayOnDrive(day)
+      await writeDayFile(day)
+      mockListLocalKeyboardUids.mockReturnValue([UID])
+
+      notifyChange(unit)
+      await vi.advanceTimersByTimeAsync(10_000)
+      await waitForSyncIdle()
+
+      expectOwnDayUploaded(day)
+    })
+
+    it('own day on Drive: executeAnalyticsSync uploads it exactly once', async () => {
+      const day = '2026-04-18'
+      seedOwnDayOnDrive(day)
+      await writeDayFile(day)
+      mockDownloadFile.mockResolvedValue(makePasswordCheckEnvelope())
+
+      expect(await executeAnalyticsSync(UID)).toBe(true)
+
+      const calls = mockUploadFile.mock.calls.filter((c) => c[0] === cloudFileName(OWN_HASH, day))
+      expect(calls).toHaveLength(1)
+      expect(calls[0][2]).toBe(`drive-${OWN_HASH}-${day}`)
+      expect(mockDownloadFile).not.toHaveBeenCalledWith(`drive-${OWN_HASH}-${day}`)
+    })
+
+    it('executeAnalyticsSync merges another device\'s deleted ranges and uploads a local ranges file', async () => {
+      const rangesName = `keyboards_${UID}_devices_${REMOTE_HASH}_deleted-ranges.enc`
+      const entry = { id: 'r1', startMs: 0, endMs: 60_000, cutoffMs: 60_000 }
+      const bundle = {
+        type: 'typing-deleted-ranges',
+        key: `${UID}|${REMOTE_HASH}`,
+        index: { uid: UID, entries: [] },
+        files: { 'deleted-ranges.json': JSON.stringify({ version: 1, entries: [entry] }) },
+      }
+      mockListFiles.mockResolvedValue([
+        { id: 'drive-ranges', name: rangesName, modifiedTime: '2026-04-19T00:00:00.000Z' },
+        PASSWORD_CHECK_DRIVE_FILE,
+      ])
+      mockDownloadFile.mockImplementation(async (id: string) => id === 'drive-ranges'
+        ? { version: 1, syncUnit: 'x', updatedAt: '', salt: 's', iv: 'i', ciphertext: JSON.stringify(bundle) }
+        : makePasswordCheckEnvelope())
+      const ownRangesPath = join(mockUserDataPath, 'sync', 'keyboards', UID, 'devices', 'third-hash', 'deleted-ranges.json')
+      await mkdir(join(ownRangesPath, '..'), { recursive: true })
+      await writeFile(ownRangesPath, JSON.stringify({ version: 1, entries: [{ ...entry, id: 'r2' }] }), 'utf-8')
+
+      expect(await executeAnalyticsSync(UID)).toBe(true)
+
+      const merged = JSON.parse(await readFile(
+        join(mockUserDataPath, 'sync', 'keyboards', UID, 'devices', REMOTE_HASH, 'deleted-ranges.json'), 'utf-8',
+      )) as { entries: Array<{ id: string }> }
+      expect(merged.entries.map((e) => e.id)).toEqual(['r1'])
+      expect(mockTombstoneRowsForUidHashInRanges).toHaveBeenCalledWith(UID, REMOTE_HASH, [entry], expect.any(Number))
+      expect(mockUploadFile.mock.calls.map((c) => c[0])).toEqual([`keyboards_${UID}_devices_third-hash_deleted-ranges.enc`])
+    })
+
+    it('every sync pass retries this device\'s own deleted ranges from the local files', async () => {
+      mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
+      mockDownloadFile.mockResolvedValue(makePasswordCheckEnvelope())
+      const calls = async (): Promise<number> => {
+        await vi.advanceTimersByTimeAsync(0)
+        return mockApplyOwnDeletedRangesForAllKeyboards.mock.calls.length
+      }
+
+      await executeSync('download', { favorites: true, keyboard: UID })
+      expect(await calls()).toBe(1)
+      await executeSync('upload')
+      expect(await calls()).toBe(2)
+      expect(await executeAnalyticsSync(UID)).toBe(true)
+      expect(await calls()).toBe(3)
+      startPolling()
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+      await waitForPollPassForTests()
+      stopPolling()
+      expect(await calls()).toBeGreaterThanOrEqual(4)
+      expect(mockApplyOwnDeletedRangesForAllKeyboards.mock.calls[0].slice(0, 2)).toEqual([mockUserDataPath, OWN_HASH])
+    })
+
+    it('fetchRemoteTypingDay merges the device\'s deleted ranges before its day', async () => {
+      const day = '2026-04-18'
+      const rangesName = `keyboards_${UID}_devices_${REMOTE_HASH}_deleted-ranges.enc`
+      const entry = { id: 'r1', startMs: 0, endMs: 60_000, cutoffMs: 60_000 }
+      const rangesBundle = {
+        type: 'typing-deleted-ranges', key: `${UID}|${REMOTE_HASH}`, index: { uid: UID, entries: [] },
+        files: { 'deleted-ranges.json': JSON.stringify({ version: 1, entries: [entry] }) },
+      }
+      const dayBundle = {
+        type: 'typing-analytics-device', key: `${UID}|${REMOTE_HASH}|${day}`, index: { uid: UID, entries: [] },
+        files: { 'data.jsonl': '{"id":"x"}\n' },
+      }
+      const envelope = (bundle: unknown): Record<string, unknown> =>
+        ({ version: 1, syncUnit: 'x', updatedAt: '', salt: 's', iv: 'i', ciphertext: JSON.stringify(bundle) })
+      mockListFiles.mockResolvedValue([
+        cloudDriveFile(REMOTE_HASH, day),
+        { id: 'drive-ranges', name: rangesName, modifiedTime: '2026-04-19T00:00:00.000Z' },
+        PASSWORD_CHECK_DRIVE_FILE,
+      ])
+      mockDownloadFile.mockImplementation(async (id: string) => {
+        if (id === 'drive-ranges') return envelope(rangesBundle)
+        if (id === `drive-${REMOTE_HASH}-${day}`) return envelope(dayBundle)
+        return makePasswordCheckEnvelope()
+      })
+
+      expect(await fetchRemoteTypingDay(UID, REMOTE_HASH, day)).toBe(true)
+
+      const order = mockDownloadFile.mock.calls.map((c) => c[0]).filter((id) => id !== 'pc-1')
+      expect(order).toEqual(['drive-ranges', `drive-${REMOTE_HASH}-${day}`])
+      const local = JSON.parse(await readFile(
+        join(mockUserDataPath, 'sync', 'keyboards', UID, 'devices', REMOTE_HASH, 'deleted-ranges.json'), 'utf-8',
+      )) as { entries: Array<{ id: string }> }
+      expect(local.entries.map((e) => e.id)).toEqual(['r1'])
+
+      // A second day of the same device does not download the ranges again.
+      mockDownloadFile.mockClear()
+      expect(await fetchRemoteTypingDay(UID, REMOTE_HASH, day)).toBe(true)
+      expect(mockDownloadFile.mock.calls.map((c) => c[0])).not.toContain('drive-ranges')
+    })
+
+    it('fetchRemoteTypingDay merges the ranges even when their revision is known but no local file exists', async () => {
+      const day = '2026-04-18'
+      const rangesName = `keyboards_${UID}_devices_${REMOTE_HASH}_deleted-ranges.enc`
+      const rangesFile = { id: 'drive-ranges', name: rangesName, modifiedTime: '2026-04-19T00:00:00.000Z' }
+      const envelope = (bundle: unknown): Record<string, unknown> =>
+        ({ version: 1, syncUnit: 'x', updatedAt: '', salt: 's', iv: 'i', ciphertext: JSON.stringify(bundle) })
+      mockListFiles.mockResolvedValue([cloudDriveFile(REMOTE_HASH, day), rangesFile, PASSWORD_CHECK_DRIVE_FILE])
+      mockDownloadFile.mockImplementation(async (id: string) => {
+        if (id === 'drive-ranges') {
+          return envelope({
+            type: 'typing-deleted-ranges', key: `${UID}|${REMOTE_HASH}`, index: { uid: UID, entries: [] },
+            files: { 'deleted-ranges.json': JSON.stringify({ version: 1, entries: [{ id: 'r1', startMs: 0, endMs: 60_000, cutoffMs: 60_000 }] }) },
+          })
+        }
+        if (id === `drive-${REMOTE_HASH}-${day}`) {
+          return envelope({
+            type: 'typing-analytics-device', key: `${UID}|${REMOTE_HASH}|${day}`, index: { uid: UID, entries: [] },
+            files: { 'data.jsonl': '{"id":"x"}\n' },
+          })
+        }
+        return makePasswordCheckEnvelope()
+      })
+      // A poll records the revision of a keyboard that is not local without merging it.
+      syncRuntime.lastKnownRemoteState.set(rangesName, { id: rangesFile.id, modifiedTime: rangesFile.modifiedTime })
+
+      expect(await fetchRemoteTypingDay(UID, REMOTE_HASH, day)).toBe(true)
+
+      expect(mockDownloadFile.mock.calls.map((c) => c[0])).toContain('drive-ranges')
+      expect(await fileExists(join(mockUserDataPath, 'sync', 'keyboards', UID, 'devices', REMOTE_HASH, 'deleted-ranges.json'))).toBe(true)
+    })
+
+    it('fetchRemoteTypingDay does not fetch the day when the ranges merge fails', async () => {
+      const day = '2026-04-18'
+      const rangesName = `keyboards_${UID}_devices_${REMOTE_HASH}_deleted-ranges.enc`
+      mockListFiles.mockResolvedValue([
+        cloudDriveFile(REMOTE_HASH, day),
+        { id: 'drive-ranges', name: rangesName, modifiedTime: '2026-04-19T00:00:00.000Z' },
+        PASSWORD_CHECK_DRIVE_FILE,
+      ])
+      mockDownloadFile.mockImplementation(async (id: string) => {
+        if (id === 'drive-ranges') throw new Error('network')
+        return makePasswordCheckEnvelope()
+      })
+
+      await expect(fetchRemoteTypingDay(UID, REMOTE_HASH, day)).rejects.toThrow('network')
+      expect(mockDownloadFile.mock.calls.map((c) => c[0])).not.toContain(`drive-${REMOTE_HASH}-${day}`)
+    })
+
+    it('own day on Drive with no local file: download sync neither uploads nor downloads it', async () => {
+      const day = '2026-04-18'
+      seedOwnDayOnDrive(day, [])
+      await mkdir(join(mockUserDataPath, 'sync', 'keyboards', UID), { recursive: true })
+
+      const result = await executeSync('download', { keyboard: UID })
+
+      expect(result.status).toBe('completed')
+      expect(mockUploadFile).not.toHaveBeenCalled()
+      expect(mockDownloadFile).not.toHaveBeenCalledWith(`drive-${OWN_HASH}-${day}`)
+    })
+
+    it('own day with a hostile uid segment is rejected before any path is joined', async () => {
+      const day = '2026-04-18'
+      // `..` is a single segment, so the day-unit parser accepts it as a uid.
+      const unit = `keyboards/../devices/${OWN_HASH}/days/${day}`
+      const remoteFiles = [{ id: 'hostile', name: `keyboards_.._devices_${OWN_HASH}_days_${day}.enc`, modifiedTime: '2026-01-01T00:00:00.000Z' }]
+
+      await expect(syncOrUpload(unit, 'test-password', remoteFiles)).rejects.toThrow('malformed sync bundle index')
+      expect(mockUploadFile).not.toHaveBeenCalled()
+      expect(mockDownloadFile).not.toHaveBeenCalled()
+    })
+
+    it('concurrent uploads of the same unit run one after the other', async () => {
+      const day = '2026-04-18'
+      const unit = `keyboards/${UID}/devices/${OWN_HASH}/days/${day}`
+      const lineA = '{"id":"line-a"}\n'
+      const lineB = '{"id":"line-b"}\n'
+      await writeDayFile(day, OWN_HASH, lineA)
+      const remoteFiles = [cloudDriveFile(OWN_HASH, day)]
+      const mockEncrypt = vi.mocked(mockEncryptFn)
+      mockEncrypt.mockClear()
+      let release: () => void = () => {}
+      const gate = new Promise<void>((resolve) => { release = resolve })
+      mockUploadFile.mockImplementationOnce(async () => {
+        await gate
+        return { id: 'file-id', modifiedTime: '2026-01-01T00:00:00.000Z' }
+      })
+
+      const first = syncOrUpload(unit, 'test-password', remoteFiles)
+      await flushUntil(() => mockUploadFile.mock.calls.length === 1, 'the first upload to start')
+      const second = syncOrUpload(unit, 'test-password', remoteFiles)
+      // Without serialization the second upload would bundle during these ticks, before line B exists.
+      for (let i = 0; i < 50; i++) await new Promise<void>((resolve) => realSetImmediate(resolve))
+      await appendFile(ownDayPath(day), lineB, 'utf-8')
+      release()
+      await Promise.all([first, second])
+
+      expect(mockUploadFile).toHaveBeenCalledTimes(2)
+      expect(mockEncrypt).toHaveBeenCalledTimes(2)
+      const dayContent = (call: number): string =>
+        (JSON.parse(mockEncrypt.mock.calls[call][0] as string) as { files: Record<string, string> }).files['data.jsonl']
+      expect(dayContent(0)).not.toContain('line-b')
+      expect(dayContent(1)).toContain('line-b')
+    })
+
+    // Drive does not keep names unique, so a unit can have several files.
+    describe('duplicate files with one name', () => {
+      const DAY = '2026-04-18'
+      const ownUnit = `keyboards/${UID}/devices/${OWN_HASH}/days/${DAY}`
+      const OLD_TIME = '2026-04-18T00:00:00.000Z'
+      const NEW_TIME = '2026-04-19T00:00:00.000Z'
+      // Listed oldest first, so taking the first match would pick the stale copy.
+      const favCopies = (): DriveFile[] => [
+        { id: 'fav-old', name: 'favorites_tapDance.enc', modifiedTime: OLD_TIME },
+        { id: 'fav-new', name: 'favorites_tapDance.enc', modifiedTime: NEW_TIME },
+      ]
+      const dayCopies = (hash: string): DriveFile[] => [
+        { id: `day-old-${hash}`, name: cloudFileName(hash, DAY), modifiedTime: OLD_TIME },
+        { id: `day-new-${hash}`, name: cloudFileName(hash, DAY), modifiedTime: NEW_TIME },
+      ]
+      const downloadedIds = (prefix: string): string[] =>
+        mockDownloadFile.mock.calls.map((call) => call[0]).filter((id) => id.startsWith(prefix))
+      const uploadsOf = (name: string): unknown[][] =>
+        mockUploadFile.mock.calls.filter((call) => call[0] === name)
+
+      function remoteDayEnvelope(hash: string): Record<string, unknown> {
+        return {
+          version: 1,
+          syncUnit: `keyboards/${UID}/devices/${hash}/days/${DAY}`,
+          updatedAt: NEW_TIME,
+          salt: 's',
+          iv: 'i',
+          ciphertext: JSON.stringify({
+            type: 'typing-analytics-device',
+            key: `${UID}|${hash}|${DAY}`,
+            index: { uid: UID, entries: [] },
+            files: { 'data.jsonl': '{"id":"r"}\n' },
+          }),
+        }
+      }
+
+      it('an Analyze sync and a flush that both list no file for today create it once', async () => {
+        mockAutoSync = true
+        mockSyncState = {
+          _rev: 3,
+          my_device_id: OWN_HASH,
+          uploaded: {},
+          reconciled_at: { [pointerKey(OWN_HASH)]: 5_000 },
+          last_synced_at: 5_000,
+        }
+        await writeDayFile(DAY)
+        mockListFiles.mockResolvedValue([PASSWORD_CHECK_DRIVE_FILE])
+        mockDownloadFile.mockResolvedValue(makePasswordCheckEnvelope())
+        let release: () => void = () => {}
+        const gate = new Promise<void>((resolve) => { release = resolve })
+        mockUploadFile.mockImplementation(async (name: string, _envelope?: unknown, existingFileId?: string) => {
+          if (name === cloudFileName(OWN_HASH, DAY) && !existingFileId) {
+            await gate
+            return { id: 'created-day', modifiedTime: OLD_TIME }
+          }
+          return { id: existingFileId ?? 'file-id', modifiedTime: NEW_TIME }
+        })
+
+        const analytics = executeAnalyticsSync(UID)
+        await flushUntil(() => uploadsOf(cloudFileName(OWN_HASH, DAY)).length === 1, 'the analytics create to start')
+        notifyChange(ownUnit)
+        const flush = flushPendingChanges()
+        // The flush waits on the unit's upload lock while the create is held.
+        for (let i = 0; i < 50; i++) await new Promise<void>((resolve) => realSetImmediate(resolve))
+        release()
+        expect(await analytics).toBe(true)
+        await flush
+
+        const uploads = uploadsOf(cloudFileName(OWN_HASH, DAY))
+        expect(uploads).toHaveLength(2)
+        expect(uploads[0][2]).toBeUndefined()
+        expect(uploads[1].slice(2)).toEqual(['created-day', { createIfMissing: true }])
+        expect(hasPendingChanges()).toBe(false)
+      })
+
+      it('creates the file again when a remembered id is gone and remembers the new id', async () => {
+        await writeDayFile(DAY)
+        const name = cloudFileName(OWN_HASH, DAY)
+        syncRuntime.createdFileIds.set(name, 'stale-id')
+        mockUploadFile.mockResolvedValueOnce({ id: 'recreated-id', modifiedTime: NEW_TIME })
+
+        await syncOrUpload(ownUnit, 'test-password', [PASSWORD_CHECK_DRIVE_FILE])
+
+        expect(mockUploadFile).toHaveBeenCalledWith(name, expect.anything(), 'stale-id', { createIfMissing: true })
+        expect(syncRuntime.createdFileIds.get(name)).toBe('recreated-id')
+      })
+
+      it('creates a new file instead of writing to a remembered id another machine renamed to trash', async () => {
+        await writeDayFile(DAY)
+        const name = cloudFileName(OWN_HASH, DAY)
+        syncRuntime.createdFileIds.set(name, 'trashed-id')
+        const trashed = { id: 'trashed-id', name: `${name}.trash.1.2.trashed-id`, modifiedTime: OLD_TIME }
+        mockUploadFile.mockResolvedValueOnce({ id: 'new-id', modifiedTime: NEW_TIME })
+
+        await syncOrUpload(ownUnit, 'test-password', [PASSWORD_CHECK_DRIVE_FILE, trashed])
+
+        expect(mockUploadFile.mock.calls[0].slice(2)).toEqual([undefined])
+        expect(syncRuntime.createdFileIds.get(name)).toBe('new-id')
+      })
+
+      it('a listed copy is updated in place without the create fallback', async () => {
+        await writeDayFile(DAY)
+        const name = cloudFileName(OWN_HASH, DAY)
+        syncRuntime.createdFileIds.set(name, 'remembered-id')
+
+        await syncOrUpload(ownUnit, 'test-password', dayCopies(OWN_HASH))
+
+        expect(mockUploadFile).toHaveBeenCalledTimes(1)
+        expect(mockUploadFile.mock.calls[0].slice(2)).toEqual([`day-new-${OWN_HASH}`])
+      })
+
+      it('forgets the created files on sign-out and when another account signs in', async () => {
+        syncRuntime.createdFileIds.set('a.enc', 'id-a')
+        await signOutKeepingPendingLocked()
+        expect(syncRuntime.createdFileIds.size).toBe(0)
+
+        syncRuntime.createdFileIds.set('b.enc', 'id-b')
+        await expect(switchAccountKeepingPending(async () => { throw new Error('store failed') }, 'account-b'))
+          .rejects.toThrow('store failed')
+        // The old account's tokens stay, so its files are still its own.
+        expect(syncRuntime.createdFileIds.get('b.enc')).toBe('id-b')
+
+        await switchAccountKeepingPending(async () => {}, 'account-b')
+        expect(syncRuntime.createdFileIds.size).toBe(0)
+      })
+
+      it('download sync merges a duplicated unit once, from the newest copy', async () => {
+        mockListFiles.mockResolvedValue([...favCopies(), PASSWORD_CHECK_DRIVE_FILE])
+        routeDownloads({ 'fav-new': () => makeRemoteEnvelope(NEW_TIME) })
+
+        const result = await executeSync('download', 'all')
+
+        expect(result.status).toBe('completed')
+        expect(downloadedIds('fav-')).toEqual(['fav-new'])
+        for (const call of mockUploadFile.mock.calls) expect(call[2]).not.toBe('fav-old')
+      })
+
+      it('Analyze sync merges a duplicated remote day once, from the newest copy', async () => {
+        mockListFiles.mockResolvedValue([...dayCopies(REMOTE_HASH), PASSWORD_CHECK_DRIVE_FILE])
+        routeDownloads({ [`day-new-${REMOTE_HASH}`]: () => remoteDayEnvelope(REMOTE_HASH) })
+
+        expect(await executeAnalyticsSync(UID)).toBe(true)
+
+        expect(downloadedIds('day-')).toEqual([`day-new-${REMOTE_HASH}`])
+      })
+
+      it('polling merges a duplicated unit once and does not see it as changed on the next pass', async () => {
+        mockListFiles.mockResolvedValue([...favCopies(), PASSWORD_CHECK_DRIVE_FILE])
+        routeDownloads({ 'fav-new': () => makeRemoteEnvelope(NEW_TIME) })
+
+        startPolling()
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+        await waitForPollPassForTests()
+        expect(downloadedIds('fav-')).toEqual(['fav-new'])
+        expect(syncRuntime.lastKnownRemoteState.get('favorites_tapDance.enc')).toEqual({ id: 'fav-new', modifiedTime: NEW_TIME })
+
+        mockDownloadFile.mockClear()
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+        await waitForPollPassForTests()
+        expect(mockListFiles).toHaveBeenCalledTimes(2)
+        expect(downloadedIds('fav-')).toEqual([])
+
+        stopPolling()
+      })
+
+      it('polling merges again when a different copy becomes the chosen one with the same modifiedTime', async () => {
+        const later: DriveFile = { id: 'fav-b', name: 'favorites_tapDance.enc', modifiedTime: NEW_TIME }
+        // Same time, smaller id: chosen once it is listed.
+        const earlier: DriveFile = { id: 'fav-a', name: 'favorites_tapDance.enc', modifiedTime: NEW_TIME }
+        mockListFiles
+          .mockResolvedValueOnce([later, PASSWORD_CHECK_DRIVE_FILE])
+          .mockResolvedValue([later, earlier, PASSWORD_CHECK_DRIVE_FILE])
+        mockDownloadFile.mockImplementation(async (id: string) =>
+          id.startsWith('fav-') ? makeRemoteEnvelope(NEW_TIME) : makePasswordCheckEnvelope())
+
+        startPolling()
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+        await waitForPollPassForTests()
+        expect(downloadedIds('fav-')).toEqual(['fav-b'])
+
+        mockDownloadFile.mockClear()
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+        await waitForPollPassForTests()
+        expect(downloadedIds('fav-')).toEqual(['fav-a'])
+        expect(syncRuntime.lastKnownRemoteState.get('favorites_tapDance.enc')).toEqual({ id: 'fav-a', modifiedTime: NEW_TIME })
+
+        stopPolling()
+      })
+
+      it('reconcile deletes every copy of a day removed locally', async () => {
+        mockSyncState = {
+          _rev: 3,
+          my_device_id: OWN_HASH,
+          uploaded: { [pointerKey(OWN_HASH)]: [DAY] },
+          reconciled_at: { [pointerKey(OWN_HASH)]: 1_000 },
+          last_synced_at: 1_000,
+        }
+        mockListFiles.mockResolvedValue([...dayCopies(OWN_HASH), PASSWORD_CHECK_DRIVE_FILE])
+
+        await executeSync('upload')
+
+        expect(mockDeleteFile.mock.calls.map((call) => call[0]).sort())
+          .toEqual([`day-new-${OWN_HASH}`, `day-old-${OWN_HASH}`])
+        expect(mockSyncState?.uploaded[pointerKey(OWN_HASH)]).toEqual([])
+      })
     })
 
     // --- fetchRemoteTypingDay branches ---
     describe('fetchRemoteTypingDay branches', () => {
       it('returns false when the user is not authenticated', async () => {
-        vi.mocked(mockRetrievePasswordResultFn).mockResolvedValueOnce({ ok: false, reason: 'unauthenticated' })
+        mockGetAuthStatus.mockResolvedValueOnce({ authenticated: false })
         const ok = await fetchRemoteTypingDay(UID, REMOTE_HASH, '2026-04-18')
         expect(ok).toBe(false)
         expect(mockListFiles).not.toHaveBeenCalled()
@@ -2802,6 +4826,16 @@ describe('sync-service', () => {
           files: bundle.files ?? {},
         }),
       }
+    }
+
+    /** Writes a local roster holding a live meta for `id` (body clock 0
+     *  unless given), so a body unit has a meta to apply to. */
+    async function seedPackMeta(dir: string, id: string, bodyClock = '1970-01-01T00:00:00.000Z'): Promise<void> {
+      const T = '2026-01-01T00:00:00.000Z'
+      await mkdir(join(mockUserDataPath, 'sync', dir), { recursive: true })
+      await writeFile(join(mockUserDataPath, 'sync', dir, 'index.json'), JSON.stringify({
+        metas: [{ id, filename: `packs/${id}.json`, name: id, version: '1.0.0', enabled: true, savedAt: T, updatedAt: T, clocks: { created: T, body: bodyClock, name: T, hub: T, enabled: T } }],
+      }), 'utf-8')
     }
 
     it('regression baseline: merging a remote i18n-index bundle no longer crashes the sync unit', async () => {
@@ -2981,7 +5015,8 @@ describe('sync-service', () => {
         packId: 'theme-a',
         body: { name: 'Theme A', version: '2.0.0', colorScheme: 'dark', colors: {} },
       },
-    ])('$label-pack: remote newer than local mtime writes the pack body locally', async ({ syncUnit, fileName, fileId, bundleType, dir, packId, body }) => {
+    ])('$label-pack: a remote body (v1 bundle, Drive modifiedTime as its clock) newer than the local one is written locally', async ({ syncUnit, fileName, fileId, bundleType, dir, packId, body }) => {
+      await seedPackMeta(dir, packId)
       mockListFiles.mockResolvedValue([
         { id: fileId, name: fileName, modifiedTime: '2026-06-01T00:00:00.000Z' },
         PASSWORD_CHECK_DRIVE_FILE,
@@ -3006,29 +5041,26 @@ describe('sync-service', () => {
       expect(packFiles.filter((f) => f.endsWith('.tmp'))).toEqual([])
     })
 
-    it('local i18n-pack file newer than remote drive modifiedTime: local kept, remote re-uploaded', async () => {
+    it('a local i18n-pack body with a newer body clock than the remote one is kept and re-uploaded', async () => {
+      await seedPackMeta('i18n', 'pack-a', '2026-06-01T00:00:00.000Z')
       await mkdir(join(mockUserDataPath, 'sync', 'i18n', 'packs'), { recursive: true })
       await writeFile(
         join(mockUserDataPath, 'sync', 'i18n', 'packs', 'pack-a.json'),
         JSON.stringify({ name: 'Pack A', version: '3.0.0' }),
         'utf-8',
       )
-      // Local file mtime is "now" (just written) — the remote drive
-      // file's modifiedTime is set far in the past, so local must win.
-      // No mockDownloadFile queued for this pack: packBodyLocalWins
-      // short-circuits mergeWithRemote BEFORE downloadFile is ever
-      // called — if the production code regressed and called it
-      // anyway, the mock would throw/return undefined and this test
-      // would fail loudly instead of silently leaking a queued
-      // implementation into the next test.
       mockListFiles.mockResolvedValue([
         { id: 'pack1', name: 'i18n_packs_pack-a.enc', modifiedTime: '2000-01-01T00:00:00.000Z' },
       ])
+      mockDownloadFile.mockResolvedValueOnce(makeBundleEnvelope('i18n/packs/pack-a', '2000-01-01T00:00:00.000Z', {
+        type: 'i18n-pack',
+        key: 'pack-a',
+        files: { 'pack-a.json': JSON.stringify({ name: 'Pack A', version: '1.0.0' }) },
+      }))
       mockUploadFile.mockResolvedValue({ id: 'pack-file-id', modifiedTime: '2026-01-01T00:00:00.000Z' })
 
       await executeSync('download')
 
-      expect(mockDownloadFile.mock.calls.some((c) => c[0] === 'pack1')).toBe(false)
       expect(mockUploadFile.mock.calls.some((c) => c[0] === 'i18n_packs_pack-a.enc')).toBe(true)
       const written = JSON.parse(
         await readFile(join(mockUserDataPath, 'sync', 'i18n', 'packs', 'pack-a.json'), 'utf-8'),
@@ -3036,71 +5068,8 @@ describe('sync-service', () => {
       expect(written.version).toBe('3.0.0')
     })
 
-    it('S3: a local-wins pack-body upload pins local mtime to the Drive response modifiedTime (closes a clock-skew re-upload loop)', async () => {
-      // Without this pin, the local pack file keeps its own wall-clock
-      // write time. If the local clock runs ahead of Drive's own clock
-      // (or the two just don't line up exactly), that time permanently
-      // looks "newer than the remote copy" — every subsequent sync pass
-      // would re-upload this unchanged body, and every peer would
-      // re-download it, forever. Pinning to the upload response's own
-      // modifiedTime closes that gap the same way a remote-win already
-      // does for the download direction (see the idempotence test
-      // below).
-      await mkdir(join(mockUserDataPath, 'sync', 'i18n', 'packs'), { recursive: true })
-      const packPath = join(mockUserDataPath, 'sync', 'i18n', 'packs', 'pack-a.json')
-      await writeFile(packPath, JSON.stringify({ name: 'Pack A', version: '3.0.0' }), 'utf-8')
-
-      mockListFiles.mockResolvedValue([
-        { id: 'pack1', name: 'i18n_packs_pack-a.enc', modifiedTime: '2000-01-01T00:00:00.000Z' },
-      ])
-      const driveAssignedModifiedTime = '2026-07-15T12:00:00.000Z'
-      mockUploadFile.mockResolvedValue({ id: 'pack-file-id', modifiedTime: driveAssignedModifiedTime })
-
-      await executeSync('download')
-
-      expect(mockUploadFile.mock.calls.some((c) => c[0] === 'i18n_packs_pack-a.enc')).toBe(true)
-      const statAfterUpload = await stat(packPath)
-      expect(statAfterUpload.mtime.toISOString()).toBe(driveAssignedModifiedTime)
-    })
-
-    it('S3-race: a concurrent local save landing between the upload snapshot and the post-upload pin is not clobbered (CAS-guarded)', async () => {
-      // uploadSyncUnit snapshots the local body's mtime BEFORE bundling —
-      // bundling/encrypting/uploading all happen without holding the
-      // store's write lock, so a fresh local save can land in that
-      // window. A blind pin would stamp the NEW content with the OLD
-      // upload's stale Drive time, making the next LWW comparison see a
-      // tie and the new edit never get uploaded. Simulate that race
-      // inside the uploadFile mock itself: by the time it "returns" from
-      // Drive, a concurrent save has already landed locally.
-      await mkdir(join(mockUserDataPath, 'sync', 'i18n', 'packs'), { recursive: true })
-      const packPath = join(mockUserDataPath, 'sync', 'i18n', 'packs', 'pack-a.json')
-      await writeFile(packPath, JSON.stringify({ name: 'Pack A', version: '3.0.0' }), 'utf-8')
-
-      mockListFiles.mockResolvedValue([
-        { id: 'pack1', name: 'i18n_packs_pack-a.enc', modifiedTime: '2000-01-01T00:00:00.000Z' },
-      ])
-      const staleDriveModifiedTime = '2026-07-15T12:00:00.000Z'
-      const raceMtime = new Date('2030-01-01T00:00:00.000Z')
-      mockUploadFile.mockImplementation(async (name: string) => {
-        if (name === 'i18n_packs_pack-a.enc') {
-          await writeFile(packPath, JSON.stringify({ name: 'Pack A', version: '4.0.0' }), 'utf-8')
-          await utimes(packPath, raceMtime, raceMtime)
-        }
-        return { id: 'pack-file-id', modifiedTime: staleDriveModifiedTime }
-      })
-
-      await executeSync('download')
-
-      // The raced edit's content and mtime must both survive untouched —
-      // the pin must have been skipped rather than overwriting either.
-      const written = JSON.parse(await readFile(packPath, 'utf-8')) as { version: string }
-      expect(written.version).toBe('4.0.0')
-      const finalStat = await stat(packPath)
-      expect(finalStat.mtime.getTime()).toBe(raceMtime.getTime())
-      expect(finalStat.mtime.toISOString()).not.toBe(staleDriveModifiedTime)
-    })
-
-    it('idempotence: a remote-won pack body is not re-uploaded on the very next sync (mtime pinned to remote modifiedTime)', async () => {
+    it('idempotence: a remote-won pack body is not re-uploaded on the very next sync (its clock is stored on the meta)', async () => {
+      await seedPackMeta('i18n', 'pack-a')
       const remoteModifiedTime = '2026-06-01T00:00:00.000Z'
       const remoteFile = { id: 'pack1', name: 'i18n_packs_pack-a.enc', modifiedTime: remoteModifiedTime }
       const packEnvelope = makeBundleEnvelope('i18n/packs/pack-a', remoteModifiedTime, {
@@ -3120,12 +5089,8 @@ describe('sync-service', () => {
       expect(mockUploadFile.mock.calls.some((c) => c[0] === 'i18n_packs_pack-a.enc')).toBe(false)
 
       // Second, independent sync pass against the exact same unchanged
-      // remote revision. Without the mtime pin in applySyncedPackBody,
-      // the file just written would carry a local mtime of "now" (>
-      // remoteModifiedTime), so this recompute would see "local newer"
-      // and immediately re-upload the identical content it just
-      // downloaded — an endless full-body ping-pong between any two
-      // devices that both hold this pack.
+      // remote revision: the meta now holds the remote body clock and
+      // fields, so the bodies compare equal.
       await executeSync('download')
       expect(mockUploadFile.mock.calls.some((c) => c[0] === 'i18n_packs_pack-a.enc')).toBe(false)
     })
@@ -3387,6 +5352,243 @@ describe('sync-service', () => {
 
       await expect(access(join(mockUserDataPath, 'sync', 'evil.json'))).rejects.toThrow()
       await expect(access(join(mockUserDataPath, 'evil.json'))).rejects.toThrow()
+    })
+  })
+  describe('merge under the stores\' write lock', () => {
+    const UID = '0x1234'
+    const PW = 'test-password'
+
+    interface TestEntry { id: string; label: string; name: string; filename: string; savedAt: string; updatedAt?: string }
+
+    function entry(id: string, savedAt = '2026-01-01T00:00:00.000Z'): TestEntry {
+      return { id, label: id, name: id, filename: `${id}.json`, savedAt, updatedAt: savedAt }
+    }
+
+    function indexEnvelope(syncUnit: string, entries: TestEntry[], extra: Record<string, unknown> = {}): Record<string, unknown> {
+      const files: Record<string, string> = {}
+      for (const e of entries) files[e.filename] = `{"data":"${e.id}"}`
+      const index = { ...extra, entries }
+      files['index.json'] = JSON.stringify(index)
+      return {
+        version: 1,
+        syncUnit,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        salt: 's',
+        iv: 'i',
+        ciphertext: JSON.stringify({ type: 'index', key: syncUnit, index, files }),
+      }
+    }
+
+    async function seedIndex(dir: string, entries: TestEntry[], extra: Record<string, unknown> = {}): Promise<void> {
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, 'index.json'), JSON.stringify({ ...extra, entries }), 'utf-8')
+      for (const e of entries) await writeFile(join(dir, e.filename), `{"data":"${e.id}"}`, 'utf-8')
+    }
+
+    async function readIndex(dir: string): Promise<{ entries: TestEntry[] }> {
+      return JSON.parse(await readFile(join(dir, 'index.json'), 'utf-8')) as { entries: TestEntry[] }
+    }
+
+    async function readIds(dir: string): Promise<string[]> {
+      return (await readIndex(dir)).entries.map((e) => e.id)
+    }
+
+    // Stalls the next call of `fn` right after the real read, until released.
+    function stallAfterRead<A extends unknown[], R>(
+      mocked: (...args: A) => Promise<R>,
+      real: (...args: A) => Promise<R>,
+    ): { reached: () => boolean; release: () => void } {
+      let reached = false
+      let release!: () => void
+      const gate = new Promise<void>((resolve) => { release = resolve })
+      vi.mocked(mocked).mockImplementation(async (...args: A) => {
+        const result = await real(...args)
+        reached = true
+        await gate
+        return result
+      })
+      return { reached: () => reached, release }
+    }
+
+    let realReadIndexFile: typeof readIndexDirMigrated
+    let realReadSettingsFile: typeof readSettingsFile
+
+    beforeEach(async () => {
+      const actual = await vi.importActual<typeof import('../sync/sync-bundle')>('../sync/sync-bundle')
+      realReadIndexFile = (await vi.importActual<typeof import('../sync/body-filename-migration')>('../sync/body-filename-migration')).readIndexDirMigrated
+      realReadSettingsFile = actual.readSettingsFile
+      vi.mocked(readIndexDirMigrated).mockImplementation(realReadIndexFile)
+      vi.mocked(readSettingsFile).mockImplementation(realReadSettingsFile)
+    })
+
+    afterEach(() => {
+      vi.mocked(readIndexDirMigrated).mockImplementation(realReadIndexFile)
+      vi.mocked(readSettingsFile).mockImplementation(realReadSettingsFile)
+    })
+
+    // Issues a concurrent writer while the merge is stalled holding its lock,
+    // then gives the writer a bounded real-time window to enter its locked
+    // section. With the lock it stays queued (enteredEarly === false). Without
+    // it, the writer is awaited to completion before the gate opens, so the
+    // merge's stale write provably lands last and the assertions fail.
+    async function raceWriterAgainstStalledMerge(
+      stall: { release: () => void },
+      merge: Promise<unknown>,
+      startWriter: (markEntered: () => void) => Promise<unknown>,
+    ): Promise<boolean> {
+      let markEntered!: () => void
+      const entered = new Promise<void>((resolve) => { markEntered = resolve })
+      const writer = startWriter(markEntered)
+      const enteredEarly = await Promise.race([
+        entered.then(() => true),
+        new Promise<boolean>((resolve) => { realSetTimeout(resolve, 100, false) }),
+      ])
+      if (enteredEarly) await writer
+      stall.release()
+      await Promise.all([merge, writer])
+      return enteredEarly
+    }
+
+    async function runIndexRace(opts: {
+      syncUnit: string
+      driveFile: DriveFile
+      remote: TestEntry[]
+      extra?: Record<string, unknown>
+      writer: (markEntered: () => void) => Promise<unknown>
+    }): Promise<boolean> {
+      mockDownloadFile.mockImplementation(async () =>
+        indexEnvelope(opts.syncUnit, opts.remote, opts.extra))
+      const stall = stallAfterRead(readIndexDirMigrated, realReadIndexFile)
+      const merge = mergeWithRemote(opts.driveFile, opts.syncUnit, PW, [opts.driveFile])
+      await flushUntil(stall.reached, 'the merge to read the local index')
+      return raceWriterAgainstStalledMerge(stall, merge, opts.writer)
+    }
+
+    it('snapshots: a store save during a merge is not overwritten', async () => {
+      const dir = join(mockUserDataPath, 'sync', 'keyboards', UID, 'snapshots')
+      await seedIndex(dir, [entry('local-1')], { uid: UID })
+      const driveFile = { id: 'snap-1', name: driveFileName(`keyboards/${UID}/snapshots`), modifiedTime: '2026-02-01T00:00:00.000Z' }
+
+      const enteredEarly = await runIndexRace({
+        syncUnit: `keyboards/${UID}/snapshots`,
+        driveFile,
+        remote: [entry('remote-1')],
+        extra: { uid: UID },
+        writer: (markEntered) => withWriteLock(UID, async () => {
+          markEntered()
+          const raw = await readIndex(dir)
+          raw.entries.push(entry('local-new'))
+          await writeFile(join(dir, 'index.json'), JSON.stringify(raw), 'utf-8')
+        }),
+      })
+
+      expect(enteredEarly).toBe(false)
+      const ids = await readIds(dir)
+      expect(ids).toContain('remote-1')
+      expect(ids).toContain('local-1')
+      expect(ids).toContain('local-new')
+    })
+
+    it('favorites: a store save during a merge is not overwritten', async () => {
+      const dir = join(mockUserDataPath, 'sync', 'favorites', 'tapDance')
+      await seedIndex(dir, [entry('local-1')], { type: 'tapDance' })
+      const driveFile = makeDriveFile('2026-02-01T00:00:00.000Z')
+
+      const enteredEarly = await runIndexRace({
+        syncUnit: 'favorites/tapDance',
+        driveFile,
+        remote: [entry('remote-1')],
+        extra: { type: 'tapDance' },
+        writer: (markEntered) => withWriteLock('favorites/tapDance', async () => {
+          markEntered()
+          const raw = await readIndex(dir)
+          raw.entries.push(entry('local-new'))
+          await writeFile(join(dir, 'index.json'), JSON.stringify(raw), 'utf-8')
+        }),
+      })
+
+      expect(enteredEarly).toBe(false)
+      const ids = await readIds(dir)
+      expect(ids).toEqual(expect.arrayContaining(['remote-1', 'local-1', 'local-new']))
+    })
+
+    it('key-labels: the store\'s own save serializes with a merge', async () => {
+      const dir = join(mockUserDataPath, 'sync', 'key-labels')
+      await seedIndex(dir, [entry('local-1')])
+      const driveFile = { id: 'kl-1', name: driveFileName('key-labels'), modifiedTime: '2026-02-01T00:00:00.000Z' }
+
+      const enteredEarly = await runIndexRace({
+        syncUnit: 'key-labels',
+        driveFile,
+        remote: [entry('remote-1')],
+        writer: (markEntered) => saveKeyLabel({ name: 'LocalNew', map: {} }).finally(markEntered),
+      })
+
+      expect(enteredEarly).toBe(false)
+      const index = await readIndex(dir)
+      const names = index.entries.map((e) => e.name)
+      expect(names).toEqual(expect.arrayContaining(['remote-1', 'local-1', 'LocalNew']))
+    })
+
+    it('settings: a store write during a merge is not overwritten', async () => {
+      const dir = join(mockUserDataPath, 'sync', 'keyboards', UID)
+      await mkdir(dir, { recursive: true })
+      const filePath = join(dir, 'pipette_settings.json')
+      await writeFile(filePath, JSON.stringify({ theme: 'light', _updatedAt: '2025-01-01T00:00:00.000Z' }), 'utf-8')
+      mockDownloadFile.mockImplementation(async () => makeSettingsEnvelope(UID, '2026-01-01T00:00:00.000Z'))
+      const driveFile = makeSettingsDriveFile(UID, '2026-02-01T00:00:00.000Z')
+
+      const stall = stallAfterRead(readSettingsFile, realReadSettingsFile)
+      const merge = mergeWithRemote(driveFile, `keyboards/${UID}/settings`, PW, [driveFile])
+      await flushUntil(stall.reached, 'the merge to read the local settings')
+      const enteredEarly = await raceWriterAgainstStalledMerge(stall, merge, (markEntered) =>
+        withWriteLock(UID, async () => {
+          markEntered()
+          await writeFile(filePath, JSON.stringify({ theme: 'light', marker: true, _updatedAt: '2026-06-01T00:00:00.000Z' }), 'utf-8')
+        }))
+
+      expect(enteredEarly).toBe(false)
+      const final = JSON.parse(await readFile(filePath, 'utf-8')) as { marker?: boolean }
+      expect(final.marker).toBe(true)
+    })
+
+    it('does not deadlock when the unit lock is held externally', async () => {
+      const dir = join(mockUserDataPath, 'sync', 'keyboards', UID, 'snapshots')
+      await seedIndex(dir, [entry('local-1')], { uid: UID })
+      mockDownloadFile.mockImplementation(async () =>
+        indexEnvelope(`keyboards/${UID}/snapshots`, [entry('remote-1')], { uid: UID }))
+      const driveFile = { id: 'snap-1', name: driveFileName(`keyboards/${UID}/snapshots`), modifiedTime: '2026-02-01T00:00:00.000Z' }
+
+      let release!: () => void
+      const hold = withWriteLock(UID, () => new Promise<void>((resolve) => { release = resolve }))
+      const merge = mergeWithRemote(driveFile, `keyboards/${UID}/snapshots`, PW, [driveFile])
+      await flushUntil(() => true)
+      release()
+      await Promise.all([hold, merge])
+
+      // local-only entry => merge asked for an upload, which ran after the lock was released
+      expect(mockUploadFile).toHaveBeenCalled()
+      expect(await readIds(dir)).toEqual(expect.arrayContaining(['remote-1', 'local-1']))
+    })
+
+    it('writes the settings file and the merged index atomically', async () => {
+      const dir = join(mockUserDataPath, 'sync', 'keyboards', UID)
+      await mkdir(dir, { recursive: true })
+      mockDownloadFile.mockImplementation(async () => makeSettingsEnvelope(UID, '2026-01-01T00:00:00.000Z'))
+      const settingsFile = makeSettingsDriveFile(UID, '2026-02-01T00:00:00.000Z')
+      await mergeWithRemote(settingsFile, `keyboards/${UID}/settings`, PW, [settingsFile])
+
+      const snapDir = join(dir, 'snapshots')
+      mockDownloadFile.mockImplementation(async () =>
+        indexEnvelope(`keyboards/${UID}/snapshots`, [entry('remote-1')], { uid: UID }))
+      const snapFile = { id: 'snap-1', name: driveFileName(`keyboards/${UID}/snapshots`), modifiedTime: '2026-02-01T00:00:00.000Z' }
+      await mergeWithRemote(snapFile, `keyboards/${UID}/snapshots`, PW, [snapFile])
+
+      const written = vi.mocked(writeFileAtomic).mock.calls.map((c) => String(c[0]))
+      expect(written).toContain(join(dir, 'pipette_settings.json'))
+      expect(written).toContain(join(snapDir, 'index.json'))
+      // Saved under the id-carrying name (`idBodyFilename`).
+      expect(written).toContain(join(snapDir, 'remote-1_remote-1.json'))
     })
   })
 })

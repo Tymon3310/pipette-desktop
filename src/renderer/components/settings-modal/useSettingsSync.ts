@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { UseSyncReturn } from '../../hooks/useSync'
+import { SyncAuthStartError, type UseSyncReturn } from '../../hooks/useSync'
 import type { AppNotification } from '../../../shared/types/notification'
 import type { ModalTabId } from '../editors/modal-tabs'
 import type { PasswordMode } from './settings-modal-shared'
@@ -45,6 +45,7 @@ export function useSettingsSync({
   const [busy, setBusy] = useState(false)
   const [authenticating, setAuthenticating] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
+  const [signOutError, setSignOutError] = useState<string | null>(null)
   const [confirmingGoogleDisconnect, setConfirmingGoogleDisconnect] = useState(false)
   const [confirmingHubDisconnect, setConfirmingHubDisconnect] = useState(false)
   const [recentNotifications, setRecentNotifications] = useState<AppNotification[]>([])
@@ -82,7 +83,10 @@ export function useSettingsSync({
     return () => { cancelled = true }
   }, [activeTab])
 
-  useEffect(() => { setConfirmingGoogleDisconnect(false) }, [sync.authStatus.authenticated])
+  useEffect(() => {
+    setConfirmingGoogleDisconnect(false)
+    setSignOutError(null)
+  }, [sync.authStatus.authenticated])
   useEffect(() => { setConfirmingHubDisconnect(false) }, [hubEnabled])
 
   const handleSignIn = useCallback(async () => {
@@ -93,19 +97,35 @@ export function useSettingsSync({
     try {
       await sync.startAuth()
     } catch (err) {
-      const detail = err instanceof Error ? err.message : ''
-      setAuthError(detail || t('sync.authFailed'))
+      if (err instanceof SyncAuthStartError && err.reason === 'syncBusy') {
+        setAuthError(t('sync.signInBusy'))
+      } else {
+        const detail = err instanceof Error ? err.message : ''
+        setAuthError(detail || t('sync.authFailed'))
+      }
     } finally {
       authInFlight.current = false
       setAuthenticating(false)
     }
   }, [sync, t])
 
-  const handleGoogleDisconnect = useCallback(() => {
-    void sync.signOut()
-    onHubEnabledChange(false)
+  // Hub stays connected when the sign-out is refused (e.g. during a
+  // password change): the account is still signed in.
+  const handleGoogleDisconnect = useCallback(async () => {
     setConfirmingGoogleDisconnect(false)
-  }, [sync, onHubEnabledChange])
+    setSignOutError(null)
+    const result = await sync.signOut()
+    if (result.success) {
+      onHubEnabledChange(false)
+    } else if (result.reason === 'syncBusy') {
+      // Another sign-in or sign-out is switching tokens; the main process
+      // message for it is not an i18n key.
+      setSignOutError(t('sync.signOutBusy'))
+    } else {
+      const error = result.error ?? 'sync.authFailed'
+      setSignOutError(t(error, error))
+    }
+  }, [sync, onHubEnabledChange, t])
 
   const handleHubDisconnect = useCallback(() => {
     onHubEnabledChange(false)
@@ -183,7 +203,8 @@ export function useSettingsSync({
         resync = passwordMode === 'reenter'
       } else {
         if (passwordMode === 'change' && result.error === PASSWORD_MISMATCH_KEY) setChangeMismatch(true)
-        const errorKey = result.reason
+        // 'syncBusy' only comes from a sign-in or sign-out.
+        const errorKey = result.reason && result.reason !== 'syncBusy'
           ? syncCredentialI18nKey('changePasswordError', result.reason)
           : (result.error ?? 'sync.passwordSetFailed')
         setPasswordError(t(errorKey, errorKey))
@@ -223,6 +244,7 @@ export function useSettingsSync({
     busy,
     authenticating,
     authError,
+    signOutError,
     confirmingGoogleDisconnect,
     setConfirmingGoogleDisconnect,
     confirmingHubDisconnect,

@@ -178,11 +178,13 @@ The left sidebar provides a **tree navigation** with the following structure:
 
 - **Local**
   - **Keyboards**: Browse saved keyboard snapshots. Click a keyboard to view, load, export, or delete entries
-  - **Typing**: Recorded typing-analytics data per keyboard — a per-day list (date, keystrokes, active time) with day selection for deleting, plus export / import of the recorded days
+  - **Typing**: Recorded typing-analytics data per keyboard — a per-day list (date, keystrokes, active time) with day selection for deleting, plus export / import of the recorded days. The days are this PC's local calendar days, and the Date column header names the time zone they follow (for example `Asia/Tokyo GMT+9`, or `UTC`). Deleting a day removes only what this device recorded on that local day; other devices' records of the same day stay. **Delete all for this keyboard** removes everything this device recorded for the keyboard, on this PC and on Google Drive, and the other PCs drop it the next time they sync. In rare cases, typing done right after the delete within the same minute does not show on the other PCs. Deleted data stays deleted even if an earlier export of that day is imported again. Caution: if the system clock is set back and Pipette is restarted, typing done after the restart in a time range that was already deleted can be removed as well
   - **Favorites**: Tap Dance, Macro, Combo, Key Override, Alt Repeat Key — each type shows its saved entries with rename, delete, export, and Hub actions
   - **Application**: Import/export local data, or reset application settings. Cancelling the Import file picker changes nothing — local data is untouched and whatever result was already shown stays displayed. A failed import rolls back everything it already wrote, leaving local data unchanged, and shows the underlying error text under **Import failed** (if the rollback itself also fails, that failure is folded into the same message)
 - **Sync** (when Cloud Sync is configured): Lists keyboards that exist only in Google Drive (not yet downloaded on this device). Each entry is labeled with the keyboard's real name, resolved from the synced name index rather than from the raw UID. Click a remote-only keyboard to download it on demand — a spinner is shown while fetching, and a failure message appears inline if the download cannot complete. Once downloaded, the keyboard moves into the **Local › Keyboards** branch
+  - **Typing**: Other devices' typing-analytics data, per keyboard and then per device, in the same per-day list as **Local › Typing** (this PC's local calendar days). Deleting days, or **Delete all for this keyboard**, works on the selected device's data and does not need Google Drive at the moment you delete: the data is hidden on this PC right away, and it is removed on the PC that recorded it the next time that PC syncs. What that PC types after the moment you delete stays. Caution: the delete compares times recorded by both PCs, so if the two PCs' clocks differ, typing close to the moment of the delete can be kept or removed against what you expect
   - **Cloud Data**: Reset targets that aren't tied to one keyboard — Favorites, Language Packs, Theme Packs, Key Labels, and imported Typing Test Texts. Only the targets actually present on Google Drive are listed. Each row has its own **Reset** button with a two-step confirmation (click Reset, then confirm or cancel); resetting removes that target's data from Google Drive only — local copies on this device are untouched, and a local copy that still exists re-uploads on the next sync (the same behavior Favorites already has). This is also where **Undecryptable Files** are listed and cleaned up: files that cannot be decrypted with the current password (e.g. encrypted with a forgotten previous password) appear as their own rows with a filename and a **Delete** button (two-step confirmation, one file at a time). Scanning, resetting and deleting here are refused while this PC has an unfinished sync password change, while a password-change lock is on Google Drive, or while Google Drive needs a newer Pipette (§6.1)
+  - **Trash**: The last entry under **Sync**. Google Drive can end up with two copies of the same synced file (for example when two PCs create it at the same moment). Sync always uses the newest copy, and moves the other copies here automatically during background sync. Nothing is merged: the newest copy's contents win, and data that only an older copy had comes back when a PC that still has it locally syncs again. Each row shows what the copy holds, when it was last updated, and the date after which it is deleted. A copy in Trash is deleted automatically 30 days after it was moved, as long as a current copy of the same data exists; if no current copy is left, the newest copy in Trash is put back automatically. **Restore** (one click) swaps the selected copy back in: the current copy moves to Trash in its place. If the swap cannot finish, Pipette puts the current copy back. Restore is not offered for this PC's own typing data: this PC uploads its own days again from its local data, and a day deleted on this PC stays deleted, so those rows only have **Delete**. **Delete** (two-step confirmation) removes the copy from Google Drive right away. The list is read from Google Drive only when you open Trash and again after each action. Restore and Delete act only on files that are still in Trash when you click — a copy that was put back automatically in the meantime is left alone and the row reports **"This file is no longer in Trash"**. Restore and Delete are refused while a sync is running on this PC (**"Cannot change Trash while sync is in progress. Try again in a moment."**). Restore and Delete are also refused while the keyboard the copy belongs to has its typing data syncing for the Analyze view, or a day of it loading in **Sync › Typing**. Opening Trash, Restore and Delete need Google sign-in and a sync password (otherwise the sign-in or password message is shown), and are all refused while this PC has an unfinished sync password change, while a password-change lock is on Google Drive, or while Google Drive needs a newer Pipette (§6.1)
 
 ![Data — Sync](screenshots/data-sidebar-sync.png)
 
@@ -1051,6 +1053,8 @@ Opening a macro action brings up the Macro Modal with two display modes that sha
 
 Empty keycode actions are tolerated while editing; they are normalized out silently when the macro is saved or exported to a favorite.
 
+When the macro contains a **Text** action, a note below the header reads: "Text is typed with the firmware's keyboard layout (usually US). If your OS layout differs, some characters may come out different." It stays visible while a row is being edited.
+
 #### Recording Lock
 
 While the built-in recorder is capturing keystrokes, the Macro Modal enters a strict disabled state to prevent accidental edits:
@@ -1492,13 +1496,13 @@ Personal bests, History, and the Accuracy Trend group Tatoeba runs by language +
 
 ![Typing Test — Data Source Modal (Aozora Bunko)](screenshots/typing-test-mode-aozora.png)
 
-Browse and import public-domain Japanese literary works from the [Aozora Bunko](https://www.aozora.gr.jp/) catalog (roughly 10,500 works, sourced via the aozorabunko GitHub mirror).
+Browse and import public-domain Japanese literary works from the [Aozora Bunko](https://www.aozora.gr.jp/) catalog (roughly 10,500 works; the catalog is derived from Aozora Bunko's official index and provided via Pipette Hub, and work texts are downloaded directly from Aozora Bunko).
 
 - The search box filters by title or author
 - Below it, a two-tier gojūon (five-vowel kana) row filter narrows results by the first kana of the author's reading (ア / カ / サ / …); click a row to also reveal its column kana for a finer filter (e.g. the カ row → キ column). Click an active button again to clear it
 - Results are split into **Downloaded** and **Available** sections; the **Available** section renders 50 works at a time, revealing the next 50 automatically as you scroll (the catalog list is loaded once when the tab opens — scrolling does not hit the network)
 - Each row shows the title, author, and an estimated character count (`~N chars` — an estimate, not an exact figure)
-- Clicking the download icon on an Available row downloads the work's archive from the GitHub mirror, decodes it, and automatically strips Aozora-specific markup (ruby annotations, editorial notes, header/footer boilerplate) before saving it as a typing text — no manual cleanup needed. The newly imported work is selected immediately. A failed import shows an inline error under that row
+- Clicking the download icon on an Available row downloads the work's archive directly from Aozora Bunko, decodes it, and automatically strips Aozora-specific markup (ruby annotations, editorial notes, header/footer boilerplate) before saving it as a typing text — no manual cleanup needed. The newly imported work is selected immediately. A failed import shows an inline error under that row
 - A downloaded work is stored through the same normalization and 5,000-word cap as File Import texts (see below). Words are counted by whitespace, so in Japanese prose — which contains no spaces — each paragraph counts as one word, and the cap effectively allows around 5,000 paragraphs
 - A downloaded work plays back exactly like an imported File Import text, including the per-line Enter-to-advance behavior, but it is only listed and deleted from this **Aozora Bunko** tab — it does not appear in the **File Import** tab
 - Click the trash icon on a Downloaded row to remove it; it returns to Available and can be re-imported later
@@ -1797,18 +1801,20 @@ The Data tab contains the following sections: Google Account, Data Sync, and Pip
 #### Google Account
 
 - Click **Connect** to sign in with your Google account
-- Click **Disconnect** to sign out. If Pipette Hub is also connected, a warning confirms that Hub will be disconnected as well
+- Click **Disconnect** to sign out. If Pipette Hub is also connected, a warning confirms that Hub will be disconnected as well. While the sync password is being changed, Disconnect is refused and a message below it asks you to try again after the change finishes (Hub stays connected)
 
 #### Sync Encryption Password
 
 - Set a password to encrypt all synced data (required). A strength indicator helps you choose a strong password
 - If a password already exists on the server (set from another device), a hint is shown asking you to enter the same password
+- **Saved password can't be read**: when this PC has a saved password that the OS keychain refuses to decrypt (the keychain is locked, access was denied, or the keychain was reset), the section shows **"This PC's saved sync password can't be read (the OS keychain refused it). If the keychain is locked or access was denied, unlock or allow it and press Retry. Otherwise, set the sync password again below."** above the password form, with a **Retry** button. **Retry** checks the saved password again — use it after unlocking or allowing the keychain. If it still can't be read, enter the password your other PCs use (or a new one on the first PC) and click **Set Password**. Until then, automatic sync, **Sync**, and the Data panel's automatic loading and scanning stay off, and **Sync Status** shows **"Couldn't read the saved sync password"**
+- **OS keychain not available**: when this PC has no usable OS keychain, the password form and the **Change Password** and **Re-enter Password** buttons are hidden. The section shows **"If the OS keychain couldn't be opened, unlock or set it up (a keyring on Linux) and restart Pipette."**, and **Sync Status** shows **"OS keychain is not available; sync is disabled here"**. A keychain that couldn't be opened stays unavailable until Pipette restarts (on Linux, the keyring is checked when Pipette starts), so there is no **Retry** here: restart Pipette after unlocking or setting it up
 - **Change Password**: Click **Change Password** to re-encrypt every synced file on Google Drive with a new password. No data is deleted — each existing file is decrypted and re-encrypted in place. The form shows **"Close Pipette on your other PCs until the password change finishes."** — keep Pipette closed on your other PCs until the change is done. Google Drive requests are retried automatically when Drive reports a rate limit, and most requests are also retried after a server or network error. Creating a new file on Google Drive (such as the lock) is retried only on rate limits, so a server or network error at that point stops the change. If that happens while taking the lock, the change does not start: Pipette undoes the lock attempt, and you run **Change Password** again. If undoing it also fails (for example while still offline), the change stays at the **Preparing** step and the panel below shows it. **Continue** and the next start clear it once the lock can be removed (otherwise it stays for the next attempt); **Abandon** clears it even when the lock can't be removed (a lock left behind then shows in the lock banner described below). Later in the change, continue it as described below
 
 **How a password change runs**
 
 1. Pipette saves the progress of the change (a plain file without secrets) and both passwords (encrypted with the OS keychain) on this PC, then puts a password-change lock file on Google Drive. While the lock exists, sync pauses on every PC (see **While a password change is in progress** below)
-2. Every synced file is re-encrypted with the new password. Files are checked again in up to three passes, so a file another PC wrote back with the old password during the change is picked up
+2. Every synced file is re-encrypted with the new password. When Google Drive has two copies of the same file, the copies that sync does not use are moved to **Trash** (Data › Sync › Trash, §1.3) first; files in Trash are re-encrypted too, so they can still be restored after the change. Files are checked again in up to three passes, so a file another PC wrote back with the old password during the change is picked up
 3. The password check on Google Drive and the password saved on this PC are switched to the new password, the lock is removed, and the saved progress and passwords are deleted
 
 **If a password change is interrupted**
@@ -1909,7 +1915,10 @@ flowchart LR
   what -->|"A sync password change on this PC hasn't finished…"| panel["Use the panel: see the next chart"]
   what -->|"Cannot change password while sync is in progress."| waitsync["Wait for the sync to finish, then try again"]
   what -->|"Sync data on this Google Drive was made by a newer version…"| update["Update Pipette"]
-  what -->|"A message about the OS keychain or the saved sync password"| keychain["Unlock the OS keychain, then try again"]
+  what -->|"This PC's saved sync password can't be read…"| unreadable{"Does Retry work after unlocking or allowing the OS keychain?"}
+  unreadable -->|Yes| unlocked["Done: the password is read again"]
+  unreadable -->|No| setagain["Enter the password your other PCs use, then Set Password"]
+  what -->|"If the OS keychain couldn't be opened…"| keychain["Unlock or set up the OS keychain, then restart Pipette"]
 ```
 
 - **Release Lock** shows the warning **"Make sure no other PC is syncing or changing the password."** Use it only when you are sure the PC that took the lock won't finish the change (see **Password change lock** above)
@@ -1979,14 +1988,17 @@ A: If the PC that started the change can still finish it, finish it there with *
 
 A: Pipette keeps the sync password — and, during a change, both passwords — encrypted with the OS keychain. On Linux that needs a keyring service (for example GNOME Keyring or KWallet) that is running and unlocked.
 
-- **"OS keychain is not available, so the sync password can't be changed here."** or **"OS keychain is not available; sync is disabled here"**: no keychain is available. Set up a keyring, then try again
-- **"Couldn't read the saved sync password"** or **"Couldn't read the saved sync password, so it can't be changed."**: the keychain could not decrypt the saved password — it is locked, or it was reset or the profile moved. Unlock it and try again
+- **"If the OS keychain couldn't be opened, unlock or set it up (a keyring on Linux) and restart Pipette."**, **"OS keychain is not available, so the sync password can't be changed here."** or **"OS keychain is not available; sync is disabled here"**: no keychain is available. Unlock or set up a keyring, then restart Pipette — the keyring is checked when Pipette starts, so it isn't picked up until the restart
+- **"This PC's saved sync password can't be read (the OS keychain refused it). If the keychain is locked or access was denied, unlock or allow it and press Retry. Otherwise, set the sync password again below."**, **"Couldn't read the saved sync password"** or **"Couldn't read the saved sync password, so it can't be changed."**: the keychain could not decrypt the saved password — it is locked, access was denied, or it was reset or the profile moved. Unlock or allow it, then click **Retry** in the **Sync Encryption Password** section. If it still can't be read, enter the password your other PCs use and click **Set Password**; if that password doesn't match Google Drive, the unreadable saved password is removed and the form stays open
 - **"The passwords saved for the password change can't be read. Make sure the OS keychain is unlocked, then try again."**: common right after login. Unlock the keychain, then **Continue**. **Abandon** still works without the keychain
 
 #### Sync Controls
 
-- **Auto Sync**: Toggle automatic sync on or off. When enabled, changes sync automatically with a 10-second debounce and periodic 3-minute polling
+- **Auto Sync**: Toggle automatic sync on or off. When enabled, changes sync automatically with a 10-second debounce and periodic 3-minute polling. Polling starts when the app launches, even with no keyboard connected, and first checks about 15 seconds after launch. Changes made while it is off are kept and sent when you turn it back on; a failed upload is retried 3 minutes later. Quitting waits for a running sync to finish (up to 30 seconds). Changes not yet sent when the app exits are sent after the next launch; changes made while signed in to one Google account are not sent to a different account
 - **Sync**: Manually sync favorites and connected keyboard data. Only favorites and the currently connected keyboard are synced (not all keyboards)
+- Changes brought in from another device appear in lists that are already open (saved keymaps, favorites, Analyze conditions, Key Labels, Typing Test texts, the Data modal) without reopening them
+- The connected keyboard's settings changed on another device (layer names, display options, typing test options, and so on) also apply to the open window once they are merged, except the current view (editor, Typing View or Typing Test), a paused typing test, the Typing View window size, and the **Record** toggle. Changes to the typing test's mode, length and language wait until you leave the typing test, and a key picker tab order waits until you finish reordering
+- The Analyze view does the same for the keyboard it shows, even when it is not the connected one: conditions, finger assignments, goal settings, layer names and typing test results update in place, and a goal you are still editing is kept
 
 #### Sync Status
 
@@ -2029,7 +2041,7 @@ See the [Data Guide](Data.md) for details on what is synced and how your data is
 Troubleshooting and data management functions are available in the **Data** panel (see §1.3):
 
 - **Local > Application**: Import/export local data, or reset application settings
-- **Sync**: List remote-only keyboards by real name and download any one on demand, plus reset global (non-keyboard) targets and delete undecryptable files under **Sync › Cloud Data** (see §1.3)
+- **Sync**: List remote-only keyboards by real name and download any one on demand, plus reset global (non-keyboard) targets and delete undecryptable files under **Sync › Cloud Data**, and restore or delete duplicate copies under **Sync › Trash** (see §1.3)
 
 #### Settings — Defaults
 
@@ -2049,7 +2061,7 @@ The Tools tab in the Settings modal includes a **Defaults** section for setting 
 
 The Tools tab also exposes a **Key Labels Manage** row (next to the Language Packs row). Click **Edit** to open the Key Labels modal, which manages every label set the app uses to render keycaps in the editor, the Analyze view, and the Layout Comparison.
 
-QWERTY is built-in; every other label set (Dvorak, Colemak, French, Brazilian, …) is downloaded from Pipette Hub or imported from a local `.json` file. Installed entries sync across devices via Cloud Sync, so the same drag order and selection appear on every machine signed into the same account.
+QWERTY is built-in; every other label set (Dvorak, Colemak, French, Brazilian, …) is downloaded from Pipette Hub or imported from a local `.json` file. Installed entries sync across devices via Cloud Sync, so the same label sets and selection appear on every machine signed into the same account. The drag order is kept per device: reordering on one machine does not change the order on another.
 
 **Delete removes the Hub post too, for entries you uploaded.** If the entry you delete is linked to a Hub post you own, Delete also takes that post down from Hub — the local copy and the shared upload disappear together, in one action. If the Hub side fails (for example, no network), the local entry is **not** deleted either — an error is shown under the row (it clears itself after about 10 seconds) and the entry stays put so you can try Delete again. A **downloaded** entry (someone else's upload) deletes locally only, even though it still shows Author/Sync — there's no Hub post of yours to remove, so Delete never makes a Hub call for it. Use **Remove** (in the Hub actions row) instead if you only want to detach your own local copy from Hub while keeping both the local entry and the Hub post — Remove never touches the local copy.
 
@@ -2057,7 +2069,7 @@ QWERTY is built-in; every other label set (Dvorak, Colemak, French, Brazilian, �
 
 ![Key Labels — Installed](screenshots/key-labels-installed.png)
 
-Lists every label set already on this device. Each row shows the label name, the uploader name (when the entry came from Hub), the Hub-side last-update time (`YYYY-MM-DD HH:mm`, mirrors what the Hub website displays), an `.json` export shortcut, and a Delete button. Drag the grip handle on the left to reorder rows — the order is propagated to the Settings dropdown and to every Key Labels picker in the editor. A **Name** button at the left of the toolbar (opposite Import) sorts the list alphabetically instead — click once for ascending, click again for descending; each click applies the new order immediately, the same way a manual drag would, so drag, dropdowns, and sync all stay consistent.
+Lists every label set already on this device. Each row shows the label name, the uploader name (when the entry came from Hub), the Hub-side last-update time (`YYYY-MM-DD HH:mm`, mirrors what the Hub website displays), an `.json` export shortcut, and a Delete button. Drag the grip handle on the left to reorder rows — the order is propagated to the Settings dropdown and to every Key Labels picker in the editor. A **Name** button at the left of the toolbar (opposite Import) sorts the list alphabetically instead — click once for ascending, click again for descending; each click applies the new order immediately, the same way a manual drag would, so drag and dropdowns always stay consistent.
 
 The Name button has three states: ascending (▲) and descending (▼) each show a triangle for as long as that sort still matches the list's order, and a plain "Name" with no triangle once the order no longer matches either sort — which happens the moment you drag a row by hand. There is no button click that returns to a triangled state; only another click (re-applying asc/desc from scratch) or reopening the modal does.
 
@@ -2184,7 +2196,7 @@ On Pipette Hub, the flag round-trips as `keymap_applicable` in the upload / down
 
 The Tools tab shows a **Language Packs** row displaying the currently active UI language. Click **Edit** to open the Language Packs modal.
 
-English is built-in; every other language is imported from a local `.json` file or downloaded from Pipette Hub. Installed packs sync across devices via Cloud Sync. Hub-linked packs are automatically checked for updates at app startup and refreshed silently when newer versions are available.
+English is built-in; every other language is imported from a local `.json` file or downloaded from Pipette Hub. Installed packs sync across devices via Cloud Sync. Hub-linked packs are automatically checked for updates at app startup and refreshed silently when newer versions are available. The refresh keeps a name you gave the pack, and does not bring back a pack deleted on another device.
 
 **Installed tab**
 
@@ -2203,7 +2215,7 @@ Each row shows:
 
 A **pulsing green dot** next to the Sync button indicates that the Hub-side post is newer than the local copy (freshness check runs once per 5 minutes when the modal is open).
 
-Drag the grip handle to reorder the list, including built-in English — the order syncs across devices and is reflected anywhere the pack list is used. A **Name** button at the left of the toolbar (opposite Import) sorts every row alphabetically instead, English included — click once for ascending, click again for descending.
+Drag the grip handle to reorder the list, including built-in English — the order is reflected anywhere the pack list is used on this device (it is kept per device and does not sync). A **Name** button at the left of the toolbar (opposite Import) sorts every row alphabetically instead, English included — click once for ascending, click again for descending.
 
 The Name button's three states (ascending/descending triangle, or a plain "Name" once you drag a row by hand) and what happens on a **single**-file import or Hub download — the new pack is inserted at its correct alphabetical position while a triangle is showing, an overwrite of an existing pack keeps its position, and a brief "Imported {name}" / "Updated {name}" message appears next to the Name button with the row scrolled into view — work exactly as described for Key Labels (§6.2); downloading from Hub follows the same placement rule.
 
@@ -2270,7 +2282,7 @@ Each row shows:
 
 A **pulsing green dot** next to the Sync button indicates that the Hub-side post is newer than the local copy (freshness check runs once per 5 minutes when the modal is open).
 
-Drag the grip handle on the left of each row to reorder theme packs — the order syncs across devices. A **Name** button at the left of the toolbar (opposite Import) sorts the list alphabetically instead — click once for ascending, click again for descending.
+Drag the grip handle on the left of each row to reorder theme packs — the order is kept per device and does not sync. A **Name** button at the left of the toolbar (opposite Import) sorts the list alphabetically instead — click once for ascending, click again for descending.
 
 The Name button's three states (ascending/descending triangle, or a plain "Name" once you drag a row by hand) and what happens on a **single**-file import or Hub download — the new pack is inserted at its correct alphabetical position while a triangle is showing, an overwrite of an existing pack keeps its position, and a brief "Imported {name}" / "Updated {name}" message appears next to the Name button with the row scrolled into view — work exactly as described for Key Labels (§6.2); downloading from Hub follows the same placement rule.
 

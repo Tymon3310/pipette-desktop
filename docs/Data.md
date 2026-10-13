@@ -94,6 +94,8 @@ Settings tied to a specific keyboard, identified by its unique ID.
 | Analyze filters | Per-tab filter state (device scope, app scope, view modes, ranking limits, snapshot selection) for the Analyze dashboard |
 | Analyze compare filters | Same shape as Analyze filters, bound to the secondary pane in the Analyze split-view |
 
+The settings file for a keyboard is created the first time you change one of these settings; until then the defaults are used in memory only, so a keyboard you merely connect never overwrites settings saved for it on another device.
+
 ### Typing Analytics
 
 Per-keyboard typing history that feeds the Analyze page (see OPERATION-GUIDE §1.4). Two sources feed the same stream: typing tests run in the editor are always recorded (each keystroke tagged with the test material and run id), while ambient typing is recorded only while you are in Typing View with the REC toggle set to Start — the REC toggle gates the Typing View stream only, not typing tests.
@@ -112,6 +114,8 @@ Per-keyboard typing history that feeds the Analyze page (see OPERATION-GUIDE §1
 | Storage | Path (under user data directory) | Scope |
 |---------|-----------------------------------|-------|
 | Per-device typing log (master) | `sync/keyboards/{uid}/devices/{machineHash}/{YYYY-MM-DD}.jsonl` | **Synced** across your signed-in devices |
+| Deleted ranges of a device | `sync/keyboards/{uid}/devices/{machineHash}/deleted-ranges.json` | **Synced** — the time ranges deleted from that device's data, under Data › Sync › Typing on another device or with Delete All under Data › Local › Typing on the device itself; other devices hide those ranges, and the device that recorded the data removes them from its own log when it syncs |
+| Applied deleted ranges | `sync/keyboards/{uid}/devices/{machineHash}/deleted-ranges-applied.json` (this device's own directory) | Local only — which deleted ranges this device has already removed from its own log |
 | Keymap snapshots (master) | `typing-analytics/keymaps/{uid}/{machineHash}/*.json` | Local only (per machine) |
 | Query cache (SQLite) | `local/typing-analytics.db` | Local only — rebuilt from the JSONL master when missing or stale |
 
@@ -201,6 +205,8 @@ Rotating log files for debugging. No keyboard data or personal information is lo
 
 OAuth tokens and sync password are encrypted using the OS keychain (Electron `safeStorage`). These are never stored in plain text.
 
+Changes not yet sent to Cloud Sync are listed by sync unit name in `local/sync-pending.json`, together with the opaque ID of the Google account they were made under (the `sub` claim of Google's sign-in token — not your email address), so they are never sent to a different account. Only this list of unsent changes is kept per account: your local data itself is shared, so a manual sync or background sync sends it to whichever account is signed in. This file is not synced.
+
 While a sync password change is in progress, the old and new sync passwords are also kept on this machine (encrypted the same way, in `local/auth/sync-password-change-keys.enc`) together with a non-secret progress file (`local/auth/sync-password-change.json`: direction, step, and the identity of its Google Drive lock). Both are deleted when the change finishes, is reverted, or is abandoned. They are never synced.
 
 ---
@@ -230,9 +236,12 @@ Pipette uses [Google Drive **appDataFolder**](https://developers.google.com/work
 
 - Sync is **opt-in** — you must sign in with Google and set a sync password to enable it
 - Synced data is **end-to-end encrypted** before upload (AES-256-GCM with a key derived from your sync password via PBKDF2)
-- Sync happens automatically when changes are detected (with a 10-second debounce) and via periodic polling (every 3 minutes)
-- Pending changes are flushed on app exit
+- Sync happens automatically when changes are detected (with a 10-second debounce) and via periodic polling (every 3 minutes). With Auto Sync on, polling starts when the app launches — even with no keyboard connected — and its first check runs about 15 seconds after launch
+- Pending changes are flushed on app exit. Quitting waits for a sync that is already running to finish first, for up to 30 seconds. Changes made while Auto Sync is off or before you sign in / set the sync password are kept and sent once Auto Sync is on and the credentials are ready. Changes not yet sent when the app exits (including after a crash) are kept on this machine and sent after the next launch. Changes made while signed in to one Google account are never sent to a different account; they wait until you sign in to that account again
 - **Selective sync scope**: Not all keyboards' data is downloaded at once. On device connection, favorites are downloaded first, then the connected keyboard's snapshots and settings are downloaded (in full) once its UID is confirmed. Keyboards you have never connected on this machine are left undownloaded; their data is fetched on demand when you open them from the **Data** modal's Sync section. Manual sync (**Sync**) and background polling keep the currently connected keyboard and favorites in sync — other keyboards' data is never pulled down automatically
+- **Open screens follow along**: when a sync brings in another device's change, lists that are open (saved keymaps, favorites, Analyze conditions, Key Labels, Typing Test texts — including the text a new run uses — the Data modal's keyboards) update in place, without clearing a name you are typing or a pending delete confirmation. The connected keyboard's settings (layer names, display options, typing test options, …) are re-read the same way, except the current view mode, a paused typing test, the Typing View window size, and the **Record** toggle; changes to the typing test's mode, length and language wait until you leave the typing test, and the key picker tab order waits while you are reordering tabs. The Analyze view follows the keyboard it shows the same way (conditions, finger assignments, goal settings, layer names, typing test results), keeping a goal you are still editing; the key picker follows the zoom of a keyboard loaded into it
+- **When two devices change the same item**: each saved item (snapshots, favorites, Analyze conditions, Key Labels, Typing Test texts, language and theme packs) keeps separate times for its content, its name and its Hub link (and, for language packs, whether it is enabled), and each part is resolved on its own: renaming an item on one device and editing its content on another keeps both changes. When the same part changes on two devices, the later change wins. Deleting an item wins over renames and Hub link changes made on other devices, and over content edits made before the delete; saving it again on purpose — downloading it from Pipette Hub again, importing a file with the same name, or updating a saved keymap — brings it back. The automatic startup update of Hub-linked language packs never brings a deleted pack back. The order of items in a list is kept per device and is not synced
+- **Duplicate copies**: Google Drive does not keep file names unique, so two devices creating the same file at once can leave two copies. Sync always uses the newest copy; background sync renames the other copies to trash names (still encrypted, still in the appDataFolder) instead of deleting them. A trash copy is deleted 30 days after the rename while a current copy exists, and the newest trash copy is put back automatically when no current copy is left. The Data modal's **Sync › Trash** lists them with Restore and Delete (this device's own typing days can only be deleted: they are uploaded again from this device's local data)
 - **Lightweight keyboard name index**: A small synced index (UID → keyboard name) is kept so that remote-only keyboards can be shown by name in the Data modal before their full data is ever downloaded. The index holds only UIDs and keyboard names — no keymap, macro, or setting data
 
 ### What Is Synced
@@ -343,7 +352,7 @@ Pipette can export keymap data in several formats. These are local file download
 | Reset Keyboard Data | Deleted | Deleted | - | Deleted for that keyboard | - | - |
 | Reset Local Data | Selected targets deleted | Selected targets deleted | Selected targets deleted | - | - | Selected targets reset to defaults |
 | Reset Sync Data | - | - | - | Selected targets deleted | - | - |
-| Change Password | - | - | - | All files re-encrypted | - | - |
+| Change Password | - | - | - | All files re-encrypted (duplicate copies moved to Trash first) | - | - |
 | Sign Out | - | - | - | - | - | - |
 | Export/Import Local Data | Included | Included | Included | - | - | - |
 
@@ -351,7 +360,9 @@ Pipette can export keymap data in several formats. These are local file download
 >
 > **Note**: While a password-change lock is on Google Drive or this machine has an unfinished sync password change, Reset Sync Data is refused with an error, and so is Reset Keyboard Data. If the lock can't be checked (for example while offline), Reset Keyboard Data still resets the local data and skips the Google Drive delete. While Google Drive needs a newer Pipette (a `sync-format-v{n}.json` marker newer than this version supports, see `OPERATION-GUIDE.md` §6.1), Reset Sync Data is refused and Reset Keyboard Data resets the local data and skips the Google Drive delete. While a password change is actually running on this machine (a sync is in progress), Reset Local Data is refused whatever is selected; otherwise it is refused only when App Settings is selected and this machine has an unfinished change, because App Settings include the change's saved state.
 >
-> **Note**: Reset Sync Data's targets are not tied to one keyboard: keyboard data, Favorites, Language Packs, Theme Packs, Key Labels, and imported Typing Test Texts can each be reset independently, deleting only that target's copy on Google Drive (local copies on this device are untouched). Per-keyboard remote deletion lives in the Data modal's **Sync › Keyboards** list; the remaining global targets live in **Sync › Cloud Data** — both surface only the targets that actually exist on the remote and require a two-step confirmation before deleting.
+> **Note**: A reset never overlaps a sync: while a sync is running (for a reset that removes keyboard data, this includes the Analyze view's analytics sync of those keyboards), the reset is refused with an error and can be retried once the sync finishes, and a sync requested during a reset runs once the reset finishes (the Analyze view's analytics sync of a keyboard being reset is skipped and runs again the next time the view opens).
+
+> **Note**: Reset Sync Data's targets are not tied to one keyboard: keyboard data, Favorites, Language Packs, Theme Packs, Key Labels, and imported Typing Test Texts can each be reset independently, deleting only that target's copy on Google Drive (local copies on this device are untouched). Per-keyboard remote deletion lives in the Data modal's **Sync › Keyboards** list; the remaining global targets live in **Sync › Cloud Data** — both surface only the targets that actually exist on the remote and require a two-step confirmation before deleting. A reset also deletes the Trash copies of what it removes, so they are not put back afterwards.
 >
 > **Note**: Reset Keyboard Data also removes that keyboard's typing analytics: the active recording session is flushed and closed, the keyboard's rows are tombstoned in the SQLite query cache, and its JSONL master files are unlinked — so the keyboard disappears from the Analyze view immediately instead of lingering in the stale cache.
 >

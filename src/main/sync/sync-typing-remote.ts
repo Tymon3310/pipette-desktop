@@ -2,16 +2,17 @@
 // Remote typing-analytics day-file bookkeeping: reconciling own-hash
 // cloud state against local + `uploaded` state before an upload pass,
 // and the Sync > Typing lazy-expand UI's on-demand cloud reads (list
-// remote hashes/days, delete a remote day, fetch a single remote day).
+// remote hashes/days, fetch a single remote day).
 
 import { app } from 'electron'
 import { join } from 'node:path'
-import { readdir, unlink } from 'node:fs/promises'
+import { readdir } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { decrypt } from './sync-crypto'
 import {
   listFiles,
   downloadFile,
-  deleteFile,
+  deleteFilesById,
   driveFileName,
   syncUnitFromFileName,
   type DriveFile,
@@ -19,14 +20,16 @@ import {
 import { requireSyncCredentials, ensurePasswordCheckValidated } from './sync-password'
 import { localSyncBlock, remoteSyncBlock } from './sync-password-guard'
 import { syncFormatGeneration } from './sync-format'
-import { mergeDeviceDayBundle } from './sync-merge-dispatch'
+import { mergeDeviceDayBundle, mergeWithRemote } from './sync-merge-dispatch'
+import { isKnownRemoteRevision, lockFreeWriterBlocked, syncRuntime } from './sync-runtime-state'
+import { canonicalFiles, filesNamedWithTrash, namesWithTrash, pickCanonicalFile } from './drive-canonical'
 import {
   parseTypingAnalyticsDeviceDaySyncUnit,
   typingAnalyticsDeviceDaySyncUnit,
+  typingDeletedRangesSyncUnit,
 } from '../typing-analytics/sync'
-import { deviceDayJsonlPath, listDeviceDays, readPointerKey } from '../typing-analytics/jsonl/paths'
-import { utcDayBoundaryMs, type UtcDay } from '../typing-analytics/jsonl/utc-day'
-import { getTypingAnalyticsDB } from '../typing-analytics/db/typing-analytics-db'
+import { deletedRangesPath, listDeviceDays, readPointerKey } from '../typing-analytics/jsonl/paths'
+import type { UtcDay } from '../typing-analytics/jsonl/utc-day'
 import { getMachineHash } from '../typing-analytics/machine-hash'
 import {
   emptySyncState,
@@ -38,26 +41,37 @@ import {
 import { log } from '../logger'
 import type { SyncBundle } from '../../shared/types/sync'
 
+/** A typing day file on Drive: `live` is the copy sync reads, absent when
+ * only trash files of the day's name are left (drive-trash.ts). */
+interface RemoteDay {
+  name: string
+  live?: DriveFile
+}
+
 /** Scan the remote file list for per-day typing-analytics units owned
  * by `ownHash`, grouped by keyboard uid. Units with a malformed
- * filename are skipped. */
+ * filename are skipped. A day with several files of its name maps to the
+ * copy `pickCanonicalFile` (drive-canonical.ts) chooses; a day with only
+ * trash files is listed without `live`. */
 export function collectRemoteOwnHashDays(
   remoteFiles: DriveFile[],
   ownHash: string,
-): Map<string, Map<UtcDay, DriveFile>> {
-  const perUid = new Map<string, Map<UtcDay, DriveFile>>()
-  for (const file of remoteFiles) {
-    const unit = syncUnitFromFileName(file.name)
-    if (!unit) continue
+): Map<string, Map<UtcDay, RemoteDay>> {
+  const perUid = new Map<string, Map<UtcDay, RemoteDay>>()
+  const add = (name: string, live: DriveFile | undefined): void => {
+    const unit = syncUnitFromFileName(name)
+    if (!unit) return
     const ref = parseTypingAnalyticsDeviceDaySyncUnit(unit)
-    if (!ref || ref.machineHash !== ownHash) continue
+    if (!ref || ref.machineHash !== ownHash) return
     let byDay = perUid.get(ref.uid)
     if (!byDay) {
-      byDay = new Map<UtcDay, DriveFile>()
+      byDay = new Map<UtcDay, RemoteDay>()
       perUid.set(ref.uid, byDay)
     }
-    byDay.set(ref.utcDay, file)
+    if (live || !byDay.has(ref.utcDay)) byDay.set(ref.utcDay, { name, live })
   }
+  for (const file of canonicalFiles(remoteFiles)) add(file.name, file)
+  for (const name of namesWithTrash(remoteFiles)) add(name, undefined)
   return perUid
 }
 
@@ -66,17 +80,23 @@ export function collectRemoteOwnHashDays(
  *
  *   Rule 2 — `uploaded` has day X, local does not: user or Local-delete
  *     removed the file locally → delete the cloud copy as well.
- *   Rule 3 — `uploaded` has day X, cloud does not: a Sync-delete from
- *     another device or a GC step removed the cloud copy → drop the
- *     local file and let the next cache rebuild resync (rows added
- *     post-delete are preserved because they were never in `uploaded`).
+ *   Rule 3 — `uploaded` has day X, cloud does not: something else removed
+ *     the cloud copy (a Reset Sync Data, another device) → drop the day from
+ *     `uploaded` and keep the local file, so the upload pass sends it again.
+ *     Another device never removes this device's data by deleting its
+ *     files; it adds deleted ranges instead (typing-device-delete.ts).
  *   Orphan — when `reconciled_at` is pending for (uid, ownHash), also
  *     delete any cloud day that is neither in local nor in `uploaded`
  *     (leftover from a previous install / pre-migration state).
  *
  * Rules 2 and 3 run on every pass; orphan cleanup only on the first
  * pass after a cache rebuild or fresh install, then `reconciled_at`
- * is timestamped so the expensive listing is skipped afterwards. */
+ * is timestamped so the expensive listing is skipped afterwards.
+ *
+ * A cloud delete removes every file with that day's name and every trash
+ * file of it, so nothing is left behind to be picked up or renamed back.
+ * Rules 2 and orphan also see a day that has only trash files; rule 3 needs
+ * a live copy, so a day with only trash is uploaded again. */
 export async function reconcileOwnHashTypingAnalytics(
   remoteFiles: DriveFile[],
   userData: string,
@@ -84,6 +104,12 @@ export async function reconcileOwnHashTypingAnalytics(
 ): Promise<{ state: TypingSyncState; mutated: boolean }> {
   const state = (await loadSyncState(userData)) ?? emptySyncState(ownHash)
   const remotePerUid = collectRemoteOwnHashDays(remoteFiles, ownHash)
+  // Deletes every copy and trash file of `day`'s name; a failed delete is
+  // logged (by deleteFilesById and here) and the pass goes on.
+  const deleteAllCopies = async (day: RemoteDay, failure: string): Promise<void> => {
+    const result = await deleteFilesById(filesNamedWithTrash(remoteFiles, day.name).map((copy) => copy.id))
+    if (result.failed > 0) log('warn', `${failure}: ${result.firstError}`)
+  }
 
   // Every uid that appears in any of the three sources needs a pass:
   // local files, uploaded bookkeeping, or remote cloud listing. Union
@@ -106,35 +132,24 @@ export async function reconcileOwnHashTypingAnalytics(
     const pointerKey = readPointerKey(uid, ownHash)
     const localDays = new Set<UtcDay>(await listDeviceDays(userData, uid, ownHash))
     const uploadedDays = new Set<UtcDay>(state.uploaded[pointerKey] ?? [])
-    const cloudDays = remotePerUid.get(uid) ?? new Map<UtcDay, DriveFile>()
+    const cloudDays = remotePerUid.get(uid) ?? new Map<UtcDay, RemoteDay>()
 
     // Rule 2: uploaded but not local — delete from cloud.
     for (const day of Array.from(uploadedDays)) {
       if (localDays.has(day)) continue
-      const cloudFile = cloudDays.get(day)
-      if (cloudFile) {
-        try {
-          await deleteFile(cloudFile.id)
-        } catch (err) {
-          log('warn', `typing-analytics cloud delete failed for ${uid} ${day}: ${String(err)}`)
-        }
+      const cloudDay = cloudDays.get(day)
+      if (cloudDay) {
+        await deleteAllCopies(cloudDay, `typing-analytics cloud delete failed for ${uid} ${day}`)
         cloudDays.delete(day)
       }
       uploadedDays.delete(day)
       mutated = true
     }
 
-    // Rule 3: uploaded but not cloud — another device Sync-deleted us.
+    // Rule 3: uploaded but not cloud — forget the upload; the local file
+    // stays and the upload pass sends it again.
     for (const day of Array.from(uploadedDays)) {
-      if (cloudDays.has(day)) continue
-      try {
-        await unlink(deviceDayJsonlPath(userData, uid, ownHash, day))
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-          log('warn', `typing-analytics local delete failed for ${uid} ${day}: ${String(err)}`)
-        }
-      }
-      localDays.delete(day)
+      if (cloudDays.get(day)?.live) continue
       uploadedDays.delete(day)
       mutated = true
     }
@@ -144,13 +159,9 @@ export async function reconcileOwnHashTypingAnalytics(
     // flat bundles converted to per-day, or data from a removed
     // install). Deleting them avoids surprising re-download prompts.
     if (isReconcilePending(state, uid, ownHash)) {
-      for (const [day, cloudFile] of Array.from(cloudDays.entries())) {
+      for (const [day, cloudDay] of Array.from(cloudDays.entries())) {
         if (localDays.has(day) || uploadedDays.has(day)) continue
-        try {
-          await deleteFile(cloudFile.id)
-        } catch (err) {
-          log('warn', `typing-analytics orphan delete failed for ${uid} ${day}: ${String(err)}`)
-        }
+        await deleteAllCopies(cloudDay, `typing-analytics orphan delete failed for ${uid} ${day}`)
         cloudDays.delete(day)
       }
       state.reconciled_at[pointerKey] = Date.now()
@@ -239,65 +250,42 @@ export async function listRemoteTypingDaysFor(
   const perUid = collectRemoteOwnHashDays(remoteFiles, machineHash)
   const days = perUid.get(uid)
   if (!days) return []
-  return Array.from(days.keys()).sort()
-}
-
-/** Delete the cloud copy of a specific (uid, machineHash, day) and
- * its local mirror if we previously downloaded it. Used by the Sync >
- * Typing > Device > Delete-day UX: another device's record is gone
- * from cloud, and when that device next syncs the reconcile pass will
- * see its `uploaded` entry without a cloud file and drop its own
- * local copy (rule 3). Own-hash cache rows are accepted as stale until
- * the next rebuild — they live in the machine that owns the day.
- * Returns `true` when a cloud delete actually ran, `false` when the
- * user is unauthenticated or the cloud file was already missing. A sync
- * password change in progress returns `false` before anything, local or
- * remote, is removed. */
-export async function deleteRemoteTypingDay(
-  uid: string,
-  machineHash: string,
-  utcDay: UtcDay,
-): Promise<boolean> {
-  const credentials = await requireSyncCredentials()
-  if (!credentials.ok) return false
-  // Both checks run before the local copy is removed, so a refused delete changes nothing.
-  if (await localSyncBlock()) return false
-  const formatGeneration = syncFormatGeneration()
-  const remoteFiles = await listFiles()
-  if (remoteSyncBlock(remoteFiles, formatGeneration)) return false
-  const targetName = driveFileName(typingAnalyticsDeviceDaySyncUnit(uid, machineHash, utcDay))
-  const remoteFile = remoteFiles.find((f) => f.name === targetName)
-  const userData = app.getPath('userData')
-  try {
-    await unlink(deviceDayJsonlPath(userData, uid, machineHash, utcDay))
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-      log('warn', `typing-analytics local delete failed for ${uid} ${machineHash} ${utcDay}: ${String(err)}`)
-    }
-  }
-  // Tombstone the remote hash's cache rows for this day so the Data
-  // modal list refreshes immediately after the delete. Scoped to the
-  // single hash + day so a same-day local contribution stays visible.
-  try {
-    const { startMs, endMs } = utcDayBoundaryMs(utcDay)
-    const updatedAt = Date.now()
-    getTypingAnalyticsDB().tombstoneRowsForUidHashInRange(uid, machineHash, startMs, endMs, updatedAt)
-  } catch (err) {
-    log('warn', `typing-analytics cache tombstone failed for ${uid} ${machineHash} ${utcDay}: ${String(err)}`)
-  }
-  if (!remoteFile) return false
-  await deleteFile(remoteFile.id)
-  return true
+  return Array.from(days).filter(([, day]) => day.live).map(([utcDay]) => utcDay).sort()
 }
 
 /** Lazily fetch a single remote (uid, machineHash, day) into the
  * local cache. Returns `true` when the day was downloaded and merged,
- * `false` when the cloud copy was missing, a credential check failed or a
- * sync password change is in progress. Throws `PasswordMismatchError`
- * when the password-check does not open with the stored password.
+ * `false` when the cloud copy was missing, a credential check failed, a
+ * reset of this keyboard is running, a sign-in or sign-out is switching
+ * tokens, or a sync password change is in progress. Throws
+ * `PasswordMismatchError` when the password-check does not open with the
+ * stored password.
  * Designed for the Sync > Typing > Device lazy-expand flow so the UI
- * can pull in only the days the user actually opens. */
+ * can pull in only the days the user actually opens.
+ * Doesn't take the sync lock: it is counted in `remoteTypingDayFetches`
+ * before its first await; a password change refuses to start, and a reset
+ * that removes this keyboard's data waits or refuses, while it is counted. */
 export async function fetchRemoteTypingDay(
+  uid: string,
+  machineHash: string,
+  utcDay: UtcDay,
+): Promise<boolean> {
+  // A password change, a reset of this keyboard and a token switch each
+  // wait or refuse while this fetch is counted (`lockFreeWriterRunning`).
+  // The check and the count below are synchronous, so they never overlap.
+  if (lockFreeWriterBlocked(uid)) return false
+  const fetches = syncRuntime.remoteTypingDayFetches
+  fetches.set(uid, (fetches.get(uid) ?? 0) + 1)
+  try {
+    return await fetchAndMergeRemoteTypingDay(uid, machineHash, utcDay)
+  } finally {
+    const remaining = (fetches.get(uid) ?? 1) - 1
+    if (remaining > 0) fetches.set(uid, remaining)
+    else fetches.delete(uid)
+  }
+}
+
+async function fetchAndMergeRemoteTypingDay(
   uid: string,
   machineHash: string,
   utcDay: UtcDay,
@@ -309,14 +297,24 @@ export async function fetchRemoteTypingDay(
   const formatGeneration = syncFormatGeneration()
   const remoteFiles = await listFiles()
   if (remoteSyncBlock(remoteFiles, formatGeneration)) return false
-  const targetName = driveFileName(typingAnalyticsDeviceDaySyncUnit(uid, machineHash, utcDay))
-  const file = remoteFiles.find((f) => f.name === targetName)
+  const file = pickCanonicalFile(remoteFiles, driveFileName(typingAnalyticsDeviceDaySyncUnit(uid, machineHash, utcDay)))
   if (!file) return false
   await ensurePasswordCheckValidated(password, remoteFiles)
+  // The device's deleted ranges first, so the day's rows in them are hidden
+  // as the day is replayed (mergeDeviceDayBundle). Skipped only when the
+  // revision is known and the local file exists: a poll also records the
+  // revisions of keyboards it leaves alone because they are not local, so
+  // a known revision alone does not mean the file was merged. A failed
+  // merge fails the fetch before the day is downloaded.
+  const rangesUnit = typingDeletedRangesSyncUnit(uid, machineHash)
+  const rangesFile = pickCanonicalFile(remoteFiles, driveFileName(rangesUnit))
+  const userData = app.getPath('userData')
+  if (rangesFile && !(isKnownRemoteRevision(rangesFile) && existsSync(deletedRangesPath(userData, uid, machineHash)))) {
+    await mergeWithRemote(rangesFile, rangesUnit, password, remoteFiles)
+  }
   const envelope = await downloadFile(file.id)
   const plaintext = await decrypt(envelope, password)
   const remoteBundle = JSON.parse(plaintext) as SyncBundle
-  const userData = app.getPath('userData')
   const ownHash = await getMachineHash()
   await mergeDeviceDayBundle(remoteBundle, { uid, machineHash, utcDay }, userData, ownHash)
   return true

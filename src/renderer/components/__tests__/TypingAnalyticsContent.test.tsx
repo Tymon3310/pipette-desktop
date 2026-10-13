@@ -1,0 +1,153 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// @vitest-environment jsdom
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { TypingAnalyticsContent } from '../data-modal/TypingAnalyticsContent'
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, opts?: { zone?: string }) => (opts?.zone ? `${key} ${opts.zone}` : key),
+  }),
+}))
+
+const summaries = [
+  { date: '2026-10-01', keystrokes: 10, activeMs: 1_000 },
+  { date: '2026-10-02', keystrokes: 20, activeMs: 2_000 },
+]
+
+const mockListItemsLocal = vi.fn()
+const mockListItemsForHash = vi.fn()
+const mockDeleteItems = vi.fn()
+const mockDeleteAll = vi.fn()
+const mockDeleteDeviceData = vi.fn()
+const mockImport = vi.fn()
+
+Object.defineProperty(window, 'vialAPI', {
+  value: {
+    typingAnalyticsListItemsLocal: mockListItemsLocal,
+    typingAnalyticsListItemsForHash: mockListItemsForHash,
+    typingAnalyticsListRemoteCloudDays: vi.fn(async () => []),
+    typingAnalyticsListLocalDeviceDays: vi.fn(async () => []),
+    typingAnalyticsFetchRemoteDay: vi.fn(async () => true),
+    typingAnalyticsDeleteItems: mockDeleteItems,
+    typingAnalyticsDeleteAll: mockDeleteAll,
+    typingAnalyticsDeleteDeviceData: mockDeleteDeviceData,
+    typingAnalyticsImport: mockImport,
+    typingAnalyticsExport: vi.fn(),
+  },
+  writable: true,
+})
+
+async function confirmDeleteAll(): Promise<void> {
+  fireEvent.click(await screen.findByTestId('typing-delete-all'))
+  fireEvent.click(screen.getByTestId('typing-delete-all-confirm'))
+}
+
+describe('TypingAnalyticsContent deletes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockListItemsLocal.mockResolvedValue(summaries)
+    mockListItemsForHash.mockResolvedValue(summaries)
+    mockDeleteItems.mockResolvedValue({ success: true })
+    mockDeleteAll.mockResolvedValue({ success: true })
+    mockDeleteDeviceData.mockResolvedValue({ success: true })
+    mockImport.mockResolvedValue({ success: true, result: { imported: 0, rejections: [] }, cancelled: true })
+  })
+
+  describe('time zone label', () => {
+    const originalTz = process.env.TZ
+    afterEach(() => {
+      if (originalTz === undefined) delete process.env.TZ
+      else process.env.TZ = originalTz
+    })
+
+    it('names the local time zone of the day rows in the date header', async () => {
+      process.env.TZ = 'Asia/Tokyo'
+      render(<TypingAnalyticsContent uid="uid1" />)
+
+      expect(await screen.findByText('dataModal.typing.colDateZone Asia/Tokyo GMT+9')).toBeInTheDocument()
+    })
+  })
+
+  it('shows the busy message and keeps the confirmation when the delete is refused', async () => {
+    mockDeleteAll.mockResolvedValueOnce({ success: false, error: 'sync.deleteBusy' })
+    const onDeleted = vi.fn()
+    render(<TypingAnalyticsContent uid="uid1" onDeleted={onDeleted} />)
+
+    await confirmDeleteAll()
+
+    expect(await screen.findByTestId('typing-error')).toHaveTextContent('sync.deleteBusy')
+    expect(screen.getByTestId('typing-delete-all-confirm')).toBeInTheDocument()
+    expect(onDeleted).not.toHaveBeenCalled()
+  })
+
+  it('shows the fallback message when the delete call rejects', async () => {
+    mockDeleteItems.mockRejectedValueOnce(new Error('ipc failed'))
+    render(<TypingAnalyticsContent uid="uid1" />)
+
+    fireEvent.click(await screen.findByLabelText('dataModal.typing.selectAll'))
+    fireEvent.click(screen.getByTestId('typing-delete-selected'))
+    fireEvent.click(screen.getByTestId('typing-delete-selected-confirm'))
+
+    expect(await screen.findByTestId('typing-error')).toHaveTextContent('statusBar.sync.error')
+  })
+
+  it('clears the error and reports the delete when a retry succeeds', async () => {
+    mockDeleteAll.mockResolvedValueOnce({ success: false, error: 'sync.deleteBusy' })
+    const onDeleted = vi.fn()
+    render(<TypingAnalyticsContent uid="uid1" onDeleted={onDeleted} />)
+    await confirmDeleteAll()
+    await screen.findByTestId('typing-error')
+
+    fireEvent.click(screen.getByTestId('typing-delete-all-confirm'))
+
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1))
+    expect(screen.queryByTestId('typing-error')).toBeNull()
+  })
+
+  it('asks with the device wording in the sync view and the local wording in the local view', async () => {
+    const { unmount } = render(<TypingAnalyticsContent uid="uid1" mode="sync" machineHash="hash1" />)
+    fireEvent.click(await screen.findByTestId('typing-delete-all'))
+    expect(screen.getByText('dataModal.typing.confirmDeleteAllDevice')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('typing-delete-all-cancel'))
+    fireEvent.click((await screen.findAllByLabelText('dataModal.typing.selectRow'))[0])
+    fireEvent.click(screen.getByTestId('typing-delete-selected'))
+    expect(screen.getByText('dataModal.typing.confirmDeleteSelectedDevice')).toBeInTheDocument()
+    unmount()
+
+    render(<TypingAnalyticsContent uid="uid1" />)
+    fireEvent.click(await screen.findByTestId('typing-delete-all'))
+    expect(screen.getByText('dataModal.typing.confirmDeleteAll')).toBeInTheDocument()
+  })
+
+  it('deletes all of the device\'s data with one call in the sync view', async () => {
+    render(<TypingAnalyticsContent uid="uid1" mode="sync" machineHash="hash1" />)
+
+    await confirmDeleteAll()
+
+    await waitFor(() => expect(mockDeleteDeviceData).toHaveBeenCalledTimes(1))
+    expect(mockDeleteDeviceData).toHaveBeenCalledWith('uid1', 'hash1', 'all')
+  })
+
+  it('deletes the selected local days of the device in the sync view', async () => {
+    render(<TypingAnalyticsContent uid="uid1" mode="sync" machineHash="hash1" />)
+
+    fireEvent.click((await screen.findAllByLabelText('dataModal.typing.selectRow'))[0])
+    fireEvent.click(screen.getByTestId('typing-delete-selected'))
+    fireEvent.click(screen.getByTestId('typing-delete-selected-confirm'))
+
+    await waitFor(() => expect(mockDeleteDeviceData).toHaveBeenCalledTimes(1))
+    expect(mockDeleteDeviceData).toHaveBeenCalledWith('uid1', 'hash1', ['2026-10-01'])
+  })
+
+  it('shows the busy message when the import is refused', async () => {
+    mockImport.mockResolvedValueOnce({ success: false, error: 'sync.importBusy' })
+    render(<TypingAnalyticsContent uid="uid1" />)
+
+    fireEvent.click(await screen.findByTestId('typing-import'))
+
+    expect(await screen.findByTestId('typing-error')).toHaveTextContent('sync.importBusy')
+    expect(screen.queryByTestId('typing-import-status')).toBeNull()
+  })
+})

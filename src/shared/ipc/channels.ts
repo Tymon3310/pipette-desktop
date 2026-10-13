@@ -78,7 +78,7 @@ export const IpcChannels = {
   SYNC_PASSWORD_CHANGE_DELETE_UNDECRYPTABLE: 'sync:password-change-delete-undecryptable',
   SYNC_PASSWORD_CHANGE_LOCK_STATUS: 'sync:password-change-lock-status',
   SYNC_PASSWORD_CHANGE_RELEASE_LOCKS: 'sync:password-change-release-locks',
-  SYNC_HAS_PASSWORD: 'sync:has-password',
+  SYNC_PASSWORD_STATUS: 'sync:password-status',
   SYNC_VALIDATE_PASSWORD: 'sync:validate-password',
   SYNC_RESET_TARGETS: 'sync:reset-targets',
   SYNC_NOTIFY_CHANGE: 'sync:notify-change',
@@ -88,14 +88,19 @@ export const IpcChannels = {
   SYNC_SCAN_REMOTE: 'sync:scan-remote',
   SYNC_FETCH_REMOTE_BUNDLE: 'sync:fetch-remote-bundle',
   SYNC_DELETE_FILES: 'sync:delete-files',
+  SYNC_LIST_TRASH: 'sync:list-trash',
+  SYNC_RESTORE_TRASH: 'sync:restore-trash',
+  SYNC_DELETE_TRASH: 'sync:delete-trash',
   SYNC_CHECK_PASSWORD_EXISTS: 'sync:check-password-exists',
   SYNC_ANALYTICS_NOW: 'sync:analytics-now',
   SYNC_FORMAT_STATUS: 'sync:format-status',
   SYNC_FORMAT_STATUS_CHANGED: 'sync:format-status-changed',
+  SYNC_UNIT_APPLIED: 'sync:unit-applied',
 
   // Pipette Settings Store (renderer → main → renderer)
   PIPETTE_SETTINGS_GET: 'pipette-settings:get',
   PIPETTE_SETTINGS_PATCH: 'pipette-settings:patch',
+  PIPETTE_SETTINGS_ENSURE_DIR: 'pipette-settings:ensure-dir',
   // Typing-test results pooled across every locally-stored keyboard, for the
   // Measurement-row comparison baseline (keyboard-agnostic).
   PIPETTE_SETTINGS_LIST_ALL_TYPING_RESULTS: 'pipette-settings:list-all-typing-results',
@@ -153,7 +158,7 @@ export const IpcChannels = {
   TYPING_ANALYTICS_LIST_REMOTE_CLOUD_HASHES: 'typing-analytics:list-remote-cloud-hashes',
   TYPING_ANALYTICS_LIST_REMOTE_CLOUD_DAYS: 'typing-analytics:list-remote-cloud-days',
   TYPING_ANALYTICS_FETCH_REMOTE_DAY: 'typing-analytics:fetch-remote-day',
-  TYPING_ANALYTICS_DELETE_REMOTE_DAY: 'typing-analytics:delete-remote-day',
+  TYPING_ANALYTICS_DELETE_DEVICE_DATA: 'typing-analytics:delete-device-data',
   TYPING_ANALYTICS_EXPORT: 'typing-analytics:export',
   TYPING_ANALYTICS_IMPORT: 'typing-analytics:import',
   /** Distinct app_name list (with keystroke totals) for the analyze
@@ -259,6 +264,7 @@ export const IpcChannels = {
   I18N_PACK_STORE_GET: 'i18n-pack-store:get',
   I18N_PACK_STORE_RENAME: 'i18n-pack-store:rename',
   I18N_PACK_STORE_SET_ENABLED: 'i18n-pack-store:set-enabled',
+  I18N_PACK_STORE_REFRESH_COVERAGE: 'i18n-pack-store:refresh-coverage',
   I18N_PACK_STORE_DELETE: 'i18n-pack-store:delete',
   I18N_PACK_STORE_SET_HUB_POST_ID: 'i18n-pack-store:set-hub-post-id',
   I18N_PACK_STORE_HAS_NAME: 'i18n-pack-store:has-name',

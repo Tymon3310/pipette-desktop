@@ -17,8 +17,8 @@ export interface NgramStatements {
   selectInRangeForUid: Statement
   selectInRangeForUidAndHash: Statement
   tombstoneForHashInRange: Statement
-  tombstoneInRange: Statement
   tombstoneAll: Statement
+  tombstoneAllForHash: Statement
   deleteBefore: Statement
 }
 
@@ -138,20 +138,19 @@ export function prepareNgramStatements(
       UPDATE ${table}
          SET is_deleted = 1, updated_at = @updatedAt
        WHERE ${TOMBSTONE_HASH_RANGE_WHERE}
-         AND minute_ts >= @startMs AND minute_ts < @endMs
-    `),
-
-    tombstoneInRange: db.prepare(`
-      UPDATE ${table}
-         SET is_deleted = 1, updated_at = @updatedAt
-       WHERE ${TOMBSTONE_RANGE_WHERE}
-         AND minute_ts >= @startMs AND minute_ts < @endMs
+         AND minute_ts >= @startMs AND minute_ts < @endMs AND minute_ts <= @cutoffMs
     `),
 
     tombstoneAll: db.prepare(`
       UPDATE ${table}
          SET is_deleted = 1, updated_at = @updatedAt
        WHERE ${TOMBSTONE_RANGE_WHERE}
+    `),
+
+    tombstoneAllForHash: db.prepare(`
+      UPDATE ${table}
+         SET is_deleted = 1, updated_at = @updatedAt
+       WHERE ${TOMBSTONE_HASH_RANGE_WHERE}
     `),
 
     deleteBefore: db.prepare(`

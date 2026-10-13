@@ -1,5 +1,5 @@
 {
-  "version": "0.1.108",
+  "version": "0.1.120",
   "name": "Japanese - ギャル",
   "common": {
     "save": "保存☆",
@@ -189,7 +189,8 @@
       "asciiOnly": "英数字・記号しか無理っしょ☆",
       "unlockClickAgain": "アンロックしたらもう一回クリックして開いてね♡",
       "unlockWarning": "パスワードとか大事なのは入れちゃダメっしょ！漏れるワンチャンあるから☆",
-      "invalidMacroEntry": "インデックス{{index}}のマクロ、バグってるっぽい？"
+      "invalidMacroEntry": "インデックス{{index}}のマクロ、バグってるっぽい？",
+      "textLayoutNote": "テキストはファームの配列（だいたいUS）で打たれるっしょ！OSの配列が違うと、一部の文字がズレて出ちゃうかも☆"
     },
     "lighting": {
       "title": "Lighting☆",
@@ -783,7 +784,8 @@
     "instructions": "光ってるキーを長押ししてアンロック！☆",
     "hint": "やめるなら抜き差ししちゃえｗ",
     "progress": "進捗: {{current}} / {{total}} っしょ",
-    "cancel": "やめとく〜"
+    "cancel": "やめとく〜",
+    "missingKeys": "このアンロックキー、レイアウトに無いんだけど！: {{positions}}。解除できないかもｗ ファームの設定見るか、作った人に聞いてみて〜☆"
   },
   "fileIO": {
     "loadLayout": ".vilっしょ",
@@ -864,6 +866,14 @@
     "signIn": "接続っしょ",
     "authenticating": "認証待ちなう...",
     "authFailed": "認証失敗ｗもう一回っしょ☆",
+    "signInBusy": "同期中だからサインインむりｗちょい待ってからもう一回っしょ☆",
+    "signOutBusy": "同期中だからバイバイむりｗちょい待ってからもう一回っしょ☆",
+    "signOutPasswordChanging": "パスワード変え中だからバイバイむりｗ終わってからもう一回っしょ☆",
+    "resetBusy": "同期中だからリセットむりｗちょい待ってからもう一回っしょ☆",
+    "deleteBusy": "同期中だから削除むりｗちょい待ってからもう一回っしょ☆",
+    "trashBusy": "同期中だからゴミ箱いじれないｗちょい待ってからもう一回っしょ☆",
+    "importBusy": "同期中だからインポートむりｗちょい待ってからもう一回っしょ☆",
+    "ownDeviceDeleteFromLocal": "このデバイスのデータはLocalタブから消してね☆",
     "encryptionPassword": "暗号化パスワード☆",
     "passwordSet": "パスワード設定おけ！",
     "passwordPlaceholder": "パスワード入れてねん♡",
@@ -946,15 +956,27 @@
     "importComplete": "インポート完了っしょ！",
     "importFailed": "インポート失敗…サゲ。。",
     "passwordMismatch": "パスワード違くね？確認してよｗ",
+    "passwordAlreadySet": "パスワードもう保存されてるよ～！「パスワード入れ直す☆」か「パスワード変える☆」使ってね♡",
     "scanning": "スキャンちう…",
     "downloading": "ダウンロードなう☆",
     "noRemoteData": "リモートにデータないじゃん",
     "undecryptableCount": "{{count}} 件開けないやつあるｗ",
+    "trash": {
+      "description": "おんなじデータの別コピーが選ばれたから、同期が使わなくなったコピーたちだよ☆ 復元したら今のコピーと入れ替えね（今のはゴミ箱行き）",
+      "empty": "ゴミ箱すっからかん☆",
+      "restore": "復活☆",
+      "notRestorable": "この PC の打鍵データは復活むりｗこの PC からまた上がるから安心☆",
+      "updated": "更新 {{date}}",
+      "autoDelete": "今のコピーがあるなら {{date}} 過ぎたらポイ☆",
+      "notFound": "これもうゴミ箱にいないっぽいｗ"
+    },
     "checkingRemotePassword": "同期チェックなう☆",
     "existingPasswordHint": "もう設定されてるよん！使ってたパスワード入れてね♡",
     "reenterPasswordWarning": "このPCのパスワード、Google Driveとズレてるっぽい！他のPCで使ってるパスワード入れてね♡",
     "reenterPassword": "パスワード入れ直す☆",
     "reenterPasswordNoRemote": "Google Driveにまだ比べるパスワード無いよ～！フォーム閉じて今のパスワードで同期してね♡",
+    "storedPasswordUnreadable": "このPCに保存したパスワード、キーチェーンに断られて読めないんですけどｗ キーチェーンがロック中とか拒否っちゃったなら、解除して「もう一回！」押してね♡ それ以外なら下でパスワード設定し直してね！",
+    "keystoreUnavailableNotice": "OSのキーチェーン開けなかったなら、解除するか設定して（Linuxならキーリング）、Pipette再起動してね♡",
     "updateRequired": "このGoogle Driveの同期データ、新しいPipetteで作られてるっぽい！同期続けたいならアプデしてね☆",
     "updateBanner": {
       "message": "Cloud Sync、新しいPipetteじゃないとダメっぽい！同期続けたいならアプリをアプデしてね☆",
@@ -1886,20 +1908,23 @@
     "syncNoOrphans": "全部ここにあるっぽみ☆",
     "resetAppSettings": "アプリ設定リセット☆",
     "cloudData": "クラウドデータ☆",
+    "trash": "ゴミ箱☆",
     "typing": {
       "title": "タイピング☆",
       "noKeyboards": "タイピングデータないじゃん",
       "noItems": "このキーボードのデータないしｗ",
       "summaryLine": "{{days}} 日分 / 合計 {{keystrokes}} 打ったよん☆",
-      "colDate": "日付☆",
+      "colDateZone": "日付☆（{{zone}}）",
       "colKeystrokes": "打鍵数っしょ",
       "colActiveMs": "打ってた時間☆",
       "selectAll": "全部選ぶっしょ！",
       "selectRow": "{{date}} を選ぶ☆",
       "deleteSelected": "選んだの消すっしょ ({{count}})",
       "deleteAll": "これの全データ消すっしょ！",
-      "confirmDeleteSelected": "選んだ {{count}} 日分消しちゃう？他のは残るけど再インポは無理っしょ☆",
-      "confirmDeleteAll": "全部消しちゃう？他のは残るけど再インポは無理っしょ☆",
+      "confirmDeleteSelected": "選んだ {{count}} 日分消しちゃう？他のは残るけど、前のExportを再インポしても消えたままだよ☆",
+      "confirmDeleteAll": "全部消しちゃう？他のPCからも次の同期で消えるよ。他のデバイスの分は残るけど、前のExportを再インポしても消えたままだよ☆",
+      "confirmDeleteSelectedDevice": "このデバイスの {{count}} 日分、ここでソッコー隠しちゃう？記録したPCが次に同期したら消えるよ。今より後に打った分は残るから安心してね☆",
+      "confirmDeleteAllDevice": "このデバイスの全部の日、ここでソッコー隠しちゃう？記録したPCが次に同期したら消えるよ。今より後に打った分は残るから安心してね☆",
       "exportLabel": "Export…☆",
       "importLabel": "Import…っしょ",
       "importStatus": {
@@ -1914,7 +1939,8 @@
           "no-matching-target": "そんな日のデータどこにもなくね？",
           "empty-or-invalid-content": "中身スカスカかバグってるっしょ☆",
           "rows-outside-day-window": "時間ズレてね？ｗ",
-          "read-error": "読み込めなかった…サゲ。。"
+          "read-error": "読み込めなかった…サゲ。。",
+          "deleted-ranges-unreadable": "削除範囲が読めなかったから、この日はそのままにしといたよ…"
         }
       },
       "noRemoteDevices": "他のデバイスで打った記録ないじゃん"

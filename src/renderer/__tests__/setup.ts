@@ -62,6 +62,7 @@ if (typeof window !== 'undefined') {
     keyLabelHubUpdate: noopOk,
     keyLabelHubDelete: noopOk,
     typingAnalyticsListAppsForRange: async () => [],
+    pipetteSettingsEnsureDir: async () => ({ success: true }),
     // Comparison baseline pool — TypingTestPane fetches this on mount.
     pipetteSettingsListAllTypingResults: async () => [],
     // Connect-time keyboard naming — fire-and-forget in useDeviceLifecycle.
@@ -84,6 +85,7 @@ if (typeof window !== 'undefined') {
     i18nPackImportApply: noopOk,
     i18nPackExport: noopOk,
     i18nPackOnChanged: () => () => undefined,
+    syncOnUnitApplied: () => () => undefined,
     hubListI18nPosts: async () => ({ success: true, data: { items: [], total: 0, page: 1, perPage: 20 } }),
     hubDownloadI18nPost: noopOk,
     hubUploadI18nPost: noopOk,

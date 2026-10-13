@@ -97,27 +97,34 @@ export async function downloadFile(fileId: string): Promise<SyncEnvelope> {
 export interface UploadedFile {
   id: string
   /** Drive's own `modifiedTime` for the revision this call just wrote.
-   *  Callers that decide a local-wins upload (i18n/theme pack bodies —
-   *  see `pinPackBodyMtimeAfterUpload` in pack-bundle-merge.ts) pin the
-   *  local file's mtime to this value instead of leaving it at "now",
-   *  closing a clock-skew gap: a locally-ahead wall clock would
-   *  otherwise permanently look newer than Drive's own stamped time,
-   *  forcing a redundant re-upload (and re-download on every peer) on
-   *  every subsequent sync pass. */
+   *  The uploader records it as the revision this machine last handled
+   *  (`recordRemoteState`, sync-runtime-state.ts), so the next poll does
+   *  not take its own upload for a remote change. */
   modifiedTime: string
 }
 
+export interface UploadFileOptions {
+  /** When the update of `existingFileId` gets 404 (the file is gone), create
+   *  the file instead of failing. For an id remembered from an earlier
+   *  create rather than taken from a listing. */
+  createIfMissing?: boolean
+}
+
+/** Updates `existingFileId`, or creates `name` when no id is given (or, with
+ *  `createIfMissing`, when that id no longer exists). The returned id is
+ *  the file actually written. */
 export async function uploadFile(
   name: string,
   envelope: SyncEnvelope,
   existingFileId?: string,
+  options?: UploadFileOptions,
 ): Promise<UploadedFile> {
   const content = JSON.stringify(envelope)
 
   if (existingFileId) {
     // Update existing file. `fields` is requested explicitly — the
     // default response for a media-upload PATCH omits `modifiedTime`.
-    const { text } = await driveRequest({
+    const { status, text } = await driveRequest({
       label: 'update',
       getHeaders: authHeaders,
       send: (headers) =>
@@ -127,8 +134,9 @@ export async function uploadFile(
           body: content,
         }),
       retryTransient: true,
+      acceptStatus: options?.createIfMissing ? (code) => code === 404 : undefined,
     })
-    return JSON.parse(text) as UploadedFile
+    if (status !== 404) return JSON.parse(text) as UploadedFile
   }
 
   // `fields` requested explicitly — same reasoning as the update path above.
@@ -195,6 +203,26 @@ export async function deleteFile(fileId: string): Promise<void> {
     retryTransient: true,
     acceptStatus: (status) => status === 404,
   })
+}
+
+/** Renames `fileId` to `name` (a metadata-only PATCH; the content is not
+ *  touched). Resolves with the renamed file, or null when it no longer
+ *  exists. Safe to retry: renaming to the same name again changes nothing. */
+export async function renameFile(fileId: string, name: string): Promise<DriveFile | null> {
+  const { status, text } = await driveRequest({
+    label: 'rename',
+    getHeaders: authHeaders,
+    send: (headers) =>
+      fetch(`${DRIVE_API}/files/${fileId}?fields=id,name,modifiedTime`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      }),
+    retryTransient: true,
+    acceptStatus: (code) => code === 404,
+  })
+  if (status === 404) return null
+  return JSON.parse(text) as DriveFile
 }
 
 export async function deleteAllFiles(): Promise<void> {
@@ -286,6 +314,11 @@ export function syncUnitFromFileName(fileName: string): string | null {
   const dayMatch = fileName.match(/^keyboards_(.+?)_devices_(.+?)_days_(\d{4}-\d{2}-\d{2})\.enc$/)
   if (dayMatch) return `keyboards/${dayMatch[1]}/devices/${dayMatch[2]}/days/${dayMatch[3]}`
 
+  // "keyboards_0x1234_devices_{hash}_deleted-ranges.enc"
+  //   → "keyboards/0x1234/devices/{hash}/deleted-ranges"
+  const rangesMatch = fileName.match(/^keyboards_(.+?)_devices_(.+?)_deleted-ranges\.enc$/)
+  if (rangesMatch) return `keyboards/${rangesMatch[1]}/devices/${rangesMatch[2]}/deleted-ranges`
+
   // "keyboards_0x1234_settings.enc" → "keyboards/0x1234/settings"
   // "keyboards_0x1234_snapshots.enc" → "keyboards/0x1234/snapshots"
   // "keyboards_0x1234_runs.enc" → "keyboards/0x1234/runs" (per-run raw
@@ -321,55 +354,39 @@ export function syncUnitFromFileName(fileName: string): string | null {
   return null
 }
 
-/** Outcome of a matched-files delete batch: `attempted` is how many files
- *  matched the predicate (0 is a legitimate "nothing to delete", not a
- *  failure); `failed` is how many of those rejected. Callers (the
- *  SYNC_RESET_TARGETS IPC handler) surface `failed > 0` as a reset
- *  failure instead of silently discarding it the way a bare
- *  `Promise.allSettled` would. */
+/** Outcome of a delete batch: `attempted` is how many files it tried to
+ *  delete (0 is a legitimate "nothing to delete", not a failure); `failed`
+ *  is how many of those rejected. Callers (the SYNC_RESET_TARGETS and
+ *  SYNC_DELETE_FILES IPC handlers) surface `failed > 0` as a failure
+ *  instead of silently discarding it the way a bare `Promise.allSettled`
+ *  would. */
 export interface DeleteMatchingFilesResult {
   attempted: number
   failed: number
+  /** Message of the first rejected delete; absent when none failed. */
+  firstError?: string
 }
 
-/** Shared body for `deleteFilesByPrefix`/`deleteFilesByExactName`: list,
- * filter by `predicate`, then delete every match with bounded
- * concurrency. Both callers still list-then-filter separately per
- * target rather than sharing one listing across a whole reset — resets
- * are a rare path, so that batching isn't worth the added complexity
- * here. */
-async function deleteMatchingFiles(
-  predicate: (file: DriveFile) => boolean,
-  listOptions?: ListFilesOptions,
-): Promise<DeleteMatchingFilesResult> {
-  const files = await listFiles(listOptions)
-  const matched = files.filter(predicate)
+/** Deletes every file in `fileIds` with bounded concurrency. A rejected
+ *  delete does not stop the others; each rejection is logged. */
+export async function deleteFilesById(fileIds: readonly string[]): Promise<DeleteMatchingFilesResult> {
   const limit = pLimit(DELETE_CONCURRENCY)
-  const results = await Promise.allSettled(
-    matched.map((file) => limit(() => deleteFile(file.id))),
-  )
-  const failed = results.filter((r) => r.status === 'rejected').length
-  return { attempted: matched.length, failed }
+  const results = await Promise.allSettled(fileIds.map((id) => limit(() => deleteFile(id))))
+  const reasons: string[] = []
+  results.forEach((result, i) => {
+    if (result.status === 'fulfilled') return
+    const reason = result.reason instanceof Error ? result.reason.message : String(result.reason)
+    console.warn(`[google-drive] delete of ${fileIds[i]} failed: ${reason}`)
+    reasons.push(reason)
+  })
+  return { attempted: fileIds.length, failed: reasons.length, firstError: reasons[0] }
 }
 
+/** Deletes every remote file whose name starts with `prefix`; a trash
+ *  file (drive-trash.ts) starts with its original name, so it goes too.
+ *  Each reset target lists separately rather than sharing one listing
+ *  across a whole reset — resets are a rare path. */
 export async function deleteFilesByPrefix(prefix: string): Promise<DeleteMatchingFilesResult> {
-  return deleteMatchingFiles((file) => file.name.startsWith(prefix))
-}
-
-/** Delete every remote file whose name matches `name` EXACTLY — unlike
- * `deleteFilesByPrefix`, this is for sync units with no subtree to
- * speak of (`key-labels.enc`, `typing-test-texts.enc`): a bare
- * `driveFileName(unit)` string has no trailing separator a prefix
- * match could safely anchor on, and a prefix match against it would
- * also catch any unrelated file that merely starts with the same
- * characters. Deletes ALL matching entries rather than looking up a
- * single id and deleting just that one — Drive keys files by id, not
- * name, so more than one file can legitimately share this exact name
- * (e.g. a stale duplicate left behind by a past upload race); a
- * find-first approach would silently leave such a duplicate behind.
- * Narrows the listing server-side via `nameContains` (the exact match
- * itself still happens client-side as a backstop, since `nameContains`
- * is a substring filter, not an equality one). */
-export async function deleteFilesByExactName(name: string): Promise<DeleteMatchingFilesResult> {
-  return deleteMatchingFiles((file) => file.name === name, { nameContains: name })
+  const files = await listFiles()
+  return deleteFilesById(files.filter((file) => file.name.startsWith(prefix)).map((file) => file.id))
 }

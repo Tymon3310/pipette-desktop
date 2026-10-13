@@ -3,13 +3,17 @@
 
 import { app } from 'electron'
 import { join } from 'node:path'
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { readFile, mkdir } from 'node:fs/promises'
 import { pLimit } from '../../shared/concurrency'
 import { decrypt } from './sync-crypto'
 import { downloadFile, driveFileName } from './google-drive'
 import type { DriveFile } from './google-drive'
+import { pickCanonicalFile } from './drive-canonical'
 import type { SnapshotIndex } from '../../shared/types/snapshot-store'
+import { notifySyncUnitApplied } from './sync-unit-applied'
+import { writeFileAtomic } from '../utils/write-file-atomic'
 import {
+  KEYBOARD_META_SYNC_UNIT,
   createEmptyKeyboardMetaIndex,
   type KeyboardMetaEntry,
   type KeyboardMetaIndex,
@@ -45,7 +49,7 @@ export async function readKeyboardMetaIndex(): Promise<KeyboardMetaIndex> {
 async function writeKeyboardMetaIndex(index: KeyboardMetaIndex): Promise<void> {
   const filePath = metaFilePath()
   await mkdir(join(app.getPath('userData'), 'sync', META_DIR), { recursive: true })
-  await writeFile(filePath, JSON.stringify(index, null, 2), 'utf-8')
+  await writeFileAtomic(filePath, JSON.stringify(index, null, 2))
 }
 
 // Serialize writes so concurrent upsert/tombstone calls can't clobber each other.
@@ -281,7 +285,7 @@ async function resolveDeviceNameFromRemoteSnapshots(
   password: string,
   driveFiles: DriveFile[],
 ): Promise<string | null> {
-  const target = driveFiles.find((file) => file.name === driveFileName(`keyboards/${uid}/snapshots`))
+  const target = pickCanonicalFile(driveFiles, driveFileName(`keyboards/${uid}/snapshots`))
   if (!target) return null
   try {
     const envelope = await downloadFile(target.id)
@@ -335,6 +339,7 @@ export async function backfillKeyboardMeta(
   }
 
   const resolved = await batchUpsertKeyboardMeta(toUpsert)
+  if (resolved > 0) notifySyncUnitApplied(KEYBOARD_META_SYNC_UNIT)
   return { resolved, failed }
 }
 
@@ -383,7 +388,12 @@ export async function applyRemoteKeyboardMetaIndex(
   return withMetaWriteLock(async () => {
     const local = await readKeyboardMetaIndex()
     const { merged, remoteNeedsUpdate } = mergeKeyboardMetaIndex(local, remote)
-    await writeKeyboardMetaIndex(merged)
+    // `merged` is already GC'd, so a tombstone-expiry-only change still
+    // differs from `local` and gets written.
+    if (JSON.stringify(merged.entries) !== JSON.stringify(local.entries)) {
+      await writeKeyboardMetaIndex(merged)
+      notifySyncUnitApplied(KEYBOARD_META_SYNC_UNIT)
+    }
     return { remoteNeedsUpdate }
   })
 }

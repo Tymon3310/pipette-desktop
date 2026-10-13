@@ -7,6 +7,7 @@
 // in a temp dir; merging and bundling are spies.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { SYNC_FORMAT_VERSION } from '../../../shared/constants/sync-format'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -58,6 +59,7 @@ vi.mock('../../logger', () => ({ log: vi.fn() }))
 vi.mock('../google-auth', () => ({
   getAuthStatus: vi.fn(async () => ({ authenticated: true })),
   getAccessToken: vi.fn(async () => 'token'),
+  getAccountSub: vi.fn(async () => null),
 }))
 
 vi.mock('../../typing-analytics/machine-hash', () => ({
@@ -99,7 +101,7 @@ vi.mock('../../key-label-store', () => ({ KEY_LABEL_SYNC_UNIT: 'key-labels' }))
 vi.mock('../../typing-test-text-store', () => ({ TYPING_TEST_TEXT_SYNC_UNIT: 'typing-test-texts' }))
 
 vi.mock('../../typing-analytics/db/typing-analytics-db', () => ({
-  getTypingAnalyticsDB: () => ({ tombstoneRowsForUidHashInRange: vi.fn() }),
+  getTypingAnalyticsDB: () => ({ tombstoneRowsForUidHashInRanges: vi.fn() }),
 }))
 
 vi.mock('../../typing-analytics/sync-state', () => ({
@@ -202,10 +204,10 @@ vi.mock('../google-drive', async () => {
   }
 })
 
-import { encrypt, decrypt, storePassword, retrievePasswordResult } from '../sync-crypto'
+import { encrypt, decrypt, storePassword, retrievePasswordResult, clearPassword } from '../sync-crypto'
 import { PASSWORD_CHANGE_LOCK_FILE } from '../google-drive'
 import { writeChangeState, forgetChangeStateCache } from '../sync-password-change-state'
-import { syncRuntime } from '../sync-runtime-state'
+import { syncRuntime, markPending } from '../sync-runtime-state'
 import { lockTiming } from '../sync-password-lock'
 import { passwordChangeTuning } from '../sync-password-switch'
 import { flushPendingChanges, setupBeforeQuitHandler } from '../sync-flush'
@@ -217,6 +219,7 @@ import {
   ensurePasswordCheckValidated,
   validatePasswordCheck,
   passwordCheckTiming,
+  resetPasswordCheckCache,
 } from '../sync-password'
 import { SyncBlockedError } from '../sync-password-guard'
 import { getAuthStatus } from '../google-auth'
@@ -231,7 +234,6 @@ import {
   hasAnyRemoteTypingData,
   listRemoteTypingHashesForUidFromCloud,
   listRemoteTypingDaysFor,
-  deleteRemoteTypingDay,
   fetchRemoteTypingDay,
   listUndecryptableFiles,
   scanRemoteData,
@@ -264,7 +266,8 @@ async function seedDrive(): Promise<void> {
 }
 
 function seedNewerSyncFormat(): void {
-  addFile('sync-format-v2.json', JSON.stringify({ type: 'sync-format', version: 2 }))
+  const newer = SYNC_FORMAT_VERSION + 1
+  addFile(`sync-format-v${newer}.json`, JSON.stringify({ type: 'sync-format', version: newer }))
 }
 
 function seedForeignLock(): void {
@@ -376,7 +379,7 @@ describe('sync password-change guard', () => {
     })
 
     it('flushPendingChanges keeps the pending changes and reports the reason', async () => {
-      syncRuntime.pendingChanges.add('favorites/tapDance')
+      markPending('favorites/tapDance')
 
       await flushPendingChanges()
 
@@ -388,7 +391,7 @@ describe('sync password-change guard', () => {
 
     it('polling merges nothing', async () => {
       vi.useFakeTimers()
-      syncRuntime.lastKnownRemoteState.set('unrelated.enc', 'x')
+      syncRuntime.lastKnownRemoteState.set('unrelated.enc', { id: 'x', modifiedTime: 'x' })
 
       startPolling()
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
@@ -403,11 +406,10 @@ describe('sync password-change guard', () => {
       expectNoDataWork()
     })
 
-    it('the Sync > Typing cloud reads and the remote day delete do nothing', async () => {
+    it('the Sync > Typing cloud reads do nothing', async () => {
       expect(await hasAnyRemoteTypingData()).toBe(false)
       expect(await listRemoteTypingHashesForUidFromCloud('uid1')).toEqual([])
       expect(await listRemoteTypingDaysFor('uid1', 'hashother')).toEqual([])
-      expect(await deleteRemoteTypingDay('uid1', 'hashother', '2026-10-01')).toBe(false)
       expect(await fetchRemoteTypingDay('uid1', 'hashother', '2026-10-01')).toBe(false)
       expect(drive.downloads).toEqual([])
       expectNoDataWork()
@@ -423,10 +425,13 @@ describe('sync password-change guard', () => {
     })
 
     it('setPasswordAndValidate is refused before the password is stored', async () => {
+      // Emptied so the refusal under test comes from the blocker, not from
+      // the already-set check, which runs before the Drive guards.
+      await clearPassword()
+
       await expect(setPasswordAndValidate(NEW)).rejects.toThrow(key)
 
-      const stored = await retrievePasswordResult()
-      expect(stored.ok && stored.password).toBe(OLD)
+      expect((await retrievePasswordResult()).ok).toBe(false)
       expectNoDataWork()
     })
 
@@ -443,7 +448,7 @@ describe('sync password-change guard', () => {
   it('a change notified during a blocked flush leaves a single retry timer', async () => {
     await seedLocalChange()
     vi.useFakeTimers()
-    syncRuntime.pendingChanges.add('favorites/tapDance')
+    markPending('favorites/tapDance')
 
     const flushing = flushPendingChanges()
     notifyChange('favorites/macro')
@@ -453,7 +458,7 @@ describe('sync password-change guard', () => {
   })
 
   describe('sync-format status', () => {
-    const newer = { required: 2, supported: 1, updateRequired: true }
+    const newer = { required: SYNC_FORMAT_VERSION + 1, supported: SYNC_FORMAT_VERSION, updateRequired: true }
 
     it('an entry point stopped by a newer marker records it', async () => {
       seedNewerSyncFormat()
@@ -527,7 +532,7 @@ describe('sync password-change guard', () => {
     it('does not flush pending changes while a local change exists, and still quits', async () => {
       await seedLocalChange()
       setupBeforeQuitHandler()
-      syncRuntime.pendingChanges.add('favorites/tapDance')
+      markPending('favorites/tapDance')
       const preventDefault = vi.fn()
 
       appEvents.handlers.get('before-quit')!({ preventDefault })
@@ -540,7 +545,7 @@ describe('sync password-change guard', () => {
 
     it('flushes when no change is in progress', async () => {
       setupBeforeQuitHandler()
-      syncRuntime.pendingChanges.add('favorites/tapDance')
+      markPending('favorites/tapDance')
 
       appEvents.handlers.get('before-quit')!({ preventDefault: vi.fn() })
       await vi.waitFor(() => expect(mockQuit).toHaveBeenCalled())
@@ -660,11 +665,12 @@ describe('sync password-change guard', () => {
       memFiles().delete(pcId)
       drive.hideNew = true
       const creates = (): number => drive.uploads.filter((name) => name === PC_NAME).length
+      await clearPassword()
 
       await setPasswordAndValidate(OLD)
       expect(creates()).toBe(1)
 
-      syncRuntime.pendingChanges.add('favorites/tapDance')
+      markPending('favorites/tapDance')
       await flushPendingChanges()
       expect((await executeSync('upload', 'favorites')).status).toBe('completed')
       expect(await executeAnalyticsSync('uid1')).toBe(true)
@@ -678,26 +684,26 @@ describe('sync password-change guard', () => {
       // Once listed, the created file is the validated one: no download.
       drive.hidden.clear()
       resetDriveLog()
-      syncRuntime.pendingChanges.add('favorites/tapDance')
+      markPending('favorites/tapDance')
       await flushPendingChanges()
       expect(drive.uploads.filter((name) => name === PC_NAME)).toEqual([])
       expect([...syncRuntime.pendingChanges]).toEqual([])
     })
 
     it('flush validates once, skips the check while its modifiedTime is unchanged, and stops on a rewritten one', async () => {
-      syncRuntime.pendingChanges.add('favorites/tapDance')
+      markPending('favorites/tapDance')
       await flushPendingChanges()
       expect(mocks.syncOrUpload).toHaveBeenCalledTimes(1)
       expect(drive.downloads).toEqual([pcId])
 
       resetDriveLog()
-      syncRuntime.pendingChanges.add('favorites/tapDance')
+      markPending('favorites/tapDance')
       await flushPendingChanges()
       expect(mocks.syncOrUpload).toHaveBeenCalledTimes(2)
       expect(drive.downloads).toEqual([])
 
       await rewritePasswordCheck(NEW)
-      syncRuntime.pendingChanges.add('favorites/tapDance')
+      markPending('favorites/tapDance')
       await flushPendingChanges()
 
       expect(drive.downloads).toEqual([pcId])
@@ -719,7 +725,7 @@ describe('sync password-change guard', () => {
 
     it('polling stops merging after the password-check is rewritten', async () => {
       vi.useFakeTimers()
-      syncRuntime.lastKnownRemoteState.set('unrelated.enc', 'x')
+      syncRuntime.lastKnownRemoteState.set('unrelated.enc', { id: 'x', modifiedTime: 'x' })
       startPolling()
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await waitForPollPassForTests()
@@ -757,6 +763,51 @@ describe('sync password-change guard', () => {
       expect(mocks.mergeDeviceDayBundle).not.toHaveBeenCalled()
     })
 
+    it('skips the download for the same password and validates again for another one', async () => {
+      await ensurePasswordCheckValidated(OLD, [...memFiles().values()])
+      expect(drive.downloads).toEqual([pcId])
+
+      resetDriveLog()
+      await ensurePasswordCheckValidated(OLD, [...memFiles().values()])
+      expect(drive.downloads).toEqual([])
+
+      await expect(ensurePasswordCheckValidated('other', [...memFiles().values()])).rejects.toThrow(PasswordMismatchError)
+      expect(drive.downloads).toEqual([pcId])
+      expect(syncRuntime.validatedPasswordCheck).toBeNull()
+    })
+
+    it('validates again once the cache is cleared', async () => {
+      await ensurePasswordCheckValidated(OLD, [...memFiles().values()])
+      resetPasswordCheckCache()
+      resetDriveLog()
+
+      await ensurePasswordCheckValidated(OLD, [...memFiles().values()])
+
+      expect(drive.downloads).toEqual([pcId])
+    })
+
+    it('a flush that read the old password before a re-enter does not upload with it', async () => {
+      await rewritePasswordCheck(NEW)
+      markPending('favorites/tapDance')
+      let openGate = (): void => {}
+      drive.listGate = new Promise<void>((resolve) => {
+        openGate = resolve
+      })
+      const flush = flushPendingChanges()
+      await vi.waitFor(() => expect(drive.lists).toBe(1))
+
+      // The re-enter lists past the gate the flush is waiting on.
+      drive.listGate = null
+      await replacePasswordAndValidate(NEW)
+      openGate()
+      await flush
+
+      expect(mocks.syncOrUpload).not.toHaveBeenCalled()
+      expect(drive.uploads).toEqual([])
+      expect(progress.at(-1)).toMatchObject({ status: 'error', message: 'sync.passwordMismatch' })
+      expect([...syncRuntime.pendingChanges]).toEqual(['favorites/tapDance'])
+    })
+
     it('fetchRemoteTypingDay merges with a matching password-check', async () => {
       expect(await fetchRemoteTypingDay(TYPING_DAY.uid, TYPING_DAY.hash, TYPING_DAY.day)).toBe(true)
       expect(mocks.mergeDeviceDayBundle).toHaveBeenCalledTimes(1)
@@ -776,12 +827,13 @@ describe('sync password-change guard', () => {
 
       expect(await storedPassword()).toBe(NEW)
       expect(drive.downloads).toEqual([pcId])
-      expect(syncRuntime.validatedPasswordCheck).toEqual({ id: pcId, modifiedTime: memFiles().get(pcId)!.modifiedTime })
+      expect(syncRuntime.validatedPasswordCheck).toMatchObject({ id: pcId, modifiedTime: memFiles().get(pcId)!.modifiedTime })
+      expect(JSON.stringify(syncRuntime.validatedPasswordCheck)).not.toContain(NEW)
       expect(drive.uploads).toEqual([])
 
       // The next flush trusts the validation: no second download.
       resetDriveLog()
-      syncRuntime.pendingChanges.add('favorites/tapDance')
+      markPending('favorites/tapDance')
       await flushPendingChanges()
       expect(drive.downloads).toEqual([])
       expect(mocks.syncOrUpload).toHaveBeenCalled()

@@ -3,12 +3,14 @@
 
 import { app } from 'electron'
 import { join } from 'node:path'
-import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
+import { mkdir, readFile, readdir } from 'node:fs/promises'
 import { IpcChannels } from '../shared/ipc/channels'
 import { notifyChange } from './sync/sync-service'
 import { secureHandle } from './ipc-guard'
+import { loadAppConfig } from './app-config'
 import { withWriteLock } from './per-uid-write-lock'
 import { isSafePathSegment } from './utils/safe-filename'
+import { writeFileAtomic } from './utils/write-file-atomic'
 import { isRecord } from '../shared/vil-file'
 import { getActiveKeyboardMetaMap, readKeyboardMetaIndex, resolveKeyboardDisplayName } from './sync/keyboard-meta'
 import { getTypingAnalyticsDB } from './typing-analytics/db/typing-analytics-db'
@@ -130,8 +132,12 @@ function validatePrefs(prefs: unknown): asserts prefs is PipetteSettings {
   }
 }
 
+function getKeyboardDir(uid: string): string {
+  return join(app.getPath('userData'), 'sync', 'keyboards', uid)
+}
+
 function getDataPath(uid: string): string {
-  return join(app.getPath('userData'), 'sync', 'keyboards', uid, 'pipette_settings.json')
+  return join(getKeyboardDir(uid), 'pipette_settings.json')
 }
 
 export async function readPipetteSettings(uid: string): Promise<PipetteSettings | null> {
@@ -188,8 +194,7 @@ async function readData(uid: string): Promise<PipetteSettings | null> {
 }
 
 async function writeData(uid: string, prefs: PipetteSettings): Promise<void> {
-  const dir = join(app.getPath('userData'), 'sync', 'keyboards', uid)
-  await mkdir(dir, { recursive: true })
+  await mkdir(getKeyboardDir(uid), { recursive: true })
 
   const data: PipetteSettings = {
     ...prefs,
@@ -197,7 +202,7 @@ async function writeData(uid: string, prefs: PipetteSettings): Promise<void> {
     layerNames: prefs.layerNames ?? [],
     _updatedAt: new Date().toISOString(),
   }
-  await writeFile(getDataPath(uid), JSON.stringify(data), 'utf-8')
+  await writeFileAtomic(getDataPath(uid), JSON.stringify(data))
 
   notifyChange(`keyboards/${uid}/settings`)
 }
@@ -219,10 +224,24 @@ function mergeAnalyze(base: unknown, partial: Record<string, unknown>): Record<s
 /** Shallow-merge only the defined keys of `partial` onto `base` so a writer
  * that omits (or leaves undefined) a field never erases the persisted value
  * another writer owns. `undefined` skips a field; `null` clears it (removes
- * the key, used by the full-prefs writer for owned fields like
- * `typingTestMemory`). `analyze` is merged one level deeper (see
+ * the key — used by setters that clear a field such as `typingTestMemory`
+ * or `viewMatrix`). `analyze` is merged one level deeper (see
  * {@link mergeAnalyze}) because three independent writers own disjoint
  * sub-fields of it. */
+// A new file starts from the app-wide defaults the renderer shows for a keyboard
+// without saved settings, so the first field-level save does not pin the shared
+// constant's layout / auto-advance.
+function newSettingsBase(): PipetteSettings {
+  const config = loadAppConfig()
+  return {
+    ...DEFAULT_PIPETTE_SETTINGS,
+    keyboardLayout: typeof config.defaultKeyboardLayout === 'string' && config.defaultKeyboardLayout.length > 0
+      ? config.defaultKeyboardLayout
+      : DEFAULT_PIPETTE_SETTINGS.keyboardLayout,
+    autoAdvance: config.defaultAutoAdvance,
+  }
+}
+
 function mergeDefined(base: PipetteSettings, partial: PipetteSettingsPatch): PipetteSettings {
   const merged: Record<string, unknown> = { ...base }
   for (const [k, v] of Object.entries(partial)) {
@@ -251,6 +270,21 @@ export function setupPipetteSettingsStore(): void {
         return await readData(uid)
       } catch {
         return null
+      }
+    },
+  )
+
+  // The keyboard directory marks a keyboard as locally known (lazy download,
+  // stored-keyboard list); this creates it without writing a settings file.
+  secureHandle(
+    IpcChannels.PIPETTE_SETTINGS_ENSURE_DIR,
+    async (_event, uid: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        validateUid(uid)
+        await mkdir(getKeyboardDir(uid), { recursive: true })
+        return { success: true }
+      } catch (err) {
+        return { success: false, error: String(err) }
       }
     },
   )
@@ -287,8 +321,8 @@ export function setupPipetteSettingsStore(): void {
   )
 
   // Field-level merge: each renderer writer PATCHes only the fields it owns,
-  // so concurrent writers (full prefs / analyze filters / goal / keymap
-  // scale) never clobber each other. The read-merge-write runs inside the
+  // so concurrent writers (per-field setters / analyze filters / goal /
+  // keymap scale) never clobber each other. The read-merge-write runs inside the
   // per-uid queue so it's atomic against other writes.
   secureHandle(
     IpcChannels.PIPETTE_SETTINGS_PATCH,
@@ -304,7 +338,7 @@ export function setupPipetteSettingsStore(): void {
         }
         await withWriteLock(uid, async () => {
           const existing = await readData(uid)
-          const merged = mergeDefined(existing ?? DEFAULT_PIPETTE_SETTINGS, partial)
+          const merged = mergeDefined(existing ?? newSettingsBase(), partial)
           validatePrefs(merged)
           await writeData(uid, merged)
         })

@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TypingDailySummary } from '../../../shared/types/typing-analytics'
 import { BTN_DANGER_OUTLINE, BTN_SECONDARY } from '../../constants/ui-tokens'
+import { localDayStartMs, localTimeZoneLabel } from './typing-time-zone-label'
+import { fetchMissingRemoteDays } from './typing-sync-remote-fetch'
 
 interface Props {
   uid: string
@@ -12,7 +14,7 @@ interface Props {
   onDeleted?: () => void
   /** Local tab by default. `"sync"` flips this component into a
    * single-remote-device view where summaries come from the hash-
-   * scoped query and deletes route to the Sync-delete cloud path. */
+   * scoped query and deletes add deleted ranges for that device. */
   mode?: 'local' | 'sync'
   /** Required for `mode === "sync"`. Identifies which remote device's
    * days are being shown and acted on. */
@@ -60,32 +62,15 @@ export function TypingAnalyticsContent({ uid, onDeleted, mode = 'local', machine
   const [confirmMode, setConfirmMode] = useState<ConfirmMode>(null)
   const [busy, setBusy] = useState(false)
   const [importStatus, setImportStatus] = useState<ImportStatus | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const isSync = mode === 'sync' && typeof machineHash === 'string'
 
   const loadSummaries = useCallback(async () => {
     setLoading(true)
     try {
-      if (isSync) {
-        // Lazy fetch: pull any day cloud currently holds for this
-        // remote device that isn't already in the local per-day tree.
-        // The "known" set must be compared in UTC-day space because
-        // the cloud listing is UTC but the daily-summary query groups
-        // by local calendar day; mixing the two caused every Sync
-        // view open to re-download the same days in non-UTC timezones.
-        try {
-          const [cloudDays, localDays] = await Promise.all([
-            window.vialAPI.typingAnalyticsListRemoteCloudDays(uid, machineHash!),
-            window.vialAPI.typingAnalyticsListLocalDeviceDays(uid, machineHash!),
-          ])
-          const knownUtcDays = new Set(localDays)
-          const toFetch = cloudDays.filter((d) => !knownUtcDays.has(d))
-          for (const day of toFetch) {
-            await window.vialAPI.typingAnalyticsFetchRemoteDay(uid, machineHash!, day)
-          }
-        } catch {
-          /* network errors surface via summaries being empty */
-        }
-      }
+      // Lazy fetch: pull any day cloud holds for this remote device that
+      // isn't in the local per-day tree yet.
+      if (isSync) await fetchMissingRemoteDays(uid, machineHash!)
       const rows = isSync
         ? await window.vialAPI.typingAnalyticsListItemsForHash(uid, machineHash!)
         : await window.vialAPI.typingAnalyticsListItemsLocal(uid)
@@ -121,46 +106,56 @@ export function TypingAnalyticsContent({ uid, onDeleted, mode = 'local', machine
     () => summaries.reduce((sum, s) => sum + s.keystrokes, 0),
     [summaries],
   )
+  // The rows are local days; the offset is the one at the start of the
+  // newest listed day (the list is sorted newest first).
+  const zoneLabel = useMemo(
+    () => localTimeZoneLabel((summaries.length > 0 ? localDayStartMs(summaries[0].date) : null) ?? Date.now()),
+    [summaries],
+  )
+
+  /** Runs a delete, reloads the list when it succeeds, and shows the
+   *  failure otherwise (e.g. sync still running after the main process
+   *  waited for it). Returns whether it succeeded. */
+  const runDelete = useCallback(async (
+    remove: () => Promise<{ success: boolean; error?: string }>,
+  ): Promise<boolean> => {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await remove()
+      if (!result.success) {
+        setError(result.error ? t(result.error, result.error) : t('statusBar.sync.error'))
+        return false
+      }
+      setConfirmMode(null)
+      await loadSummaries()
+      return true
+    } catch {
+      setError(t('statusBar.sync.error'))
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }, [loadSummaries, t])
 
   const handleDeleteSelected = useCallback(async () => {
     if (selected.size === 0) return
     // Capture the "delete clears the list" signal BEFORE the await so the
     // next loadSummaries() replacing `summaries` cannot race this check.
     const clearsView = summaries.length === selected.size
-    setBusy(true)
-    try {
-      if (isSync) {
-        for (const date of selected) {
-          await window.vialAPI.typingAnalyticsDeleteRemoteDay(uid, machineHash!, date)
-        }
-      } else {
-        await window.vialAPI.typingAnalyticsDeleteItems(uid, Array.from(selected))
-      }
-      setConfirmMode(null)
-      await loadSummaries()
-      if (clearsView) onDeleted?.()
-    } finally {
-      setBusy(false)
-    }
-  }, [uid, machineHash, isSync, selected, summaries.length, loadSummaries, onDeleted])
+    const dates = Array.from(selected)
+    const ok = await runDelete(() => isSync
+      ? window.vialAPI.typingAnalyticsDeleteDeviceData(uid, machineHash!, dates)
+      : window.vialAPI.typingAnalyticsDeleteItems(uid, dates))
+    if (ok && clearsView) onDeleted?.()
+  }, [uid, machineHash, isSync, selected, summaries.length, runDelete, onDeleted])
 
   const handleDeleteAll = useCallback(async () => {
-    setBusy(true)
-    try {
-      if (isSync) {
-        for (const summary of summaries) {
-          await window.vialAPI.typingAnalyticsDeleteRemoteDay(uid, machineHash!, summary.date)
-        }
-      } else {
-        await window.vialAPI.typingAnalyticsDeleteAll(uid)
-      }
-      setConfirmMode(null)
-      await loadSummaries()
-      onDeleted?.()
-    } finally {
-      setBusy(false)
-    }
-  }, [uid, machineHash, isSync, summaries, loadSummaries, onDeleted])
+    const ok = await runDelete(() => isSync
+      ? window.vialAPI.typingAnalyticsDeleteDeviceData(uid, machineHash!, 'all')
+      : window.vialAPI.typingAnalyticsDeleteAll(uid))
+    if (ok) onDeleted?.()
+  }, [uid, machineHash, isSync, runDelete, onDeleted])
 
   const handleExport = useCallback(async () => {
     if (selected.size === 0) return
@@ -180,9 +175,15 @@ export function TypingAnalyticsContent({ uid, onDeleted, mode = 'local', machine
 
   const handleImport = useCallback(async () => {
     setBusy(true)
+    setError(null)
     setImportStatus({ phase: 'importing' })
     try {
-      const { result, cancelled } = await window.vialAPI.typingAnalyticsImport()
+      const { success, error: importError, result, cancelled } = await window.vialAPI.typingAnalyticsImport()
+      if (!success || !result) {
+        setImportStatus(null)
+        setError(importError ? t(importError, importError) : t('statusBar.sync.error'))
+        return
+      }
       if (cancelled) {
         setImportStatus(null)
         return
@@ -192,13 +193,21 @@ export function TypingAnalyticsContent({ uid, onDeleted, mode = 'local', machine
         await loadSummaries()
         onDeleted?.()
       }
+    } catch {
+      setImportStatus(null)
+      setError(t('statusBar.sync.error'))
     } finally {
       setBusy(false)
     }
-  }, [loadSummaries, onDeleted])
+  }, [loadSummaries, onDeleted, t])
 
   const footer = (
     <div className="mt-4 border-t border-edge pt-3 shrink-0">
+      {error && (
+        <div className="mb-2 text-xs text-danger" data-testid="typing-error">
+          {error}
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           {!isSync && confirmMode === null && (
@@ -228,7 +237,7 @@ export function TypingAnalyticsContent({ uid, onDeleted, mode = 'local', machine
         {confirmMode === 'selected' ? (
           <>
             <span className="text-sm text-danger">
-              {t('dataModal.typing.confirmDeleteSelected', { count: selected.size })}
+              {t(isSync ? 'dataModal.typing.confirmDeleteSelectedDevice' : 'dataModal.typing.confirmDeleteSelected', { count: selected.size })}
             </span>
             <button
               type="button"
@@ -251,7 +260,7 @@ export function TypingAnalyticsContent({ uid, onDeleted, mode = 'local', machine
           </>
         ) : confirmMode === 'all' ? (
           <>
-            <span className="text-sm text-danger">{t('dataModal.typing.confirmDeleteAll')}</span>
+            <span className="text-sm text-danger">{t(isSync ? 'dataModal.typing.confirmDeleteAllDevice' : 'dataModal.typing.confirmDeleteAll')}</span>
             <button
               type="button"
               className={BTN_DANGER_OUTLINE}
@@ -397,7 +406,7 @@ export function TypingAnalyticsContent({ uid, onDeleted, mode = 'local', machine
                   data-testid="typing-select-all"
                 />
               </th>
-              <th className="py-1.5 px-2 text-left font-medium">{t('dataModal.typing.colDate')}</th>
+              <th className="py-1.5 px-2 text-left font-medium">{t('dataModal.typing.colDateZone', { zone: zoneLabel })}</th>
               <th className="py-1.5 px-2 text-right font-medium">{t('dataModal.typing.colKeystrokes')}</th>
               <th className="py-1.5 px-2 text-right font-medium">{t('dataModal.typing.colActiveMs')}</th>
             </tr>
