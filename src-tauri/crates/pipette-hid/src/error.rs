@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+use pipette_virtual_device::NotOpenError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum HidError {
+    #[error("No HID device is open")]
+    NotOpen,
+    /// The read window passed with no report. The only retryable failure:
+    /// write errors, disconnects and I/O errors fail at once.
+    #[error("HID read timeout")]
+    ReadTimeout,
+    /// No Vial interface other than the main connection matches the probe's
+    /// VID/PID (and serial number, when one is given).
+    #[error("Probe target device not found")]
+    ProbeTargetNotFound,
+    /// The probe handle with this id is not the open one, or it was closed
+    /// by `close_probe` while being opened.
+    #[error("No probe device is open")]
+    ProbeNotOpen,
+    /// An empty read on the probe handle. Probes never retry.
+    #[error("HID read timeout during probe")]
+    ProbeReadTimeout,
+    #[error("HID data exceeds maximum length of {max}")]
+    DataTooLong { max: usize },
+    /// Any failure reported by the HID library (enumeration, open, write, read).
+    #[error("{0}")]
+    Backend(String),
+}
+
+impl From<hidapi::HidError> for HidError {
+    fn from(err: hidapi::HidError) -> Self {
+        Self::Backend(err.to_string())
+    }
+}
+
+/// A report reached the virtual device after it was closed.
+impl From<NotOpenError> for HidError {
+    fn from(_: NotOpenError) -> Self {
+        Self::NotOpen
+    }
+}

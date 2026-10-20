@@ -1,0 +1,189 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// In-memory HID backend for the service tests.
+
+#![allow(dead_code, clippy::unwrap_used)]
+
+use std::collections::VecDeque;
+use std::ffi::CString;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+
+use pipette_hid::{
+    HID_USAGE, HID_USAGE_PAGE, HidBackend, HidError, HidHandle, HidService, RawDeviceInfo, Timing,
+    VirtualDeviceMode, is_vial_interface,
+};
+
+/// One HID interface as the OS lists it, Vial or not.
+#[derive(Clone)]
+pub struct MockDevice {
+    pub info: RawDeviceInfo,
+    pub usage_page: u16,
+    pub usage: u16,
+}
+
+pub fn raw_device(path: &str) -> MockDevice {
+    MockDevice {
+        info: RawDeviceInfo {
+            path: CString::new(path).unwrap(),
+            vendor_id: 0x1234,
+            product_id: 0x5678,
+            serial_number: Some("vial:f64c2b3c".into()),
+            product: Some("Real Test Keyboard".into()),
+        },
+        usage_page: HID_USAGE_PAGE,
+        usage: HID_USAGE,
+    }
+}
+
+/// One scripted read: bytes (empty = timeout) or an error message.
+pub type ReadResult = Result<Vec<u8>, String>;
+
+#[derive(Default)]
+pub struct MockHandle {
+    pub writes: Mutex<Vec<Vec<u8>>>,
+    pub reads: Mutex<VecDeque<ReadResult>>,
+    /// Returned when `reads` is empty.
+    pub default_read: Mutex<Vec<u8>>,
+    pub write_error: Mutex<Option<String>>,
+    /// Called inside every read, before it returns (blocking hooks, ordering).
+    pub on_read: Mutex<Option<Box<dyn Fn() + Send>>>,
+    pub read_calls: AtomicUsize,
+    /// This many reads fail with `HidError::ReadTimeout` (an error the
+    /// handle returns, not an empty read).
+    pub read_timeout_errors: AtomicUsize,
+    /// Timeouts each read was given.
+    pub read_timeouts: Mutex<Vec<i32>>,
+    pub close_calls: AtomicUsize,
+}
+
+impl HidHandle for MockHandle {
+    fn write(&self, data: &[u8]) -> Result<usize, HidError> {
+        if let Some(message) = self.write_error.lock().unwrap().clone() {
+            return Err(HidError::Backend(message));
+        }
+        self.writes.lock().unwrap().push(data.to_vec());
+        Ok(data.len())
+    }
+
+    fn read_timeout(&self, buf: &mut [u8], timeout_ms: i32) -> Result<usize, HidError> {
+        self.read_calls.fetch_add(1, Ordering::SeqCst);
+        self.read_timeouts.lock().unwrap().push(timeout_ms);
+        if self.read_timeout_errors.load(Ordering::SeqCst) > 0 {
+            self.read_timeout_errors.fetch_sub(1, Ordering::SeqCst);
+            return Err(HidError::ReadTimeout);
+        }
+        if let Some(hook) = self.on_read.lock().unwrap().as_ref() {
+            hook();
+        }
+        let next = self.reads.lock().unwrap().pop_front();
+        let bytes = match next {
+            Some(Ok(bytes)) => bytes,
+            Some(Err(message)) => return Err(HidError::Backend(message)),
+            None => self.default_read.lock().unwrap().clone(),
+        };
+        buf[..bytes.len()].copy_from_slice(&bytes);
+        Ok(bytes.len())
+    }
+
+    fn close(&self) {
+        self.close_calls.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[derive(Default)]
+pub struct MockBackend {
+    pub devices: Mutex<Vec<MockDevice>>,
+    /// Opened for every path without its own entry in `path_handles`.
+    pub handle: Arc<MockHandle>,
+    /// A handle of its own for a path, created on first open and reused.
+    pub path_handles: Mutex<Vec<(CString, Arc<MockHandle>)>>,
+    /// Paths given to open_path, failed attempts included.
+    pub opened_paths: Mutex<Vec<CString>>,
+    /// Called inside open_path, before it returns.
+    pub on_open: Mutex<Option<Box<dyn Fn() + Send>>>,
+    /// When set, enumeration fails with this message.
+    pub enumerate_error: Mutex<Option<String>>,
+    pub enumerate_calls: AtomicUsize,
+    pub open_calls: AtomicUsize,
+    /// open_path fails this many times before succeeding.
+    pub open_failures: AtomicUsize,
+    /// The message of those failures; "open failed" when unset.
+    pub open_error: Mutex<Option<String>>,
+}
+
+/// Shares one `MockBackend` between the service and the test. Enumeration
+/// keeps only Vial interfaces, with the same filter as the hidapi backend.
+pub struct SharedBackend(pub Arc<MockBackend>);
+
+impl HidBackend for SharedBackend {
+    fn enumerate(&self) -> Result<Vec<RawDeviceInfo>, HidError> {
+        self.0.enumerate_calls.fetch_add(1, Ordering::SeqCst);
+        if let Some(message) = self.0.enumerate_error.lock().unwrap().clone() {
+            return Err(HidError::Backend(message));
+        }
+        let devices = self.0.devices.lock().unwrap();
+        Ok(devices
+            .iter()
+            .filter(|d| is_vial_interface(d.usage_page, d.usage))
+            .map(|d| d.info.clone())
+            .collect())
+    }
+
+    fn open_path(&self, path: &CString) -> Result<Arc<dyn HidHandle>, HidError> {
+        self.0.open_calls.fetch_add(1, Ordering::SeqCst);
+        self.0.opened_paths.lock().unwrap().push(path.clone());
+        if let Some(hook) = self.0.on_open.lock().unwrap().as_ref() {
+            hook();
+        }
+        let remaining = self.0.open_failures.load(Ordering::SeqCst);
+        if remaining > 0 {
+            self.0.open_failures.store(remaining - 1, Ordering::SeqCst);
+            let message = self.0.open_error.lock().unwrap().clone().unwrap_or_else(|| "open failed".into());
+            return Err(HidError::Backend(message));
+        }
+        let own = self.0.path_handles.lock().unwrap().iter().find(|(p, _)| p == path).map(|(_, h)| h.clone());
+        Ok(own.unwrap_or_else(|| self.0.handle.clone()))
+    }
+}
+
+pub struct Fixture {
+    pub service: HidService,
+    pub backend: Arc<MockBackend>,
+    pub sleeps: Arc<AtomicUsize>,
+}
+
+/// A service on the mock backend with the clock fixed at 0 and retry delays
+/// skipped (and counted).
+pub fn fixture(mode: VirtualDeviceMode) -> Fixture {
+    let backend = Arc::new(MockBackend::default());
+    let sleeps = Arc::new(AtomicUsize::new(0));
+    let sleep_counter = sleeps.clone();
+    let timing = Timing::new(
+        || 0,
+        move |_| {
+            sleep_counter.fetch_add(1, Ordering::SeqCst);
+        },
+    );
+    let service = HidService::with_backend(Box::new(SharedBackend(backend.clone())), mode, timing);
+    Fixture { service, backend, sleeps }
+}
+
+impl MockBackend {
+    /// The handle open_path returns for `path`, created on first use.
+    pub fn handle_for(&self, path: &str) -> Arc<MockHandle> {
+        let path = CString::new(path).unwrap();
+        let mut handles = self.path_handles.lock().unwrap();
+        if let Some((_, handle)) = handles.iter().find(|(p, _)| *p == path) {
+            return handle.clone();
+        }
+        let handle = Arc::new(MockHandle::default());
+        handles.push((path, handle.clone()));
+        handle
+    }
+}
+
+/// Enumerate one real (mock) keyboard and open it.
+pub fn open_real(f: &Fixture) {
+    f.backend.devices.lock().unwrap().push(raw_device("/dev/hidraw0"));
+    assert!(f.service.open_device(0x1234, 0x5678).unwrap());
+}

@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
+import { clearMocks, mockIPC } from '@tauri-apps/api/mocks'
 import { useKeyLabels } from '../useKeyLabels'
+import { keyLabelsApi } from '../../../tauri-shim/api/key-labels'
+import { keyLabelHubApi } from '../../../tauri-shim/api/key-label-hub'
 
 const mockList = vi.fn()
 const mockImport = vi.fn()
@@ -19,23 +22,66 @@ const mockHubDelete = vi.fn()
 const mockHubSync = vi.fn()
 const mockHubTimestamps = vi.fn()
 
-Object.defineProperty(window, 'vialAPI', {
-  value: {
-    keyLabelStoreList: mockList,
-    keyLabelStoreImport: mockImport,
-    keyLabelStoreExport: mockExport,
-    keyLabelStoreReorder: mockReorder,
-    keyLabelStoreRename: mockRename,
-    keyLabelStoreDelete: mockDelete,
-    keyLabelHubList: mockHubList,
-    keyLabelHubDownload: mockHubDownload,
-    keyLabelHubUpload: mockHubUpload,
-    keyLabelHubUpdate: mockHubUpdate,
-    keyLabelHubDelete: mockHubDelete,
-    keyLabelHubSync: mockHubSync,
-    keyLabelHubTimestamps: mockHubTimestamps,
+const storeMembers = {
+  keyLabelStoreList: mockList,
+  keyLabelStoreImport: mockImport,
+  keyLabelStoreExport: mockExport,
+  keyLabelStoreReorder: mockReorder,
+  keyLabelStoreRename: mockRename,
+  keyLabelStoreDelete: mockDelete,
+}
+
+// The plain mock's Hub members; the shim's hand their arguments to
+// the same spies.
+const hubMembers = {
+  keyLabelHubList: mockHubList,
+  keyLabelHubDownload: mockHubDownload,
+  keyLabelHubUpload: mockHubUpload,
+  keyLabelHubUpdate: mockHubUpdate,
+  keyLabelHubDelete: mockHubDelete,
+  keyLabelHubSync: mockHubSync,
+  keyLabelHubTimestamps: mockHubTimestamps,
+}
+
+function installVialAPI(members: object): void {
+  Object.defineProperty(window, 'vialAPI', { value: { ...hubMembers, ...members }, writable: true, configurable: true })
+}
+
+// Both vialAPI implementations answer from the same spies: a plain
+// mock, and the Tauri shim's key label and key label Hub members over a
+// mocked Tauri IPC, whose commands hand their arguments to the spies in the
+// members' order.
+const backends = [
+  { name: 'plain mock', install: () => installVialAPI(storeMembers) },
+  {
+    name: 'Tauri shim over mockIPC',
+    install: () => {
+      mockIPC((cmd, payload) => {
+        const a = payload as Record<string, unknown>
+        switch (cmd) {
+          case 'key_label_store_list': return mockList()
+          case 'key_label_store_import': return mockImport()
+          case 'key_label_store_export': return mockExport(a.id)
+          case 'key_label_store_reorder': return mockReorder(a.orderedIds)
+          case 'key_label_store_rename': return mockRename(a.id, a.newName)
+          case 'key_label_store_delete': return mockDelete(a.id)
+          case 'key_label_hub_list': return mockHubList(a.params)
+          case 'key_label_hub_download': return mockHubDownload(a.hubPostId)
+          case 'key_label_hub_upload': return mockHubUpload(a.localId)
+          case 'key_label_hub_update': return mockHubUpdate(a.localId)
+          case 'key_label_hub_delete': return mockHubDelete(a.localId)
+          case 'key_label_hub_sync': return mockHubSync(a.localId)
+          case 'key_label_hub_timestamps': return mockHubTimestamps(a.ids)
+          default: throw new Error(`unexpected command ${cmd}`)
+        }
+      })
+      installVialAPI({ ...keyLabelsApi, ...keyLabelHubApi })
+    },
   },
-  writable: true,
+]
+
+afterEach(() => {
+  clearMocks()
 })
 
 function meta(overrides: Partial<{ id: string; name: string; uploaderName: string }> = {}) {
@@ -49,9 +95,10 @@ function meta(overrides: Partial<{ id: string; name: string; uploaderName: strin
   }
 }
 
-describe('useKeyLabels', () => {
+describe.each(backends)('useKeyLabels ($name)', (backend) => {
   beforeEach(() => {
     vi.clearAllMocks()
+    backend.install()
     mockList.mockResolvedValue({ success: true, data: [meta({ id: 'b', name: 'B' }), meta({ id: 'a', name: 'A' })] })
     mockImport.mockResolvedValue({ success: true, data: { imported: [{ fileName: 'c.json', meta: meta({ id: 'c', name: 'C' }) }], rejections: [] } })
     mockExport.mockResolvedValue({ success: true, data: { filePath: '/tmp/c.json' } })

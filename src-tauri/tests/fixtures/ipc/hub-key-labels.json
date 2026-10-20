@@ -1,0 +1,134 @@
+[
+  {
+    "member": "keyLabelHubList",
+    "args": [
+      {
+        "q": "x",
+        "page": 1,
+        "perPage": 20
+      }
+    ],
+    "command": "key_label_hub_list",
+    "invokeArgs": {
+      "params": {
+        "q": "x",
+        "page": 1,
+        "perPage": 20
+      }
+    },
+    "response": {
+      "success": false,
+      "errorCode": "IO_ERROR",
+      "error": "offline"
+    }
+  },
+  {
+    "member": "keyLabelHubDetail",
+    "args": [
+      "h1"
+    ],
+    "command": "key_label_hub_detail",
+    "invokeArgs": {
+      "hubPostId": "h1"
+    },
+    "response": {
+      "success": false,
+      "errorCode": "IO_ERROR",
+      "error": "offline"
+    }
+  },
+  {
+    "member": "keyLabelHubDownload",
+    "args": [
+      "h1"
+    ],
+    "command": "key_label_hub_download",
+    "invokeArgs": {
+      "hubPostId": "h1"
+    },
+    "response": {
+      "success": false,
+      "errorCode": "IO_ERROR",
+      "error": "offline"
+    }
+  },
+  {
+    "member": "keyLabelHubUpload",
+    "args": [
+      "l1"
+    ],
+    "command": "key_label_hub_upload",
+    "invokeArgs": {
+      "localId": "l1"
+    },
+    "response": {
+      "success": false,
+      "errorCode": "NOT_FOUND",
+      "error": "Key label not found"
+    }
+  },
+  {
+    "member": "keyLabelHubUpdate",
+    "args": [
+      "l1"
+    ],
+    "command": "key_label_hub_update",
+    "invokeArgs": {
+      "localId": "l1"
+    },
+    "response": {
+      "success": false,
+      "errorCode": "NOT_FOUND",
+      "error": "Key label not found"
+    }
+  },
+  {
+    "member": "keyLabelHubSync",
+    "args": [
+      "l1"
+    ],
+    "command": "key_label_hub_sync",
+    "invokeArgs": {
+      "localId": "l1"
+    },
+    "response": {
+      "success": false,
+      "errorCode": "NOT_FOUND",
+      "error": "Key label not found"
+    }
+  },
+  {
+    "member": "keyLabelHubTimestamps",
+    "args": [
+      [
+        "h1"
+      ]
+    ],
+    "command": "key_label_hub_timestamps",
+    "invokeArgs": {
+      "ids": [
+        "h1"
+      ]
+    },
+    "response": {
+      "success": false,
+      "errorCode": "IO_ERROR",
+      "error": "offline"
+    }
+  },
+  {
+    "member": "keyLabelHubDelete",
+    "args": [
+      "l1"
+    ],
+    "command": "key_label_hub_delete",
+    "invokeArgs": {
+      "localId": "l1"
+    },
+    "response": {
+      "success": false,
+      "errorCode": "NOT_FOUND",
+      "error": "Key label not found"
+    }
+  }
+]

@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+[package]
+name = "pipette-notification"
+description = "The startup notices: where they are fetched from, the request, and the checks and normalization of the response"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# The request goes through the app's HTTP client.
+pipette-net = { path = "../pipette-net" }
+# The request body, byte for byte as JSON.stringify writes it.
+pipette-js-json = { path = "../pipette-js-json" }
+# Date.parse and toISOString for the notices' publication dates.
+pipette-time = { path = "../pipette-time" }
+log = "=0.4.34"
+serde = { workspace = true }
+# The 10-second limit of the whole fetch (src/lib.rs).
+tokio = { version = "=1.53.3", features = ["time"] }
+
+[dev-dependencies]
+# The tests' runtime, with paused time for the time limit.
+tokio = { version = "=1.53.3", features = ["rt", "macros", "time", "test-util"] }
+# Reads the golden file and checks the result's JSON form.
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

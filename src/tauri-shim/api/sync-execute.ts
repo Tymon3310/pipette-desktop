@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// The VialAPI members that run the sync in the Tauri build and report on it:
+// the sync of a scope, the Analyze sync, the sync format status, and the
+// progress, format and applied-unit events, all the backend's
+// (src-tauri/src/sync_commands/{execute,analytics_remote,preflight}.rs), the
+// events on the channels of src/shared/ipc/channels.ts.
+// coverage.test.ts lists the members each of these modules holds.
+
+import { IpcChannels } from '../../shared/ipc/channels'
+import type { SyncFormatStatus, SyncOperationResult, SyncProgress } from '../../shared/types/sync'
+import type { VialAPI } from '../../shared/types/vial-api'
+import { call, subscribe } from '../ipc'
+
+export const syncExecuteApi = {
+  syncExecute: (direction, scope?) =>
+    call<SyncOperationResult>('sync_execute', scope === undefined ? { direction } : { direction, scope }),
+  syncAnalyticsNow: (uid) => call<boolean>('sync_analytics_now', { uid }),
+  syncFormatStatus: () => call<SyncFormatStatus | null>('sync_format_status'),
+  syncOnProgress: (callback) => subscribe<SyncProgress>(IpcChannels.SYNC_PROGRESS, callback),
+  syncOnFormatStatusChanged: (callback) =>
+    subscribe<SyncFormatStatus | null>(IpcChannels.SYNC_FORMAT_STATUS_CHANGED, callback),
+  syncOnUnitApplied: (callback) =>
+    subscribe<{ syncUnit: string }>(IpcChannels.SYNC_UNIT_APPLIED, (payload) => callback(payload.syncUnit)),
+} satisfies Partial<VialAPI>
