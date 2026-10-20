@@ -3,7 +3,10 @@ import tsparser from '@typescript-eslint/parser'
 
 export default [
   {
-    files: ['src/**/*.{ts,tsx}'],
+    // The fake servers and tools under scripts/ and the Tauri e2e tests get
+    // the same TypeScript rules as src/. The scripts/ globs must match the
+    // include list in tsconfig.scripts.json.
+    files: ['src/**/*.{ts,tsx}', 'scripts/script-vitest-config.ts', 'scripts/fake-drive/**/*.ts', 'scripts/fake-hub/**/*.ts', 'scripts/fake-notification/**/*.ts', 'scripts/fake-update/**/*.ts', 'scripts/update-manifest/**/*.ts', 'scripts/fake-server/**/*.ts', 'scripts/node-identity/**/*.ts', 'scripts/takeover-rehearsal/**/*.ts', 'e2e-tauri/**/*.ts'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
@@ -79,8 +82,7 @@ export default [
       'src/shared/keycodes/keycodes-v6.ts',
       'src/shared/typing-benchmarks.ts',
       'src/renderer/typing-test/romaji-tables.ts',
-      'src/preload/index.ts',
-      'src/preload/keychron-protocol.ts',
+      'src/tauri-shim/keychron-protocol.ts',
       'src/renderer/App.tsx',
       'src/renderer/components/editors/KeychronAnalog.tsx',
       'src/renderer/components/editors/KeychronDfuFlasher.tsx',
@@ -91,6 +93,6 @@ export default [
     }
   },
   {
-    ignores: ['out/', 'dist/', 'node_modules/']
+    ignores: ['out-tauri/', 'dist/', 'dist-web/', 'node_modules/']
   }
 ]

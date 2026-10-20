@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Type definition for the vialAPI exposed by preload via contextBridge
+// Type definition for the vialAPI the Tauri shim installs on window
+// (src/tauri-shim/install.ts)
 
 import type {
   DeviceInfo,
@@ -69,6 +70,7 @@ import type { AozoraImportResult } from './aozora-import'
 import type { HubUploadPostParams, HubUpdatePostParams, HubPatchPostParams, HubUploadResult, HubDeleteResult, HubFetchMyPostsResult, HubFetchMyKeyboardPostsResult, HubFetchMyPostsParams, HubUserResult, HubUploadFavoritePostParams, HubUpdateFavoritePostParams, HubUploadAnalyticsPostParams, HubUpdateAnalyticsPostParams, HubPreviewAnalyticsPostParams, HubAnalyticsPreview, HubUploadI18nPostParams, HubUpdateI18nPostParams, HubI18nListParams, HubI18nListResponse, HubI18nExportV1, HubI18nPackTimestampsResponse, HubUploadThemePostParams, HubUpdateThemePostParams, HubThemeListParams, HubThemeListResponse, HubThemePackBody, HubThemePackTimestampsResponse, HubPrivateUploadResult, HubPrivateKind, HubPrivateUploadPostParams, HubPrivateUploadFavoritePostParams, HubPrivateUploadAnalyticsPostParams } from './hub'
 import type { HubPrivateLink } from './hub-private'
 import type { NotificationFetchResult } from './notification'
+import type { UpdateCheckResult, UpdateFailure, UpdateInstallResult, UpdateProgress } from './update'
 
 export interface VialAPI {
   // Device Management
@@ -187,7 +189,7 @@ export interface VialAPI {
   jumpToBootloader(): Promise<void>
 
   // Debug
-  getDebugFlags(): Promise<Record<string, string | undefined>>
+  getDebugFlags?(): Promise<Record<string, string | undefined>>
 
   // File I/O (IPC to main for native file dialogs)
   saveLayout(json: string, deviceName?: string): Promise<{ success: boolean; filePath?: string; error?: string }>
@@ -362,8 +364,8 @@ export interface VialAPI {
   typingAnalyticsListRemoteCloudDays(uid: string, machineHash: string): Promise<string[]>
   typingAnalyticsFetchRemoteDay(uid: string, machineHash: string, utcDay: string): Promise<boolean>
   /** Deletes another device's typing on local calendar `dates`, or all of
-   * it, up to the moment of the call (see deleteDeviceTypingData,
-   * typing-device-delete.ts). */
+   * it, up to the moment of the call (see
+   * src-tauri/crates/pipette-typing-analytics/src/device_delete.rs). */
   typingAnalyticsDeleteDeviceData(uid: string, machineHash: string, dates: string[] | 'all'): Promise<{ success: boolean; error?: string }>
   typingAnalyticsExport(uid: string, dates: string[]): Promise<{ written: number; cancelled: boolean }>
   typingAnalyticsImport(): Promise<TypingAnalyticsImportResult>
@@ -450,6 +452,12 @@ export interface VialAPI {
 
   // Shell
   openExternal(url: string): Promise<void>
+
+  // In-app update
+  updateCheck(): Promise<UpdateCheckResult>
+  updateInstall(version: string): Promise<UpdateInstallResult>
+  updateTakeFailure(): Promise<UpdateFailure | null>
+  updateOnProgress(callback: (progress: UpdateProgress) => void): () => void
 
   // Snapshot Store extensions
   snapshotStoreSetHubPostId(uid: string, entryId: string, hubPostId: string | null): Promise<{ success: boolean; error?: string }>
@@ -549,9 +557,8 @@ export interface VialAPI {
 }
 
 /** Connected-keyboard name and REC keystroke-counter state reported by
- * the renderer to the main-process tray. Purely display data — declared
- * once here so every IPC leg (renderer hook, preload bridge, main
- * handler) shares one shape instead of re-typing it per boundary. */
+ * the renderer to the tray. Purely display data — declared once here so
+ * the renderer hook and the shim member share one shape. */
 export interface TrayStatus {
   keyboardName: string | null
   recording: boolean

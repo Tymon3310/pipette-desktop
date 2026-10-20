@@ -1,0 +1,78 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Pipette",
+  "mainBinaryName": "pipette",
+  "version": "../package.json",
+  "identifier": "app.pipette.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm exec vite --config vite.tauri.config.ts",
+    "beforeBuildCommand": "pnpm exec vite build --config vite.tauri.config.ts",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../out-tauri/renderer"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "create": false,
+        "url": "tauri.html",
+        "title": "Pipette"
+      }
+    ],
+    "security": {
+      "headers": {
+        "X-Content-Type-Options": "nosniff"
+      },
+      "csp": {
+        "default-src": "'self'",
+        "img-src": "'self' data:",
+        "font-src": "'self'",
+        "base-uri": "'self'",
+        "object-src": "'none'",
+        "frame-src": "'none'",
+        "frame-ancestors": "'none'",
+        "form-action": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self'",
+        "connect-src": "'self' ipc: http://ipc.localhost"
+      },
+      "devCsp": {
+        "default-src": "'self'",
+        "img-src": "'self' data:",
+        "font-src": "'self'",
+        "base-uri": "'self'",
+        "object-src": "'none'",
+        "frame-src": "'none'",
+        "frame-ancestors": "'none'",
+        "form-action": "'self'",
+        "script-src": "'self' 'unsafe-inline'",
+        "style-src": "'self' 'unsafe-inline'",
+        "connect-src": "'self' ipc: http://ipc.localhost ws://localhost:*"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU1OTA1RjRCOTlBQkNEOTEKUldTUnphdVpTMStRVlpSTDFzTVRRTHVhVWhyL29HYnhibTRGOGpEVXZTZUUyM0FHSXNuWFlSYkIK",
+      "requireSignedVersion": true,
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "publisher": "darakuneko",
+    "copyright": "Copyright © darakuneko",
+    "license": "GPL-3.0-or-later",
+    "homepage": "https://github.com/tymon3310/pipette-desktop",
+    "category": "Utility",
+    "shortDescription": "Vial-compatible keyboard configurator",
+    "icon": [
+      "../build/icon.png",
+      "../build/icon.ico",
+      "../build/icon.icns"
+    ]
+  }
+}

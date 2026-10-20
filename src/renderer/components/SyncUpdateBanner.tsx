@@ -9,7 +9,7 @@ import { X } from 'lucide-react'
 import { BTN_SECONDARY, ICON_SM } from '../constants/ui-tokens'
 import type { SyncUpdateBannerState } from '../hooks/use-sync-format-status'
 
-export const PIPETTE_RELEASES_URL = 'https://github.com/darakuneko/pipette-desktop/releases/latest'
+export const PIPETTE_RELEASES_URL = 'https://github.com/tymon3310/pipette-desktop/releases/latest'
 
 interface Props {
   state: SyncUpdateBannerState

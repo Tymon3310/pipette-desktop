@@ -1,0 +1,467 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Tauri entry point: one window that loads the renderer build, the HID,
+// definition, app config and window commands its vialAPI shim calls, the
+// typing analytics, the tray of tray.rs, the quit handling of lifecycle.rs
+// and the window geometry of window_ops. Before any of that it settles the
+// userData directory (the 0.4 build's for a distributed build) and
+// refuses to start while the 0.4 build holds it; once no other instance
+// of this build runs, it locks the directory against the 0.4 build on
+// Windows, starts the log in the directory and loads the app config.
+
+// Builds in the release profile (the ones that get bundled) must not open a
+// console next to the window on Windows. build.rs sets `release_profile`, from
+// the same check that keeps the dev-tools feature out of that profile, so
+// every build with the development tools keeps its console.
+#![cfg_attr(release_profile, windows_subsystem = "windows")]
+
+mod analytics_commands;
+mod app_config;
+#[cfg(any(target_os = "macos", test))]
+mod app_menu;
+#[cfg(test)]
+mod capability_files;
+mod command_error;
+mod definition;
+mod dev_commands;
+mod dialog;
+mod e2e_run;
+mod events;
+mod file_commands;
+mod hid_commands;
+mod hub_commands;
+#[cfg(test)]
+mod ipc_contract;
+mod keychron_dfu;
+mod lifecycle;
+mod main_window;
+mod navigation;
+mod notification_commands;
+mod refusal;
+mod shell;
+mod shutdown;
+mod store_commands;
+mod sync_commands;
+mod tray;
+mod typing_dataset_commands;
+mod updater;
+mod window_bounds;
+mod window_commands;
+mod window_ops;
+mod window_state;
+
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
+
+use pipette_hid::{HidService, VirtualDeviceMode};
+use tauri::ipc::Invoke;
+use tauri::{Manager, Runtime};
+
+use crate::hid_commands::Hid;
+use crate::shell::ExternalOpener;
+
+/// The handler of the app commands; their permissions are listed in
+/// build.rs and granted in capabilities/main.json. Generic over the runtime
+/// so the IPC contract tests (ipc_contract.rs) run these same commands on
+/// Tauri's mock runtime.
+fn app_commands<R: Runtime>() -> impl Fn(Invoke<R>) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![
+        hid_commands::list_devices,
+        hid_commands::open_device,
+        hid_commands::close_device,
+        hid_commands::send_receive,
+        hid_commands::send,
+        hid_commands::is_device_open,
+        hid_commands::hid_probe_open,
+        hid_commands::hid_probe_send_receive,
+        hid_commands::hid_probe_close,
+        keychron_dfu::keychron_dfu_flash,
+        definition::decompress_definition,
+        app_config::app_config_get_all,
+        app_config::app_config_set,
+        shell::open_external,
+        updater::update_check,
+        updater::update_install,
+        updater::update_take_failure,
+        window_commands::set_window_zoom,
+        window_commands::window_show,
+        window_commands::window_hide,
+        window_commands::window_started_hidden,
+        window_commands::window_is_visible,
+        window_commands::set_window_compact_mode,
+        window_commands::set_window_aspect_ratio,
+        window_commands::set_window_always_on_top,
+        window_commands::set_window_opacity,
+        window_commands::set_window_min_size,
+        window_commands::is_always_on_top_supported,
+        tray::tray_status_update,
+        notification_commands::notification_fetch,
+        store_commands::sync_pending::sync_has_pending_changes,
+        file_commands::file_save_layout,
+        file_commands::file_load_layout,
+        file_commands::file_export_keymap_c,
+        file_commands::file_export_pdf,
+        file_commands::file_export_csv,
+        file_commands::file_export_csv_bundle,
+        file_commands::file_export_json,
+        file_commands::file_sideload_json,
+        store_commands::keyboard_data::list_stored_keyboards,
+        store_commands::keyboard_data::keyboard_meta_name_if_missing,
+        store_commands::favorites::favorite_store_list,
+        store_commands::favorites::favorite_store_save,
+        store_commands::favorites::favorite_store_load,
+        store_commands::favorites::favorite_store_rename,
+        store_commands::favorites::favorite_store_delete,
+        store_commands::favorites::favorite_store_set_hub_post_id,
+        store_commands::favorites::favorite_store_set_hub_private,
+        store_commands::favorites::favorite_store_read_for_export,
+        store_commands::favorites::favorite_store_save_export,
+        store_commands::favorites::favorite_store_open_import,
+        store_commands::favorites::favorite_store_import_batch,
+        store_commands::key_labels::key_label_store_list,
+        store_commands::key_labels::key_label_store_list_all,
+        store_commands::key_labels::key_label_store_get,
+        store_commands::key_labels::key_label_store_rename,
+        store_commands::key_labels::key_label_store_delete,
+        store_commands::key_labels::key_label_store_import,
+        store_commands::key_labels::key_label_store_export,
+        store_commands::key_labels::key_label_store_reorder,
+        store_commands::key_labels::key_label_store_set_hub_post_id,
+        store_commands::key_labels::key_label_store_has_name,
+        store_commands::typing_texts::typing_test_text_store_list,
+        store_commands::typing_texts::typing_test_text_store_get,
+        store_commands::typing_texts::typing_test_text_store_rename,
+        store_commands::typing_texts::typing_test_text_store_delete,
+        store_commands::typing_texts::typing_test_text_store_import,
+        store_commands::typing_texts::typing_test_text_store_import_confirm,
+        store_commands::snapshots::snapshot_store_list,
+        store_commands::snapshots::snapshot_store_save,
+        store_commands::snapshots::snapshot_store_load,
+        store_commands::snapshots::snapshot_store_update,
+        store_commands::snapshots::snapshot_store_rename,
+        store_commands::snapshots::snapshot_store_delete,
+        store_commands::snapshots::snapshot_store_set_hub_post_id,
+        store_commands::snapshots::snapshot_store_set_hub_private,
+        store_commands::analyze_filters::analyze_filter_store_list,
+        store_commands::analyze_filters::analyze_filter_store_save,
+        store_commands::analyze_filters::analyze_filter_store_load,
+        store_commands::analyze_filters::analyze_filter_store_update,
+        store_commands::analyze_filters::analyze_filter_store_rename,
+        store_commands::analyze_filters::analyze_filter_store_delete,
+        store_commands::analyze_filters::analyze_filter_store_set_hub_post_id,
+        store_commands::analyze_filters::analyze_filter_store_set_hub_private,
+        store_commands::run_logs::typing_run_log_save,
+        store_commands::run_logs::typing_run_log_list,
+        store_commands::run_logs::typing_run_log_get,
+        analytics_commands::keymaps::typing_analytics_save_keymap_snapshot,
+        analytics_commands::keymaps::typing_analytics_get_keymap_snapshot_for_range,
+        analytics_commands::keymaps::typing_analytics_list_keymap_snapshots,
+        analytics_commands::record::typing_analytics_event,
+        analytics_commands::record::typing_analytics_flush,
+        analytics_commands::data::typing_analytics_delete_items,
+        analytics_commands::data::typing_analytics_delete_all,
+        analytics_commands::data::typing_analytics_delete_device_data,
+        analytics_commands::data::typing_analytics_export,
+        analytics_commands::data::typing_analytics_import,
+        store_commands::settings::pipette_settings_read,
+        store_commands::settings::pipette_settings_write,
+        store_commands::settings::pipette_settings_ensure_dir,
+        store_commands::settings::pipette_settings_read_all,
+        typing_dataset_commands::lang_list,
+        typing_dataset_commands::lang_get,
+        typing_dataset_commands::lang_download,
+        typing_dataset_commands::lang_delete,
+        typing_dataset_commands::typing_dataset_check,
+        typing_dataset_commands::typing_dataset_update,
+        typing_dataset_commands::aozora_import,
+        analytics_commands::queries::typing_analytics_list_keyboards,
+        analytics_commands::queries::typing_analytics_list_items,
+        analytics_commands::queries::typing_analytics_list_items_local,
+        analytics_commands::queries::typing_analytics_list_items_for_hash,
+        analytics_commands::queries::typing_analytics_list_interval_items,
+        analytics_commands::queries::typing_analytics_list_interval_items_local,
+        analytics_commands::queries::typing_analytics_list_interval_items_for_hash,
+        analytics_commands::queries::typing_analytics_list_activity_grid,
+        analytics_commands::queries::typing_analytics_list_activity_grid_local,
+        analytics_commands::queries::typing_analytics_list_activity_grid_for_hash,
+        analytics_commands::queries::typing_analytics_list_layer_usage,
+        analytics_commands::queries::typing_analytics_list_layer_usage_local,
+        analytics_commands::queries::typing_analytics_list_layer_usage_for_hash,
+        analytics_commands::queries::typing_analytics_list_matrix_cells,
+        analytics_commands::queries::typing_analytics_list_matrix_cells_local,
+        analytics_commands::queries::typing_analytics_list_matrix_cells_for_hash,
+        analytics_commands::queries::typing_analytics_list_matrix_cells_by_day,
+        analytics_commands::queries::typing_analytics_list_matrix_cells_by_day_local,
+        analytics_commands::queries::typing_analytics_list_matrix_cells_by_day_for_hash,
+        analytics_commands::queries::typing_analytics_list_minute_stats,
+        analytics_commands::queries::typing_analytics_list_minute_stats_local,
+        analytics_commands::queries::typing_analytics_list_minute_stats_for_hash,
+        analytics_commands::queries::typing_analytics_list_sessions,
+        analytics_commands::queries::typing_analytics_list_sessions_local,
+        analytics_commands::queries::typing_analytics_list_sessions_for_hash,
+        analytics_commands::queries::typing_analytics_list_bks_minute,
+        analytics_commands::queries::typing_analytics_list_bks_minute_local,
+        analytics_commands::queries::typing_analytics_list_bks_minute_for_hash,
+        analytics_commands::queries::typing_analytics_get_peak_records,
+        analytics_commands::queries::typing_analytics_get_peak_records_local,
+        analytics_commands::queries::typing_analytics_get_peak_records_for_hash,
+        analytics_commands::queries::typing_analytics_get_matrix_heatmap,
+        analytics_commands::queries::typing_analytics_list_device_infos,
+        analytics_commands::queries::typing_analytics_list_local_device_days,
+        analytics_commands::range::typing_analytics_list_apps_for_range,
+        analytics_commands::range::typing_analytics_list_typing_tests_for_range,
+        analytics_commands::range::typing_analytics_list_typing_test_runs_for_range,
+        analytics_commands::range::typing_analytics_get_app_usage_for_range,
+        analytics_commands::range::typing_analytics_get_wpm_by_app_for_range,
+        analytics_commands::range::typing_analytics_get_matrix_heatmap_for_range,
+        analytics_commands::range::typing_analytics_get_bigram_aggregate_for_range,
+        analytics_commands::range::typing_analytics_list_rollover_minutes,
+        analytics_commands::range::typing_analytics_list_duration_cells,
+        analytics_commands::range::typing_analytics_get_layout_comparison_for_range,
+        store_commands::i18n_packs::i18n_pack_store_list,
+        store_commands::i18n_packs::i18n_pack_store_get,
+        store_commands::i18n_packs::i18n_pack_store_rename,
+        store_commands::i18n_packs::i18n_pack_store_set_enabled,
+        store_commands::i18n_packs::i18n_pack_store_refresh_coverage,
+        store_commands::i18n_packs::i18n_pack_store_delete,
+        store_commands::i18n_packs::i18n_pack_store_set_hub_post_id,
+        store_commands::i18n_packs::i18n_pack_store_has_name,
+        store_commands::i18n_packs::i18n_pack_store_reorder,
+        store_commands::i18n_packs::i18n_pack_import,
+        store_commands::i18n_packs::i18n_pack_import_apply,
+        store_commands::i18n_packs::i18n_pack_export,
+        store_commands::theme_packs::theme_pack_store_list,
+        store_commands::theme_packs::theme_pack_store_get,
+        store_commands::theme_packs::theme_pack_store_rename,
+        store_commands::theme_packs::theme_pack_store_delete,
+        store_commands::theme_packs::theme_pack_store_set_hub_post_id,
+        store_commands::theme_packs::theme_pack_store_has_name,
+        store_commands::theme_packs::theme_pack_store_reorder,
+        store_commands::theme_packs::theme_pack_import,
+        store_commands::theme_packs::theme_pack_import_apply,
+        store_commands::theme_packs::theme_pack_export,
+        sync_commands::auth::sync_auth_status,
+        sync_commands::auth::sync_auth_start,
+        sync_commands::auth::sync_auth_sign_out,
+        sync_commands::password::sync_password_status,
+        sync_commands::password::sync_set_password,
+        sync_commands::password::sync_replace_password,
+        sync_commands::password::sync_check_password_exists,
+        sync_commands::preflight::sync_format_status,
+        sync_commands::data::export_local_data,
+        sync_commands::data::import_local_data,
+        sync_commands::execute::sync_execute,
+        sync_commands::password_change::sync_change_password,
+        sync_commands::password_change::sync_password_change_status,
+        sync_commands::password_change::sync_password_change_resume,
+        sync_commands::password_change::sync_password_change_revert,
+        sync_commands::password_change::sync_password_change_abandon,
+        sync_commands::password_change::sync_password_change_delete_undecryptable,
+        sync_commands::password_change::sync_password_change_lock_status,
+        sync_commands::password_change::sync_password_change_release_locks,
+        sync_commands::password_change::sync_list_undecryptable,
+        sync_commands::analytics_remote::sync_analytics_now,
+        sync_commands::analytics_remote::typing_analytics_has_remote,
+        sync_commands::analytics_remote::typing_analytics_list_remote_cloud_hashes,
+        sync_commands::analytics_remote::typing_analytics_list_remote_cloud_days,
+        sync_commands::analytics_remote::typing_analytics_fetch_remote_day,
+        sync_commands::data::sync_scan_remote,
+        sync_commands::data::sync_fetch_remote_bundle,
+        sync_commands::data::sync_delete_files,
+        sync_commands::trash::sync_list_trash,
+        sync_commands::trash::sync_restore_trash,
+        sync_commands::trash::sync_delete_trash,
+        sync_commands::reset::sync_reset_targets,
+        sync_commands::reset::reset_keyboard_data,
+        sync_commands::reset::reset_local_targets,
+        hub_commands::account::hub_get_origin,
+        hub_commands::account::hub_set_auth_display_name,
+        hub_commands::account::hub_fetch_auth_me,
+        hub_commands::account::hub_patch_auth_me,
+        hub_commands::posts::hub_upload_post,
+        hub_commands::posts::hub_update_post,
+        hub_commands::posts::hub_patch_post,
+        hub_commands::posts::hub_delete_post,
+        hub_commands::posts::hub_fetch_my_posts,
+        hub_commands::posts::hub_fetch_my_keyboard_posts,
+        hub_commands::posts::hub_upload_private_post,
+        hub_commands::posts::hub_delete_private_post,
+        hub_commands::favorite::hub_upload_favorite_post,
+        hub_commands::favorite::hub_update_favorite_post,
+        hub_commands::favorite::hub_upload_private_favorite_post,
+        hub_commands::favorite::hub_favorite_entry,
+        hub_commands::analytics::hub_upload_analytics_post,
+        hub_commands::analytics::hub_update_analytics_post,
+        hub_commands::analytics::hub_preview_analytics_post,
+        hub_commands::analytics::hub_upload_private_analytics_post,
+        hub_commands::packs::i18n_pack_hub_timestamps,
+        hub_commands::packs::hub_list_i18n_posts,
+        hub_commands::packs::hub_download_i18n_post,
+        hub_commands::packs::hub_upload_i18n_post,
+        hub_commands::packs::hub_update_i18n_post,
+        hub_commands::packs::hub_delete_i18n_post,
+        hub_commands::packs::theme_pack_hub_timestamps,
+        hub_commands::packs::hub_list_theme_posts,
+        hub_commands::packs::hub_download_theme_post,
+        hub_commands::packs::hub_upload_theme_post,
+        hub_commands::packs::hub_update_theme_post,
+        hub_commands::packs::hub_delete_theme_post,
+        hub_commands::key_labels::key_label_hub_list,
+        hub_commands::key_labels::key_label_hub_detail,
+        hub_commands::key_labels::key_label_hub_download,
+        hub_commands::key_labels::key_label_hub_upload,
+        hub_commands::key_labels::key_label_hub_update,
+        hub_commands::key_labels::key_label_hub_sync,
+        hub_commands::key_labels::key_label_hub_timestamps,
+        hub_commands::key_labels::key_label_hub_delete,
+    ]
+}
+
+/// The window events: the close request goes to lifecycle.rs, the others to
+/// window_ops.
+fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
+    lifecycle::on_window_event(window, event);
+    window_ops::on_window_event(window, event);
+}
+
+/// The userData directory (`pipette_fs::user_data_dir`), the root of all the
+/// app keeps on disk.
+pub struct UserDataDir(pub PathBuf);
+
+/// Whether this is a distributed build (`pipette_fs::is_distributed_build`):
+/// a release build without the development tools, run from the executable a
+/// release ships. It decides the default userData directory and whether
+/// the app registers itself to start at sign-in (app_config.rs).
+pub fn distributed_build() -> bool {
+    static DISTRIBUTED: OnceLock<bool> = OnceLock::new();
+    *DISTRIBUTED.get_or_init(|| {
+        pipette_fs::is_distributed_build(cfg!(release_profile) && !cfg!(feature = "dev-tools"))
+    })
+}
+
+/// The userData directory. Exits when there is none or a running 0.4
+/// build holds it (Linux and macOS); runs before the log exists, so nothing
+/// is written to the directory of a running 0.4 build.
+fn startup_user_data() -> PathBuf {
+    let dir = match pipette_fs::user_data_dir(distributed_build()) {
+        Ok(dir) => dir,
+        Err(err) => {
+            eprintln!("cannot start: {err}");
+            std::process::exit(1);
+        }
+    };
+    if let Some(holder) = pipette_fs::v04_lock_holder(&dir) {
+        let lock = dir.join(pipette_fs::V04_LOCK_FILE);
+        refusal::refuse(&refusal::v04_running(&dir, Some(holder.pid), &lock));
+    }
+    dir
+}
+
+/// How long a launch tries again to open the 0.4 build's `lockfile`
+/// while it is in use: the installer of an update starts the new app while
+/// the old process may still be ending, holding the file.
+#[cfg(target_os = "windows")]
+const LOCKFILE_RETRY: std::time::Duration = std::time::Duration::from_secs(5);
+
+#[cfg(target_os = "windows")]
+const LOCKFILE_RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// On Windows, opens the 0.4 build's `lockfile` in `dir` sharing
+/// nothing and keeps it open until the process ends: a running 0.4
+/// build makes the open fail, and a 0.4 build started later cannot
+/// take the directory. A file in use is tried again for up to
+/// `LOCKFILE_RETRY` before the launch is refused; it is never opened
+/// without the lock. Runs after the single-instance check, so a second
+/// launch of this build hands over to the first instead of finding the
+/// file in use, and before the log, so nothing is written to the directory
+/// of a running 0.4 build.
+#[cfg(target_os = "windows")]
+fn lock_against_v04(dir: &Path) {
+    static HELD: OnceLock<std::fs::File> = OnceLock::new();
+    let lock = dir.join(pipette_fs::V04_LOCKFILE);
+    let deadline = std::time::Instant::now() + LOCKFILE_RETRY;
+    loop {
+        match pipette_fs::hold_lockfile(dir) {
+            Ok(file) => {
+                let _ = HELD.set(file);
+                return;
+            }
+            Err(pipette_fs::LockfileError::InUse) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(LOCKFILE_RETRY_INTERVAL);
+            }
+            Err(pipette_fs::LockfileError::InUse) => refusal::refuse(&refusal::v04_running(dir, None, &lock)),
+            Err(err) => refusal::refuse(&refusal::lock_failed(&lock, &err)),
+        }
+    }
+}
+
+fn main() {
+    let user_data = startup_user_data();
+    // The single-instance plugin, registered first, runs while the app is
+    // built: a second launch hands over to the running app there and exits
+    // with 0. So the log, the app config and the HID service, which the
+    // running app owns, start only after `build`.
+    // Tauri's default macOS menu is replaced by src/app_menu.rs in setup; the
+    // other systems get no menu.
+    let builder = tauri::Builder::default()
+        .enable_macos_default_menu(false)
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| lifecycle::on_second_launch(app)))
+        // Used from src/updater.rs only; no capability grants its commands.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(|app| {
+            store_commands::sync_pending::manage(app.handle(), &app.state::<UserDataDir>().0);
+            dev_commands::manage_dialogs(app.handle());
+            dev_commands::manage_http(app.handle());
+            sync_commands::manage(app.handle(), &app.state::<UserDataDir>().0);
+            dev_commands::manage_auth_browser(app.handle());
+            typing_dataset_commands::manage(app.handle(), &app.state::<UserDataDir>().0);
+            store_commands::keyboard_data::manage(app.handle(), &app.state::<UserDataDir>().0);
+            analytics_commands::manage(app.handle(), &app.state::<UserDataDir>().0);
+            sync_commands::preflight::manage(app.handle());
+            sync_commands::execute::manage(app.handle());
+            sync_commands::analytics_remote::manage(app.handle());
+            sync_commands::adopt_pending_at_startup(app.handle());
+            sync_commands::password_change::manage(app.handle());
+            sync_commands::reset::manage(app.handle());
+            sync_commands::triggers::start(app.handle());
+            analytics_commands::start(app.handle());
+            hub_commands::setup(app.handle());
+            tray::setup(app);
+            #[cfg(target_os = "macos")]
+            app_menu::install(app);
+            main_window::open_main_window(app.handle(), &app.state::<app_config::AppConfig>())?;
+            app_config::listen_for_changes(app.handle());
+            lifecycle::setup(app);
+            updater::manage(app.handle(), &app.state::<UserDataDir>().0);
+            hub_commands::setup::start_background(app.handle());
+            Ok(())
+        })
+        .on_window_event(on_window_event);
+    let builder = dev_commands::install_or_passthrough(builder, app_commands(), lifecycle::on_page_load);
+    let built = builder.build(tauri::generate_context!());
+    #[cfg(target_os = "windows")]
+    lock_against_v04(&user_data);
+    start_log(&user_data);
+    let app = match built {
+        Ok(app) => app,
+        Err(err) => {
+            log::error!("failed to run the application: {err}");
+            std::process::exit(1);
+        }
+    };
+    log::info!("Pipette starting");
+    let config: app_config::AppConfig = Arc::new(pipette_app_config::AppConfigStore::open(&user_data));
+    app.manage(Hid(Arc::new(HidService::new(VirtualDeviceMode::from_env()))));
+    app.manage(UserDataDir(user_data));
+    app.manage(config);
+    app.manage(ExternalOpener::system());
+    app.run(lifecycle::on_run_event);
+}
+
+/// Starts the log after `build`, that is after the single-instance check, so
+/// a second launch never touches the running app's log; records emitted
+/// while the app is built (plugin setup included) are not written to the file.
+fn start_log(user_data: &Path) {
+    if let Err(err) = pipette_logger::init(user_data.join("logs")) {
+        log::error!("the log file is unavailable: {err}");
+    }
+}

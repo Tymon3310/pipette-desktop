@@ -1,0 +1,16 @@
+{
+  "$schema": "../../gen/schemas/desktop-schema.json",
+  "identifier": "dev-virtual-device",
+  "description": "Builds with the dev-tools feature only: the virtual keyboard controller and the log sink used to drive the UI during development.",
+  "windows": ["main"],
+  "permissions": [
+    "allow-virtual-device-press-key",
+    "allow-virtual-device-release-key",
+    "allow-virtual-device-release-all",
+    "allow-virtual-device-hold-keys",
+    "allow-virtual-device-set-unlock-counter-max",
+    "allow-virtual-device-get-state",
+    "allow-virtual-device-reset",
+    "allow-dev-log"
+  ]
+}

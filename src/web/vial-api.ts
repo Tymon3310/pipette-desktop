@@ -3,17 +3,26 @@
 
 import type { VialAPI, TrayStatus } from '../shared/types/vial-api'
 import type { DeviceInfo, KeyboardDefinition, KeyboardId, ProbeResult } from '../shared/types/protocol'
-import * as protocol from '../preload/protocol'
-import * as keychronProtocol from '../preload/keychron-protocol'
+import * as protocol from '../tauri-shim/protocol'
+import * as keychronProtocol from '../tauri-shim/keychron-protocol'
 import * as webHid from './hid-transport'
 import * as webStorage from './storage'
 import * as webFileIo from './file-io'
 import { decompressDefinition } from './lzma'
 import { requestAndFlashWebDfu } from './dfu'
+import { createVialApi } from '../tauri-shim/create-vial-api'
 
 const dfuListeners = new Set<(data: { log?: string; progress?: number }) => void>()
 
+/** The web members, with an inert stub for every VialAPI member the web
+ *  build does not implement (yet), so a member upstream adds cannot crash
+ *  the page. The web-only optional members are kept. */
 export function createWebVialAPI(): VialAPI {
+  const web = createWebMembers()
+  return { ...createVialApi(web), requestDevice: web.requestDevice, getDebugFlags: web.getDebugFlags }
+}
+
+function createWebMembers(): Partial<VialAPI> {
   // Ensure WebHID transport is initialized for protocol modules
   webHid.initWebTransport()
 
@@ -194,7 +203,7 @@ export function createWebVialAPI(): VialAPI {
       try {
         await protocol.resetDevice()
       } finally {
-        await closeHidDevice()
+        await webHid.closeHidDevice()
       }
     },
 
@@ -498,5 +507,15 @@ export function createWebVialAPI(): VialAPI {
 
     // --- Tray status ---
     trayStatusUpdate: async (_status: TrayStatus) => {},
+
+    // --- In-app update: the web app is always the deployed version ---
+    updateCheck: async () => ({ status: 'disabled' }),
+    updateInstall: async () => ({
+      status: 'failed',
+      code: 'unknown',
+      releaseUrl: 'https://github.com/tymon3310/pipette-desktop/releases/latest',
+    }),
+    updateTakeFailure: async () => null,
+    updateOnProgress: () => () => {},
   }
 }

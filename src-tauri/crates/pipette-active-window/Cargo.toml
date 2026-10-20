@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+[package]
+name = "pipette-active-window"
+description = "The name of the active application for typing analytics: the native window lookup (X11 on Linux, the system's own on Windows and macOS), the GNOME Shell FocusedWindow query, and the name normalization"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# The JavaScript strings the names are (UTF-16, lone surrogates included),
+# and JSON.parse of the FocusedWindow reply.
+pipette-js-json = { path = "../pipette-js-json" }
+# The Windows and macOS lookup (the system calls it makes need unsafe code,
+# which only that crate has); elsewhere it answers that it has none.
+pipette-native = { path = "../pipette-native" }
+log = "=0.4.34"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# The X11 lookup: x11rb's pure-Rust connection (no libxcb, and without the
+# allow-unsafe-code feature it forbids unsafe code itself), and rustix's poll
+# for the read timeout of its stream.
+x11rb = { version = "=0.14.0", default-features = false }
+rustix = { version = "=1.1.2", features = ["event"] }
+
+[dev-dependencies]
+# The private X server's authority file in the X11 tests.
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

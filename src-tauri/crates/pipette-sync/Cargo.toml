@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+[package]
+name = "pipette-sync"
+description = "The sync engine: the bundles, the merges, the passes and their entry points, the password and its change, the trash and the resets"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# The Drive client and the lookups by name of a listing (the reconcile).
+pipette-drive = { path = "../pipette-drive" }
+# The entry merge, the body filename rules and the store write locks.
+pipette-entry-store = { path = "../pipette-entry-store" }
+pipette-fs = { path = "../pipette-fs" }
+# The sign-in whose token switch keeps the pending units with their account.
+pipette-google-auth = { path = "../pipette-google-auth" }
+pipette-js-json = { path = "../pipette-js-json" }
+# The stores whose units the bundles read and the merges write.
+pipette-keyboard-stores = { path = "../pipette-keyboard-stores" }
+pipette-pack-stores = { path = "../pipette-pack-stores" }
+# The stored sync password the password-check is opened with.
+pipette-secret-store = { path = "../pipette-secret-store" }
+# The Drive file name of a unit, whose remembered revision a roster merge forgets.
+pipette-sync-format = { path = "../pipette-sync-format" }
+pipette-sync-pending = { path = "../pipette-sync-pending" }
+pipette-sync-runtime = { path = "../pipette-sync-runtime" }
+pipette-time = { path = "../pipette-time" }
+# The day files and deleted-ranges files of the typing analytics.
+pipette-typing-analytics = { path = "../pipette-typing-analytics" }
+# The rows of a day file and the ranges the cache hides.
+pipette-typing-analytics-db = { path = "../pipette-typing-analytics-db" }
+# The units of a pass run 10 at a time.
+futures-util = { version = "=0.3.34", default-features = false, features = ["alloc"] }
+# The JavaScript Map order of the own-hash days on Drive.
+indexmap = "=2.14.2"
+log = "=0.4.34"
+serde = { workspace = true }
+serde_json = { workspace = true }
+# The digest of the password a validated password-check opened with.
+sha2 = { version = "=0.10.9", default-features = false }
+thiserror = "=2.0.21"
+# The analytics merges wait for the database thread and the flush chain,
+# the `sync:` locks are held across awaits, and a switch of accounts waits
+# for running sync work; "macros": the two listings of the guard run at once.
+tokio = { version = "=1.53.3", features = ["rt", "sync", "macros", "time"] }
+# The random id of a password change's Drive lock (`randomUUID`).
+uuid = { version = "=1.26.1", features = ["v4"] }
+zeroize = "=1.9.0"
+
+[dev-dependencies]
+# The id_token of the sign-in through GoogleAuth.
+base64 = { version = "=0.22.1", default-features = false, features = ["alloc"] }
+pipette-net = { path = "../pipette-net" }
+pipette-secret-store = { path = "../pipette-secret-store", features = ["test-util"] }
+pipette-entry-store = { path = "../pipette-entry-store", features = ["test-util"] }
+pipette-drive = { path = "../pipette-drive", features = ["test-util"] }
+# Envelopes sealed with a key derived once per password, and the envelope
+# keys a recorded pass derives once per salt.
+pipette-sync-format = { path = "../pipette-sync-format", features = ["test-util"] }
+# Reads the cache tables the analytics merges wrote.
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled", "cache"] }
+tempfile = { workspace = true }
+tokio = { version = "=1.53.3", features = ["rt", "sync", "macros", "time", "test-util"] }
+
+[lints]
+workspace = true

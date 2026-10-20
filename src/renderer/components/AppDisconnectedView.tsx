@@ -7,6 +7,7 @@ import { DeviceSelector } from './DeviceSelector'
 import { SettingsModal } from './SettingsModal'
 import { DataModal } from './DataModal'
 import { NotificationModal } from './NotificationModal'
+import { StartupUpdateModal } from './UpdateAvailableModal'
 import { JaRemovedBanner } from './i18n-packs/JaRemovedBanner'
 import { SyncUpdateBanner } from './SyncUpdateBanner'
 import type { SyncUpdateBannerState } from '../hooks/use-sync-format-status'
@@ -18,6 +19,7 @@ import type { UseDevicePrefsReturn } from '../hooks/useDevicePrefs'
 import type { useAppConfig } from '../hooks/useAppConfig'
 import type { useHubState } from '../hooks/useHubState'
 import type { useStartupNotification } from '../hooks/useStartupNotification'
+import type { UpdateCheckState } from '../hooks/useUpdateCheck'
 
 interface Props {
   deviceSyncing: boolean
@@ -29,6 +31,7 @@ interface Props {
   appConfig: ReturnType<typeof useAppConfig>
   hub: ReturnType<typeof useHubState>
   startupNotification: ReturnType<typeof useStartupNotification>
+  updateCheck: UpdateCheckState
   syncUpdate: SyncUpdateBannerState
   onLoadDummy?: () => void
 }
@@ -43,6 +46,7 @@ export function AppDisconnectedView({
   appConfig,
   hub,
   startupNotification,
+  updateCheck,
   syncUpdate,
   onLoadDummy,
 }: Props) {
@@ -139,6 +143,7 @@ export function AppDisconnectedView({
           onClose={startupNotification.dismiss}
         />
       )}
+      <StartupUpdateModal updateCheck={updateCheck} />
       <JaRemovedBanner />
     </>
   )

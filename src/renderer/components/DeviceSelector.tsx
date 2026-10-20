@@ -197,7 +197,7 @@ export function DeviceSelector({
 
         {tab === 'keyboard' && (
           <>
-            {typeof navigator !== 'undefined' && !('hid' in navigator) && (
+            {typeof window.vialAPI?.requestDevice === 'function' && typeof navigator !== 'undefined' && !('hid' in navigator) && (
               <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
                 <div className="font-semibold mb-1">Browser Notice (Firefox / Safari)</div>
                 <div>

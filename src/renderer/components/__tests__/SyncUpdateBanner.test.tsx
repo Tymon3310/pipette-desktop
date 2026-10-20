@@ -36,7 +36,7 @@ describe('SyncUpdateBanner', () => {
 
     fireEvent.click(screen.getByTestId('sync-update-download'))
 
-    expect(PIPETTE_RELEASES_URL).toBe('https://github.com/darakuneko/pipette-desktop/releases/latest')
+    expect(PIPETTE_RELEASES_URL).toBe('https://github.com/tymon3310/pipette-desktop/releases/latest')
     expect(openExternal).toHaveBeenCalledWith(PIPETTE_RELEASES_URL)
   })
 

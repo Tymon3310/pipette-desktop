@@ -1,0 +1,25 @@
+[
+  {
+    "member": "openDevice",
+    "args": [13364, 2832, "bridge:/dev/hidraw-probe"],
+    "command": "open_device",
+    "invokeArgs": {
+      "vendorId": 13364,
+      "productId": 2832,
+      "serialNumber": "bridge:/dev/hidraw-probe"
+    },
+    "response": false
+  },
+  {
+    "member": "keychronDfuFlash",
+    "args": [[]],
+    "command": "keychron_dfu_flash",
+    "invokeArgs": {
+      "data": []
+    },
+    "response": {
+      "success": false,
+      "error": "Invalid firmware data"
+    }
+  }
+]

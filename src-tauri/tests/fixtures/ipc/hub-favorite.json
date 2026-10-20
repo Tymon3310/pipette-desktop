@@ -1,0 +1,100 @@
+[
+  {
+    "member": "hub-favorite.uploadFavorite",
+    "args": [
+      {
+        "type": "macro",
+        "entryId": "e1",
+        "title": "T",
+        "vialProtocol": 6
+      },
+      "{}"
+    ],
+    "command": "hub_upload_favorite_post",
+    "invokeArgs": {
+      "params": {
+        "type": "macro",
+        "entryId": "e1",
+        "title": "T",
+        "vialProtocol": 6
+      },
+      "json": "{}"
+    },
+    "response": {
+      "success": false,
+      "error": "Not authenticated with Google. Please sign in again."
+    }
+  },
+  {
+    "member": "hub-favorite.updateFavorite",
+    "args": [
+      {
+        "type": "macro",
+        "entryId": "e1",
+        "title": "T",
+        "postId": "p1",
+        "vialProtocol": 6
+      },
+      "{}"
+    ],
+    "command": "hub_update_favorite_post",
+    "invokeArgs": {
+      "params": {
+        "type": "macro",
+        "entryId": "e1",
+        "title": "T",
+        "postId": "p1",
+        "vialProtocol": 6
+      },
+      "json": "{}"
+    },
+    "response": {
+      "success": false,
+      "error": "Not authenticated with Google. Please sign in again."
+    }
+  },
+  {
+    "member": "hub-favorite.uploadPrivateFavorite",
+    "args": [
+      {
+        "type": "macro",
+        "entryId": "e1",
+        "title": "T",
+        "vialProtocol": 6,
+        "expiresInDays": 7
+      },
+      "{}"
+    ],
+    "command": "hub_upload_private_favorite_post",
+    "invokeArgs": {
+      "params": {
+        "type": "macro",
+        "entryId": "e1",
+        "title": "T",
+        "vialProtocol": 6,
+        "expiresInDays": 7
+      },
+      "json": "{}"
+    },
+    "response": {
+      "success": false,
+      "error": "Not authenticated with Google. Please sign in again."
+    }
+  },
+  {
+    "member": "hub-favorite.favoriteEntry",
+    "args": [
+      "nope",
+      "e1"
+    ],
+    "command": "hub_favorite_entry",
+    "invokeArgs": {
+      "favoriteType": "nope",
+      "entryId": "e1"
+    },
+    "response": {
+      "success": false,
+      "error": "Invalid favorite type"
+    }
+  }
+]

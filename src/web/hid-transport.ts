@@ -16,7 +16,7 @@ import {
   WIRELESS_RAW_HID_XOR_KEY,
 } from '../shared/constants/bridge'
 import type { DeviceInfo, DeviceType, ProbeResult } from '../shared/types/protocol'
-import { setTransport } from '../preload/transport'
+import { setTransport } from '../tauri-shim/transport'
 
 export let activeDevice: HIDDevice | null = null
 export let activeIsBridge = false

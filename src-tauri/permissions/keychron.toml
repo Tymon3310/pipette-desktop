@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The Keychron firmware flasher of src/keychron_dfu.rs.
+
+[[set]]
+identifier = "keychron"
+description = "Flashes Keychron firmware through the system's dfu-util."
+permissions = [
+  "allow-keychron-dfu-flash",
+]

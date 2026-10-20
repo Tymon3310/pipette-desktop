@@ -1,15 +1,37 @@
 name: Release
 
+# A v* tag builds the Tauri app for Linux, Windows and macOS and publishes the
+# files to a draft release, marked as a pre-release when the version has a
+# pre-release part (0.5.0-beta.1). With them go the in-app update's files:
+# the update of each system (the AppImage, the installer, the macOS app as
+# .app.tar.gz), its minisign signature (.sig, bound to the version) and
+# latest.json, the manifest naming them. Publishing the release does not
+# offer the update to anyone: promote-update.yml makes a published
+# release's latest.json a channel's manifest. Run by hand, it builds the same
+# files as artifacts and publishes nothing; the version input builds them under
+# another version (to try a pre-release version before tagging one).
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: Build under this version instead of package.json's (no release)
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: write
-  id-token: write   # Required for SignPath trusted build verification
-  actions: read      # Required for SignPath to read artifact & workflow info
+
+# Line tables are enough for the backtraces of a failed test, and the test
+# binaries and their caches get much smaller; Cargo colours its output in the
+# logs. Set the same in every workflow that builds src-tauri: rust-cache puts
+# the CARGO_* variables in its key, and the workflows share keys.
+env:
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_TERM_COLOR: always
 
 jobs:
   test:
@@ -32,20 +54,16 @@ jobs:
             exit 1
           fi
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install Linux build dependencies for native modules
-        run: sudo apt-get install -y --no-upgrade libusb-1.0-0-dev libudev-dev || true
-
-      - name: Install node-gyp
-        run: npm install -g node-gyp
+      - uses: ./.github/actions/setup-node-pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # A release must carry the updater's real public key: with the
+      # placeholder of src-tauri/tauri.conf.json the app accepts no update.
+      - name: Require the updater's public key
+        if: startsWith(github.ref, 'refs/tags/')
+        run: npx tsx scripts/update-manifest/cli.ts pubkey
+
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -53,154 +71,406 @@ jobs:
       - name: Verify generated docs are up to date
         run: bash scripts/check-docs-fresh.sh
 
-  build:
-    needs: test
+  # The Rust side of the Tauri app, in two jobs that run side by side: format
+  # and clippy (in the debug build with the development tools and in the
+  # release build), and the workspace's tests. build-tauri waits for both.
+  # On a tag neither reads a Cargo cache.
+  lint-tauri:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The rust-lint job of ci.yml checks all of this and more, and owns
+      # the key.
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache-key: lint
+          save-cache: "false"
+          cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy (debug, with the development tools)
+        run: cargo clippy --workspace --all-targets --features pipette-app/dev-tools -- -D warnings
+
+      # Without the development tools: build.rs rejects them in the release
+      # profile.
+      - name: Clippy (release)
+        run: cargo clippy --workspace --all-targets --release -- -D warnings
+
+  test-tauri:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-node-pnpm
+
+      # The rust-test job of ci.yml runs these tests and more, and owns the
+      # key.
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache-key: test
+          save-cache: "false"
+          cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+      # The tests start the Node fakes.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # The X11 active-window test of pipette-active-window starts a private
+      # Xvfb of its own (the apt index is fresh from setup-rust).
+      - name: Install Xvfb
+        run: sudo apt-get install -y xvfb
+
+      # cargo-nextest runs the test binaries side by side, one process per
+      # test; cargo test runs one binary at a time, and a few slow ones keep
+      # the rest waiting. A prebuilt binary, checked against its checksum.
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest@0.9.146
+          fallback: none
+
+      - name: Test
+        working-directory: src-tauri
+        env:
+          PIPETTE_REQUIRE_FAKE_OAUTH: "1"
+          PIPETTE_REQUIRE_XVFB: "1"
+        run: |
+          cargo nextest run --workspace --features pipette-app/dev-tools
+          # cargo-nextest runs no doc tests.
+          cargo test --workspace --features pipette-app/dev-tools --doc
+
+  build-tauri:
+    # Signing and notarizing start only after every check passed.
+    needs: [test, lint-tauri, test-tauri]
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            platform: mac
-            arch: x64
-          - os: macos-latest
-            platform: mac
-            arch: arm64
-          # Pin to windows-2022 (VS 2022 / v17): node-gyp 11 cannot yet
-          # detect the VS 18 toolchain that windows-latest now ships.
+          # The oldest supported runner, so the AppImage does not need a newer
+          # glibc than Ubuntu 22.04's.
+          - os: ubuntu-22.04
+            platform: linux
+          # Visual Studio 2022.
           - os: windows-2022
             platform: win
-            arch: x64
-          - os: ubuntu-latest
-            platform: linux
-            arch: x64
+          # Apple silicon, the only macOS build that is released.
+          - os: macos-latest
+            platform: mac
     runs-on: ${{ matrix.os }}
+    env:
+      # Sign and notarize the macOS app when the signing secrets exist;
+      # without them the app is ad-hoc signed (this fork has no Developer ID).
+      MAC_SIGN: ${{ secrets.CSC_LINK != '' }}
+      # Build the in-app update's files, signed with the updater key, when
+      # its secrets exist. A tag requires them (the step "Require the
+      # updater key"); a run by hand without them builds no update files.
+      UPDATER_SIGN: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+    defaults:
+      run:
+        shell: bash
     steps:
+      # The files as committed: Git for Windows would turn the line ends into
+      # CRLF.
+      - name: Keep the line ends
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: ./.github/actions/setup-node-pnpm
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      # No Cargo cache on a tag (setup-rust skips it there, and so does the
+      # rust-cache step below): the released files are built from scratch,
+      # never from a cache an earlier run of any ref may have saved.
+      - uses: ./.github/actions/setup-rust
+        if: runner.os == 'Linux'
         with:
-          node-version: 24
-          cache: pnpm
+          # The build of Ubuntu 22.04, which no other job's cache may stand in for.
+          cache-key: release-linux
+          cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
-      - name: Install Linux dependencies
-        if: matrix.platform == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev libudev-dev squashfs-tools
+      # Not setup-rust: it installs the Linux packages of the app and runs on
+      # Linux only.
+      - uses: ./.github/actions/install-rust-toolchain
+        if: runner.os != 'Linux'
 
-      - name: Install node-gyp
-        run: npm install -g node-gyp
+      # The bundle job of tauri-bundle.yml builds the same and owns the key.
+      # A build that signs (the macOS app with the signing secrets, by hand
+      # too) is built from scratch, as on a tag.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        if: runner.os != 'Linux' && !startsWith(github.ref, 'refs/tags/') && !(runner.os == 'macOS' && env.MAC_SIGN == 'true')
+        with:
+          workspaces: src-tauri -> target
+          key: bundle
+          add-job-id-key: false
+          save-if: false
 
-      - run: pnpm install --frozen-lockfile
-      - name: Rebuild native dependencies for target architecture
-        run: pnpm exec electron-builder install-app-deps --arch=${{ matrix.arch }}
+      # unsquashfs for scripts/repack-appimage.sh.
+      - name: Install squashfs-tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y squashfs-tools
 
-      - run: pnpm exec electron-vite build
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
-      # Windows: build WITHOUT code signing (SignPath will sign later)
-      - name: Build Electron app (Windows)
-        if: matrix.platform == 'win'
-        run: pnpm exec electron-builder --win --${{ matrix.arch }} --publish never
+      - name: Set the version
+        if: github.event_name == 'workflow_dispatch' && inputs.version != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          VERSION: ${{ inputs.version }}
+        run: npm pkg set version="$VERSION"
 
-      # macOS: build with Apple code signing & notarization
-      - name: Build Electron app (macOS)
-        if: matrix.platform == 'mac'
+      - name: Require the updater key
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          if [ -n "$CSC_LINK_SECRET" ]; then export CSC_LINK="$CSC_LINK_SECRET"; fi
-          if [ -n "$CSC_KEY_PASSWORD_SECRET" ]; then export CSC_KEY_PASSWORD="$CSC_KEY_PASSWORD_SECRET"; fi
-          if [ -n "$APPLE_ID_SECRET" ]; then export APPLE_ID="$APPLE_ID_SECRET"; fi
-          if [ -n "$APPLE_APP_SPECIFIC_PASSWORD_SECRET" ]; then export APPLE_APP_SPECIFIC_PASSWORD="$APPLE_APP_SPECIFIC_PASSWORD_SECRET"; fi
-          if [ -n "$APPLE_TEAM_ID_SECRET" ]; then export APPLE_TEAM_ID="$APPLE_TEAM_ID_SECRET"; fi
-          pnpm exec electron-builder --mac --${{ matrix.arch }} --publish never -c.mac.notarize=${{ secrets.APPLE_ID != '' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-          CSC_LINK_SECRET: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD_SECRET: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD_SECRET: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
+          missing=0
+          for name in TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::The secret $name is not set"
+              missing=1
+            fi
+          done
+          exit "$missing"
 
-      # Linux: build without code signing
-      - name: Build Electron app (Linux)
-        if: matrix.platform == 'linux'
-        run: pnpm exec electron-builder --linux --${{ matrix.arch }} --publish never
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The update files are made with the key (src-tauri/tauri.updater.conf.json
+      # turns them on); `tauri build` signs each with --app-version, binding
+      # the version, which the app requires (requireSignedVersion).
+      - name: Turn on the update files
+        if: env.UPDATER_SIGN == 'true'
+        run: echo "UPDATER_CONFIG=--config src-tauri/tauri.updater.conf.json" >> "$GITHUB_ENV"
 
-      # Static runtime (no libfuse2), update information and .zsync.
-      - name: Repack AppImage
-        if: matrix.platform == 'linux'
-        run: bash scripts/repack-appimage.sh
+      # This fork has no Apple Developer ID: without the signing secrets the
+      # macOS app is ad-hoc signed (see "Build (macOS, unsigned)").
+      - name: Note missing signing secrets
+        if: runner.os == 'macOS' && env.MAC_SIGN != 'true'
+        run: echo "::warning::No Apple signing secrets; the macOS app is ad-hoc signed and not notarized"
+
+      # The certificate Tauri imports must hold the identity it is told to
+      # sign with, a Developer ID Application one (the only kind Gatekeeper
+      # accepts outside the App Store). Checked in a keychain of its own,
+      # deleted afterwards; nothing of the certificate is printed.
+      - name: Check the signing certificate
+        if: runner.os == 'macOS' && env.MAC_SIGN == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.CSC_LINK }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          keychain="$RUNNER_TEMP/check-signing.keychain-db"
+          p12="$RUNNER_TEMP/check-signing.p12"
+          trap 'rm -f "$p12"; security delete-keychain "$keychain" 2>/dev/null || true' EXIT
+          if ! printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$p12"; then
+            echo "::error::CSC_LINK is not a base64-encoded .p12 certificate"
+            exit 1
+          fi
+          security create-keychain -p "" "$keychain"
+          if ! security import "$p12" -k "$keychain" -f pkcs12 -P "$APPLE_CERTIFICATE_PASSWORD" >/dev/null; then
+            echo "::error::CSC_LINK cannot be imported with CSC_KEY_PASSWORD"
+            exit 1
+          fi
+          if [[ "$APPLE_SIGNING_IDENTITY" != "Developer ID Application: "* ]]; then
+            echo "::error::APPLE_SIGNING_IDENTITY is not a Developer ID Application identity"
+            exit 1
+          fi
+          if ! security find-identity -v -p codesigning "$keychain" | grep -qF "\"$APPLE_SIGNING_IDENTITY\""; then
+            echo "::error::The certificate of CSC_LINK has no valid identity named APPLE_SIGNING_IDENTITY"
+            exit 1
+          fi
+
+      # Tauri's names for the secrets: the certificate (base64 of the .p12)
+      # and its password, and the Apple ID, app-specific password and team
+      # the app is notarized with. Tauri signs, notarizes and staples the app
+      # before it builds the dmg.
+      - name: Build (macOS, signed)
+        if: runner.os == 'macOS' && env.MAC_SIGN == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.CSC_LINK }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        # UPDATER_CONFIG is two words (--config and the path) or nothing.
+        run: |
+          # shellcheck disable=SC2086
+          pnpm exec tauri build --ci $UPDATER_CONFIG
+
+      # Ad-hoc signed (identity "-"): Apple silicon refuses to run an app
+      # with no signature at all, and --no-sign would also skip the update
+      # files' signatures.
+      - name: Build (macOS, unsigned)
+        if: runner.os == 'macOS' && env.MAC_SIGN != 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          # shellcheck disable=SC2086
+          pnpm exec tauri build --ci $UPDATER_CONFIG
+
+      # Windows is not code-signed.
+      - name: Build (Linux, Windows)
+        if: runner.os != 'macOS'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          # shellcheck disable=SC2086
+          pnpm exec tauri build --ci $UPDATER_CONFIG
+
+      # The release file names, which the README links to and the AppImage
+      # update information names. The update files take the name of what
+      # they update, their signatures that name plus .sig:
+      # the Windows update is the installer itself. The AppImage changes
+      # when it is repacked, so it is signed again afterwards (bound to the
+      # version as `tauri build` binds the others); the bundler's signature
+      # of the AppImage before the repack is dropped.
+      - name: Collect the files
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          bundle=src-tauri/target/release/bundle
+          one() {
+            local matches=("$@")
+            if [ "${#matches[@]}" -ne 1 ] || [ ! -f "${matches[0]}" ]; then
+              echo "::error::Expected one file, found: ${matches[*]}"
+              exit 1
+            fi
+            echo "${matches[0]}"
+          }
+          mkdir -p dist
+          version=$(node -p "require('./package.json').version")
+          case "${{ matrix.platform }}" in
+            linux)
+              src=$(one "$bundle"/appimage/*.AppImage)
+              bash scripts/repack-appimage.sh "$src"
+              if [ "$UPDATER_SIGN" = true ]; then
+                pnpm exec tauri signer sign --app-version "$version" dist/Pipette-linux-x86_64.AppImage
+              fi
+              ;;
+            win)
+              src=$(one "$bundle"/nsis/*-setup.exe)
+              cp "$src" dist/Pipette-win-x64.exe
+              if [ "$UPDATER_SIGN" = true ]; then
+                cp "$(one "$src.sig")" dist/Pipette-win-x64.exe.sig
+              fi
+              ;;
+            mac)
+              src=$(one "$bundle"/dmg/*.dmg)
+              cp "$src" dist/Pipette-mac-arm64.dmg
+              if [ "$UPDATER_SIGN" = true ]; then
+                src=$(one "$bundle"/macos/*.app.tar.gz)
+                cp "$src" dist/Pipette-mac-arm64.app.tar.gz
+                cp "$(one "$src.sig")" dist/Pipette-mac-arm64.app.tar.gz.sig
+              fi
+              ;;
+          esac
+          ls -l dist
+
+      # The app in the dmg is the one users get: signed with the hardened
+      # runtime, notarized, the ticket stapled, and accepted by Gatekeeper.
+      - name: Verify the signature and the notarization
+        if: runner.os == 'macOS' && env.MAC_SIGN == 'true'
+        run: |
+          mnt="$RUNNER_TEMP/dmg"
+          mkdir -p "$mnt"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" dist/Pipette-mac-arm64.dmg
+          trap 'hdiutil detach "$mnt"' EXIT
+          app="$mnt/Pipette.app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          details=$(codesign --display --verbose=2 "$app" 2>&1)
+          grep -qE 'flags=0x[0-9a-f]+\([^)]*runtime' <<< "$details"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose=4 "$app"
+
+      # The update replaces the installed app with the .app of this archive:
+      # it must be the same signed, notarized and stapled app.
+      - name: Verify the app of the update
+        if: runner.os == 'macOS' && env.MAC_SIGN == 'true' && env.UPDATER_SIGN == 'true'
+        run: |
+          dir="$RUNNER_TEMP/update-app"
+          rm -rf "$dir"
+          mkdir -p "$dir"
+          tar -xzf dist/Pipette-mac-arm64.app.tar.gz -C "$dir"
+          app="$dir/Pipette.app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          details=$(codesign --display --verbose=2 "$app" 2>&1)
+          grep -qE 'flags=0x[0-9a-f]+\([^)]*runtime' <<< "$details"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose=4 "$app"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: artifact-${{ matrix.platform }}-${{ matrix.arch }}
+          name: artifact-${{ matrix.platform }}
           path: |
             dist/*.dmg
             dist/*.exe
             dist/*.AppImage
             dist/*.AppImage.zsync
-
-  sign-windows:
-    needs: build
-    # Only run when SignPath is configured
-    if: vars.SIGNPATH_ORGANIZATION_ID != ''
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: artifact-win-x64
-          path: unsigned
-
-      - name: Upload unsigned exe for SignPath
-        id: upload-unsigned
-        uses: actions/upload-artifact@v7
-        with:
-          name: artifact-win-unsigned
+            dist/*.app.tar.gz
+            dist/*.sig
           if-no-files-found: error
-          path: unsigned/*.exe
-
-      - name: Submit signing request to SignPath
-        id: signpath
-        uses: signpath/github-action-submit-signing-request@v2
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
-          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
-          wait-for-completion: true
-          output-artifact-directory: signed
-
-      - name: Upload signed Windows artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: artifact-win-signed
-          if-no-files-found: error
-          path: signed/*.exe
 
   release:
-    needs: [build, sign-windows]
-    # Run even if sign-windows was skipped (SignPath not yet configured)
-    if: always() && startsWith(github.ref, 'refs/tags/') && needs.build.result == 'success'
+    if: startsWith(github.ref, 'refs/tags/') && github.event_name == 'push'
+    needs: build-tauri
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v7
+      # The public key (src-tauri/tauri.conf.json) and the manifest scripts.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-node-pnpm
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: artifact-*
-          path: .
+          path: release-files
           merge-multiple: true
 
+      # Every update file must verify, with minisign itself, against the
+      # public key the app has; the key line is read from tauri.conf.json.
+      - name: Verify the update signatures
+        working-directory: release-files
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y minisign
+          key=$(npx tsx ../scripts/update-manifest/cli.ts pubkey)
+          for file in Pipette-linux-x86_64.AppImage Pipette-win-x64.exe Pipette-mac-arm64.app.tar.gz; do
+            base64 -d "$file.sig" > "$RUNNER_TEMP/$file.minisig"
+            minisign -V -P "$key" -m "$file" -x "$RUNNER_TEMP/$file.minisig"
+          done
+
+      # latest.json names every platform's update and its signature, after
+      # checking again that each verifies and binds this version.
+      - name: Build latest.json
+        run: npx tsx scripts/update-manifest/cli.ts build --version "${GITHUB_REF_NAME#v}" --dir release-files
+
+      # A version with a pre-release part (0.5.0-alpha.1) is a pre-release.
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
-            *.dmg
-            *.exe
-            *.AppImage
-            *.AppImage.zsync
+            release-files/Pipette-mac-arm64.dmg
+            release-files/Pipette-win-x64.exe
+            release-files/Pipette-linux-x86_64.AppImage
+            release-files/Pipette-linux-x86_64.AppImage.zsync
+            release-files/Pipette-mac-arm64.app.tar.gz
+            release-files/Pipette-mac-arm64.app.tar.gz.sig
+            release-files/Pipette-win-x64.exe.sig
+            release-files/Pipette-linux-x86_64.AppImage.sig
+            release-files/latest.json

@@ -121,6 +121,7 @@ function createDefaultProps() {
     devicePrefs: {} as any,
     hub: {} as any,
     startupNotification: { activeNotification: null, dismiss: vi.fn() } as any,
+    updateCheck: { prompt: null, close: vi.fn(), skip: vi.fn() } as any,
     missingKeyLabel: { missingKeyLabelNotice: null, dismissMissingKeyLabelNotice: vi.fn() } as any,
     decodedLayoutOptions: new Map<number, number>(),
     deserializedMacros: [],
