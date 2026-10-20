@@ -36,10 +36,10 @@ describe('minisign', () => {
     expect(() => verifySignature(data, testOnlySign(data), TEST_ONLY_PUBKEY, '0.5.0-beta.3')).toThrow('binds no version')
   })
 
-  it('reads the release key of tauri.conf.json, which is not the test key', () => {
+  it('reads this fork\'s release key of tauri.conf.json, which is not the test key', () => {
     const conf = JSON.parse(readFileSync(TAURI_CONF, 'utf8')) as { plugins: { updater: { pubkey: string } } }
     const release = decodePublicKey(conf.plugins.updater.pubkey)
-    expect(release.keyId).toBe('EF45D93F7FED6391')
+    expect(release.keyId).toBe('55905F4B99ABCD91')
     expect(release.keyId).not.toBe(decodePublicKey(TEST_ONLY_PUBKEY).keyId)
   })
 })

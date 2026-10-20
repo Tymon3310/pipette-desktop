@@ -60,7 +60,7 @@ describe('latest.json', () => {
     const files = signedFiles('0.5.0-beta.3')
     const manifest = buildLatestJson({ version: '0.5.0-beta.3', pubDate: '2026-10-20T00:00:00.000Z', files, pubkey: TEST_ONLY_PUBKEY })
     expect(Object.keys(manifest.platforms).sort()).toEqual([
-      'darwin-aarch64', 'darwin-aarch64-app', 'linux-x86_64', 'linux-x86_64-appimage', 'windows-x86_64', 'windows-x86_64-nsis',
+      'darwin-aarch64', 'darwin-aarch64-app', 'darwin-x86_64', 'darwin-x86_64-app', 'linux-x86_64', 'linux-x86_64-appimage', 'windows-x86_64', 'windows-x86_64-nsis',
     ])
     expect(manifest.platforms['windows-x86_64-nsis']).toEqual({
       url: 'https://github.com/tymon3310/pipette-desktop/releases/download/v0.5.0-beta.3/Pipette-win-x64.exe',

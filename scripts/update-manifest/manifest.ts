@@ -28,6 +28,7 @@ export const UPDATE_ASSETS: readonly { file: string; platforms: readonly string[
   { file: 'Pipette-linux-x86_64.AppImage', platforms: ['linux-x86_64-appimage', 'linux-x86_64'] },
   { file: 'Pipette-win-x64.exe', platforms: ['windows-x86_64-nsis', 'windows-x86_64'] },
   { file: 'Pipette-mac-arm64.app.tar.gz', platforms: ['darwin-aarch64-app', 'darwin-aarch64'] },
+  { file: 'Pipette-mac-x64.app.tar.gz', platforms: ['darwin-x86_64-app', 'darwin-x86_64'] },
 ]
 
 export const PUBKEY_PLACEHOLDER = 'UPDATER-PUBLIC-KEY-PLACEHOLDER'

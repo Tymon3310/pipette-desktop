@@ -76,6 +76,9 @@ Download the latest release for your platform:
 - **macOS (Apple Silicon)**  
   https://github.com/tymon3310/pipette-desktop/releases/latest/download/Pipette-mac-arm64.dmg
 
+- **macOS (Intel)**  
+  https://github.com/tymon3310/pipette-desktop/releases/latest/download/Pipette-mac-x64.dmg
+
 - **Linux (x86_64 AppImage)**  
   https://github.com/tymon3310/pipette-desktop/releases/latest/download/Pipette-linux-x86_64.AppImage
 
@@ -96,7 +99,7 @@ Run `Pipette-win-x64.exe`. Pipette is installed for your user only (no administr
 
 ### macOS disk image
 
-Open `Pipette-mac-arm64.dmg` and drag **Pipette** into **Applications** (replace the old app if there is one). This fork's app is **not notarized** (it is ad-hoc signed only), so the first time, right-click Pipette in Applications and choose **Open**, or run `xattr -dr com.apple.quarantine /Applications/Pipette.app`. It needs macOS 12 or later on Apple Silicon; there is no Intel build any more. Run it from Applications, not from the disk image: an app run from the disk image does not update itself (see [Updating](#updating)).
+Open `Pipette-mac-arm64.dmg` (Apple Silicon) or `Pipette-mac-x64.dmg` (Intel) and drag **Pipette** into **Applications** (replace the old app if there is one). This fork's app is **not notarized** (it is ad-hoc signed only), so the first time, right-click Pipette in Applications and choose **Open**, or run `xattr -dr com.apple.quarantine /Applications/Pipette.app`. It needs macOS 12 or later; use `Pipette-mac-x64.dmg` on Intel Macs. Run it from Applications, not from the disk image: an app run from the disk image does not update itself (see [Updating](#updating)).
 
 ### Linux AppImage
 

@@ -158,14 +158,27 @@ jobs:
           # glibc than Ubuntu 22.04's.
           - os: ubuntu-22.04
             platform: linux
+            name: linux
           # Visual Studio 2022.
           - os: windows-2022
             platform: win
-          # Apple silicon, the only macOS build that is released.
+            name: win
+          # Apple silicon.
           - os: macos-latest
             platform: mac
+            name: mac-arm64
+            arch: arm64
+          # Intel Macs (and Hackintoshes), cross-compiled on the Apple
+          # silicon runner.
+          - os: macos-latest
+            platform: mac
+            name: mac-x64
+            arch: x64
+            target: x86_64-apple-darwin
     runs-on: ${{ matrix.os }}
     env:
+      # `--target <triple>` for a cross-compiled build, nothing otherwise.
+      TARGET_ARGS: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
       # Sign and notarize the macOS app when the signing secrets exist;
       # without them the app is ad-hoc signed (this fork has no Developer ID).
       MAC_SIGN: ${{ secrets.CSC_LINK != '' }}
@@ -200,6 +213,10 @@ jobs:
       # Linux only.
       - uses: ./.github/actions/install-rust-toolchain
         if: runner.os != 'Linux'
+
+      - name: Add the cross-compilation target
+        if: matrix.target
+        run: rustup target add "${{ matrix.target }}"
 
       # The bundle job of tauri-bundle.yml builds the same and owns the key.
       # A build that signs (the macOS app with the signing secrets, by hand
@@ -303,7 +320,7 @@ jobs:
         # UPDATER_CONFIG is two words (--config and the path) or nothing.
         run: |
           # shellcheck disable=SC2086
-          pnpm exec tauri build --ci $UPDATER_CONFIG
+          pnpm exec tauri build --ci $TARGET_ARGS $UPDATER_CONFIG
 
       # Ad-hoc signed (identity "-"): Apple silicon refuses to run an app
       # with no signature at all, and --no-sign would also skip the update
@@ -316,7 +333,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           # shellcheck disable=SC2086
-          pnpm exec tauri build --ci $UPDATER_CONFIG
+          pnpm exec tauri build --ci $TARGET_ARGS $UPDATER_CONFIG
 
       # Windows is not code-signed.
       - name: Build (Linux, Windows)
@@ -326,7 +343,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           # shellcheck disable=SC2086
-          pnpm exec tauri build --ci $UPDATER_CONFIG
+          pnpm exec tauri build --ci $TARGET_ARGS $UPDATER_CONFIG
 
       # The release file names, which the README links to and the AppImage
       # update information names. The update files take the name of what
@@ -340,7 +357,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          bundle=src-tauri/target/release/bundle
+          bundle=src-tauri/target/${{ matrix.target && format('{0}/', matrix.target) || '' }}release/bundle
           one() {
             local matches=("$@")
             if [ "${#matches[@]}" -ne 1 ] || [ ! -f "${matches[0]}" ]; then
@@ -368,11 +385,11 @@ jobs:
               ;;
             mac)
               src=$(one "$bundle"/dmg/*.dmg)
-              cp "$src" dist/Pipette-mac-arm64.dmg
+              cp "$src" dist/Pipette-mac-${{ matrix.arch }}.dmg
               if [ "$UPDATER_SIGN" = true ]; then
                 src=$(one "$bundle"/macos/*.app.tar.gz)
-                cp "$src" dist/Pipette-mac-arm64.app.tar.gz
-                cp "$(one "$src.sig")" dist/Pipette-mac-arm64.app.tar.gz.sig
+                cp "$src" dist/Pipette-mac-${{ matrix.arch }}.app.tar.gz
+                cp "$(one "$src.sig")" dist/Pipette-mac-${{ matrix.arch }}.app.tar.gz.sig
               fi
               ;;
           esac
@@ -385,7 +402,7 @@ jobs:
         run: |
           mnt="$RUNNER_TEMP/dmg"
           mkdir -p "$mnt"
-          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" dist/Pipette-mac-arm64.dmg
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" dist/Pipette-mac-${{ matrix.arch }}.dmg
           trap 'hdiutil detach "$mnt"' EXIT
           app="$mnt/Pipette.app"
           codesign --verify --deep --strict --verbose=2 "$app"
@@ -402,7 +419,7 @@ jobs:
           dir="$RUNNER_TEMP/update-app"
           rm -rf "$dir"
           mkdir -p "$dir"
-          tar -xzf dist/Pipette-mac-arm64.app.tar.gz -C "$dir"
+          tar -xzf dist/Pipette-mac-${{ matrix.arch }}.app.tar.gz -C "$dir"
           app="$dir/Pipette.app"
           codesign --verify --deep --strict --verbose=2 "$app"
           details=$(codesign --display --verbose=2 "$app" 2>&1)
@@ -412,7 +429,7 @@ jobs:
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: artifact-${{ matrix.platform }}
+          name: artifact-${{ matrix.name }}
           path: |
             dist/*.dmg
             dist/*.exe
@@ -447,7 +464,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y minisign
           key=$(npx tsx ../scripts/update-manifest/cli.ts pubkey)
-          for file in Pipette-linux-x86_64.AppImage Pipette-win-x64.exe Pipette-mac-arm64.app.tar.gz; do
+          for file in Pipette-linux-x86_64.AppImage Pipette-win-x64.exe Pipette-mac-arm64.app.tar.gz Pipette-mac-x64.app.tar.gz; do
             base64 -d "$file.sig" > "$RUNNER_TEMP/$file.minisig"
             minisign -V -P "$key" -m "$file" -x "$RUNNER_TEMP/$file.minisig"
           done
@@ -466,11 +483,14 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             release-files/Pipette-mac-arm64.dmg
+            release-files/Pipette-mac-x64.dmg
             release-files/Pipette-win-x64.exe
             release-files/Pipette-linux-x86_64.AppImage
             release-files/Pipette-linux-x86_64.AppImage.zsync
             release-files/Pipette-mac-arm64.app.tar.gz
             release-files/Pipette-mac-arm64.app.tar.gz.sig
+            release-files/Pipette-mac-x64.app.tar.gz
+            release-files/Pipette-mac-x64.app.tar.gz.sig
             release-files/Pipette-win-x64.exe.sig
             release-files/Pipette-linux-x86_64.AppImage.sig
             release-files/latest.json

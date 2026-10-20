@@ -76,7 +76,8 @@ jobs:
           for name in latest.json \
             Pipette-linux-x86_64.AppImage Pipette-linux-x86_64.AppImage.sig \
             Pipette-win-x64.exe Pipette-win-x64.exe.sig \
-            Pipette-mac-arm64.app.tar.gz Pipette-mac-arm64.app.tar.gz.sig; do
+            Pipette-mac-arm64.app.tar.gz Pipette-mac-arm64.app.tar.gz.sig \
+            Pipette-mac-x64.app.tar.gz Pipette-mac-x64.app.tar.gz.sig; do
             curl -fsSL --retry 3 -o "$dir/$name" "https://github.com/$REPO/releases/download/$TAG/$name"
           done
 
@@ -98,7 +99,7 @@ jobs:
           sudo apt-get install -y minisign
           key=$(npx tsx scripts/update-manifest/cli.ts pubkey)
           dir="$RUNNER_TEMP/release-files"
-          for file in Pipette-linux-x86_64.AppImage Pipette-win-x64.exe Pipette-mac-arm64.app.tar.gz; do
+          for file in Pipette-linux-x86_64.AppImage Pipette-win-x64.exe Pipette-mac-arm64.app.tar.gz Pipette-mac-x64.app.tar.gz; do
             base64 -d "$dir/$file.sig" > "$RUNNER_TEMP/$file.minisig"
             minisign -V -P "$key" -m "$dir/$file" -x "$RUNNER_TEMP/$file.minisig"
           done
