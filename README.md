@@ -1,30 +1,42 @@
-# Pipette — Keychron Edition
-
+# Pipette (Keychron Edition)
 <p align="center">
-  <img width="1200" alt="Pipette keymap editor" src="docs/screenshots/layer-panel-collapsed.png" />
+  <img width="1024" alt="keymap-editor" src="docs/screenshots/layer-panel-collapsed.png" />
 </p>
 
-<p align="center">
-  <a href="https://pipette.tymon3310.dev"><img alt="Web app" src="https://img.shields.io/badge/Web_App-pipette.tymon3310.dev-007ACC?style=flat&logo=googlechrome&logoColor=white"></a>
-  <a href="https://github.com/tymon3310/pipette-desktop/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/tymon3310/pipette-desktop?style=flat"></a>
-  <a href="https://aur.archlinux.org/packages/pipette-desktop-keychron-bin"><img alt="AUR" src="https://img.shields.io/aur/version/pipette-desktop-keychron-bin?style=flat&logo=archlinux&logoColor=white"></a>
-  <a href="LICENSE"><img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue?style=flat"></a>
-</p>
+Refining the way you interact with your Vial-powered keyboards.
 
-A keymap editor for [Vial](https://get.vial.today/) keyboards with full support for **Keychron** and **Lemokey** boards: Keychron's own settings, per-key RGB, Snap Click, Hall Effect (analog) keyboards, firmware flashing, and editing over the **2.4 GHz Keychron Link** receiver.
+This is a fork of [darakuneko/pipette-desktop](https://github.com/darakuneko/pipette-desktop) that adds full support for **Keychron** and **Lemokey** keyboards: Keychron's own settings, per-key RGB, Snap Click, Hall Effect (analog) keyboards, firmware flashing, and editing over the **2.4 GHz Keychron Link** receiver. Every upstream feature is kept. See [Keychron-Specific Features](#keychron-specific-features).
 
-It is a fork of [darakuneko/pipette-desktop](https://github.com/darakuneko/pipette-desktop) and keeps every upstream feature. It is part of the [Keychron Vial project](https://github.com/tymon3310/keychron-vial), which also has the firmware and the [list of supported keyboards](https://github.com/tymon3310/keychron-vial#supported-keyboards).
+It is part of the [Keychron Vial project](https://github.com/tymon3310/keychron-vial), which also has the [Keychron Vial firmware](https://github.com/tymon3310/vial-qmk) your keyboard needs and the [list of supported keyboards](https://github.com/tymon3310/keychron-vial#supported-keyboards).
 
-## Contents
+Pipette is an independent keymap editor compatible with [Vial](https://get.vial.today/), built with [Tauri](https://tauri.app/).  \
+Communicates with Vial keyboards via USB HID to configure keymaps, macros, lighting, and more.
 
-- [What this fork adds](#what-this-fork-adds)
-- [Get Pipette](#get-pipette)
+[![Web App](https://img.shields.io/badge/Web_App-pipette.tymon3310.dev-007ACC?style=flat&logo=googlechrome&logoColor=white)](https://pipette.tymon3310.dev)
+[![Tauri](https://img.shields.io/badge/Tauri_2-24C8D8?style=flat&logo=tauri&logoColor=white)](https://tauri.app/)
+[![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![React](https://img.shields.io/badge/React_19-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_v4-06B6D4?style=flat&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Vitest](https://img.shields.io/badge/Vitest-6E9F18?style=flat&logo=vitest&logoColor=white)](https://vitest.dev/)
+[![WebdriverIO](https://img.shields.io/badge/WebdriverIO-EA5906?style=flat&logo=webdriverio&logoColor=white)](https://webdriver.io/)
+[![pnpm](https://img.shields.io/badge/pnpm-F69220?style=flat&logo=pnpm&logoColor=white)](https://pnpm.io/)
+
+## Table of Contents
+
+- [Web App (Zero Install)](#web-app-zero-install)
+- [Installation](#installation)
+- [Migrating from 0.4](#migrating-from-04)
+- [System Requirements](#system-requirements)
+- [Usage](#usage)
 - [Updating](#updating)
-- [Upgrading from 0.5.x](#upgrading-from-05x)
-- [Using Pipette](#using-pipette)
-- [Platform notes](#platform-notes)
-- [All features](#all-features)
-- [Reporting problems](#reporting-problems)
+- [Operation Guide](#operation-guide)
+- [Platform Setup](#platform-setup)
+  - [Linux](#linux)
+  - [macOS](#macos)
+- [Features](#features)
+- [Keychron-Specific Features](#keychron-specific-features)
 - [Development](#development)
 - [Architecture](#architecture)
 - [Data & Privacy](#data--privacy)
@@ -32,113 +44,174 @@ It is a fork of [darakuneko/pipette-desktop](https://github.com/darakuneko/pipet
 - [Acknowledgments](#acknowledgments)
 - [License](#license)
 
-## What this fork adds
+## Screenshot
 
 <p align="center">
-  <img width="1000" alt="Keychron Settings" src="docs/screenshots/keychron-settings.png" />
+  <img width="1200" alt="keymap-editor" src="docs/screenshots/layer-panel-collapsed.png" />
 </p>
 
-| Feature | What you can do |
-|---|---|
-| **Keychron Settings** | Debounce algorithm and time, NKRO, USB / 2.4 GHz report rate (up to 8000 Hz on 8K boards), wireless sleep timers |
-| **Keychron RGB** | Global effects, per-key colours, mixed (per-region) RGB, colours and on/off for the Caps / Num / Scroll Lock indicators |
-| **Snap Click (SOCD)** | Opposite-direction key pairs (A + D, W + S, …) with last-input, first-key, neutral and other resolution modes |
-| **Hall Effect** | Named profiles; global or per-key actuation point; Rapid Trigger with separate press / release sensitivity; Dynamic Keystroke (DKS), toggle and gamepad keys; analog SOCD; calibration and a live travel view |
-| **2.4 GHz editing** | Edit a keyboard connected through the Keychron Link receiver exactly like a wired one |
-| **Firmware flasher** | Flash Keychron firmware from inside Pipette; your Keychron settings are kept |
-| **Export / import** | `.vil` and `.pipette` files also carry the RGB, Keychron and Hall Effect settings |
+### Keychron Edition
 
-Find the buttons in the keymap editor's footer: **Behavior** tab → *Keychron*, *Snap Click (SOCD)*, *Keychron HE*; **Lighting** tab → *Keychron RGB*; **System** tab → *Keychron Flasher*. They appear only when the connected keyboard supports them.
+The Keychron fork adds Keychron's own settings to the keymap editor — here the **Keychron Settings** panel with debounce, NKRO, report rate and wireless power management. See [Keychron-Specific Features](#keychron-specific-features) for everything else.
 
-The keyboard needs the Keychron Vial firmware from [tymon3310/vial-qmk](https://github.com/tymon3310/vial-qmk).
+<p align="center">
+  <img width="1200" alt="keychron-settings" src="docs/screenshots/keychron-settings.png" />
+</p>
 
-## Get Pipette
+## Web App (Zero Install)
 
-### Web app — nothing to install
+Use Pipette directly in any Chromium-based browser (Chrome, Edge, Brave, Opera, Arc) — they have the WebHID and WebUSB APIs it needs; Firefox and Safari do not:
 
-👉 **[pipette.tymon3310.dev](https://pipette.tymon3310.dev)** in Chrome, Edge, Brave, Opera or another Chromium browser (they have WebHID and WebUSB; Firefox and Safari do not). It has the same Keychron features as the desktop app, over USB and the 2.4 GHz receiver, and is always the latest version.
+👉 **[Launch Pipette Web (https://pipette.tymon3310.dev)](https://pipette.tymon3310.dev)**
 
-### Desktop app
+- The same Keychron features as the desktop app: Keychron Settings, Snap Click (SOCD), Keychron RGB, Hall Effect, the firmware flasher (over WebUSB, no dfu-util needed) and the battery indicator.
+- Works over a USB cable and over the 2.4 GHz Keychron Link receiver.
+- Always the latest version; settings are kept in the browser. Cloud Sync and Pipette Hub uploads need the desktop app.
 
-| System | Download |
-|---|---|
-| Windows 10 / 11 (x64) | [Pipette-win-x64.exe](https://github.com/tymon3310/pipette-desktop/releases/latest/download/Pipette-win-x64.exe) |
-| macOS 12+ on Apple Silicon | [Pipette-mac-arm64.dmg](https://github.com/tymon3310/pipette-desktop/releases/latest/download/Pipette-mac-arm64.dmg) |
-| macOS 12+ on Intel | [Pipette-mac-x64.dmg](https://github.com/tymon3310/pipette-desktop/releases/latest/download/Pipette-mac-x64.dmg) |
-| Linux (x86_64) | [Pipette-linux-x86_64.AppImage](https://github.com/tymon3310/pipette-desktop/releases/latest/download/Pipette-linux-x86_64.AppImage) |
-| Arch Linux | AUR: [`pipette-desktop-keychron-bin`](https://aur.archlinux.org/packages/pipette-desktop-keychron-bin) (release build) or [`pipette-desktop-keychron-git`](https://aur.archlinux.org/packages/pipette-desktop-keychron-git) (built from the latest source) |
+## Installation
 
-**Windows** — run the installer. It installs for your user only (no administrator rights) into `%LOCALAPPDATA%\Pipette`. The installer is not code-signed, so SmartScreen may warn: choose **More info › Run anyway**. Pipette uses the Edge WebView2 runtime that comes with Windows; if it is missing, the installer downloads it.
+Download the latest release for your platform:
 
-**macOS** — open the `.dmg` and drag **Pipette** into **Applications**. This fork's app is not notarized by Apple, so the first time right-click Pipette and choose **Open** (or run `xattr -dr com.apple.quarantine /Applications/Pipette.app`). Always start it from Applications, not from the disk image.
+- **Windows (x64)**  
+  https://github.com/tymon3310/pipette-desktop/releases/latest/download/Pipette-win-x64.exe
 
-**Linux AppImage** — `chmod +x Pipette-linux-x86_64.AppImage` and run it. No `libfuse2` is needed. Install the [udev rule](#linux) so Pipette can reach your keyboard.
+- **macOS (Apple Silicon)**  
+  https://github.com/tymon3310/pipette-desktop/releases/latest/download/Pipette-mac-arm64.dmg
 
-**Arch Linux** — `yay -S pipette-desktop-keychron-bin` (or your AUR helper). The package uses the system WebKitGTK and installs the udev rule for you.
+- **macOS (Intel)**  
+  https://github.com/tymon3310/pipette-desktop/releases/latest/download/Pipette-mac-x64.dmg
 
-To flash firmware, the desktop app needs [dfu-util](https://dfu-util.sourceforge.net/) installed and on `PATH` (Arch: `pacman -S dfu-util`, macOS: `brew install dfu-util`). The web app flashes over WebUSB and needs nothing extra.
+- **Linux (x86_64 AppImage)**  
+  https://github.com/tymon3310/pipette-desktop/releases/latest/download/Pipette-linux-x86_64.AppImage
+
+### Arch Linux (AUR)
+
+Two AUR packages are available for Arch-based distributions:
+
+- **[pipette-desktop-keychron-bin](https://aur.archlinux.org/packages/pipette-desktop-keychron-bin)** — the release build (recommended)
+- **[pipette-desktop-keychron-git](https://aur.archlinux.org/packages/pipette-desktop-keychron-git)** — built from the latest source
+
+```bash
+yay -S pipette-desktop-keychron-bin
+```
+
+Both run on the system's WebKitGTK, install the [udev rule](#udev-rules) for you, and keep the same data folder as the AppImage. They never update themselves: update them with your AUR helper (`yay -Syu`). Install `dfu-util` to flash firmware.
+
+### Windows installer
+
+Run `Pipette-win-x64.exe`. Pipette is installed for your user only (no administrator rights needed), into `%LOCALAPPDATA%\Pipette` by default; the installer lets you choose another folder.
+
+- The installer is **not code-signed**, so SmartScreen may warn about it: choose **More info › Run anyway**.
+- Pipette uses the Microsoft Edge WebView2 runtime, which comes with Windows 11 and almost every Windows 10. If it is missing, the installer downloads it, so it needs a network connection.
+- Uninstalling Pipette does not delete your data folder (`%APPDATA%\pipette-desktop`), even with the uninstaller's option to delete app data: that option removes only the data stored under `app.pipette.desktop`.
+
+### macOS disk image
+
+Open `Pipette-mac-arm64.dmg` (Apple Silicon) or `Pipette-mac-x64.dmg` (Intel) and drag **Pipette** into **Applications** (replace the old app if there is one). This fork's app is **not notarized** (it is ad-hoc signed only), so the first time, right-click Pipette in Applications and choose **Open**, or run `xattr -dr com.apple.quarantine /Applications/Pipette.app`. It needs macOS 12 or later; use `Pipette-mac-x64.dmg` on Intel Macs. Run it from Applications, not from the disk image: an app run from the disk image does not update itself (see [Updating](#updating)).
+
+### Linux AppImage
+
+Make the AppImage executable and run it; see [Platform Setup › Linux](#linux) for the udev rules keyboards need.
+
+## Migrating from 0.4
+
+Pipette 0.6 of this fork (upstream 0.5) is the same app rebuilt on Tauri; "0.4" below means the Electron versions (0.5.x of this fork). It takes the 0.4 data over in place: it opens the same data folder that 0.4 used, without copying or converting it. The sync format is unchanged, so PCs still running 0.4 keep syncing with it.
+
+### Before you install
+
+1. Quit Pipette 0.4 from the tray menu (**Quit**), not just the window. If a sync password change is unfinished in 0.4, finish it first.
+2. Back up the data folder and the autostart entry:
+
+| OS | Data folder | Autostart entry |
+|---|---|---|
+| Windows | `%APPDATA%\pipette-desktop` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (export with `reg export`) |
+| macOS | `~/Library/Application Support/pipette-desktop` | Login item (note whether **Launch at Login** is on) |
+| Linux | `~/.config/pipette-desktop` | `~/.config/autostart/pipette.desktop` |
+
+There is no supported way back to 0.4; the backup is the safety net.
+
+### After the first launch
+
+- Sign in to Google again (Settings › Connect › Google Account › **Connect**) and enter your sync encryption password again. Sign-in data is now protected by the OS key store, and the files 0.4 saved are not read. Changes 0.4 had not uploaded are sent once you sign in with the same Google account.
+- **Launch at Login** is taken over: when on, the autostart entry starts 0.5; when off, it is removed.
+- Do not run 0.4 and 0.5 at the same time. 0.5 refuses to start while 0.4 is running; on Linux and macOS it cannot stop 0.4 from starting afterwards.
+
+#### Windows: from 0.4
+
+The installer uninstalls 0.4 for your user (the data folder is kept) and installs per user into `%LOCALAPPDATA%\Pipette` (`pipette.exe`). If 0.4 was installed for all users, uninstall it from **Settings › Apps** first. Taskbar pins are lost; the desktop shortcut is created only if you tick it at the end of the installer. Uninstalling 0.5 does not delete `%APPDATA%\pipette-desktop`.
+
+#### macOS: from 0.4
+
+Replace `Pipette.app` in Applications. On macOS 12, a login item registered by 0.4 keeps working, but turning **Launch at Login** off cannot remove it; remove it in the system settings. macOS 13 and later are not affected.
+
+#### Linux: from 0.4
+
+Existing udev rules keep working. If 0.4 saved its window size under GNOME Wayland, the first launch opens the window slightly taller. Proxy settings come from the `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY` environment variables; the GNOME proxy settings are not used.
+
+## System Requirements
+
+Pipette's window has a minimum size of **1280×1024**, and defaults to **1440×1024** (or larger is recommended) on first launch.
+
+It might feel a bit large — but keyboards are wide, so this is what it takes to work with them comfortably. Sorry!
+
+On a display whose usable work area (screen space minus the Dock, taskbar, or menu bar) is smaller than that minimum — common on smaller MacBook screens — the window is clamped to fit the visible area instead.
+
+## Usage
+
+### Quick Start
+
+1.  Connect your Vial-compatible keyboard via USB.
+2.  Launch Pipette.
+3.  The keyboard will be detected automatically.
+4.  Select a layer and start editing key assignments.
 
 ## Updating
 
-| How you installed | How it updates |
-|---|---|
-| Windows installer, macOS app in Applications, AppImage | Pipette checks for a new version at startup and offers **Update**, **Not now** or **Skip this version**; Settings → About → **Check for updates** checks any time. |
-| AUR | Never updates itself — update with your AUR helper (`yay -Syu`). |
-| Web app | Always the latest version. |
+Pipette checks for a new version shortly after it starts (after any startup notice is closed) and shows what it found: open the release page to see what changed, **Update** to download, verify and install it, **Not now**, or **Skip this version** (a newer version is still offered). Settings → About → **Check for updates** checks at any time.
 
-- Updates come only from this fork's releases, never from upstream Pipette, and each one is verified with this fork's signing key before it is installed. Pipette saves your work, installs the update and starts again.
-- If an update fails, nothing is lost: download the new version from the [releases page](https://github.com/tymon3310/pipette-desktop/releases) and install it over the old one.
-- The AppImage is replaced where it is, so it must be in a folder you can write to; an extracted AppImage does not update itself. A beta gets betas and releases; a release gets releases only.
+- Every update is downloaded and verified with Pipette's signing key first. Pipette then saves your work and quits as usual, installs the update, and starts again as the new version.
+- A pre-release (beta) gets the betas and the releases; a release gets releases only.
+- If the download or the verification fails, nothing is installed and Pipette keeps running. If the install itself fails, Pipette has already quit: start it again and it shows what went wrong (if the previous version could not be put back, it also says where a copy of it was kept). You can always download the new version from the [releases page](https://github.com/tymon3310/pipette-desktop/releases) and install it over the old one; your settings and data are kept.
+- **Windows:** the installer runs without questions and starts Pipette again. Pipette is installed for your user only, so no administrator rights are needed.
+- **macOS:** move Pipette to Applications first: an app run from the disk image (or from a quarantined copy) does not update itself. If Pipette cannot write to the folder it is in, macOS asks for an administrator password.
+- **Linux:** only the AppImage updates itself (an extracted AppImage does not). The file is replaced where it is, so it must be writable.
+- **Arch Linux (AUR):** the AUR packages never update themselves; update them with your AUR helper (e.g. `yay -Syu`).
+- Updates come from this fork's releases only, never from upstream Pipette.
 
-## Upgrading from 0.5.x
+## Operation Guide
 
-Version 0.6 is the same app rebuilt on [Tauri](https://tauri.app/) instead of Electron (upstream Pipette 0.5). It opens your existing data folder in place, without copying or converting it, and the sync format is unchanged.
+For complete instructions with screenshots:
 
-**Before you install**
+-   [Operation Guide](https://darakuneko.github.io/pipette-desktop/guide.html)
 
-1. Quit Pipette 0.5.x from the tray menu (**Quit**), not just the window. Finish a sync password change first if one is unfinished.
-2. Back up your data folder (and note whether **Launch at Login** is on):
-
-| System | Data folder | Autostart entry |
-|---|---|---|
-| Windows | `%APPDATA%\pipette-desktop` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
-| macOS | `~/Library/Application Support/pipette-desktop` | Login item |
-| Linux | `~/.config/pipette-desktop` | `~/.config/autostart/pipette.desktop` |
-
-There is no supported way back to 0.5.x; the backup is the safety net.
-
-**After the first start**
-
-- Sign in to Google again (Settings › Connect › Google Account › **Connect**) and enter your sync password again: sign-in data is now kept in the OS key store and the old files are not read. Unsynced changes are uploaded once you sign in with the same account.
-- **Launch at Login** carries over.
-- Do not run 0.5.x and 0.6 at the same time; 0.6 refuses to start while 0.5.x is running.
-- **Windows:** the installer removes 0.5.x for your user and keeps the data folder. If 0.5.x was installed for all users, uninstall it from **Settings › Apps** first. Taskbar pins are lost.
-- **macOS 12:** a login item registered by 0.5.x keeps working, but turning **Launch at Login** off cannot remove it — remove it in System Settings.
-- **Linux:** existing udev rules keep working. Proxy settings come from `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY`.
-
-## Using Pipette
-
-1. Connect the keyboard with a USB cable — or plug in the Keychron Link receiver and switch the keyboard to 2.4 GHz.
-2. Start Pipette and pick the keyboard. A keyboard on the receiver is listed with **[2.4 GHz]** after its name.
-3. Choose a layer and click a key to change it. Changes are written to the keyboard at once.
-4. Unlock the keyboard (Esc + Enter on Keychron boards) when Pipette asks, before changing protected settings.
-
-The window needs at least **1280×1024** (1440×1024 by default); on smaller screens it is fitted to the visible area. The [Operation Guide](https://darakuneko.github.io/pipette-desktop/guide.html) explains every screen with screenshots.
-
-## Platform notes
+## Platform Setup
 
 ### Linux
 
-#### udev rule
+#### AppImage executable
 
-Pipette needs access to the keyboard's HID interface. The AUR packages install a rule for you; for the AppImage:
+Make the AppImage executable before launching:
 
 ```bash
-sudo cp scripts/99-vial.rules /etc/udev/rules.d/60-vial.rules
+chmod +x Pipette-linux-x86_64.AppImage
+```
+
+The AppImage uses the static AppImage runtime, so `libfuse2` does not need to be installed.
+
+#### Updating the AppImage
+
+Pipette updates the AppImage itself (see [Updating](#updating)). The AppImage also embeds update information, so [AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate) can update it in place, downloading only the changed parts.
+
+#### udev Rules
+
+udev rules are required to access keyboards:
+
+```bash
+sudo cp scripts/99-vial.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
-`scripts/99-vial.rules` is in this repository; the AppImage also carries a copy at `usr/lib/Pipette/udev/99-vial.rules`. (The rule uses `uaccess`, which only takes effect from a file numbered below 73.)
+`scripts/99-vial.rules` is in this repository; the AppImage also carries a copy at `usr/lib/Pipette/udev/99-vial.rules`. Rules installed for 0.4 keep working.
 
 #### Monitor App on Wayland (GNOME Shell extension)
 
@@ -150,6 +223,12 @@ https://extensions.gnome.org/extension/5592/focused-window-d-bus/
 
 Without the extension Monitor App silently records `null` for every minute on Wayland — keystroke counts still flow to the analytics, but per-app breakdowns are unavailable. Compositors other than GNOME Shell (KDE Plasma, Sway, etc.) are not currently supported; each would need its own focus-bridge implementation.
 
+#### Distribution Policy
+
+The **upstream** Pipette project is officially distributed only as an AppImage on Linux and does not provide distro-specific packages.
+
+For this **Keychron fork**, we provide official AUR packages for Arch-based distributions (see above). We do not provide or document other distro-specific packages (.deb, .rpm, Flatpak, Snap, etc.) in order to keep the maintenance and support scope focused on the AppImage and AUR releases.
+
 ### macOS
 
 #### Monitor App
@@ -158,9 +237,9 @@ The typing-view Monitor App toggle reads the name of the frontmost application, 
 
 #### Launch at Login on macOS 12
 
-On macOS 13 and later, **Launch at Login** registers Pipette as a login item and removes it again when turned off. On macOS 12 Pipette does not register a login item itself: a login item that Pipette 0.5.x registered keeps starting Pipette, but turning **Launch at Login** off cannot remove it. Remove it in the system settings yourself.
+On macOS 13 and later, **Launch at Login** registers Pipette as a login item and removes it again when turned off. On macOS 12 Pipette does not register a login item itself: a login item that Pipette 0.4 registered keeps starting Pipette, but turning **Launch at Login** off cannot remove it. Remove it in the system settings yourself.
 
-## All features
+## Features
 
 ### Feature Availability
 
@@ -229,15 +308,67 @@ See [Data Guide](https://darakuneko.github.io/pipette-desktop/guide.html#data) f
 - **Configurable panel side** (left / right)
 - **Auto-lock timer**
 
-## Reporting problems
+## Keychron-Specific Features
 
-Keychron support is tested on a **V5 Max ANSI Encoder**. If something does not work on another keyboard, please [open an issue](https://github.com/tymon3310/pipette-desktop/issues) with the keyboard model, the firmware version (Keychron Settings shows it) and, if you can, the log: `logs/pipette-0.log` in the data folder. Start Pipette with `VIAL_DEBUG_HID=1` to log every HID packet.
+This fork adds full Keychron (and Lemokey) keyboard support while keeping all of Pipette's own features. The keyboard needs the Keychron Vial firmware from [tymon3310/vial-qmk](https://github.com/tymon3310/vial-qmk); check the [supported keyboards](https://github.com/tymon3310/keychron-vial#supported-keyboards).
+
+The Keychron buttons are in the keymap editor's footer and appear only when the connected keyboard supports them:
+
+| Tab | Buttons |
+|---|---|
+| **Behavior** | *Keychron* (settings), *Snap Click (SOCD)*, *Keychron HE* (Hall Effect boards) |
+| **Lighting** | *Keychron RGB* (RGB boards) |
+| **System** | *Keychron Flasher* |
+
+### Keychron Settings
+- **Debounce** — Algorithm and time
+- **NKRO** — Toggle N-Key Rollover (shown as adaptive when the firmware controls it)
+- **Report Rate** — 125 Hz to 1000 Hz, up to 8000 Hz on 8K boards; USB and 2.4 GHz rates separately where supported
+- **Wireless power management** — When the backlight turns off and when the keyboard sleeps
+- **Firmware info** — Firmware version, MCU and protocol version
+
+### Keychron RGB
+- **Global RGB mode** — Effect, brightness, speed and colour
+- **Per-Key RGB** — Set individual key colors
+- **Mixed RGB** — Combine effects per region
+- **OS Indicators** — Colour of the Caps Lock, Num Lock and Scroll Lock indicators, or turn them off
+
+### Snap Click (SOCD)
+Simultaneous Opposite Cardinal Direction resolution for **non-HE** keyboards:
+- Define key pairs (e.g., A+D, W+S)
+- Choose resolution mode: Last Input, First Key, Second Key, Neutral, etc.
+
+### Analog Matrix (Hall Effect keyboards only)
+- **Profiles** — Multiple named profiles with independent configurations
+- **Actuation Modes** — Global, Regular, Rapid Trigger, Dynamic Keystroke (DKS), Gamepad, Toggle
+- **Actuation Point** — Per-key or global, 0.1mm–4.0mm
+- **Rapid Trigger** — Separate press/release sensitivity with bottom dead zone
+- **SOCD** — Per-key-pair resolution (Deeper Travel Wins, Last Input Wins, Neutral, etc.)
+- **Calibration** — Min/max readings and a live key travel view
+- **Gamepad Mode** — Assign keys to joystick axes (X/Y/Z/Rz) or buttons
+
+### 2.4 GHz Wireless (Keychron Link)
+Edit a keyboard connected through Keychron's 2.4 GHz receiver exactly like a wired one:
+1. Plug in the receiver and switch the keyboard to 2.4 GHz mode.
+2. Pick the keyboard in Pipette: it is listed with **[2.4 GHz]** after its name.
+
+Every Vial and Keychron feature works over the receiver; it is a little slower than a cable. Bluetooth is not supported — use the receiver or a cable.
+
+### Firmware Update
+- Flash Keychron firmware from inside Pipette while **keeping all Keychron settings** (debounce, RGB, Hall Effect profiles, etc.)
+- The desktop app flashes through [dfu-util](https://dfu-util.sourceforge.net/), which must be installed and on `PATH` (Arch: `pacman -S dfu-util`, macOS: `brew install dfu-util`); the web app flashes over WebUSB
+
+### Export / Import
+- `.vil` and `.pipette` files also carry the RGB, Keychron and Hall Effect settings
+
+### Reporting problems
+Keychron support is tested on a **V5 Max ANSI Encoder**. If something does not work on another keyboard, please [open an issue](https://github.com/tymon3310/pipette-desktop/issues) with the keyboard model, the firmware version (shown in Keychron Settings) and, if you can, the log: `logs/pipette-0.log` in the data folder. Start Pipette with `VIAL_DEBUG_HID=1` to log every HID packet.
 
 ## Development
 
 ### Prerequisites
 
-- Node.js 24 and pnpm (the version in `package.json`'s `packageManager`; `corepack pnpm` picks it)
+- Node.js 24 and pnpm (the version in `package.json`'s `packageManager`)
 - Rust (the toolchain in `src-tauri/rust-toolchain.toml`, installed by rustup)
 - On Linux, the libraries Tauri and hidapi build against, e.g. on Ubuntu:
 
@@ -270,9 +401,9 @@ cargo clippy --workspace --all-targets --features pipette-app/dev-tools -- -D wa
 cargo fmt --all
 ```
 
-### Web edition
+### Web Edition (`pipette-web` / `vial-web v2`)
 
-Pipette Web is built from the same UI with `src/web/` (WebHID, WebUSB, browser storage) in place of the Tauri backend:
+Pipette can also run directly in modern Chromium-based web browsers (Chrome, Edge, Brave, Opera) using the WebHID API. It is built from the same renderer with `src/web/` in place of the Tauri backend:
 
 ```bash
 pnpm dev:web     # Start Vite dev server for Web
@@ -295,15 +426,13 @@ Pipette is a [Tauri 2](https://tauri.app/) app: a Rust backend and a React UI in
 
 ```
 src-tauri/          Rust backend: the app crate (src/: Tauri commands, windows, tray,
-                    quit sequence, updater, Keychron DFU flasher) and the library crates
-                    (crates/: HID incl. the Keychron 2.4 GHz receiver, VIA/Vial virtual
-                    keyboard, stores, cloud sync, Google auth, Drive, Hub, typing
-                    analytics, OS key store, autostart, ...)
+                    quit sequence, updater) and the library crates (crates/: HID,
+                    VIA/Vial virtual keyboard, stores, cloud sync, Google auth,
+                    Drive, Hub, typing analytics, OS key store, autostart, ...)
 src/tauri-shim/     The `window.vialAPI` the UI calls, on top of the Tauri commands;
-                    the VIA/Vial and Keychron protocols over the HID transport
+                    the VIA/Vial protocol (protocol.ts) over the HID transport
 src/renderer/       React 19 UI (Tailwind CSS v4, i18next)
 src/shared/         Types, constants, keycodes, KLE parser shared by the UI and shim
-src/web/            Pipette Web: WebHID / WebUSB / browser storage in place of the backend
 ```
 
 USB HID I/O runs in the backend (hidapi). The UI calls `window.vialAPI`; the shim turns each call into a Tauri command, and the commands the window may use are listed in `src-tauri/capabilities/` and `src-tauri/permissions/`.
@@ -327,8 +456,6 @@ Contributions are welcome! In particular:
 - **Bug reports & feature requests** — Open an issue to let us know.
 
 ## Acknowledgments
-
-This fork is based on [Pipette](https://github.com/darakuneko/pipette-desktop) by [darakuneko](https://github.com/darakuneko); all of Pipette's own features are their work. Keychron support builds on Keychron's [QMK firmware](https://github.com/Keychron/qmk_firmware) and the Keychron Vial firmware of [tymon3310/vial-qmk](https://github.com/tymon3310/vial-qmk).
 
 Pipette is built upon the foundation laid by [Vial](https://get.vial.today/) and [Vial GUI](https://github.com/vial-kb/vial-gui).
 The VIA/Vial protocol implementation, keyboard definition format, and overall design philosophy originate from these projects.
