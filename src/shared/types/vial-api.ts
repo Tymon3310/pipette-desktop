@@ -359,7 +359,6 @@ export interface VialAPI {
   typingAnalyticsListDurationCells(uid: string, scope: DeviceScope, sinceMs: number, untilMs: number, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<TypingDurationCell[]>
   typingAnalyticsGetLayoutComparisonForRange(uid: string, sinceMs: number, untilMs: number, scope: DeviceScope, options: LayoutComparisonOptions, appScopes?: string[], typingTestScopes?: string[], runIdScopes?: string[]): Promise<LayoutComparisonResult | null>
   typingAnalyticsListLocalDeviceDays(uid: string, machineHash: string): Promise<string[]>
-  typingAnalyticsHasRemote(): Promise<boolean>
   typingAnalyticsListRemoteCloudHashes(uid: string): Promise<string[]>
   typingAnalyticsListRemoteCloudDays(uid: string, machineHash: string): Promise<string[]>
   typingAnalyticsFetchRemoteDay(uid: string, machineHash: string, utcDay: string): Promise<boolean>
@@ -373,6 +372,8 @@ export interface VialAPI {
   // App Config
   appConfigGetAll(): Promise<AppConfig>
   appConfigSet(key: string, value: unknown): Promise<void>
+  /** The folder the Debug Mode log files are written to. */
+  appConfigLogDir(): Promise<string>
 
   // Sync
   syncAuthStart(): Promise<SyncOperationResult>

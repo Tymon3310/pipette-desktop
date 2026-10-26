@@ -5,9 +5,13 @@
 //! Read with revision 3 as it is, revisions 2
 //! and 1 moved to 3 (2 keeps `uploaded` and `reconciled_at`, 1 starts both
 //! empty), anything else or any field of the wrong type is no state, and
-//! only the five known fields are kept. Written as `JSON.stringify(state,
+//! only the known fields are kept. Written as `JSON.stringify(state,
 //! null, 2)` with the fields in that order, through a temp file and a
 //! rename.
+//!
+//! `day_uploads` is optional, so it stays under revision 3: a build that
+//! drops it costs only one upload of each day. A bad one reads as empty
+//! rather than as no state, so it never loses `uploaded`.
 
 use std::path::{Path, PathBuf};
 
@@ -29,6 +33,10 @@ pub struct TypingSyncState {
     /// one is pending; kept as read, like `uploaded`.
     pub reconciled_at: Value,
     pub last_synced_at: f64,
+    /// `{uid}|{ownHash}` → UTC day → what the last upload of the day sent
+    /// and where it went (an object; the sync reads and checks the
+    /// entries). Kept as read.
+    pub day_uploads: Value,
 }
 
 /// `local/typing-analytics/sync_state.json` under the userData directory.
@@ -44,6 +52,7 @@ impl TypingSyncState {
             uploaded: Value::Object(Object::new()),
             reconciled_at: Value::Object(Object::new()),
             last_synced_at: 0.0,
+            day_uploads: Value::Object(Object::new()),
         }
     }
 
@@ -67,7 +76,17 @@ impl TypingSyncState {
             }
             _ => return None,
         };
-        Some(Self { my_device_id: my_device_id.clone(), uploaded, reconciled_at, last_synced_at })
+        let day_uploads = match object.get("day_uploads") {
+            Some(value @ Value::Object(_)) => value.clone(),
+            _ => Value::Object(Object::new()),
+        };
+        Some(Self {
+            my_device_id: my_device_id.clone(),
+            uploaded,
+            reconciled_at,
+            last_synced_at,
+            day_uploads,
+        })
     }
 
     /// The file's text.
@@ -78,6 +97,9 @@ impl TypingSyncState {
         object.insert("uploaded", self.uploaded.clone());
         object.insert("reconciled_at", self.reconciled_at.clone());
         object.insert("last_synced_at", Value::Number(self.last_synced_at));
+        if self.day_uploads.as_object().is_some_and(|record| !record.is_empty()) {
+            object.insert("day_uploads", self.day_uploads.clone());
+        }
         pipette_js_json::stringify_with_gap(&Value::Object(object), "  ")
     }
 }
@@ -113,10 +135,25 @@ fn is_reconciled_at_record(value: &Value) -> bool {
 /// The state in `user_data`, or `None` when the file is
 /// missing, cannot be read, is not JSON or is not a state.
 pub fn load_sync_state(user_data: &Path) -> Option<TypingSyncState> {
-    let bytes = std::fs::read(sync_state_path(user_data)).ok()?;
+    try_load_sync_state(user_data).ok().flatten()
+}
+
+/// The state in `user_data`; `Ok(None)` only when the file is missing
+/// (`NotFound`). A file that cannot be read, is not JSON or is not a state
+/// is an error, so a caller that deletes by the state can tell it from a
+/// device that has no state yet.
+pub fn try_load_sync_state(user_data: &Path) -> std::io::Result<Option<TypingSyncState>> {
+    let bytes = match std::fs::read(sync_state_path(user_data)) {
+        Ok(bytes) => bytes,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err),
+    };
+    let invalid =
+        |what: &str| std::io::Error::new(std::io::ErrorKind::InvalidData, format!("sync_state.json {what}"));
     // Each invalid sequence reads as U+FFFD.
-    let parsed = pipette_js_json::parse(&String::from_utf8_lossy(&bytes)).ok()?;
-    TypingSyncState::from_value(&parsed)
+    let parsed =
+        pipette_js_json::parse(&String::from_utf8_lossy(&bytes)).map_err(|_| invalid("is not JSON"))?;
+    TypingSyncState::from_value(&parsed).map(Some).ok_or_else(|| invalid("is not a typing sync state"))
 }
 
 /// Writes `state` through a temp file and a rename,
@@ -145,6 +182,27 @@ mod tests {
             "{\n  \"_rev\": 3,\n  \"my_device_id\": \"dev\",\n  \"uploaded\": {},\n  \"reconciled_at\": {},\n  \
              \"last_synced_at\": 5\n}"
         );
+    }
+
+    #[test]
+    fn keeps_the_day_uploads_and_reads_a_file_without_them() {
+        let without = parse(
+            r#"{"_rev":3,"my_device_id":"d","uploaded":{"u|h":["2026-01-01"]},"reconciled_at":{},"last_synced_at":7}"#,
+        )
+        .unwrap();
+        assert_eq!(without.day_uploads, Value::Object(Object::new()));
+        assert!(!without.to_text().contains("day_uploads"));
+
+        let text = r#"{"_rev":3,"my_device_id":"d","uploaded":{},"reconciled_at":{},"last_synced_at":7,"day_uploads":{"u|h":{"2026-01-01":{"sha256":"x"}}}}"#;
+        let with = parse(text).unwrap();
+        assert_eq!(parse(&with.to_text()).unwrap(), with);
+        assert!(with.to_text().ends_with(
+            "\"last_synced_at\": 7,\n  \"day_uploads\": {\n    \"u|h\": {\n      \"2026-01-01\": {\n        \"sha256\": \"x\"\n      }\n    }\n  }\n}"
+        ));
+
+        // A field of the wrong type is no record, not a lost state.
+        let bad = parse(r#"{"_rev":3,"my_device_id":"d","uploaded":{"u|h":["2026-01-01"]},"reconciled_at":{},"last_synced_at":7,"day_uploads":[1]}"#).unwrap();
+        assert_eq!(bad, without);
     }
 
     #[test]
@@ -183,6 +241,30 @@ mod tests {
         save_sync_state(dir.path(), &state).unwrap();
         assert_eq!(load_sync_state(dir.path()), Some(state));
         std::fs::write(sync_state_path(dir.path()), "{").unwrap();
+        assert_eq!(load_sync_state(dir.path()), None);
+    }
+
+    #[test]
+    fn try_load_tells_a_missing_state_from_one_that_cannot_be_used() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(try_load_sync_state(dir.path()).unwrap(), None);
+        let state = TypingSyncState::empty("dev");
+        save_sync_state(dir.path(), &state).unwrap();
+        assert_eq!(try_load_sync_state(dir.path()).unwrap(), Some(state));
+        for text in [
+            "{",
+            "[]",
+            r#"{"_rev":4,"my_device_id":"d","uploaded":{},"reconciled_at":{},"last_synced_at":0}"#,
+            r#"{"_rev":3,"my_device_id":"d","uploaded":{"k":"x"},"reconciled_at":{},"last_synced_at":0}"#,
+        ] {
+            std::fs::write(sync_state_path(dir.path()), text).unwrap();
+            assert!(try_load_sync_state(dir.path()).is_err(), "{text}");
+            assert_eq!(load_sync_state(dir.path()), None, "{text}");
+        }
+        // A directory where the file goes cannot be read.
+        std::fs::remove_file(sync_state_path(dir.path())).unwrap();
+        std::fs::create_dir(sync_state_path(dir.path())).unwrap();
+        assert!(try_load_sync_state(dir.path()).is_err());
         assert_eq!(load_sync_state(dir.path()), None);
     }
 }

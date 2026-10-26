@@ -14,17 +14,18 @@ use pipette_drive::DriveFile;
 use pipette_drive::canonical::Listing;
 use pipette_drive::client::DriveClient;
 use pipette_drive::retry::DriveFailure;
-use pipette_entry_store::Clock;
 use pipette_js_json::Value;
 use pipette_sync_format::drive_names::{drive_file_name, is_data_file_name, sync_unit_from_file_name};
+use pipette_typing_analytics::TypingAnalytics;
 use pipette_typing_analytics::jsonl::paths::deleted_ranges_path;
-use pipette_typing_analytics::jsonl::{keyboards_root, list_device_days};
-use pipette_typing_analytics::sync_state::{TypingSyncState, load_sync_state, save_sync_state};
+use pipette_typing_analytics::jsonl::{keyboards_root, try_list_device_days};
+use pipette_typing_analytics::sync_state::{TypingSyncState, try_load_sync_state};
 use pipette_typing_analytics::sync_units::{
     typing_analytics_device_day_sync_unit, typing_deleted_ranges_sync_unit,
 };
 use zeroize::Zeroizing;
 
+use crate::day_uploads::retain_day_uploads;
 use crate::dispatch::{UnitError, UnitSync};
 use crate::preflight::{Preflight, PreflightError};
 use crate::units::{DeviceDayUnit, parse_device_day_unit};
@@ -98,6 +99,51 @@ pub(crate) fn set(record: &mut Value, key: &str, value: Value) {
     }
 }
 
+/// Writes `days` as the list `uploaded` holds under `key`, sorted so the
+/// file's diff stays stable.
+pub(crate) fn set_uploaded_days(uploaded: &mut Value, key: &str, days: impl IntoIterator<Item = String>) {
+    let mut days: Vec<String> = days.into_iter().collect();
+    days.sort();
+    set(uploaded, key, Value::Array(days.into_iter().map(Value::from).collect()));
+}
+
+/// What a reconcile changes in the state, applied to the state read again
+/// when it is saved, so what another writer recorded meanwhile is kept.
+#[derive(Default)]
+struct ReconcileChanges {
+    /// Each keyboard reconciled, by its key, with the days it left
+    /// `uploaded`. The list of each is written back sorted.
+    uploaded: Vec<(String, IndexSet<String>)>,
+    /// The keyboards whose orphans were looked for, with the time.
+    reconciled_at: Vec<(String, f64)>,
+}
+
+impl ReconcileChanges {
+    /// Whether the reconcile removed a day or recorded a time.
+    fn changes_state(&self) -> bool {
+        !self.reconciled_at.is_empty() || self.uploaded.iter().any(|(_, removed)| !removed.is_empty())
+    }
+
+    /// Also drops each reconciled keyboard's `day_uploads` entries whose day
+    /// is not in its resulting `uploaded`: a day sent again after it left
+    /// must not count as unchanged. Returns whether any entry was dropped.
+    fn apply(&self, state: &mut TypingSyncState) -> bool {
+        let mut pruned = false;
+        for (key, removed) in &self.uploaded {
+            let days: IndexSet<String> = uploaded_days(&state.uploaded, key)
+                .into_iter()
+                .filter(|day| !removed.contains(day))
+                .collect();
+            pruned |= retain_day_uploads(&mut state.day_uploads, key, |day| days.contains(day));
+            set_uploaded_days(&mut state.uploaded, key, days);
+        }
+        for (key, at) in &self.reconciled_at {
+            set(&mut state.reconciled_at, key, Value::Number(*at));
+        }
+        pruned
+    }
+}
+
 /// Whether no time is recorded for `key` (missing or null).
 fn reconcile_pending(reconciled_at: &Value, key: &str) -> bool {
     matches!(reconciled_at.as_object().and_then(|record| record.get(key)), None | Some(Value::Null))
@@ -151,19 +197,30 @@ async fn delete_all_copies(drive: &DriveClient, listing: &Listing, day: &RemoteD
 ///
 /// A delete removes every copy and trash file of the day's name. Rule 2
 /// and the orphans also see a day that only has trash files; rule 3 needs
-/// a live copy, so such a day is uploaded again. The state is saved (with
-/// `last_synced_at`) only when it changed; a failed save is the error,
-/// after any deletes on Drive.
+/// a live copy, so such a day is uploaded again. A `day_uploads` entry goes
+/// with its day. The state is saved only when it changed, through
+/// [`TypingAnalytics::update_sync_state`]: the file is read again and only
+/// the reconcile's changes are applied to it, so a day recorded while the
+/// deletes ran is kept. Nothing holds that lock while Drive is called.
+/// `last_synced_at` moves only when a day left `uploaded` or a time was
+/// recorded; dropping only `day_uploads` entries saves the state without
+/// it (Drive is untouched). A failed save is the error, after any deletes
+/// on Drive.
+///
+/// Rule 2 and the orphans delete what is not local, so nothing runs on
+/// what was not read: a state that cannot be loaded is the error before any
+/// delete, and a keyboard whose day directory cannot be listed is skipped
+/// with a warning, its `uploaded` and `reconciled_at` left for the next pass.
 pub async fn reconcile_own_hash_typing_analytics(
     drive: &DriveClient,
     listing: &Listing,
-    user_data: &Path,
+    analytics: &Arc<TypingAnalytics>,
     own_hash: &str,
-    clock: &dyn Clock,
 ) -> io::Result<Reconciled> {
-    let root = user_data.to_path_buf();
+    let clock = analytics.clock();
+    let root = analytics.user_data().to_path_buf();
     let (state, local_uids) =
-        blocking(move || Ok((load_sync_state(&root), local_keyboard_uids(&root)))).await?;
+        blocking(move || Ok((try_load_sync_state(&root)?, local_keyboard_uids(&root)))).await?;
     let mut state = state.unwrap_or_else(|| TypingSyncState::empty(own_hash));
     let mut remote = collect_remote_own_hash_days(listing, own_hash);
 
@@ -183,12 +240,14 @@ pub async fn reconcile_own_hash_typing_analytics(
     // The local days, read before any delete: the reconcile never changes
     // them.
     let mut local_days = {
-        let (root, uids, own) = (user_data.to_path_buf(), candidates.clone(), own_hash.to_owned());
+        let (root, uids, own) =
+            (analytics.user_data().to_path_buf(), candidates.clone(), own_hash.to_owned());
         blocking(move || {
             Ok(uids
                 .into_iter()
                 .map(|uid| {
-                    let days: HashSet<String> = list_device_days(&root, &uid, &own).into_iter().collect();
+                    let days = try_list_device_days(&root, &uid, &own)
+                        .map(|days| days.into_iter().collect::<HashSet<String>>());
                     (uid, days)
                 })
                 .collect::<HashMap<_, _>>())
@@ -196,11 +255,18 @@ pub async fn reconcile_own_hash_typing_analytics(
         .await?
     };
 
-    let mut mutated = false;
+    let mut changes = ReconcileChanges::default();
     for uid in &candidates {
         let key = pointer_key(uid, own_hash);
-        let local = local_days.remove(uid).unwrap_or_default();
-        let mut uploaded = uploaded_days(&state.uploaded, &key);
+        let local = match local_days.remove(uid).unwrap_or_else(|| Ok(HashSet::new())) {
+            Ok(local) => local,
+            Err(err) => {
+                log::warn!("typing-analytics reconcile skipped {uid}: its day files cannot be listed: {err}");
+                continue;
+            }
+        };
+        let listed = uploaded_days(&state.uploaded, &key);
+        let mut uploaded = listed.clone();
         let mut cloud = remote.shift_remove(uid).unwrap_or_default();
 
         // Rule 2: uploaded but not local — delete from Drive.
@@ -218,7 +284,6 @@ pub async fn reconcile_own_hash_typing_analytics(
                 .await;
             }
             uploaded.shift_remove(&day);
-            mutated = true;
         }
 
         // Rule 3: uploaded but no live copy on Drive — forget the upload.
@@ -227,7 +292,6 @@ pub async fn reconcile_own_hash_typing_analytics(
                 continue;
             }
             uploaded.shift_remove(&day);
-            mutated = true;
         }
 
         if reconcile_pending(&state.reconciled_at, &key) {
@@ -243,21 +307,31 @@ pub async fn reconcile_own_hash_typing_analytics(
                 )
                 .await;
             }
-            set(&mut state.reconciled_at, &key, Value::Number(clock.now_ms() as f64));
-            mutated = true;
+            changes.reconciled_at.push((key.clone(), clock.now_ms() as f64));
         }
-
-        // Sorted, so the file's diff stays stable.
-        let mut days: Vec<String> = uploaded.into_iter().collect();
-        days.sort();
-        set(&mut state.uploaded, &key, Value::Array(days.into_iter().map(Value::from).collect()));
+        let removed = listed.into_iter().filter(|day| !uploaded.contains(day)).collect();
+        changes.uploaded.push((key, removed));
     }
 
-    if mutated {
-        state.last_synced_at = clock.now_ms() as f64;
-        let (root, saved) = (user_data.to_path_buf(), state.clone());
-        blocking(move || save_sync_state(&root, &saved)).await?;
+    let mutated = changes.changes_state();
+    // Applied here too so the state returned when nothing is saved carries
+    // each reconciled keyboard's list sorted, as the file would.
+    let pruned = changes.apply(&mut state);
+    if !mutated && !pruned {
+        return Ok(Reconciled { state, mutated });
     }
+    let synced_at = clock.now_ms() as f64;
+    let (analytics, own) = (analytics.clone(), own_hash.to_owned());
+    let state = blocking(move || {
+        analytics.update_sync_state(&own, |state| {
+            let pruned = changes.apply(state);
+            if mutated {
+                state.last_synced_at = synced_at;
+            }
+            mutated || pruned
+        })
+    })
+    .await?;
     Ok(Reconciled { state, mutated })
 }
 
@@ -277,8 +351,8 @@ impl From<DriveFailure> for RemoteTypingError {
 }
 
 /// The Data modal's reads of the typing data on Drive (the Sync > Typing
-/// tree): whether another device has any, its devices and days, and the
-/// lazy fetch of one of its days. None takes the sync lock or creates the
+/// tree): the other devices with days of a keyboard, their days, and the
+/// lazy fetch of one of those days. None takes the sync lock or creates the
 /// sync-format marker; each lists Drive whole and stops on the guard like
 /// a pass. Signed out, without a usable password, or while the guard
 /// blocks, they find nothing.
@@ -325,17 +399,6 @@ impl RemoteTyping {
                 (day.machine_hash != own_hash).then(|| (day.uid.to_owned(), day.machine_hash.to_owned()))
             })
             .collect()
-    }
-
-    /// Whether Drive holds a day file of another device, which decides whether
-    /// the Sync > Typing tree is shown.
-    pub async fn has_any_remote_typing_data(&self) -> Result<bool, RemoteTypingError> {
-        if self.signed_in_with_password().await.is_none() {
-            return Ok(false);
-        }
-        let own = self.units.own_hash()?;
-        let Some((listing, _)) = self.guarded_listing().await? else { return Ok(false) };
-        Ok(!Self::remote_day_units(&listing, &own).is_empty())
     }
 
     /// The other devices with a day file of keyboard `uid` on Drive, sorted; it

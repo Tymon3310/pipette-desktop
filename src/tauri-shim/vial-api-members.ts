@@ -259,7 +259,6 @@ export const VIAL_API_MEMBER_KINDS = {
   typingAnalyticsListDurationCells: 'request',
   typingAnalyticsGetLayoutComparisonForRange: 'request',
   typingAnalyticsListLocalDeviceDays: 'request',
-  typingAnalyticsHasRemote: 'request',
   typingAnalyticsListRemoteCloudHashes: 'request',
   typingAnalyticsListRemoteCloudDays: 'request',
   typingAnalyticsFetchRemoteDay: 'request',
@@ -270,6 +269,7 @@ export const VIAL_API_MEMBER_KINDS = {
   // App Config
   appConfigGetAll: 'request',
   appConfigSet: 'request',
+  appConfigLogDir: 'request',
 
   // Sync
   syncAuthStart: 'request',

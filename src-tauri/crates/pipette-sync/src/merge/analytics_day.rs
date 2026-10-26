@@ -93,11 +93,5 @@ pub async fn merge_device_day_bundle(
     // Through the lock the upload's bookkeeping takes, so the two never
     // write over each other.
     let (now, own) = (analytics.now_ms(), own_hash.to_owned());
-    blocking(move || {
-        Ok(analytics.update_sync_state(&own, |state| {
-            state.last_synced_at = now as f64;
-            true
-        })?)
-    })
-    .await
+    blocking(move || Ok(analytics.touch_last_synced_at(&own, now as f64)?)).await
 }

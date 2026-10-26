@@ -78,6 +78,7 @@ fn app_commands<R: Runtime>() -> impl Fn(Invoke<R>) -> bool + Send + Sync + 'sta
         definition::decompress_definition,
         app_config::app_config_get_all,
         app_config::app_config_set,
+        app_config::app_config_log_dir,
         shell::open_external,
         updater::update_check,
         updater::update_install,
@@ -260,7 +261,6 @@ fn app_commands<R: Runtime>() -> impl Fn(Invoke<R>) -> bool + Send + Sync + 'sta
         sync_commands::password_change::sync_password_change_release_locks,
         sync_commands::password_change::sync_list_undecryptable,
         sync_commands::analytics_remote::sync_analytics_now,
-        sync_commands::analytics_remote::typing_analytics_has_remote,
         sync_commands::analytics_remote::typing_analytics_list_remote_cloud_hashes,
         sync_commands::analytics_remote::typing_analytics_list_remote_cloud_days,
         sync_commands::analytics_remote::typing_analytics_fetch_remote_day,
@@ -448,8 +448,13 @@ fn main() {
             std::process::exit(1);
         }
     };
-    log::info!("Pipette starting");
+    // Opened after `build` (a second launch never gets here) and before the
+    // first line, so the log files follow the stored Debug Mode from the
+    // start; the config's own errors at open reach stderr only.
     let config: app_config::AppConfig = Arc::new(pipette_app_config::AppConfigStore::open(&user_data));
+    app_config::apply_stored_debug_mode(app.handle(), &config);
+    log::info!("Pipette starting");
+    spawn_v04_cleanup(user_data.clone());
     app.manage(Hid(Arc::new(HidService::new(VirtualDeviceMode::from_env()))));
     app.manage(UserDataDir(user_data));
     app.manage(config);
@@ -457,11 +462,33 @@ fn main() {
     app.run(lifecycle::on_run_event);
 }
 
+/// Removes what the 0.4 build left in `user_data` on a thread of its own, so
+/// the start does not wait on it. Runs after the Windows `lockfile` is held
+/// and the log has started.
+fn spawn_v04_cleanup(user_data: PathBuf) {
+    let spawned = std::thread::Builder::new().name("v04-leftovers".into()).spawn(move || {
+        let removed = pipette_fs::remove_v04_leftovers(&user_data);
+        if removed > 0 {
+            log::info!("removed {removed} entries the 0.4 build left in the userData directory");
+        }
+    });
+    if let Err(err) = spawned {
+        log::warn!("cannot start the removal of the 0.4 leftovers: {err}");
+    }
+}
+
 /// Starts the log after `build`, that is after the single-instance check, so
 /// a second launch never touches the running app's log; records emitted
 /// while the app is built (plugin setup included) are not written to the file.
+/// The files stay disabled until the stored Debug Mode is applied, and a
+/// failed build never touches them.
 fn start_log(user_data: &Path) {
-    if let Err(err) = pipette_logger::init(user_data.join("logs")) {
+    if let Err(err) = pipette_logger::init(log_dir(user_data), std::env::home_dir().as_deref()) {
         log::error!("the log file is unavailable: {err}");
     }
+}
+
+/// The directory the log files are written to.
+pub(crate) fn log_dir(user_data: &Path) -> PathBuf {
+    user_data.join("logs")
 }

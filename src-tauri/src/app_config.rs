@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//! The app config commands behind the shim's `appConfigGetAll` and
-//! `appConfigSet` (src/tauri-shim/api/app-config.ts), and what a change the
-//! renderer makes does in this process. The store itself is
-//! crates/pipette-app-config.
+//! The app config commands behind the shim's `appConfigGetAll`,
+//! `appConfigSet` and `appConfigLogDir` (src/tauri-shim/api/app-config.ts),
+//! and what a change the renderer makes does in this process. The store
+//! itself is crates/pipette-app-config.
 
 use std::path::Path;
 use std::sync::Arc;
 
 use pipette_app_config::{AppConfigStore, Value, clamp_zoom_factor};
+use pipette_typing_analytics::identity::{os_arch, os_platform, os_release};
 use tauri::ipc::Response;
 use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow};
 
@@ -48,6 +49,13 @@ pub async fn app_config_set(
     blocking(&config, move |store| store.set_from_renderer(&key, value.as_deref())).await
 }
 
+/// The directory the log files are written to (`log_dir` in main.rs),
+/// shown under Debug Mode in Settings.
+#[tauri::command]
+pub fn app_config_log_dir(user_data: State<'_, crate::UserDataDir>) -> String {
+    crate::log_dir(&user_data.0).to_string_lossy().into_owned()
+}
+
 /// Applies the stored zoom factor to `window` when it is created.
 pub fn apply_stored_zoom<R: Runtime>(store: &AppConfigStore, window: &WebviewWindow<R>) {
     let zoom = store.get("zoomFactor").unwrap_or_else(|err| {
@@ -64,12 +72,43 @@ pub(crate) fn set_zoom<R: Runtime>(window: &WebviewWindow<R>, percent: f64) {
     }
 }
 
-/// Reacts to the renderer's changes: `zoomFactor` zooms every window,
+/// Applies Debug Mode to the log files (pipette-logger): on, lines go to the
+/// files from now on, and the version and the OS are logged first; off, the
+/// files are removed and nothing more is written to them.
+pub fn apply_debug_mode<R: Runtime>(app: &AppHandle<R>, enabled: bool) {
+    if let Err(err) = pipette_logger::set_file_enabled(enabled) {
+        log::warn!("[app-config] some log files were not removed: {err}");
+    }
+    if enabled {
+        log::info!(
+            "Pipette {} on {} {} ({})",
+            app.package_info().version,
+            os_platform(),
+            os_release(),
+            os_arch()
+        );
+    }
+}
+
+/// [`apply_debug_mode`] with the stored `debugMode`. A read error leaves the
+/// files disabled without removing them, so an unreadable config does not
+/// cost the user the log.
+pub fn apply_stored_debug_mode<R: Runtime>(app: &AppHandle<R>, store: &AppConfigStore) {
+    match store.get("debugMode") {
+        Ok(stored) => apply_debug_mode(app, stored.is_some_and(|value| value.is_truthy())),
+        Err(err) => log::error!("[app-config] failed to read debugMode: {err}"),
+    }
+}
+
+/// Reacts to the renderer's changes, and to Reset Local Data's clear of
+/// the config (`clear_and_notify` of pipette-app-config, which tells every
+/// key with a default): `zoomFactor` zooms every window,
 /// `trayResident` adds or removes the tray, `autoSync` starts or stops the
 /// polling and the flush (sync_commands/triggers.rs), `autoLaunch`
 /// registers or unregisters the app to start at sign-in (pipette-autostart,
 /// which reaches the real entry only in a distributed build without
-/// `PIPETTE_USER_DATA_DIR`). Then applies the stored `autoLaunch`.
+/// `PIPETTE_USER_DATA_DIR`), `debugMode` starts or stops the log files
+/// ([`apply_debug_mode`]). Then applies the stored `autoLaunch`.
 ///
 /// The listener runs under the store lock, once per set in the order the
 /// sets were saved. The zoom, the tray and the sign-in changes are queued
@@ -81,8 +120,7 @@ pub(crate) fn set_zoom<R: Runtime>(window: &WebviewWindow<R>, percent: f64) {
 /// those changes saved.
 pub fn listen_for_changes(app: &AppHandle) {
     let handle = app.clone();
-    let user_data = app.state::<crate::UserDataDir>().0.clone();
-    let launch_user_data = user_data.clone();
+    let launch_user_data = app.state::<crate::UserDataDir>().0.clone();
     app.state::<AppConfig>().subscribe(move |key, value| match key {
         "zoomFactor" => {
             let percent = clamp_zoom_factor(Some(value));
@@ -92,19 +130,22 @@ pub fn listen_for_changes(app: &AppHandle) {
         }
         "trayResident" => crate::tray::set_tray_resident(&handle, value.is_truthy()),
         "autoSync" => crate::sync_commands::triggers::on_auto_sync_changed(&handle, value.is_truthy()),
-        "autoLaunch" => {
-            let enabled = value.is_truthy();
-            let user_data = user_data.clone();
-            if let Err(err) = handle.run_on_main_thread(move || apply_auto_launch(enabled, &user_data)) {
-                log::error!("[app-config] failed to apply autoLaunch: {err}");
-            }
-        }
+        "debugMode" => apply_debug_mode(&handle, value.is_truthy()),
+        "autoLaunch" => queue_auto_launch(&handle, value.is_truthy()),
         _ => {}
     });
     match app.state::<AppConfig>().get("autoLaunch") {
         Ok(stored) => apply_auto_launch(stored.is_some_and(|value| value.is_truthy()), &launch_user_data),
         // Not taken as off: that would remove the entry over a read error.
         Err(err) => log::error!("[app-config] failed to read autoLaunch: {err}"),
+    }
+}
+
+/// Queues [`apply_auto_launch`] to the main thread without waiting for it.
+fn queue_auto_launch(app: &AppHandle, enabled: bool) {
+    let user_data = app.state::<crate::UserDataDir>().0.clone();
+    if let Err(err) = app.run_on_main_thread(move || apply_auto_launch(enabled, &user_data)) {
+        log::error!("[app-config] failed to apply autoLaunch: {err}");
     }
 }
 

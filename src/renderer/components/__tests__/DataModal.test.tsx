@@ -17,6 +17,7 @@ import type { SyncDataScanResult } from '../../../shared/types/sync'
 function fullScanResult(overrides?: Partial<SyncDataScanResult>): SyncDataScanResult {
   return {
     keyboards: [],
+    typingKeyboards: [],
     keyboardNames: {},
     favorites: [],
     i18nPacks: [],
@@ -34,6 +35,11 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),
+}))
+
+const mockAppConfigReload = vi.fn().mockResolvedValue(undefined)
+vi.mock('../../hooks/useAppConfig', () => ({
+  useAppConfig: () => ({ reload: mockAppConfigReload }),
 }))
 
 vi.mock('../editors/ModalCloseButton', () => ({
@@ -67,7 +73,6 @@ const mockTypingAnalyticsSaveKeymapSnapshot = vi.fn().mockResolvedValue({ saved:
 const mockTypingAnalyticsGetKeymapSnapshotForRange = vi.fn().mockResolvedValue(null)
 const mockTypingAnalyticsListRemoteHashes = vi.fn().mockResolvedValue([])
 const mockTypingAnalyticsListLocalDeviceDays = vi.fn().mockResolvedValue([])
-const mockTypingAnalyticsHasRemote = vi.fn().mockResolvedValue(false)
 const mockTypingAnalyticsListRemoteCloudHashes = vi.fn().mockResolvedValue([])
 const mockTypingAnalyticsListRemoteCloudDays = vi.fn().mockResolvedValue([])
 const mockTypingAnalyticsFetchRemoteDay = vi.fn().mockResolvedValue(true)
@@ -105,7 +110,6 @@ Object.defineProperty(window, 'vialAPI', {
     typingAnalyticsGetKeymapSnapshotForRange: mockTypingAnalyticsGetKeymapSnapshotForRange,
     typingAnalyticsListRemoteHashes: mockTypingAnalyticsListRemoteHashes,
     typingAnalyticsListLocalDeviceDays: mockTypingAnalyticsListLocalDeviceDays,
-    typingAnalyticsHasRemote: mockTypingAnalyticsHasRemote,
     typingAnalyticsListRemoteCloudHashes: mockTypingAnalyticsListRemoteCloudHashes,
     typingAnalyticsListRemoteCloudDays: mockTypingAnalyticsListRemoteCloudDays,
     typingAnalyticsFetchRemoteDay: mockTypingAnalyticsFetchRemoteDay,
@@ -146,6 +150,7 @@ function makeSyncMock(overrides?: Partial<UseSyncReturn>): UseSyncReturn {
     validatePassword: vi.fn().mockResolvedValue({ score: 4, feedback: [] }),
     syncNow: vi.fn().mockResolvedValue({ success: true, status: 'completed' }),
     refreshStatus: vi.fn().mockResolvedValue(undefined),
+    resetAfterAppSettings: vi.fn().mockResolvedValue(undefined),
     refreshPasswordStatus: vi.fn().mockResolvedValue(undefined),
     deleteFiles: vi.fn().mockResolvedValue({ success: true }),
     listTrash: vi.fn().mockResolvedValue({ success: true, files: [] }),
@@ -186,7 +191,6 @@ describe('DataModal', () => {
     mockTypingAnalyticsGetKeymapSnapshotForRange.mockResolvedValue(null)
     mockTypingAnalyticsListRemoteHashes.mockResolvedValue([])
     mockTypingAnalyticsListLocalDeviceDays.mockResolvedValue([])
-    mockTypingAnalyticsHasRemote.mockResolvedValue(false)
     mockTypingAnalyticsListRemoteCloudHashes.mockResolvedValue([])
     mockTypingAnalyticsListRemoteCloudDays.mockResolvedValue([])
     mockTypingAnalyticsFetchRemoteDay.mockResolvedValue(true)
@@ -776,7 +780,8 @@ describe('DataModal', () => {
 
     it('keeps the reset confirmation open and shows the error when resetting application settings fails', async () => {
       mockResetLocalTargets.mockResolvedValueOnce({ success: false, error: 'EACCES: sync-pending.json' })
-      renderAndSwitchToApplication()
+      const sync = makeSyncMock()
+      renderAndSwitchToApplication({ sync })
 
       fireEvent.click(screen.getByTestId('app-reset-btn'))
       fireEvent.click(screen.getByTestId('app-reset-confirm'))
@@ -786,6 +791,8 @@ describe('DataModal', () => {
       })
       expect(mockResetLocalTargets).toHaveBeenCalledWith({ keyboards: false, favorites: false, appSettings: true })
       expect(screen.getByTestId('app-reset-confirm')).toBeInTheDocument()
+      expect(mockAppConfigReload).not.toHaveBeenCalled()
+      expect(sync.resetAfterAppSettings).not.toHaveBeenCalled()
 
       fireEvent.click(screen.getByTestId('app-reset-cancel'))
       expect(screen.queryByTestId('app-settings-reset-error')).not.toBeInTheDocument()
@@ -802,6 +809,35 @@ describe('DataModal', () => {
         expect(screen.getByTestId('app-reset-btn')).toBeInTheDocument()
       })
       expect(screen.queryByTestId('app-settings-reset-error')).not.toBeInTheDocument()
+    })
+
+    it('reads the app config and the sync status again when resetting application settings succeeds', async () => {
+      mockResetLocalTargets.mockResolvedValueOnce({ success: true })
+      const sync = makeSyncMock()
+      renderAndSwitchToApplication({ sync })
+
+      fireEvent.click(screen.getByTestId('app-reset-btn'))
+      fireEvent.click(screen.getByTestId('app-reset-confirm'))
+
+      await waitFor(() => {
+        expect(mockAppConfigReload).toHaveBeenCalledOnce()
+      })
+      expect(sync.resetAfterAppSettings).toHaveBeenCalledOnce()
+    })
+
+    it('reads nothing again when the reset of application settings throws', async () => {
+      mockResetLocalTargets.mockRejectedValueOnce(new Error('ipc'))
+      const sync = makeSyncMock()
+      renderAndSwitchToApplication({ sync })
+
+      fireEvent.click(screen.getByTestId('app-reset-btn'))
+      fireEvent.click(screen.getByTestId('app-reset-confirm'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('app-settings-reset-error')).toHaveTextContent('statusBar.sync.error')
+      })
+      expect(mockAppConfigReload).not.toHaveBeenCalled()
+      expect(sync.resetAfterAppSettings).not.toHaveBeenCalled()
     })
   })
 
@@ -825,6 +861,34 @@ describe('DataModal', () => {
       await waitFor(() => expect(screen.getByTestId('trash-empty')).toBeInTheDocument())
       expect(listTrash).toHaveBeenCalledTimes(1)
       expect(screen.getByTestId('data-nav-breadcrumb')).toHaveTextContent('dataModal.sync›dataModal.trash')
+    })
+  })
+
+  describe('Sync > Typing', () => {
+    const syncOn = () => makeProps({ sync: makeSyncMock({ authStatus: { authenticated: true }, hasPassword: true }) })
+
+    it('lists the keyboards only another device typed on as soon as the modal opens', async () => {
+      mockTypingAnalyticsListKeyboards.mockResolvedValue([{ uid: 'kb-local', productName: 'Local KB', vendorId: 1, productId: 2 }])
+      mockSyncScanRemote.mockResolvedValue(fullScanResult({
+        keyboards: ['kb-named', 'kb-unnamed'],
+        typingKeyboards: ['kb-named', 'kb-unnamed'],
+        keyboardNames: { 'kb-named': 'Named KB' },
+      }))
+      render(<DataModal {...syncOn()} />)
+      fireEvent.click(screen.getByTestId('nav-sync'))
+      fireEvent.click(await screen.findByTestId('nav-sync-typing'))
+
+      expect(screen.getByTestId('nav-sync-typing-kb-named')).toHaveTextContent('Named KB')
+      expect(screen.getByTestId('nav-sync-typing-kb-unnamed')).toHaveTextContent('kb-unnamed')
+      expect(screen.getByTestId('nav-sync-typing-kb-local')).toHaveTextContent('Local KB')
+    })
+
+    it('hides the branch when neither this machine nor another device has typing', async () => {
+      render(<DataModal {...syncOn()} />)
+      fireEvent.click(screen.getByTestId('nav-sync'))
+      await screen.findByTestId('nav-sync-empty')
+
+      expect(screen.queryByTestId('nav-sync-typing')).not.toBeInTheDocument()
     })
   })
 

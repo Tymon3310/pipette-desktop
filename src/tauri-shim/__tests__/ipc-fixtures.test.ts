@@ -196,6 +196,7 @@ const CALLERS: Record<string, Caller> = {
     run: ({ appConfig }, [key, value]) => appConfig.appConfigApi.appConfigSet(key as string, value),
     void: true,
   },
+  appConfigLogDir: { run: ({ appConfig }) => appConfig.appConfigApi.appConfigLogDir() },
   'device.decompressDefinition': {
     run: ({ device }, [data]) => device.decompressDefinition(data as number[]),
   },
@@ -272,9 +273,6 @@ const CALLERS: Record<string, Caller> = {
   syncListUndecryptable: { run: ({ syncPasswordChange }) => syncPasswordChange.syncPasswordChangeApi.syncListUndecryptable() },
   syncFormatStatus: { run: ({ syncExecute }) => syncExecute.syncExecuteApi.syncFormatStatus() },
   syncAnalyticsNow: { run: ({ syncExecute }, [uid]) => syncExecute.syncExecuteApi.syncAnalyticsNow(uid as string) },
-  typingAnalyticsHasRemote: {
-    run: ({ typingAnalyticsRemote }) => typingAnalyticsRemote.typingAnalyticsRemoteApi.typingAnalyticsHasRemote(),
-  },
   typingAnalyticsListRemoteCloudHashes: {
     run: ({ typingAnalyticsRemote }, [uid]) =>
       typingAnalyticsRemote.typingAnalyticsRemoteApi.typingAnalyticsListRemoteCloudHashes(uid as string),

@@ -73,6 +73,23 @@ export function SettingsToolsTab({
   const i18nPacks = useI18nPackStore()
   const themePacks = useThemePackStore()
 
+  const debugMode = appConfig.config.debugMode ?? false
+  const [logDir, setLogDir] = useState<string | null>(null)
+
+  // Fetched once per mount; a failure leaves the folder unshown.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const dir = await window.vialAPI.appConfigLogDir()
+        if (!cancelled) setLogDir(dir)
+      } catch {
+        // Nothing to show.
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   const [zoomInput, setZoomInput] = useState(String(appConfig.config.zoomFactor ?? ZOOM_FACTOR_DEFAULT))
 
   useEffect(() => {
@@ -271,6 +288,18 @@ export function SettingsToolsTab({
             on={appConfig.config.startInTray ?? false}
             onToggle={() => appConfig.set('startInTray', !(appConfig.config.startInTray ?? false))}
             disabled={!(appConfig.config.trayResident ?? false)}
+          />
+
+          <SettingsToggleRow
+            rowTestId="settings-debug-mode-row"
+            toggleTestId="settings-debug-mode-toggle"
+            label={t('settings.debugMode')}
+            description={t('settings.debugModeDescription')}
+            detail={debugMode && logDir !== null ? (
+              <span data-testid="settings-debug-mode-log-path">{t('settings.debugModeLogPath', { path: logDir })}</span>
+            ) : undefined}
+            on={debugMode}
+            onToggle={() => appConfig.set('debugMode', !debugMode)}
           />
         </div>
       </section>

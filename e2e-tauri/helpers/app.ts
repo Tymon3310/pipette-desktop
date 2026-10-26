@@ -72,6 +72,17 @@ export async function vialApi<T>(member: string, ...args: unknown[]): Promise<T>
   return JSON.parse(text) as T
 }
 
+/** A day of a keyboard's typing analytics as the Analyze lists it. */
+export interface DaySummary {
+  date: string
+  keystrokes: number
+}
+
+/** The days this machine's typing analytics hold for keyboard `uid`. */
+export const localDays = (uid: string): Promise<DaySummary[]> => vialApi<DaySummary[]>('typingAnalyticsListItemsLocal', uid)
+
+export const totalKeystrokes = (days: DaySummary[]): number => days.reduce((sum, day) => sum + day.keystrokes, 0)
+
 /** Starts recording the page's errors (console.error calls, uncaught
  *  errors and unhandled rejections) until the page loads again. */
 export async function recordPageErrors(): Promise<void> {
@@ -172,6 +183,16 @@ export async function waitForGone(selector: string, timeoutMsg: string): Promise
 export async function closeSettings(): Promise<void> {
   await clickInPage(tid('settings-close'))
   await waitForGone(tid('settings-modal'), 'the Settings modal did not close')
+}
+
+/** A zoom factor other than the default the specs set, in percent. */
+export const ZOOM_PERCENT = 125
+
+/** The window's width in CSS pixels over its width on screen: the zoom
+ *  factor the page is drawn at. */
+export async function pageZoom(): Promise<number> {
+  const { width } = await browser.getWindowRect()
+  return width / (await browser.execute(() => window.innerWidth))
 }
 
 /** The app's log, empty before its first line. */

@@ -346,7 +346,6 @@ function createWebMembers(): Partial<VialAPI> {
     typingAnalyticsListDurationCells: async () => [],
     typingAnalyticsGetLayoutComparisonForRange: async () => null,
     typingAnalyticsListLocalDeviceDays: async () => [],
-    typingAnalyticsHasRemote: async () => false,
     typingAnalyticsListRemoteCloudHashes: async () => [],
     typingAnalyticsListRemoteCloudDays: async () => [],
     typingAnalyticsFetchRemoteDay: async () => false,
@@ -357,6 +356,8 @@ function createWebMembers(): Partial<VialAPI> {
     // --- App Config ---
     appConfigGetAll: () => webStorage.appConfigGetAll(),
     appConfigSet: (key, value) => webStorage.appConfigSet(key, value),
+    // The web build writes no log files: rejecting leaves the folder unshown.
+    appConfigLogDir: () => Promise.reject(new Error('No log files in the web build')),
 
     // --- Sync ---
     syncAuthStart: async () => ({ success: false, error: 'Sync requires backend' }),
