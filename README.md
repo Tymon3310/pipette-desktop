@@ -304,17 +304,17 @@ These need the Keychron Vial firmware from [tymon3310/vial-qmk](https://github.c
 </p>
 
 ### Keychron Settings
-- **Debounce** — Algorithm and time
-- **NKRO** — N-Key Rollover
-- **Report Rate** — 125 Hz to 1000 Hz, up to 8000 Hz on 8K keyboards; USB and 2.4 GHz rates separately where supported
-- **Wireless power management** — Backlight timeout and sleep timeout
+- **Debounce**: algorithm and time
+- **NKRO**: N-Key Rollover
+- **Report Rate**: 125 Hz to 1000 Hz, up to 8000 Hz on 8K keyboards; USB and 2.4 GHz rates separately where supported
+- **Wireless power management**: backlight timeout and sleep timeout
 - Firmware version, MCU and protocol version
 
 ### Keychron RGB
-- **Global mode** — Effect, brightness, speed and colour
-- **Per-key RGB** — Individual key colours
-- **Mixed RGB** — Effects per region
-- **OS indicators** — Colour of the Caps Lock, Num Lock and Scroll Lock indicators, or turn them off
+- **Global mode**: effect, brightness, speed and colour
+- **Per-key RGB**: individual key colours
+- **Mixed RGB**: effects per region
+- **OS indicators**: colour of the Caps Lock, Num Lock and Scroll Lock indicators, or turn them off
 
 ### Snap Click (SOCD)
 For keyboards without Hall Effect switches:
@@ -322,13 +322,13 @@ For keyboards without Hall Effect switches:
 - Resolution mode: Last Input, First Key, Second Key, Neutral, etc.
 
 ### Hall Effect (analog) keyboards
-- **Profiles** — Named profiles with independent settings
-- **Actuation modes** — Global, Regular, Rapid Trigger, Dynamic Keystroke (DKS), Gamepad, Toggle
-- **Actuation point** — Per key or global, 0.1 mm to 4.0 mm
-- **Rapid Trigger** — Separate press and release sensitivity
-- **SOCD** — Per key pair (Deeper Travel Wins, Last Input Wins, Neutral, etc.)
-- **Calibration** — With a live key travel view
-- **Gamepad mode** — Keys as joystick axes or buttons
+- **Profiles**: named profiles with independent settings
+- **Actuation modes**: Global, Regular, Rapid Trigger, Dynamic Keystroke (DKS), Gamepad, Toggle
+- **Actuation point**: per key or global, 0.1 mm to 4.0 mm
+- **Rapid Trigger**: separate press and release sensitivity
+- **SOCD**: per key pair (Deeper Travel Wins, Last Input Wins, Neutral, etc.)
+- **Calibration**: with a live key travel view
+- **Gamepad mode**: keys as joystick axes or buttons
 
 ### 2.4 GHz receiver
 Plug in the Keychron Link receiver and switch the keyboard to 2.4 GHz. The keyboard is listed with **[2.4 GHz]** after its name and can be edited like a wired one. Bluetooth is not supported.
