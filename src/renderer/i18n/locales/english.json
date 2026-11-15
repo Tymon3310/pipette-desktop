@@ -2480,6 +2480,7 @@
     "KC_LSCR": "Locking Scroll Lock",
     "QK_LOCK": "Hold down the next key pressed until the key is pressed again",
     "joystick": "Joystick button {{n}}",
+    "programmableButton": "Programmable button {{n}}",
     "tapDance": "Tap dance keycode",
     "DYN_REC_START1": "Dynamic Macro 1 Rec Start",
     "DYN_REC_START2": "Dynamic Macro 2 Rec Start",

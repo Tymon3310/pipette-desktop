@@ -1045,6 +1045,7 @@ export const KEYCODES_SYSTEM_JOYSTICK: Keycode[] = Array.from({ length: 32 }, (_
 export const KEYCODES_PROGRAMMABLE_BUTTON: Keycode[] = Array.from({ length: 32 }, (_, i) =>
   K(`PB_${i + 1}`, `PB\n${i + 1}`, `Programmable button ${i + 1}`, {
     alias: [`QK_PROGRAMMABLE_BUTTON_${i + 1}`],
+    tooltipKey: `${KEYCODE_TOOLTIP_NS}.programmableButton`, tooltipParams: { n: i + 1 },
   }),
 )
 
